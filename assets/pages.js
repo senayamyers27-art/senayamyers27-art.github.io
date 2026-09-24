@@ -4,6 +4,7 @@
 (function () {
   const EFFECTIVE = "September 24, 2026";
   const SITE = "Cyber Cert Study";
+  const U = CertHub.U;
   const contact = () => `<a href="https://github.com/senayamyers27-art/Claude.ai-stuff/security/advisories/new" target="_blank" rel="noopener">GitHub private reporting</a>`;
 
   function privacy() {
@@ -40,6 +41,9 @@
 
     <h2>Hosting and server logs</h2>
     <p>The site is hosted on Cloudflare Pages. Like any web host, Cloudflare processes technical request data such as IP address, browser user agent, the page requested and time, to deliver the site and protect it from abuse. We don't use this data to identify or profile visitors. Cloudflare's handling is described in the <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">Cloudflare Privacy Policy</a>.</p>
+
+    <h2>Donations</h2>
+    <p>If you choose to donate through the Support page, the payment is handled entirely by that donation service under its own terms and privacy policy. We never see card details; we receive only what that service shares with creators (typically your name or a message, if you choose to include them).</p>
 
     <h2>Links to other sites</h2>
     <p>Labs and exam pages link to official documentation and vendor sites (for example CompTIA, ISC2, Cisco, NIST and tool vendors). Those sites have their own privacy practices. Labs that use cloud services (such as AWS) or third-party tools involve accounts you create with those providers under their terms.</p>
@@ -183,5 +187,23 @@
     </ul>`;
   }
 
-  CertHub.policyViews = { privacy, terms, security, install };
+  function support() {
+    const site = CertHub.site || {}, sup = site.support || {};
+    const donate = sup.url
+      ? `<div class="panel donate"><strong>Donate</strong><p>If the plans or labs helped you, a small donation covers the domain and hosting and funds new labs and questions. Payments are handled by ${U.esc(sup.label || "the donation service")}; this site never sees your payment details.</p><div class="btns"><a class="btn" href="${U.esc(sup.url)}" target="_blank" rel="noopener">Donate${sup.label ? ` on ${U.esc(sup.label)}` : ""}</a></div></div>`
+      : "";
+    const shareUrl = location.origin && /^https:/.test(location.origin) ? location.origin + "/" : "";
+    return `<h1>Support this site</h1>
+    <p class="meta">${SITE} is free, with no ads, no accounts and no tracking. Here's how you can help keep it that way.</p>
+    ${donate}
+    <h2>Share it</h2>
+    <p>Send it to classmates, your bootcamp cohort or anyone studying for a certification. Word of mouth is the biggest help.</p>
+    ${shareUrl ? `<div class="btns"><button type="button" class="btn ghost" data-gact="share">Share the site</button></div>` : ""}
+    <h2>Report mistakes and suggest labs</h2>
+    <p>Found a wrong answer, a lab command that doesn't work on your system, or a topic you want covered? ${site.feedbackUrl ? `<a href="${U.esc(site.feedbackUrl)}" target="_blank" rel="noopener">Open an issue on GitHub</a>` : "Let us know"} with the page and what you saw. Security problems go to the <a href="#security">Security</a> page instead.</p>
+    <h2>Show your work</h2>
+    <p>Finished labs make a strong portfolio. If you publish yours, mentioning where you practiced helps others find the site.</p>`;
+  }
+
+  CertHub.policyViews = { privacy, terms, security, install, support };
 })();
