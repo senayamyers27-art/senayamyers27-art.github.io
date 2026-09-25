@@ -30,6 +30,30 @@
     if (w && w.resolve) w.resolve(qs);
   }
 
+  // Lessons (free teaching text for each plan topic) load on demand too: data/lessons/<id>.js
+  // calls CertHub.addLessons. Certifications without lessons yet resolve to null.
+  const lessons = {}, lWaiting = {};
+  function loadLessons(id) {
+    if (!certs[id] || !certs[id].hasLessons) return Promise.resolve(null);
+    if (lessons[id]) return Promise.resolve(lessons[id]);
+    if (!lWaiting[id]) {
+      lWaiting[id] = new Promise(resolve => {
+        const s = document.createElement("script");
+        s.src = `${BASE}data/lessons/${id}.js`;
+        s.async = true;
+        s.onload = () => resolve(lessons[id] || null);
+        s.onerror = () => { delete lWaiting[id]; s.remove(); resolve(null); };
+        document.head.appendChild(s);
+      });
+    }
+    return lWaiting[id];
+  }
+  // Lessons are matched to plan topics by their exact topic text.
+  function addLessons(id, list) {
+    if (!Array.isArray(list)) return;
+    lessons[id] = new Map(list.filter(l => l && typeof l.t === "string").map(l => [l.t, l]));
+  }
+
   const U = {
     DAY,
     $: s => document.querySelector(s),
@@ -52,7 +76,7 @@
     set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } },
     keys() { try { return Object.keys(localStorage).filter(k => k.startsWith("certhub:")); } catch (e) { return []; } }
   };
-  function freshProgress() { return { checks: {}, stats: {}, review: {}, history: [], start: null, examDate: null }; }
+  function freshProgress() { return { checks: {}, stats: {}, review: {}, read: {}, history: [], start: null, examDate: null }; }
   function loadProgress(id) {
     const p = freshProgress();
     try { const raw = store.get(KEY(id)); if (raw) Object.assign(p, JSON.parse(raw)); } catch (e) {}
@@ -307,7 +331,7 @@
     U, store, certs, buildPlan, loadProgress, saveProgress, freshProgress, applyTheme, themeButton, exportAll, importAll, activeNotices,
     backupText, restoreText, ui, install, labs, labOrder, loadLabProgress, saveLabProgress, labStatus,
     register(c) { certs[c.id] = c; if (Array.isArray(c.questions)) c.qCount = c.questions.length; },
-    loadQuestions, addQuestions,
+    loadQuestions, addQuestions, loadLessons, addLessons,
     registerLabs(list) { list.forEach(l => { if (!labs[l.id]) labOrder.push(l.id); labs[l.id] = l; }); }
   };
 })();

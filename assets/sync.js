@@ -14,6 +14,9 @@
     // Checked study days: once checked on any device, stay checked.
     out.checks = { ...(b.checks || {}), ...(a.checks || {}) };
     for (const k of Object.keys(out.checks)) out.checks[k] = !!((a.checks || {})[k] || (b.checks || {})[k]);
+    // Lessons marked read: once read on any device, stay read.
+    out.read = { ...(b.read || {}), ...(a.read || {}) };
+    for (const k of Object.keys(out.read)) out.read[k] = !!((a.read || {})[k] || (b.read || {})[k]);
     // Quiz stats per domain: keep whichever device has answered more.
     out.stats = {};
     for (const d of new Set([...Object.keys(a.stats || {}), ...Object.keys(b.stats || {})])) {

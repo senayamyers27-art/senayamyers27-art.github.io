@@ -7,8 +7,9 @@
   const INTERVALS = [1, 3, 7, 14];
 
   let C, PLAN, W, DOM, Q, S, FREE_Q, PRO = null;
+  let LES = null; // lessons for this certification: a Map by topic text, false when there are none yet, null while loading
   let active = false;
-  const TAB_IDS = ["week", "plan", "practice", "labs", "progress", "guide", "about"];
+  const TAB_IDS = ["week", "learn", "plan", "practice", "labs", "progress", "guide", "about"];
   const Pro = () => CertHub.pro || { available: false, active: false };
   const toQ = ([id, w, d, q, o, a, e, src]) => ({ id, w, d, q, o, a, e, src });
 
@@ -38,6 +39,12 @@
         if (active && !(S.quiz && !S.quiz.done)) render();
       }, e => { if (active && C.id === id) CertHub.ui.toast(e.message); });
     }
+    LES = null;
+    CertHub.loadLessons(id).then(m => {
+      if (!C || C.id !== id) return;
+      LES = m || false;
+      if (active && !(S.quiz && !S.quiz.done) && (S.tab === "week" || S.tab === "learn")) render();
+    });
     const p = loadProgress(C.id);
     if (!p.start) p.start = C.start || U.iso(U.nextMonday(today()));
     if (!p.examDate) p.examDate = C.examDate || U.iso(U.addDays(parseD(p.start), W.length * 7 + 1));
@@ -66,9 +73,9 @@
   function close() { active = false; clearTimeout(tickT); }
 
   const DAYS = () => [
-    ["Mon", "Read this week's objectives and reread the listed sections of your notes"],
+    ["Mon", "Read this week's lessons below and mark each one read"],
     ["Tue", C.videoTip || "Watch videos or read the matching chapters of a study guide for this week's topics"],
-    ["Wed", "Answer the study questions below out loud before revealing them"],
+    ["Wed", "Answer each lesson's \"Check yourself\" questions out loud before revealing them"],
     ["Thu", "Hands-on: this week's lab (step-by-step below)"],
     ["Fri", "Take the weekly quiz (10 questions)"],
     ["Sat", "Clear your review queue, then any checkpoint test"],
@@ -184,7 +191,7 @@
   }
 
   /* ---------- views ---------- */
-  const TABS = [["week", "This week"], ["plan", "Plan"], ["practice", "Quizzes & tests"], ["labs", "Labs"], ["progress", "Progress"], ["guide", "Flashcards & guide"], ["about", "About the exam"]];
+  const TABS = [["week", "This week"], ["learn", "Lessons"], ["plan", "Plan"], ["practice", "Quizzes & tests"], ["labs", "Labs"], ["progress", "Progress"], ["guide", "Flashcards & guide"], ["about", "About the exam"]];
   // The Pro tab only shows where Pro can be bought.
   const tabs = () => TABS.filter(([k]) => k !== "guide" || Pro().available);
   function renderTabs() {
@@ -232,8 +239,7 @@
       ${cp ? `<button class="btn ghost" data-act="checkpoint" data-d="${cp.dom}">Checkpoint test: Domain ${cp.dom}</button>` : ""}
       ${n === W.length ? `<button class="btn ghost" data-act="exam">Full practice exam</button>` : ""}
     </div>
-    <h2>What you're covering</h2>
-    <div class="panel wk" style="--c:${dc(w.dom)}"><ul class="clean">${w.topics.map(t => `<li>${esc(t)}</li>`).join("")}</ul></div>
+    ${weekLessons(w)}
     <h2>Hands-on labs</h2>
     ${labs.length ? `<p class="note">Step-by-step, in your own home lab. Each one ends with a portfolio write-up and a resume bullet.</p>
     <div class="labgrid">${labs.map(l => CertHub.labCard(l)).join("")}</div>` : ""}
@@ -245,6 +251,59 @@
     <p class="note">Answer out loud first, then open to check.</p>
     <div class="panel">${w.study.map(([q, a]) => `<details class="sq"><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("")}</div>` : ""}`;
   }
+  /* ---------- lessons ---------- */
+  const lessonKey = t => "l" + [...String(t)].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7).toString(36);
+  const isRead = t => !!(S.p.read && S.p.read[lessonKey(t)]);
+  // Lesson text: `code` inline, and paragraphs that start with ``` are code blocks.
+  const inline = x => esc(x).replace(/`([^`\n]+)`/g, "<code>$1</code>");
+  const para = x => /^```/.test(x) ? `<pre class="code" tabindex="0"><code>${esc(x.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/, ""))}</code></pre>` : `<p>${inline(x)}</p>`;
+  function readBtn(t) {
+    const r = isRead(t);
+    return `<button class="btn sm ${r ? "ghost" : ""}" data-act="read" data-k="${lessonKey(t)}" aria-pressed="${r}">${r ? "Read ✓ (mark unread)" : "Mark as read"}</button>`;
+  }
+  function lessonHtml(t, n) {
+    const l = LES && LES.get(t);
+    if (!l) return `<li class="lesson-none">${esc(t)}</li>`;
+    const r = isRead(t);
+    return `<li><details class="lesson" data-k="${lessonKey(t)}"><summary><span class="grow">${esc(t)}</span>${r ? `<span class="chip done">Read</span>` : ""}</summary>
+      <div class="lbody">
+        ${(l.body || []).map(para).join("")}
+        ${l.terms && l.terms.length ? `<h3>Key terms</h3><dl class="terms">${l.terms.map(([a, b]) => `<dt>${inline(a)}</dt><dd>${inline(b)}</dd>`).join("")}</dl>` : ""}
+        ${l.example ? `<div class="panel ex"><strong>Real-world example</strong>${[].concat(l.example).map(para).join("")}</div>` : ""}
+        ${l.tip ? `<div class="status notice"><strong>Exam tip:</strong> ${inline(l.tip)}</div>` : ""}
+        ${l.check && l.check.length ? `<h3>Check yourself</h3><p class="note">Answer out loud first, then open to check.</p>${l.check.map(([q, a]) => `<details class="sq"><summary>${inline(q)}</summary><p>${inline(a)}</p></details>`).join("")}` : ""}
+        <div class="btns">${readBtn(t)}${n ? `<button class="btn ghost sm" data-act="weekly" data-w="${n}">Quiz me on week ${n}</button>` : ""}</div>
+      </div></details></li>`;
+  }
+  const lessonTopics = w => w.dom ? w.topics.filter(t => !/^Checkpoint test/i.test(t)) : [];
+  function weekLessons(w) {
+    const ts = lessonTopics(w);
+    const head = `<h2>This week's lessons</h2>`;
+    if (LES === null && ts.length) return head + `<p class="note">Loading lessons…</p><div class="panel wk" style="--c:${dc(w.dom)}"><ul class="clean">${w.topics.map(t => `<li>${esc(t)}</li>`).join("")}</ul></div>`;
+    if (!LES || !ts.some(t => LES.has(t))) return `<h2>What you're covering</h2><div class="panel wk" style="--c:${dc(w.dom)}"><ul class="clean">${w.topics.map(t => `<li>${esc(t)}</li>`).join("")}</ul></div>`;
+    const done = ts.filter(t => LES.has(t) && isRead(t)).length, all = ts.filter(t => LES.has(t)).length;
+    return head + `<p class="note">Open each topic to read its lesson: an explanation, key terms, a real-world example, an exam tip and questions to check yourself. ${done} of ${all} read.</p>
+    <div class="panel wk" style="--c:${dc(w.dom)}"><ul class="clean lessons">${w.topics.map(t => lessonHtml(t, 0)).join("")}</ul></div>`;
+  }
+  function learnView() {
+    const head = `<h1>Lessons</h1>`;
+    if (LES === null) return head + `<p class="note">Loading lessons…</p>`;
+    if (!LES) return head + `<p class="meta">Lessons for ${esc(C.short)} are being written. Until then, use each week's topic list with a study guide or video course, then check yourself with the weekly quiz.</p>`;
+    const all = W.flatMap(w => lessonTopics(w).filter(t => LES.has(t)));
+    const done = all.filter(isRead).length;
+    return head + `<p class="meta">A short lesson for every topic in your ${W.length}-week plan, in plan order. Read a lesson, answer its check questions, then take that week's quiz. ${done} of ${all.length} read.</p>
+    <div class="panel bars"><div class="b"><div class="track"><i style="width:${all.length ? Math.round(100 * done / all.length) : 0}%"></i></div></div></div>
+    ${C.domains.map(d => {
+      const ws = W.filter(w => w.dom === d.id && lessonTopics(w).some(t => LES.has(t)));
+      if (!ws.length) return "";
+      const n = ws.flatMap(lessonTopics).filter(t => LES.has(t));
+      return `<h2 style="--c:${dc(d.id)}">Domain ${d.id}: ${esc(d.name)}</h2>
+      <p class="note">${d.w}% of the exam · ${n.filter(isRead).length} of ${n.length} read</p>
+      ${ws.map(w => `<h3>Week ${w.n}${ws.length > 1 || w.title !== d.name ? `: ${esc(w.title)}` : ""}</h3>
+      <div class="panel wk" style="--c:${dc(d.id)}"><ul class="clean lessons">${lessonTopics(w).map(t => lessonHtml(t, w.n)).join("")}</ul></div>`).join("")}`;
+    }).join("")}`;
+  }
+
   function planView() {
     const now = weekNow();
     const hours = C.hoursPerWeek || "6–8";
@@ -447,7 +506,7 @@
   function render() {
     renderTabs();
     if (S.tab === "guide" && !Pro().available) S.tab = "week";
-    const v = { week: weekView, plan: planView, practice: practiceView, labs: labsView, progress: progressView, guide: guideView, about: aboutView }[S.tab];
+    const v = { week: weekView, learn: learnView, plan: planView, practice: practiceView, labs: labsView, progress: progressView, guide: guideView, about: aboutView }[S.tab];
     $("#app").innerHTML = v();
     if (S.quiz && !S.quiz.done && S.quiz.end && S.tab === "practice") tick();
   }
@@ -483,6 +542,20 @@
       fcknow: () => fcGrade(true),
       fcagain: () => fcGrade(false),
       fcdone: () => { S.fc = null; render(); },
+      read: () => {
+        const k = t.dataset.k, rd = S.p.read || (S.p.read = {});
+        if (rd[k]) delete rd[k]; else rd[k] = true;
+        save();
+        // Update in place so the open lesson stays open.
+        const det = t.closest("details.lesson"), r = !!rd[k];
+        t.outerHTML = `<button class="btn sm ${r ? "ghost" : ""}" data-act="read" data-k="${k}" aria-pressed="${r}">${r ? "Read ✓ (mark unread)" : "Mark as read"}</button>`;
+        if (det) {
+          const chip = det.querySelector(":scope > summary .chip");
+          if (r && !chip) det.querySelector(":scope > summary").insertAdjacentHTML("beforeend", `<span class="chip done">Read</span>`);
+          if (!r && chip) chip.remove();
+          if (r) { det.open = false; det.querySelector(":scope > summary").focus(); }
+        }
+      },
       printguide: () => { document.querySelectorAll(".guide details").forEach(d => { d.open = true; }); window.print(); },
       next, prev, quit: quitQuiz,
       finish: async () => {
