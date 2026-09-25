@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Privilege escalation: sudo, visudo, /etc/sudoers.d, su… · Linux+ Lesson</title>
+<meta name="description" content="Logging in as root for daily work is risky: every typo runs with full power, and actions are not tied to a person. Instead, administrators use normal accou">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Privilege escalation: sudo, visudo, /etc/sudoers.d, su… · Linux+ Lesson">
+<meta property="og:description" content="Logging in as root for daily work is risky: every typo runs with full power, and actions are not tied to a person. Instead, administrators use normal accou">
+<link rel="canonical" href="https://senayamyers27-art.github.io/linux-plus/lessons/privilege-escalation-sudo-visudo-etc-sudoers-d-su-polkit/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/linux-plus/lessons/privilege-escalation-sudo-visudo-etc-sudoers-d-su-polkit/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Linux+</a> / <a href="../">Lessons</a></p>
+<p class="note">CompTIA Linux+ XK0-006 · Domain 3: Security</p>
+<h1>Privilege escalation: sudo, visudo, /etc/sudoers.d, su, polkit</h1>
+<article class="lbody">
+<p>Logging in as root for daily work is risky: every typo runs with full power, and actions are not tied to a person. Instead, administrators use normal accounts and elevate privileges only when needed. Linux+ tests the tools for this, and also calls it privilege escalation, a term that in security reports also means an attacker gaining more rights than intended.</p>
+<p><code>su</code> (substitute user) switches to another account, root by default, and asks for the target account's password. <code>su -</code> (or <code>su -l</code>) starts a full login shell with the target's environment, which is usually what you want; plain <code>su</code> keeps much of your current environment. <code>su - alice</code> becomes alice, and <code>su -c 'command'</code> runs one command. The drawback is that everyone who needs root must know the root password, and actions are logged as root.</p>
+<p><code>sudo</code> lets permitted users run commands as root (or another user) using their own password, and logs each command. <code>sudo command</code> runs one command, <code>sudo -i</code> opens a root login shell, <code>sudo -u postgres psql</code> runs as another user, <code>sudo -l</code> lists what you are allowed to run, and <code>sudo -k</code> forgets cached credentials. Credentials are cached for a short time after a successful prompt. Commands are logged to the authentication log or journal.</p>
+<p>Rules live in <code>/etc/sudoers</code>, and you should edit it only with <code>visudo</code>, which locks the file and checks syntax before saving; a broken sudoers file can lock every admin out. The rule format is <code>who where=(as_whom) what</code>: <code>alice ALL=(ALL) ALL</code> lets alice run anything as anyone. A <code>%</code> means a group: <code>%wheel ALL=(ALL) ALL</code> on RHEL-family systems and <code>%sudo ALL=(ALL:ALL) ALL</code> on Debian-family systems give members full sudo rights, which is why adding a user to wheel or sudo makes them an admin. <code>NOPASSWD:</code> skips the password prompt, which is convenient for automation but weakens security. Least privilege means granting only specific commands, using full paths: <code>%webops ALL=(root) /usr/bin/systemctl restart nginx</code>. Aliases (<code>User_Alias</code>, <code>Cmnd_Alias</code>) keep large policies readable.</p>
+<p>Rather than editing the main file, drop separate files into <code>/etc/sudoers.d/</code>, edited with <code>visudo -f /etc/sudoers.d/webops</code>. This keeps changes modular and friendly to configuration management. Files there must not contain a dot or end with <code>~</code>, or they are ignored, and they should be mode 0440.</p>
+<p>Be careful which commands you grant: allowing an editor, a pager, a shell or tools like <code>find</code> or <code>tar</code> with sudo can let a user break out to a full root shell. Security reviewers check sudo rules for exactly these escapes, as well as for writable scripts called via sudo.</p>
+<p>polkit (formerly PolicyKit) is a separate framework that authorizes unprivileged processes to perform specific privileged actions through system services, such as a desktop user managing network connections or <code>systemctl</code> and <code>timedatectl</code> asking for admin authentication. Rules are written in JavaScript files in <code>/etc/polkit-1/rules.d/</code>, and <code>pkexec</code> runs a program as another user under polkit control. Keep polkit updated; serious vulnerabilities have been found in it in the past.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>sudo</dt><dd>Runs a command as another user (root by default) based on sudoers rules, with per-user authentication and logging.</dd><dt>visudo</dt><dd>Safely edits sudoers files with locking and syntax checking.</dd><dt>/etc/sudoers.d</dt><dd>Directory of drop-in sudoers files for modular rules.</dd><dt>su -</dt><dd>Switches to another user with a full login environment, requiring that user's password.</dd><dt>polkit</dt><dd>An authorization framework letting unprivileged processes request specific privileged actions from system services.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>The web operations team needs to restart nginx but should not have full root. You run visudo -f /etc/sudoers.d/webops and add %webops ALL=(root) /usr/bin/systemctl restart nginx, /usr/bin/systemctl reload nginx. A team member runs sudo -l to confirm the allowed commands, and each use appears in the logs under their own name.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Always choose visudo (or visudo -f for a drop-in) over editing sudoers with a normal editor, and remember that a % in sudoers means a group.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What is the difference between su - and sudo -i?</summary><p>su - requires the target (root) password; sudo -i uses the caller's own password and is permitted by sudoers rules, with logging.</p></details>
+<details class="sq"><summary>What does %wheel ALL=(ALL) ALL mean?</summary><p>Members of the wheel group may run any command as any user on any host.</p></details>
+<details class="sq"><summary>Why is granting sudo access to vim risky?</summary><p>An editor can spawn a shell, so a user could escape to a full root shell rather than just editing files.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Linux+ for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../linux-plus/">Open the Linux+ study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../ssh-hardening-key-based-auth-ssh-copy-id-sshd-config-permitrootlogin-p/">← SSH hardening: key-based auth, ssh-copy-id, sshd_config (Per</a><a href="../authentication-pam-modules-pam-faillock-pam-pwquality-ldap-sssd-kerber/">Authentication: PAM modules (pam_faillock, pam_pwquality), L →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Azure RBAC data-plane roles: Key Vault Secrets User… · AI-200 Lesson</title>
+<meta name="description" content="Azure separates two kinds of operations. The control plane (management plane) manages resources themselves: creating a Key Vault, changing a Service Bus ti">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Azure RBAC data-plane roles: Key Vault Secrets User… · AI-200 Lesson">
+<meta property="og:description" content="Azure separates two kinds of operations. The control plane (management plane) manages resources themselves: creating a Key Vault, changing a Service Bus ti">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/azure-rbac-data-plane-roles-key-vault-secrets-user-service-bus-data-se/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/azure-rbac-data-plane-roles-key-vault-secrets-user-service-bus-data-se/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 4: Secure, monitor, and troubleshoot Azure solutions</p>
+<h1>Azure RBAC data-plane roles: Key Vault Secrets User, Service Bus Data Sender/Receiver, AcrPull, Cosmos DB built-in data roles</h1>
+<article class="lbody">
+<p>Azure separates two kinds of operations. The control plane (management plane) manages resources themselves: creating a Key Vault, changing a Service Bus tier, deleting a Cosmos DB account. It goes through Azure Resource Manager. The data plane works with the data inside: reading a secret, sending a message, pulling an image, querying items. Roles such as Owner and Contributor are control-plane roles; they let you manage the resource but, for services using RBAC data access, they do not by themselves let you read the data. Apps need data-plane roles, assigned to their managed identity with least privilege.</p>
+<p>For Key Vault using the Azure RBAC permission model, Key Vault Secrets User can read secret contents, which is what an application needs. Key Vault Secrets Officer can also create, update and delete secrets, suitable for a rotation process or an admin. Key Vault Reader sees metadata but not secret values. Similar pairs exist for keys (Key Vault Crypto User, Crypto Officer) and certificates (Key Vault Certificates Officer), and Key Vault Administrator covers everything on the data plane.</p>
+<p>For Service Bus, Azure Service Bus Data Sender allows sending to queues and topics, Azure Service Bus Data Receiver allows receiving from queues and subscriptions, and Azure Service Bus Data Owner allows full data access including management of entities. Assign at the narrowest useful scope: a single queue or topic rather than the whole namespace. A producer needs only Sender; a worker needs only Receiver.</p>
+<p>For Azure Container Registry, AcrPull lets an identity pull images and AcrPush lets it push and pull. Compute platforms get AcrPull; build pipelines get AcrPush. Storage has equivalent roles, such as Storage Blob Data Reader and Contributor, and Event Hubs has Data Sender and Receiver.</p>
+<p>Cosmos DB for NoSQL is different and frequently tested. Its data-plane access uses Cosmos DB's own native role-based access control, with two built-in data roles: Cosmos DB Built-in Data Reader (read items and query, read metadata) and Cosmos DB Built-in Data Contributor (create, read, update and delete items). They are assigned not through the portal's usual Access control (IAM) page but through Cosmos DB SQL role assignments, for example with the CLI. The scope can be the account, a database or a container.</p>
+<pre class="code" tabindex="0"><code>PRINCIPAL=$(az identity show -g rg -n app-id --query principalId -o tsv)
+az cosmosdb sql role assignment create -g rg --account-name shop-cosmos \
+  --role-definition-name &quot;Cosmos DB Built-in Data Contributor&quot; \
+  --principal-id $PRINCIPAL --scope &quot;/&quot;
+
+az role assignment create --assignee $PRINCIPAL \
+  --role &quot;Azure Service Bus Data Receiver&quot; --scope $QUEUE_ID</code></pre>
+<p>Once apps use Microsoft Entra roles, you can disable local (key-based) authentication on services such as Cosmos DB, Service Bus and Storage, so leaked keys stop working. Role assignments can take several minutes to take effect, so a 403 Forbidden immediately after assignment may clear on its own; a persistent 403 usually means the wrong role, the wrong scope or the wrong identity.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Data plane</dt><dd>Operations on the data inside a service, such as reading secrets or sending messages, as opposed to managing the resource.</dd><dt>Key Vault Secrets User</dt><dd>A built-in role that can read secret contents in an RBAC-enabled Key Vault.</dd><dt>Azure Service Bus Data Sender</dt><dd>A built-in role allowing an identity to send messages to queues and topics in its scope.</dd><dt>Cosmos DB Built-in Data Contributor</dt><dd>A Cosmos DB native data role that allows item reads and writes, assigned with Cosmos DB SQL role assignments.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A developer gave a function app's identity Contributor on a Cosmos DB account, yet every query failed with 403 Forbidden. Contributor is a control-plane role. After running az cosmosdb sql role assignment create with Cosmos DB Built-in Data Contributor scoped to the account, queries succeeded, and the team then disabled key-based authentication on the account.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Contributor or Owner do not grant data access; pick the data role that matches the action (Secrets User to read secrets, Data Sender or Receiver for Service Bus, AcrPull for images) and remember Cosmos DB data roles are assigned with az cosmosdb sql role assignment.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>An app must only read secrets from an RBAC-mode Key Vault. Which role?</summary><p>Key Vault Secrets User, which can read secret contents but not change them.</p></details>
+<details class="sq"><summary>Why might an identity with Contributor on a Cosmos DB account still get 403 on queries?</summary><p>Contributor is a control-plane role; data access needs a Cosmos DB data role such as Built-in Data Reader or Contributor.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../managed-identities-system-assigned-vs-user-assigned-defaultazurecreden/">← Managed identities: system-assigned vs user-assigned; Defaul</a><a href="../key-vault-secrets-keys-and-certificates-versions-soft-delete-and-purge/">Key Vault: secrets, keys and certificates, versions, soft de →</a></nav>
+</main>
+</body>
+</html>

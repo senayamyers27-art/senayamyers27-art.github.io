@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Using several different providers in one configuration · Terraform Associate Lesson</title>
+<meta name="description" content="A single Terraform configuration can use as many providers as it needs. You declare each one in required_providers, configure each with its own provider bl">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Using several different providers in one configuration · Terraform Associate Lesson">
+<meta property="og:description" content="A single Terraform configuration can use as many providers as it needs. You declare each one in required_providers, configure each with its own provider bl">
+<link rel="canonical" href="https://senayamyers27-art.github.io/terraform/lessons/using-several-different-providers-in-one-configuration/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/terraform/lessons/using-several-different-providers-in-one-configuration/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Terraform Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004) · Domain 2: Terraform fundamentals</p>
+<h1>Using several different providers in one configuration</h1>
+<article class="lbody">
+<p>A single Terraform configuration can use as many providers as it needs. You declare each one in <code>required_providers</code>, configure each with its own <code>provider</code> block if it needs settings, and then write resources of any of their types side by side. <code>terraform init</code> installs them all, and one plan shows changes across every platform.</p>
+<pre class="code" tabindex="0"><code>terraform {
+  required_providers {
+    docker = { source = &quot;kreuzwerker/docker&quot;, version = &quot;~&gt; 3.0&quot; }
+    local  = { source = &quot;hashicorp/local&quot; }
+    random = { source = &quot;hashicorp/random&quot; }
+  }
+}
+
+provider &quot;docker&quot; {}
+
+resource &quot;random_pet&quot; &quot;name&quot; {}
+
+resource &quot;docker_container&quot; &quot;web&quot; {
+  name  = random_pet.name.id
+  image = &quot;nginx:latest&quot;
+}
+
+resource &quot;local_file&quot; &quot;note&quot; {
+  filename = &quot;container.txt&quot;
+  content  = docker_container.web.name
+}</code></pre>
+<p>Notice how the resources connect. The container's name comes from <code>random_pet</code>, and the file's content comes from the container. These references create implicit dependencies, so Terraform creates the random name first, then the container, then the file, even though three different providers are involved. This is the core advantage over running separate tools: Terraform sees one dependency graph that spans providers.</p>
+<p>Terraform maps each resource to its provider using the prefix of the resource type: <code>docker_container</code> goes to the provider whose local name is <code>docker</code>, <code>local_file</code> to <code>local</code>, and so on. Many providers, like <code>random</code> and <code>local</code>, need no configuration at all, so you can omit their <code>provider</code> blocks and Terraform uses an empty default configuration.</p>
+<p>A few practical considerations come with multi-provider configurations. Each provider has its own authentication, so the environment running Terraform needs credentials for all of them. Plans take longer as more APIs are refreshed. A failure in one provider's API can stop an apply part-way, leaving earlier resources created; Terraform records what succeeded in state, and the next apply continues from there. And very large configurations spanning many providers can become hard to manage, so teams often split them into separate root modules along team or lifecycle lines and pass values between them through outputs and data sources.</p>
+<p>This pattern is what the week's lab asks you to try: adding the third-party <code>kreuzwerker/docker</code> provider next to <code>local</code> shows one workflow managing two unrelated platforms. Run <code>terraform providers</code> to list every provider the configuration requires and which module requires it.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Resource type prefix</dt><dd>The part of a resource type before the first underscore, such as <code>docker</code> in <code>docker_container</code>, which selects the provider.</dd><dt>terraform providers</dt><dd>Command that shows the providers required by the configuration and its modules.</dd><dt>Dependency graph</dt><dd>Terraform's internal map of which objects depend on which, used to order operations across all providers.</dd><dt>Partial apply</dt><dd>An apply that stops after some changes succeed; state records completed work so the next run can continue.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A startup's configuration creates a managed database in its cloud provider, stores the generated password from the <code>random</code> provider in a secrets manager, and creates an uptime check in a monitoring SaaS pointing at the new endpoint, all in one plan.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> You do not need a separate configuration or command per provider. One configuration, one init and one apply can manage all of them, and references between them create dependencies automatically.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How does Terraform decide the creation order when resources from different providers reference each other?</summary><p>It builds a single dependency graph from the references, so a resource is created after anything it references, regardless of provider.</p></details>
+<details class="sq"><summary>Do you need a <code>provider</code> block for every provider you use?</summary><p>No. Providers that need no settings, such as <code>random</code> or <code>local</code>, can be used with only a <code>required_providers</code> entry.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Terraform Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../terraform/">Open the Terraform Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../provider-configuration-blocks-multiple-configurations-with-alias-and-t/">← Provider configuration blocks, multiple configurations with </a><a href="../what-state-is-for-mapping-configuration-to-real-objects-tracking-metad/">What state is for: mapping configuration to real objects, tr →</a></nav>
+</main>
+</body>
+</html>

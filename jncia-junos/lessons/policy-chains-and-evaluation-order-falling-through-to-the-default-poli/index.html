@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Policy chains and evaluation order, falling through to… · JNCIA-Junos Lesson</title>
+<meta name="description" content="You can apply more than one policy in the same place. When you list several policies, for example set protocols bgp group ISP export [ NO-BOGONS ADVERTISE-">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Policy chains and evaluation order, falling through to… · JNCIA-Junos Lesson">
+<meta property="og:description" content="You can apply more than one policy in the same place. When you list several policies, for example set protocols bgp group ISP export [ NO-BOGONS ADVERTISE-">
+<link rel="canonical" href="https://senayamyers27-art.github.io/jncia-junos/lessons/policy-chains-and-evaluation-order-falling-through-to-the-default-poli/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/jncia-junos/lessons/policy-chains-and-evaluation-order-falling-through-to-the-default-poli/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">JNCIA-Junos</a> / <a href="../">Lessons</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106 · Domain 7: Routing policy and firewall filters</p>
+<h1>Policy chains and evaluation order, falling through to the default policy</h1>
+<article class="lbody">
+<p>You can apply more than one policy in the same place. When you list several policies, for example <code>set protocols bgp group ISP export [ NO-BOGONS ADVERTISE-AGG ]</code>, they form a policy chain. Understanding how Junos walks through a chain is essential to predicting what a policy configuration will do.</p>
+<p>Evaluation works like this. For each route, Junos starts with the first policy in the chain and evaluates its terms from top to bottom. As soon as the route matches a term with a terminating action, <code>accept</code> or <code>reject</code>, the decision is final. Junos does not look at any remaining terms, any remaining policies or the default policy. If a route matches a term with <code>next policy</code>, or if it matches no term with a terminating action in this policy, evaluation moves on to the next policy in the chain. If the route gets to the end of the last configured policy without a terminating action, it falls through to the protocol's default policy, which makes the final decision.</p>
+<pre class="code" tabindex="0"><code>Chain: export [ P1 P2 P3 ] -&gt; then default policy
+Route A: P1 term 2 says reject   -&gt; rejected, P2/P3/default never checked
+Route B: no match in P1, P2 term 1 says accept -&gt; accepted
+Route C: no match in P1, P2 or P3 -&gt; protocol default decides</code></pre>
+<p>Because of this, the order of policies in the chain matters just as much as the order of terms in each policy. A broad <code>accept</code> in an early policy will prevent any later policy from rejecting the same route. A common design is to put the most specific protections first (for example, a policy that rejects bogon or private prefixes), then the policies that accept what you want to advertise, and finally an explicit reject-all term or policy so nothing slips through to a permissive default. When you add a policy to an existing chain, it goes to the end of the list by default; use <code>insert</code> to place it earlier, for example <code>insert export NO-BOGONS before ADVERTISE-AGG</code> under the protocol or group.</p>
+<p>Falling through to the default policy is often where surprises come from. Imagine a BGP export chain containing only a policy that accepts your aggregate route. Your aggregate is accepted, but other active BGP routes, such as routes from another provider, also get advertised because they fall through to BGP's default export policy, which advertises active BGP routes. The result is that you accidentally offer transit between two ISPs. Adding a final <code>then reject</code> term fixes it.</p>
+<p>Policies can also be applied at more than one level of BGP, such as the global, group and neighbor level. The most specific level wins: a neighbor-level export replaces the group-level export for that neighbor rather than adding to it. Junos also supports policy expressions, which combine policies with logical operators such as <code>&amp;&amp;</code>, <code>||</code> and <code>!</code>, but chains are the everyday tool. You can verify behavior with <code>test policy</code> and by checking <code>show route advertising-protocol bgp &lt;neighbor&gt;</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Policy chain</dt><dd>An ordered list of policies applied in one place, evaluated left to right.</dd><dt>Fall-through</dt><dd>What happens when no configured policy makes a terminating decision, so the protocol's default policy decides.</dd><dt>Explicit reject term</dt><dd>A final term with no <code>from</code> and <code>then reject</code>, used to prevent routes from reaching the default policy.</dd><dt>Policy hierarchy in BGP</dt><dd>Policies applied at neighbor level override those at group level, which override global ones.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A company's BGP export chain is <code>[ AGG-ONLY ]</code>, which accepts its 198.51.100.0/24 aggregate. A few days later its second ISP notices it is receiving routes from the first ISP through the company. The engineer adds a term with <code>then reject</code> at the end of AGG-ONLY, so other BGP routes no longer fall through to the default export policy.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> The first terminating action anywhere in the chain wins; later policies and the default are never consulted for that route. If nothing terminates, the protocol default policy decides, which for BGP export means advertising active BGP routes.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>In <code>export [ A B ]</code>, policy A accepts a route. Does policy B get to reject it?</summary><p>No. Once a terminating action accepts the route, evaluation stops.</p></details>
+<details class="sq"><summary>What decides the fate of a route that matches no terminating term in any policy of the chain?</summary><p>The protocol's default policy.</p></details>
+<details class="sq"><summary>How can you ensure only intended routes are exported by BGP?</summary><p>End the chain with an explicit reject term or policy so nothing falls through to the default.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study JNCIA-Junos for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../jncia-junos/">Open the JNCIA-Junos study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../policy-structure-terms-from-match-conditions-then-actions-terminating/">← Policy structure: terms, `from` match conditions, `then` act</a><a href="../route-filters-and-match-types-exact-orlonger-longer-upto-prefix-length/">Route filters and match types: exact, orlonger, longer, upto →</a></nav>
+</main>
+</body>
+</html>

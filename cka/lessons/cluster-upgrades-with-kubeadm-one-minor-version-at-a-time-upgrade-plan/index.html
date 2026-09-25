@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cluster upgrades with kubeadm: one minor version at a… · CKA Lesson</title>
+<meta name="description" content="Kubernetes releases a new minor version (1.x) regularly, and kubeadm supports upgrading only one minor version at a time. To go from 1.33 to 1.35 you upgra">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Cluster upgrades with kubeadm: one minor version at a… · CKA Lesson">
+<meta property="og:description" content="Kubernetes releases a new minor version (1.x) regularly, and kubeadm supports upgrading only one minor version at a time. To go from 1.33 to 1.35 you upgra">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/cluster-upgrades-with-kubeadm-one-minor-version-at-a-time-upgrade-plan/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/cluster-upgrades-with-kubeadm-one-minor-version-at-a-time-upgrade-plan/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 1: Cluster Architecture, Installation and Configuration</p>
+<h1>Cluster upgrades with kubeadm: one minor version at a time, upgrade plan/apply/node, drain, kubelet upgrade, uncordon, version skew</h1>
+<article class="lbody">
+<p>Kubernetes releases a new minor version (1.x) regularly, and kubeadm supports upgrading only one minor version at a time. To go from 1.33 to 1.35 you upgrade to 1.34 first. Patch versions within a minor can be skipped. The exam frequently gives you a cluster one minor behind and asks you to upgrade the control plane and a worker.</p>
+<p>Version skew rules explain the order. The kubelet must never be newer than the API server, and it may lag it by a few minor versions. kubectl should be within one minor version of the API server. So you always upgrade the control plane first, then the nodes.</p>
+<p>On the first control plane node, upgrade the kubeadm package to the exact target version, then check the plan and apply it. <code>kubeadm upgrade plan</code> verifies the cluster can be upgraded and shows available versions. <code>kubeadm upgrade apply v1.X.Y</code> upgrades the static Pod manifests, CoreDNS and kube-proxy, and renews certificates. On additional control plane nodes you run <code>kubeadm upgrade node</code> instead of apply.</p>
+<pre class="code" tabindex="0"><code># control plane (Debian/Ubuntu, adjust version)
+sudo apt-mark unhold kubeadm &amp;&amp; sudo apt-get install -y kubeadm='1.X.Y-*' &amp;&amp; sudo apt-mark hold kubeadm
+sudo kubeadm upgrade plan
+sudo kubeadm upgrade apply v1.X.Y
+kubectl drain cp1 --ignore-daemonsets
+sudo apt-mark unhold kubelet kubectl &amp;&amp; sudo apt-get install -y kubelet='1.X.Y-*' kubectl='1.X.Y-*' &amp;&amp; sudo apt-mark hold kubelet kubectl
+sudo systemctl daemon-reload &amp;&amp; sudo systemctl restart kubelet
+kubectl uncordon cp1</code></pre>
+<p>Each worker follows a similar pattern. From a machine with kubectl, drain the node so its Pods move elsewhere: <code>kubectl drain node01 --ignore-daemonsets</code> (add <code>--delete-emptydir-data</code> if Pods use emptyDir). On the worker, upgrade the kubeadm package and run <code>sudo kubeadm upgrade node</code>, which updates the local kubelet configuration. Then upgrade the kubelet and kubectl packages, reload systemd and restart the kubelet. Finally uncordon the node so it accepts Pods again.</p>
+<p>Note that Kubernetes package repositories are published per minor version, so moving to a new minor may require changing the repository definition on each node before the new packages appear. Verify with <code>kubectl get nodes</code>: the VERSION column shows each kubelet's version, which is the easiest way to confirm a node really finished.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>kubeadm upgrade plan</dt><dd>Checks upgradeability and lists target versions without changing anything.</dd><dt>kubeadm upgrade apply</dt><dd>Upgrades the first control plane node's components to a given version.</dd><dt>kubeadm upgrade node</dt><dd>Upgrades additional control plane nodes or updates a worker's kubelet config.</dd><dt>Version skew policy</dt><dd>Rules on how far component versions may differ; kubelets may never be newer than the API server.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Asked to upgrade the control plane and node01 to the next patch of the next minor, you upgrade kubeadm on cp1, run plan and apply, drain and upgrade the kubelet on cp1, uncordon it, then repeat drain, <code>kubeadm upgrade node</code>, kubelet upgrade and uncordon on node01. <code>kubectl get nodes</code> shows both at the new version.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Upgrading the package is not enough: forgetting <code>systemctl daemon-reload &amp;&amp; systemctl restart kubelet</code> leaves the node reporting the old version. Also remember <code>upgrade apply</code> only on the first control plane node and <code>upgrade node</code> everywhere else.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Can you upgrade directly from 1.33 to 1.35 with kubeadm?</summary><p>No; upgrade one minor at a time, 1.33 to 1.34, then 1.34 to 1.35.</p></details>
+<details class="sq"><summary>Why is the control plane upgraded before worker kubelets?</summary><p>The version skew policy forbids a kubelet newer than the API server.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../static-pods-and-etc-kubernetes-manifests-kubeadm-certificates-check-ex/">← Static Pods and /etc/kubernetes/manifests; kubeadm certifica</a><a href="../etcd-backup-and-restore-with-etcdctl-etcdutl-and-the-etcd-pki-pointing/">etcd backup and restore with etcdctl/etcdutl and the etcd PK →</a></nav>
+</main>
+</body>
+</html>

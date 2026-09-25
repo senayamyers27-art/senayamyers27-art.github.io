@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hard links vs symbolic links (ln, ln -s) and their limits · RHCSA Lesson</title>
+<meta name="description" content="To understand links you first need the idea of an inode. A file's data and metadata (owner, permissions, timestamps, size, where the data blocks are) live ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Hard links vs symbolic links (ln, ln -s) and their limits · RHCSA Lesson">
+<meta property="og:description" content="To understand links you first need the idea of an inode. A file's data and metadata (owner, permissions, timestamps, size, where the data blocks are) live ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/hard-links-vs-symbolic-links-ln-ln-s-and-their-limits/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/hard-links-vs-symbolic-links-ln-ln-s-and-their-limits/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 1: Understand and use essential tools</p>
+<h1>Hard links vs symbolic links (ln, ln -s) and their limits</h1>
+<article class="lbody">
+<p>To understand links you first need the idea of an inode. A file's data and metadata (owner, permissions, timestamps, size, where the data blocks are) live in an inode, identified by a number. A file name is just a directory entry that points to an inode. <code>ls -i</code> shows inode numbers, and the second column of <code>ls -l</code> shows the link count: how many names point to that inode.</p>
+<p>A hard link is simply another name for the same inode, created with <code>ln target linkname</code>. Both names are equal; neither is the 'original'. Editing the file through one name changes what you see through the other, and they always share permissions and ownership because there is only one inode. Deleting one name only decrements the link count; the data is freed when the count reaches zero and no process still has the file open.</p>
+<p>A symbolic (soft) link is a separate small file whose content is a path, created with <code>ln -s target linkname</code>. When you open the link, the system follows the path. <code>ls -l</code> shows it with an <code>l</code> type and an arrow: <code>lrwxrwxrwx ... current -&gt; /opt/app-2.1</code>. If the target is moved or deleted, the symlink remains but points at nothing; this is called a dangling or broken link, and <code>ls</code> usually highlights it in red.</p>
+<pre class="code" tabindex="0"><code>ln /data/report.txt /data/report-hard.txt
+ln -s /etc/httpd/conf/httpd.conf /root/httpd.conf
+ls -li /data                  # same inode number, link count 2
+readlink -f /root/httpd.conf  # where the symlink really points</code></pre>
+<p>The limits are what the exam asks about. Hard links cannot cross file systems, because inode numbers are only unique within one file system; trying gives an 'Invalid cross-device link' error. Hard links to directories are not allowed (not even for root), which prevents loops in the tree. Symbolic links have neither restriction: they can point to directories and to files on other file systems or even to paths that do not exist yet. The price is that they break when the target moves.</p>
+<p>Watch the argument order: <code>ln</code> takes the existing target first and the new name second, just like <code>cp</code>. With symlinks, a relative target is interpreted relative to the link's own directory, not your current directory, so <code>ln -s ../conf/app.conf /etc/app.conf</code> points to <code>/conf/app.conf</code>. Using absolute targets avoids that confusion.</p>
+<p>Also note that a symlink's own permissions (always shown as rwxrwxrwx) are ignored; access is decided by the target's permissions.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Inode</dt><dd>The on-disk structure holding a file's metadata and data locations, identified by a number unique within its file system.</dd><dt>Hard link</dt><dd>An additional directory entry pointing to the same inode; created with ln.</dd><dt>Symbolic link</dt><dd>A special file containing a path to another file or directory; created with ln -s.</dd><dt>Link count</dt><dd>The number of hard links (names) referring to an inode, shown in the second column of ls -l.</dd><dt>Dangling link</dt><dd>A symbolic link whose target no longer exists.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An application expects its configuration at /etc/app.conf but you keep the real file on a separate /data file system. A hard link fails with 'Invalid cross-device link', so you create <code>ln -s /data/app/app.conf /etc/app.conf</code> and confirm it with <code>ls -l /etc/app.conf</code>.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Hard links: same inode, same file system only, no directories, survive deletion of the other name. Symlinks: separate file holding a path, can cross file systems and point to directories, break if the target moves.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>If you delete the original name of a file that has a hard link, what happens to the data?</summary><p>Nothing is lost; the data remains reachable through the other name until the last link is removed.</p></details>
+<details class="sq"><summary>Why can't you hard-link a file from /home to /boot when they are different file systems?</summary><p>Hard links reference inode numbers, which are only meaningful within one file system.</p></details>
+<details class="sq"><summary>How can you tell a symbolic link in <code>ls -l</code> output?</summary><p>The first character is l and the name is followed by -&gt; and the target path.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../creating-deleting-copying-and-moving-files-and-directories-mkdir-p-cp/">← Creating, deleting, copying and moving files and directories</a><a href="../listing-setting-and-changing-standard-ugo-rwx-permissions-in-numeric-a/">Listing, setting and changing standard ugo/rwx permissions i →</a></nav>
+</main>
+</body>
+</html>

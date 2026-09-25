@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Static Pods vs scheduler-placed Pods; what happens when… · CKA Lesson</title>
+<meta name="description" content="Most Pods reach a node through the scheduler: the Pod is created in the API with an empty spec.nodeName, the kube-scheduler picks a node and writes a bindi">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Static Pods vs scheduler-placed Pods; what happens when… · CKA Lesson">
+<meta property="og:description" content="Most Pods reach a node through the scheduler: the Pod is created in the API with an empty spec.nodeName, the kube-scheduler picks a node and writes a bindi">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/static-pods-vs-scheduler-placed-pods-what-happens-when-the-scheduler-i/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/static-pods-vs-scheduler-placed-pods-what-happens-when-the-scheduler-i/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 2: Workloads and Scheduling</p>
+<h1>Static Pods vs scheduler-placed Pods; what happens when the scheduler is down</h1>
+<article class="lbody">
+<p>Most Pods reach a node through the scheduler: the Pod is created in the API with an empty <code>spec.nodeName</code>, the kube-scheduler picks a node and writes a binding, and that node's kubelet sees the Pod and starts it. Static Pods take a different path: the kubelet reads a manifest from its local <code>staticPodPath</code> directory and starts the Pod itself, then creates a mirror Pod in the API so you can see it.</p>
+<p>The differences matter for troubleshooting. Scheduler-placed Pods are usually owned by controllers (ReplicaSets, DaemonSets, Jobs) and can be managed fully through kubectl. Static Pods are owned by the node: they cannot be moved, scaled or truly deleted via the API, cannot reference ConfigMaps, Secrets or ServiceAccounts in the normal way, and exist only on the node that has the file. You can recognize a mirror Pod by the node name suffix and by its <code>ownerReferences</code>, which point to the Node object, and by the <code>kubernetes.io/config.mirror</code> annotation.</p>
+<p>Now consider the scheduler going down, for example because someone broke <code>/etc/kubernetes/manifests/kube-scheduler.yaml</code>. Running Pods are unaffected; the kubelets keep them running. Controllers keep working too: a Deployment scaled up still gets new Pod objects. But those Pods stay Pending forever with an empty NODE column and, tellingly, no FailedScheduling events at all, because nothing is even trying. DaemonSet Pods are placed by the default scheduler too, so new ones will also wait.</p>
+<p>Two kinds of Pods still start. Static Pods, because the kubelet does not need the scheduler. And Pods with <code>spec.nodeName</code> already set, because they are effectively pre-bound. That is why setting nodeName is a way to run a Pod in an emergency, and why the control plane itself can come up without a scheduler.</p>
+<pre class="code" tabindex="0"><code>kubectl get pods -n kube-system | grep scheduler
+kubectl get pods --field-selector=status.phase=Pending -A
+# on the control plane node
+sudo crictl ps -a | grep scheduler
+sudo crictl logs &lt;container-id&gt;
+sudo vi /etc/kubernetes/manifests/kube-scheduler.yaml</code></pre>
+<p>To fix it, look at the scheduler's container logs with crictl or <code>kubectl logs -n kube-system</code>, correct the manifest (a wrong image tag, a bad flag, or a wrong kubeconfig path are common), and wait for the kubelet to restart it. Pending Pods are then scheduled automatically. Note that Pods can also request a different scheduler with <code>spec.schedulerName</code>; if that scheduler does not exist, they stay Pending in exactly the same silent way.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Binding</dt><dd>The act of assigning a Pod to a node, recorded by setting spec.nodeName.</dd><dt>Mirror Pod</dt><dd>The API representation of a static Pod, owned by the Node and not editable.</dd><dt>schedulerName</dt><dd>A Pod field naming which scheduler should place it, default-scheduler by default.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>All new Pods in the cluster are Pending with no events. <code>kubectl get pods -n kube-system</code> shows kube-scheduler-cp1 in CrashLoopBackOff, and its logs complain about an unknown flag. Removing the bad flag from the manifest restarts the scheduler, and the backlog of Pending Pods is scheduled within seconds.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Pending with a FailedScheduling event means the scheduler ran and found no node. Pending with no events at all suggests the scheduler is not running or the Pod names a scheduler that does not exist.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which Pods can still start while the scheduler is down?</summary><p>Static Pods and Pods with spec.nodeName already set.</p></details>
+<details class="sq"><summary>How can you tell a mirror Pod apart from a normal Pod?</summary><p>Its name ends in the node name, its owner reference is the Node, and it carries the config.mirror annotation.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../workload-autoscaling-horizontalpodautoscaler-kubectl-autoscale-autosca/">← Workload autoscaling: HorizontalPodAutoscaler (kubectl autos</a><a href="../kubernetes-network-model-one-ip-per-pod-nat-free-pod-to-pod-traffic-th/">Kubernetes network model: one IP per Pod, NAT-free Pod-to-Po →</a></nav>
+</main>
+</body>
+</html>

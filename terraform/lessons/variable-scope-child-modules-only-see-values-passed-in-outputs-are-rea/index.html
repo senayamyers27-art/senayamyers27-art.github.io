@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Variable scope: child modules only see values passed in… · Terraform Associate Lesson</title>
+<meta name="description" content="Modules are sealed boxes. A child module cannot see the variables, locals, resources or data sources of the module that calls it, and the caller cannot rea">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Variable scope: child modules only see values passed in… · Terraform Associate Lesson">
+<meta property="og:description" content="Modules are sealed boxes. A child module cannot see the variables, locals, resources or data sources of the module that calls it, and the caller cannot rea">
+<link rel="canonical" href="https://senayamyers27-art.github.io/terraform/lessons/variable-scope-child-modules-only-see-values-passed-in-outputs-are-rea/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/terraform/lessons/variable-scope-child-modules-only-see-values-passed-in-outputs-are-rea/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Terraform Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004) · Domain 5: Terraform modules</p>
+<h1>Variable scope: child modules only see values passed in; outputs are read as `module.NAME.OUTPUT`</h1>
+<article class="lbody">
+<p>Modules are sealed boxes. A child module cannot see the variables, locals, resources or data sources of the module that calls it, and the caller cannot reach inside the child to read its resources directly. The only way in is through input variables, and the only way out is through outputs. This strict scoping is what makes a module predictable and reusable, because its behavior depends only on the values it is given.</p>
+<p>Consider a root module with <code>variable &quot;region&quot;</code>. A child module that writes <code>var.region</code> is referring to its own <code>region</code> variable, not the root's. If the child does not declare one, the reference is an error. To make the root's value available, the child must declare <code>variable &quot;region&quot;</code> and the caller must pass it in the module block: <code>region = var.region</code>. The same rule applies to environment variables set with <code>TF_VAR_region</code>: they set root module variables only, never child module variables directly.</p>
+<p>Going the other way, a child exposes data with <code>output</code> blocks. The caller reads those outputs using the syntax <code>module.MODULE_NAME.OUTPUT_NAME</code>. If the module uses <code>count</code>, you index it (<code>module.web[0].ip</code>), and with <code>for_each</code> you use the key (<code>module.web[&quot;blue&quot;].ip</code>). Anything the child does not export stays private; you cannot write <code>module.network.aws_vpc.this.id</code> in an expression.</p>
+<pre class="code" tabindex="0"><code># modules/network/outputs.tf
+output &quot;vpc_id&quot; {
+  value = aws_vpc.this.id
+}
+
+# root main.tf
+resource &quot;aws_security_group&quot; &quot;app&quot; {
+  vpc_id = module.network.vpc_id
+}</code></pre>
+<p>Only root module outputs are shown after <code>terraform apply</code> and by <code>terraform output</code>. If you want a child module's value to appear there, the root module must re-export it with its own output, such as <code>output &quot;vpc_id&quot; { value = module.network.vpc_id }</code>. This is a very common exam scenario: a value exists in a child module's output but does not appear on the command line because the root never passed it up.</p>
+<p>Because values flow only through explicit interfaces, reading a module's <code>variables.tf</code> and <code>outputs.tf</code> tells you everything you need to use it. Designing good modules means choosing that interface carefully: expose the inputs callers genuinely need to change and the outputs other parts of the system will consume, such as IDs, ARNs and endpoints, and keep everything else internal.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Module scope</dt><dd>The rule that each module has its own namespace and sees only its own variables, locals and resources.</dd><dt>Output value</dt><dd>A value a module exports with an output block, readable by its caller as module.NAME.OUTPUT.</dd><dt>Re-exporting</dt><dd>Declaring a root module output whose value is a child module output, so it appears in terraform output.</dd><dt>TF_VAR_ environment variable</dt><dd>An environment variable that sets a root module input variable; it does not reach child modules directly.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An engineer runs terraform output expecting to see the database endpoint, but nothing appears. The endpoint is an output of module.db, and the root module never re-exported it. Adding output &quot;db_endpoint&quot; { value = module.db.endpoint } in the root makes it visible.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Values move down only through module block arguments and up only through outputs; a child can never read the parent's var. values directly.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How does the root module read the subnet_ids output of a module named network?</summary><p>With module.network.subnet_ids.</p></details>
+<details class="sq"><summary>Why doesn't a child module output show up in terraform output?</summary><p>terraform output shows only root module outputs; the root must declare its own output that references the child's output.</p></details>
+<details class="sq"><summary>A child module references var.env but the root sets TF_VAR_env. Does the child get the value?</summary><p>Not automatically. The child must declare variable env and the root must pass it in the module block.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Terraform Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../terraform/">Open the Terraform Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../calling-a-module-with-a-module-block-and-passing-input-variables/">← Calling a module with a `module` block and passing input var</a><a href="../passing-provider-configurations-to-modules-with-the-providers-argument/">Passing provider configurations to modules with the `provide →</a></nav>
+</main>
+</body>
+</html>

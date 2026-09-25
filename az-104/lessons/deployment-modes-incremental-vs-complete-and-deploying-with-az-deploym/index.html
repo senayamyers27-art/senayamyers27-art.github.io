@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Deployment modes (incremental vs complete) and deploying… · Azure Administrator Lesson</title>
+<meta name="description" content="When you deploy a template to a resource group, Azure Resource Manager compares what the template declares with what already exists. The deployment mode de">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Deployment modes (incremental vs complete) and deploying… · Azure Administrator Lesson">
+<meta property="og:description" content="When you deploy a template to a resource group, Azure Resource Manager compares what the template declares with what already exists. The deployment mode de">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-104/lessons/deployment-modes-incremental-vs-complete-and-deploying-with-az-deploym/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-104/lessons/deployment-modes-incremental-vs-complete-and-deploying-with-az-deploym/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Azure Administrator</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure Administrator Associate AZ-104 · Domain 3: Deploy and manage Azure compute resources</p>
+<h1>Deployment modes (incremental vs complete) and deploying with `az deployment group create` or `New-AzResourceGroupDeployment`</h1>
+<article class="lbody">
+<p>When you deploy a template to a resource group, Azure Resource Manager compares what the template declares with what already exists. The deployment mode decides what happens to resources that are in the resource group but not in the template. This single setting can decide whether a deployment is safe or destroys production, so the exam tests it.</p>
+<p>Incremental mode is the default. Resources in the template are created if missing or updated to match the template if they exist. Resources that exist in the resource group but are not in the template are left alone. Note that for resources in the template, the properties you specify are applied as written, so a property you omit may be reset to its default rather than kept.</p>
+<p>Complete mode makes the resource group match the template exactly. Resources in the template are created or updated as in incremental mode, and any resource in the resource group that is not in the template is deleted. Complete mode only applies to resource group deployments. It is useful when a resource group is owned entirely by one template, but dangerous if other people also deploy resources there. A CanNotDelete lock on a resource prevents complete mode from deleting it. For new designs Microsoft recommends deployment stacks, which track the resources they manage, as a safer way to clean up removed resources.</p>
+<p>Before deploying, preview the changes with what-if. It lists resources that will be created, modified, deleted or ignored, without changing anything:</p>
+<pre class="code" tabindex="0"><code># Azure CLI: preview, then deploy in complete mode
+az deployment group what-if --resource-group rg-web --template-file main.bicep --parameters @prod.parameters.json --mode Complete
+az deployment group create  --resource-group rg-web --template-file main.bicep --parameters @prod.parameters.json --mode Complete
+
+# Azure PowerShell equivalent (incremental is the default if -Mode is omitted)
+New-AzResourceGroupDeployment -ResourceGroupName rg-web -TemplateFile main.bicep -TemplateParameterFile prod.parameters.json -Mode Complete -WhatIf
+New-AzResourceGroupDeployment -ResourceGroupName rg-web -TemplateFile main.bicep -TemplateParameterFile prod.parameters.json</code></pre>
+<p>Parameters can be passed inline (<code>--parameters storageName=stcontoso01</code> in the CLI, or as named arguments like <code>-storageName stcontoso01</code> in PowerShell) or from a parameters file. The resource group must exist first (<code>az group create</code> or <code>New-AzResourceGroup</code>). Other scopes use different commands: <code>az deployment sub create</code> or <code>New-AzSubscriptionDeployment</code> to deploy at subscription level (for example to create resource groups or assign policies), plus management group and tenant variants.</p>
+<p>Each deployment is recorded under the resource group's Deployments blade with its template, parameters, operations and any error. If a deployment fails, open that entry to see which resource failed and why, fix the template and redeploy. Because templates are idempotent, redeploying the same template in incremental mode brings resources back to the declared state without creating duplicates.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Incremental mode</dt><dd>The default deployment mode that creates or updates template resources and leaves other resources in the group untouched.</dd><dt>Complete mode</dt><dd>A deployment mode that also deletes resources in the resource group that are not declared in the template.</dd><dt>What-if</dt><dd>A preview operation that shows what a deployment would create, change or delete without making changes.</dd><dt>Idempotent</dt><dd>Producing the same result no matter how many times it is run, which is how template deployments behave.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A resource group contains a VM, a storage account and a key vault. A template that declares only the VM and storage account is deployed in complete mode. The what-if output lists the key vault as Delete, and the administrator stops, adds the key vault to the template, and only then runs az deployment group create.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Incremental is the default and never deletes; complete deletes whatever is in the resource group but not in the template. Always run what-if before a complete-mode deployment.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>A resource group has three resources and you deploy a template containing one of them in incremental mode. What happens to the other two?</summary><p>Nothing; incremental mode leaves resources not in the template unchanged.</p></details>
+<details class="sq"><summary>Which PowerShell parameter makes New-AzResourceGroupDeployment delete resources that are not in the template?</summary><p>-Mode Complete.</p></details>
+<details class="sq"><summary>How can you see the effect of a deployment before running it?</summary><p>Use what-if: az deployment group what-if, or New-AzResourceGroupDeployment with -WhatIf.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Azure Administrator for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-104/">Open the Azure Administrator study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../arm-templates-and-bicep-files-interpret-and-modify-deploy-export-a-dep/">← ARM templates and Bicep files: interpret and modify, deploy,</a><a href="../create-virtual-machines-images-sizes-os-and-data-disks-disk-types-stan/">Create virtual machines: images, sizes, OS and data disks, d →</a></nav>
+</main>
+</body>
+</html>

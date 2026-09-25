@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NetworkPolicy needs a CNI plugin that enforces it (for… · CKAD Lesson</title>
+<meta name="description" content="Kubernetes defines the NetworkPolicy API, but it does not enforce it itself. The API server will happily store any policy you create.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="NetworkPolicy needs a CNI plugin that enforces it (for… · CKAD Lesson">
+<meta property="og:description" content="Kubernetes defines the NetworkPolicy API, but it does not enforce it itself. The API server will happily store any policy you create.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/networkpolicy-needs-a-cni-plugin-that-enforces-it-for-example-calico-o/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/networkpolicy-needs-a-cni-plugin-that-enforces-it-for-example-calico-o/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 5: Services and Networking</p>
+<h1>NetworkPolicy needs a CNI plugin that enforces it (for example Calico or Cilium)</h1>
+<article class="lbody">
+<p>Kubernetes defines the NetworkPolicy API, but it does not enforce it itself. The API server will happily store any policy you create. Enforcement is the job of the cluster's network plugin, which implements the Container Network Interface (CNI), the standard way Kubernetes asks a plugin to wire up Pod networking. If the plugin does not support NetworkPolicy, your policies exist but have no effect, and all traffic keeps flowing.</p>
+<p>Plugins such as Calico and Cilium enforce NetworkPolicy. Calico typically programs rules in the Linux kernel's packet filtering (iptables or nftables) or uses eBPF; Cilium uses eBPF programs attached in the kernel. Both watch NetworkPolicy objects and Pod labels through the API server and update filtering rules on every node as Pods and policies change. Some plugins, particularly simple ones focused only on connectivity such as a basic Flannel setup, do not enforce policies on their own. Some local tools start with such a plugin by default, so check before trusting a test result.</p>
+<p>There is no error message when policies are unenforced, which is what makes this important. <code>kubectl apply</code> succeeds, <code>kubectl describe networkpolicy</code> shows the rules, and yet a connection you meant to block still works. The only real proof is a test.</p>
+<pre class="code" tabindex="0"><code># which network plugin is running?
+kubectl get pods -n kube-system -o wide | grep -Ei 'calico|cilium|flannel|weave'
+kubectl get daemonset -n kube-system
+# test: apply a default deny, then try to connect
+kubectl run t --image=busybox --rm -it --restart=Never -n shop -- wget -qO- -T 2 api:8080</code></pre>
+<p>For practice clusters, choose a setup with an enforcing plugin. minikube can start with Calico using <code>minikube start --cni=calico</code>, or with Cilium using <code>--cni=cilium</code>. kind can be created with its default network plugin disabled in its cluster config and Calico or Cilium installed afterwards. The CKAD exam environment is provided with a working setup, so there you focus on writing correct policies, but in your own lab an unenforcing plugin can make you believe a wrong policy is right, or a right policy is wrong.</p>
+<p>It also helps to understand the layering. NetworkPolicy is part of the core Kubernetes API (<code>networking.k8s.io/v1</code>) and portable across enforcing plugins. Calico and Cilium also offer their own custom resources with extra features, such as explicit deny rules, cluster-wide policies, ordering, or rules based on DNS names or application-layer protocols. Those are CRDs specific to one plugin, not part of the CKAD objectives; if a task says NetworkPolicy, write the standard object.</p>
+<p>From a security perspective, NetworkPolicy is defence in depth: it limits how far an attacker can move sideways after compromising one Pod, but it complements, rather than replaces, authentication and encryption between services.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>CNI (Container Network Interface)</dt><dd>The standard interface Kubernetes uses to have a plugin set up Pod networking.</dd><dt>Network plugin</dt><dd>The CNI implementation that provides Pod networking and, if supported, enforces NetworkPolicy.</dd><dt>Calico / Cilium</dt><dd>Widely used network plugins that enforce NetworkPolicy.</dd><dt>eBPF</dt><dd>Linux kernel technology for running small verified programs, used by some plugins to filter traffic.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A developer applies a default-deny policy in a practice cluster running a basic Flannel network and is puzzled when requests still succeed. Recreating the cluster with Calico as the network plugin makes the same policy block traffic as expected.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> If an exam-style question asks why a correct NetworkPolicy has no effect, the answer is that the cluster's CNI plugin does not enforce NetworkPolicy.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Does the API server reject NetworkPolicies when the network plugin cannot enforce them?</summary><p>No; they are stored normally but have no effect.</p></details>
+<details class="sq"><summary>Name two plugins that enforce NetworkPolicy.</summary><p>Calico and Cilium.</p></details>
+<details class="sq"><summary>How do you verify that a policy is enforced?</summary><p>Test real traffic, for example with wget from a temporary Pod, before and after applying the policy.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../networkpolicy-peers-podselector-namespaceselector-ipblock-and-vs-or-ru/">← NetworkPolicy peers: podSelector, namespaceSelector, ipBlock</a><a href="../ingress-resources-ingressclassname-host-and-path-rules-pathtype-prefix/">Ingress resources: ingressClassName, host and path rules, pa →</a></nav>
+</main>
+</body>
+</html>

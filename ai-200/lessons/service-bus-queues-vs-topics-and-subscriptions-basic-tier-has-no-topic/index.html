@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Service Bus queues vs topics and subscriptions; Basic… · AI-200 Lesson</title>
+<meta name="description" content="Azure Service Bus is a fully managed enterprise message broker. Applications send messages to it and other applications receive them later, which decouples">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Service Bus queues vs topics and subscriptions; Basic… · AI-200 Lesson">
+<meta property="og:description" content="Azure Service Bus is a fully managed enterprise message broker. Applications send messages to it and other applications receive them later, which decouples">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/service-bus-queues-vs-topics-and-subscriptions-basic-tier-has-no-topic/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/service-bus-queues-vs-topics-and-subscriptions-basic-tier-has-no-topic/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 3: Connect to and consume Azure services</p>
+<h1>Service Bus queues vs topics and subscriptions; Basic tier has no topics</h1>
+<article class="lbody">
+<p>Azure Service Bus is a fully managed enterprise message broker. Applications send messages to it and other applications receive them later, which decouples senders from receivers: the receiver can be offline, slow or scaled differently, and the message waits safely. Service Bus is built for high-value messages, such as orders or payments, where each message must be processed reliably. You work with it in Python through the <code>azure-servicebus</code> package.</p>
+<p>The top-level resource is a namespace, which has a fully qualified name ending in <code>servicebus.windows.net</code>. Inside a namespace you create queues and topics.</p>
+<p>A queue is point-to-point. Senders put messages in, and each message is delivered to exactly one receiver. Several receivers can read from the same queue (competing consumers), which spreads load and lets you scale workers out, but any single message goes to only one of them. Messages are stored durably and received in first-in, first-out order under normal conditions, and features such as sessions provide strict ordering when needed. Use a queue when one kind of work must be done once, like processing an order.</p>
+<p>A topic is publish-subscribe. Senders publish to the topic, and the topic has one or more subscriptions. Each subscription acts like its own virtual queue and gets a copy of every message that matches its filter rules. Receivers read from a subscription, not from the topic. Use topics when several independent systems must react to the same event: an OrderPlaced message could go to a billing subscription, a shipping subscription and an analytics subscription, each processed separately and at its own pace. Adding a new consumer means adding a subscription without touching the sender.</p>
+<pre class="code" tabindex="0"><code>from azure.servicebus import ServiceBusClient, ServiceBusMessage
+from azure.identity import DefaultAzureCredential
+
+with ServiceBusClient(&quot;shop-sb.servicebus.windows.net&quot;, DefaultAzureCredential()) as client:
+    with client.get_topic_sender(topic_name=&quot;orders&quot;) as sender:
+        sender.send_messages(ServiceBusMessage('{&quot;id&quot;: 1001}', subject=&quot;OrderPlaced&quot;))
+    with client.get_subscription_receiver(&quot;orders&quot;, &quot;billing&quot;) as receiver:
+        for msg in receiver.receive_messages(max_message_count=10, max_wait_time=5):
+            print(str(msg))
+            receiver.complete_message(msg)</code></pre>
+<p>The tier decides what you can use. Basic supports queues only, with no topics and subscriptions, and it lacks features such as sessions, transactions and duplicate detection. Standard adds topics and subscriptions and those advanced features, on shared capacity with pay-per-operation pricing. Premium runs on dedicated resources for predictable performance, supports larger messages, virtual network integration and private endpoints, and higher availability options. A classic exam trap: a design with multiple independent consumers of each message cannot use the Basic tier, because Basic has no topics.</p>
+<p>For permissions, grant the sending app Azure Service Bus Data Sender and the receiving app Azure Service Bus Data Receiver, scoped to the queue or topic, instead of distributing connection strings with shared access keys.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Namespace</dt><dd>The Service Bus container resource that holds queues and topics and defines the tier.</dd><dt>Queue</dt><dd>A point-to-point entity where each message is received by exactly one consumer.</dd><dt>Topic</dt><dd>A publish-subscribe entity where each matching subscription receives its own copy of a message.</dd><dt>Subscription</dt><dd>A named, queue-like view of a topic with its own filter rules and receivers.</dd><dt>Competing consumers</dt><dd>Multiple receivers reading from the same queue so work is spread among them.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A startup built order processing on a Basic namespace queue. When finance and warehouse teams both needed every order, a second consumer on the queue only received half the orders, because each queue message goes to one receiver. They moved to a Standard namespace with an orders topic and separate billing and shipping subscriptions, so each system now gets every order.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> One consumer per message means a queue; every consumer gets a copy means a topic with subscriptions, which requires Standard or Premium because Basic has no topics.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Two services must each receive every order message. What should you use?</summary><p>A topic with one subscription per service; a queue would deliver each message to only one of them.</p></details>
+<details class="sq"><summary>Which Service Bus tier cannot host topics?</summary><p>Basic; topics and subscriptions require Standard or Premium.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../choosing-the-store-cosmos-db-vs-postgresql-pgvector-vs-redis-for-a-giv/">← Choosing the store: Cosmos DB vs PostgreSQL + pgvector vs Re</a><a href="../receive-modes-peek-lock-complete-abandon-dead-letter-defer-vs-receive/">Receive modes: peek-lock (complete, abandon, dead-letter, de →</a></nav>
+</main>
+</body>
+</html>

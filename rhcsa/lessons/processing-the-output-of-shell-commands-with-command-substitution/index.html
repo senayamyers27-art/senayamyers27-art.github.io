@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Processing the output of shell commands with $( ) command… · RHCSA Lesson</title>
+<meta name="description" content="Command substitution runs a command and puts its output into your command line or into a variable. It is how a script learns facts about the system, such a">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Processing the output of shell commands with $( ) command… · RHCSA Lesson">
+<meta property="og:description" content="Command substitution runs a command and puts its output into your command line or into a variable. It is how a script learns facts about the system, such a">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/processing-the-output-of-shell-commands-with-command-substitution/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/processing-the-output-of-shell-commands-with-command-substitution/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 3: Create simple shell scripts</p>
+<h1>Processing the output of shell commands with $( ) command substitution</h1>
+<article class="lbody">
+<p>Command substitution runs a command and puts its output into your command line or into a variable. It is how a script learns facts about the system, such as the host name, today's date, the number of lines in a file or the IP address of an interface, and then uses them in messages, file names or tests.</p>
+<p>The syntax is <code>$(command)</code>. The shell runs the command in a subshell, captures its standard output, removes trailing newlines and substitutes the result in place. <code>today=$(date +%F)</code> stores something like 2026-09-25 in a variable, and <code>echo &quot;Kernel: $(uname -r)&quot;</code> embeds the output directly in a message. The older form, which wraps the command in backquote characters, does the same thing but is harder to read and to nest, so prefer <code>$( )</code>.</p>
+<pre class="code" tabindex="0"><code>#!/bin/bash
+host=$(hostname -s)
+users=$(who | wc -l)
+rootuse=$(df --output=pcent / | tail -1 | tr -d ' %')
+echo &quot;$host has $users login(s); / is ${rootuse}% full&quot;
+if [ &quot;$rootuse&quot; -gt 90 ]; then
+    echo &quot;WARNING: root file system almost full&quot; &gt;&amp;2
+fi
+tar -czf /backup/etc-$(date +%F).tar.gz /etc</code></pre>
+<p>Often you must trim a command's output down to exactly the value you need, and a pipeline inside the substitution does that. <code>cut</code> selects fields (<code>cut -d: -f1 /etc/passwd</code> gives user names), <code>awk '{print $2}'</code> prints a whitespace-separated column, <code>tr</code> deletes or translates characters, <code>head</code> and <code>tail</code> pick lines and <code>grep</code> filters them. Try the pipeline at the prompt first and only then wrap it in <code>$( )</code>.</p>
+<p>Only stdout is captured. Error messages still go to the terminal, so add <code>2&gt;/dev/null</code> inside the parentheses if you want them silenced. The command's exit status is available afterwards in <code>$?</code>, which lets you write <code>out=$(some_cmd) || echo 'failed'</code>.</p>
+<p>Quoting matters here too. When you use a substitution as an argument, put it in double quotes, <code>&quot;$(command)&quot;</code>, to keep its output as one word; unquoted, the result is split on whitespace and glob characters in it are expanded. The exception is when you deliberately want word splitting, such as <code>for u in $(cut -d: -f1 /etc/passwd)</code>, which gives one loop iteration per user name.</p>
+<p>Substitutions nest cleanly: <code>echo &quot;Config owned by $(rpm -qf $(which sshd))&quot;</code> finds the sshd binary and then the package that owns it.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Command substitution</dt><dd>$(command): replaces itself with the standard output of the command.</dd><dt>Backticks</dt><dd>The older <code>command</code> form of command substitution; equivalent but harder to nest.</dd><dt>cut</dt><dd>Extracts fields or character ranges from each line, e.g. cut -d: -f1.</dd><dt>awk '{print $N}'</dt><dd>Prints the Nth whitespace-separated field of each line.</dd><dt>Subshell</dt><dd>A child copy of the shell in which the substituted command runs.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A task asks for a script that saves a list of users with UID 1000 or above into a file named after the host. You compute <code>file=/root/users-$(hostname -s).txt</code> and fill it with <code>awk -F: '$3 &gt;= 1000 {print $1}' /etc/passwd &gt; &quot;$file&quot;</code>.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> $( ) captures stdout only and strips trailing newlines. Quote it (&quot;$(cmd)&quot;) unless you intentionally want the output split into separate words.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How do you store the current date as YYYY-MM-DD in a variable?</summary><p>d=$(date +%F).</p></details>
+<details class="sq"><summary>Does $(command) capture error messages?</summary><p>No, only standard output; redirect 2&gt;&amp;1 inside the parentheses to include them.</p></details>
+<details class="sq"><summary>Why prefer $( ) over backticks?</summary><p>It is easier to read and nests without escaping.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../processing-script-inputs-1-2-and-0/">← Processing script inputs: $1, $2, $#, $@ and $0</a><a href="../reading-input-and-using-variables-and-quoting-correctly/">Reading input and using variables and quoting correctly →</a></nav>
+</main>
+</body>
+</html>

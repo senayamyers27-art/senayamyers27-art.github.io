@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Extending Kubernetes: CustomResourceDefinitions, custom… · CKAD Lesson</title>
+<meta name="description" content="Kubernetes ships with built-in types such as Pods, Services and Deployments, but its API is designed to be extended. A CustomResourceDefinition (CRD) adds ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Extending Kubernetes: CustomResourceDefinitions, custom… · CKAD Lesson">
+<meta property="og:description" content="Kubernetes ships with built-in types such as Pods, Services and Deployments, but its API is designed to be extended. A CustomResourceDefinition (CRD) adds ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/extending-kubernetes-customresourcedefinitions-custom-resources-and-op/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/extending-kubernetes-customresourcedefinitions-custom-resources-and-op/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 4: Application Environment, Configuration and Security</p>
+<h1>Extending Kubernetes: CustomResourceDefinitions, custom resources and Operators; discovering them with kubectl get crd and api-resources</h1>
+<article class="lbody">
+<p>Kubernetes ships with built-in types such as Pods, Services and Deployments, but its API is designed to be extended. A CustomResourceDefinition (CRD) adds a new resource type to the API server. Once a CRD exists, you can create, list, edit and delete objects of that type with kubectl exactly like built-in objects. Those objects are called custom resources.</p>
+<p>A CRD declares the new type's API <code>group</code>, its <code>versions</code> (with an OpenAPI v3 schema that validates fields), its <code>scope</code> (Namespaced or Cluster), and its <code>names</code>: the kind, plural, singular and optional short names. The CRD's own name must be <code>&lt;plural&gt;.&lt;group&gt;</code>, for example <code>backups.example.com</code>.</p>
+<pre class="code" tabindex="0"><code>apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: backups.example.com
+spec:
+  group: example.com
+  scope: Namespaced
+  names:
+    plural: backups
+    singular: backup
+    kind: Backup
+    shortNames: [bk]
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              schedule: {type: string}
+              retainDays: {type: integer}
+---
+apiVersion: example.com/v1
+kind: Backup
+metadata:
+  name: nightly
+spec:
+  schedule: &quot;0 1 * * *&quot;
+  retainDays: 7</code></pre>
+<p>A CRD on its own only stores data. Something has to act on it. That is a controller: a program, usually running as a Deployment in the cluster, that watches objects of a type and works to make the real world match their spec. An Operator is a controller plus CRDs that together encode the operational knowledge for a particular application, such as how to deploy, back up, upgrade or fail over a database. You declare <code>kind: PostgresCluster</code> with three replicas, and the Operator creates the StatefulSets, Services, Secrets and backups for you.</p>
+<p>Discovering what extensions exist is a common exam starter. <code>kubectl get crd</code> (short for customresourcedefinitions) lists all CRDs with their creation times. <code>kubectl api-resources --api-group=example.com</code> shows the resource names, short names and whether they are namespaced. <code>kubectl explain backup.spec</code> works for CRDs that define a schema. Then use the plural, singular, or short name as normal: <code>kubectl get backups -A</code>, <code>kubectl get bk nightly -o yaml</code>, <code>kubectl describe backup nightly</code>.</p>
+<pre class="code" tabindex="0"><code>kubectl get crd
+kubectl get crd backups.example.com -o yaml
+kubectl api-resources | grep example.com
+kubectl get backups -n prod
+kubectl apply -f nightly-backup.yaml</code></pre>
+<p>Deleting a CRD deletes every custom resource of that type, so treat it with care. And if you apply a custom resource before its CRD exists, you get the error 'no matches for kind &quot;Backup&quot; in version &quot;example.com/v1&quot;'; install the CRD (often part of an Operator's Helm chart) first.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>CustomResourceDefinition (CRD)</dt><dd>An object that registers a new resource type with the Kubernetes API.</dd><dt>Custom resource</dt><dd>An object of a type defined by a CRD, managed with kubectl like built-in objects.</dd><dt>Controller</dt><dd>A program that watches objects and acts to make actual state match their spec.</dd><dt>Operator</dt><dd>A controller plus CRDs that automate running a specific application.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A platform team installs a certificate Operator. <code>kubectl get crd | grep cert</code> shows new types such as Certificate and Issuer. A developer then writes a short <code>kind: Certificate</code> manifest for their app's hostname, and the Operator's controller obtains the certificate and stores it in a Secret the Ingress uses.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> The CRD name is <code>&lt;plural&gt;.&lt;group&gt;</code>, and custom resources use <code>apiVersion: &lt;group&gt;/&lt;version&gt;</code>. <code>kubectl api-resources</code> tells you the exact plural and short names to use.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What happens if you apply a custom resource whose CRD is not installed?</summary><p>The API server rejects it with a 'no matches for kind' error.</p></details>
+<details class="sq"><summary>What makes an Operator more than a CRD?</summary><p>A controller that watches the custom resources and performs the actions to realise them.</p></details>
+<details class="sq"><summary>How do you list all CRDs in a cluster?</summary><p><code>kubectl get crd</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../output-tricks-for-fast-troubleshooting-o-wide-o-yaml-jsonpath-show-lab/">← Output tricks for fast troubleshooting: -o wide, -o yaml, js</a><a href="../request-flow-authentication-authorization-rbac-and-admission-control-m/">Request flow: authentication, authorization (RBAC) and admis →</a></nav>
+</main>
+</body>
+</html>

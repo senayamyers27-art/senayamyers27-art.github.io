@@ -80,7 +80,7 @@ CertHub.addLessons("ai-200", [
    ]
   ],
   "example": "A retailer runs its API on Container Apps in East US and West Europe. With a Standard registry in East US, the European replicas pulled across the Atlantic on every scale-out. They upgraded the registry to Premium, added a West Europe replica and a private endpoint in each VNet, then turned off public network access. Pushes still go to one login server, and each region now pulls locally over a private IP.",
-  "tip": "Any requirement mentioning multiple regions from one registry name, private endpoints, or blocking public access points to Premium; Basic and Standard differ only in storage and throughput.",
+  "tip": "Any requirement mentioning multiple regions from one registry name, private endpoints, or blocking public access points to Premium; Basic and Standard differ mainly in storage and throughput.",
   "check": [
    [
     "A company needs one registry that serves images to clusters in three regions with local pulls. Which tier and feature?",
@@ -588,7 +588,7 @@ CertHub.addLessons("ai-200", [
     "The status returned when requests exceed provisioned throughput; clients should retry after the indicated delay."
    ]
   ],
-  "example": "A document store saw high RU charges on every write. Checking x-ms-request-charge showed large inserts costing far more than expected because the default policy indexed every word-level property of a big text field and a 1536-number embedding. Excluding those paths cut write cost sharply, and switching reads from a query by id to read_item brought read charges down to about 1 RU each.",
+  "example": "A document store saw high RU charges on every write. Checking x-ms-request-charge showed large inserts costing far more than expected because the default policy indexed a big text field and every element of a 1536-number embedding. Excluding those paths cut write cost sharply, and switching reads from a query by id to read_item brought read charges down to about 1 RU each.",
   "tip": "Strong and Bounded Staleness reads cost about double; excluding unused paths lowers write RUs; a point read beats any query. Clients can relax consistency per request but cannot strengthen it beyond the account default.",
   "check": [
    [
@@ -1339,7 +1339,7 @@ CertHub.addLessons("ai-200", [
     "A blob trigger that uses Event Grid notifications instead of polling for lower latency."
    ]
   ],
-  "example": "A nightly cleanup meant for 2:00 ran every minute because a developer wrote the five-field cron expression 0 2 * * *, which NCRONTAB reads as second 0 of minute 2 of every hour. Rewriting it as 0 0 2 * * * fixed the schedule. The same team moved a slow polling blob trigger to the Event Grid source and saw processing start within seconds of upload.",
+  "example": "A nightly cleanup meant to run once at 2:00 ran sixty times each night because a developer wrote * 0 2 * * *, where the * in the leading seconds field means every second of the 2:00 minute. Rewriting it as 0 0 2 * * * fixed the schedule. The same team moved a slow polling blob trigger to the Event Grid source and saw processing start within seconds of upload.",
   "tip": "Timer schedules have six fields with seconds first (0 */5 * * * * is every five minutes). FUNCTION auth needs a key in x-functions-key or code; it is not user authentication.",
   "check": [
    [
@@ -1474,7 +1474,7 @@ CertHub.addLessons("ai-200", [
   "check": [
    [
     "What happens to a system-assigned identity when its web app is deleted?",
-    "It is deleted too, along with its role assignments, because it shares the resource's lifecycle."
+    "It is deleted too, because it shares the resource's lifecycle; its role assignments stop working and remain as orphaned entries until you remove them."
    ],
    [
     "Why does the same DefaultAzureCredential code work locally and in Azure?",
@@ -1659,12 +1659,12 @@ CertHub.addLessons("ai-200", [
   "t": "Azure App Configuration: key-values, labels, feature flags, Key Vault references, sentinel-key refresh and snapshots",
   "body": [
    "Azure App Configuration is a managed service for centralizing application settings and feature flags. Instead of every app and environment carrying its own copies of settings, apps load them at startup from one store and can refresh them at runtime without redeploying. It complements Key Vault: App Configuration holds ordinary settings, while secrets stay in Key Vault.",
-   "The basic item is a key-value. Keys are strings, often hierarchical with a separator such as `:` or `/`, like `Orders:MaxBatchSize`. Labels add another dimension: the same key can have several values distinguished by label, such as `Dev`, `Test` and `Prod`, or version numbers. An app selects the keys it needs with a key filter and chooses a label filter for its environment, falling back to the unlabeled value when needed. Values can have a content type, such as JSON.",
+   "The basic item is a key-value. Keys are strings, often hierarchical with a separator such as `:` or `/`, like `Orders:MaxBatchSize`. Labels add another dimension: the same key can have several values distinguished by label, such as `Dev`, `Test` and `Prod`, or version numbers. An app selects the keys it needs with a key filter and chooses a label filter for its environment; to fall back to unlabeled values, it loads the unlabeled keys first and then the environment's label, so labeled values override them. Values can have a content type, such as JSON.",
    "Feature flags are special key-values (stored under the `.appconfig.featureflag/` prefix) that turn features on or off at runtime. A flag can be simply enabled or disabled, or use filters such as a percentage rollout, a time window or targeting specific users and groups. Feature management libraries evaluate the flags in your code, which lets you ship code dark and enable it gradually, then turn it off instantly if something goes wrong.",
    "App Configuration can hold Key Vault references: a key-value whose content marks it as a pointer to a Key Vault secret URI. App Configuration never reads the secret itself. The client provider resolves it by calling Key Vault with the app's credential, so the app's identity needs both App Configuration Data Reader and Key Vault Secrets User. This gives one place to discover settings while secrets stay protected.",
    "```python\nfrom azure.appconfiguration.provider import load, SettingSelector, WatchKey\ncred = DefaultAzureCredential()\nconfig = load(endpoint=APPCONFIG_ENDPOINT, credential=cred,\n    selects=[SettingSelector(key_filter=\"Orders:*\", label_filter=\"Prod\")],\n    keyvault_credential=cred,\n    refresh_on=[WatchKey(\"Orders:Sentinel\")], refresh_interval=60,\n    feature_flag_enabled=True)\nbatch = config[\"Orders:MaxBatchSize\"]\nconfig.refresh()   # call periodically, e.g. per request; reloads only if the sentinel changed\n```",
    "Refreshing many keys individually is inefficient and can load a half-updated set. The sentinel key pattern solves this: you watch a single key, such as `Orders:Sentinel`. When you finish updating a group of settings, you change the sentinel's value last. The provider checks the sentinel after the refresh interval, and only when it changes does it reload all selected settings together. Your code calls `refresh()` regularly; it is cheap until the interval passes. Refresh can also be driven by Event Grid events from App Configuration for push-based updates.",
-   "Snapshots are immutable, named point-in-time copies of a set of key-values chosen by filters. Once created, a snapshot never changes, so an app that loads a snapshot gets exactly the same configuration every time, which is useful for safe deployments and rollbacks: deploy release 12 with snapshot `release-12`, and roll back to the previous snapshot if needed. Other features to know: point-in-time restore of revisions, import and export, geo-replicas for resiliency, and Free versus Standard tiers with different quotas and features. For security, prefer Microsoft Entra authentication with App Configuration Data Reader over access keys."
+   "Snapshots are immutable, named point-in-time copies of a set of key-values chosen by filters. Once created, a snapshot never changes, so an app that loads a snapshot gets exactly the same configuration every time, which is useful for safe deployments and rollbacks: deploy release 12 with snapshot `release-12`, and roll back to the previous snapshot if needed. Other features to know: point-in-time restore of revisions, import and export, geo-replicas for resiliency, and several pricing tiers (Free and Standard among them) with different quotas and features. For security, prefer Microsoft Entra authentication with App Configuration Data Reader over access keys."
   ],
   "terms": [
    [

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KQL basics: where, project, extend, summarize, count… · SC-200 Lesson</title>
+<meta name="description" content="Kusto Query Language (KQL) is the read-only query language used in Sentinel, Log Analytics and Defender XDR advanced hunting. A query starts with a table n">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="KQL basics: where, project, extend, summarize, count… · SC-200 Lesson">
+<meta property="og:description" content="Kusto Query Language (KQL) is the read-only query language used in Sentinel, Log Analytics and Defender XDR advanced hunting. A query starts with a table n">
+<link rel="canonical" href="https://senayamyers27-art.github.io/sc-200/lessons/kql-basics-where-project-extend-summarize-count-bin-ago-order-by-take/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/sc-200/lessons/kql-basics-where-project-extend-summarize-count-bin-ago-order-by-take/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">SC-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Security Operations Analyst Associate SC-200 · Domain 3: Perform threat hunting</p>
+<h1>KQL basics: where, project, extend, summarize, count, bin, ago(), order by, take, render</h1>
+<article class="lbody">
+<p>Kusto Query Language (KQL) is the read-only query language used in Sentinel, Log Analytics and Defender XDR advanced hunting. A query starts with a table name and passes rows through a pipeline of operators separated by the pipe character. Each operator takes the rows from the previous one and returns a new set. Reading top to bottom is reading the order of processing.</p>
+<p><code>where</code> filters rows. Put time filters and the most selective filters first so less data flows down the pipeline. <code>ago()</code> returns a time relative to now, so <code>where TimeGenerated &gt; ago(1d)</code> keeps the last day. Sentinel tables usually use <code>TimeGenerated</code>; Defender XDR advanced hunting tables use <code>Timestamp</code>. Comparison operators include <code>==</code> (case-sensitive equality), <code>=~</code> (case-insensitive equality) and <code>!=</code>.</p>
+<p><code>project</code> chooses and orders columns and can rename them. <code>extend</code> adds calculated columns while keeping all existing ones, for example <code>extend Hour = hourofday(TimeGenerated)</code>. <code>take</code> (or <code>limit</code>) returns an arbitrary set of rows and is useful for a quick look at a table's shape; it is not sorted. <code>order by</code> (or <code>sort by</code>) sorts, descending by default, and <code>top 10 by Count</code> sorts and limits in one step.</p>
+<p><code>summarize</code> aggregates. It groups rows by the columns after <code>by</code> and computes functions such as <code>count()</code>, <code>dcount()</code> (distinct count), <code>min()</code>, <code>max()</code>, <code>make_set()</code> and <code>arg_max()</code>. The <code>count</code> operator on its own just returns the number of rows. <code>bin()</code> rounds values into buckets, most often times, so <code>summarize count() by bin(TimeGenerated, 1h)</code> gives an hourly count. <code>render</code> draws a chart from the results, such as <code>render timechart</code> or <code>render barchart</code>.</p>
+<pre class="code" tabindex="0"><code>SecurityEvent
+| where TimeGenerated &gt; ago(1d)
+| where EventID == 4625
+| summarize Failures = count() by Account, bin(TimeGenerated, 1h)
+| where Failures &gt;= 10
+| order by Failures desc</code></pre>
+<p>This query finds accounts with ten or more failed Windows logons in any hour of the last day. Notice the pattern: filter by time, filter by event, aggregate, filter the aggregate, sort. Most detection queries follow it. To chart failures over time, remove the Account grouping and end with <code>render timechart</code>.</p>
+<p>Practice in the free Log Analytics demo environment. Start with <code>TableName | take 10</code> to see the columns, then build your query one line at a time, running it after each step so you understand what each operator changed.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>where</dt><dd>An operator that keeps only rows matching a condition.</dd><dt>summarize</dt><dd>An operator that groups rows and computes aggregates such as count() or dcount().</dd><dt>bin()</dt><dd>A function that rounds values, usually timestamps, into fixed-size buckets for grouping.</dd><dt>extend</dt><dd>An operator that adds calculated columns while keeping the existing ones.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An analyst suspects password spraying. She runs SigninLogs for the last day, filters failed results, summarizes distinct users per source IP per hour with dcount and bin, and sorts descending. One IP address has failed sign-ins against 300 different users in an hour, which she adds to an incident and blocks.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Know the difference between project (keep only listed columns) and extend (add columns, keep all), and between take (unsorted sample) and top (sorted and limited). Remember Timestamp in Defender tables and TimeGenerated in Sentinel tables.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How do you count events per hour for the last seven days?</summary><p>Filter with where TimeGenerated &gt; ago(7d), then summarize count() by bin(TimeGenerated, 1h).</p></details>
+<details class="sq"><summary>Does take return the newest rows?</summary><p>No. It returns an arbitrary set of rows; use top or order by for sorted results.</p></details>
+<details class="sq"><summary>What is the difference between == and =~?</summary><p>== is case-sensitive equality; =~ is case-insensitive equality.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study SC-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../sc-200/">Open the SC-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../microsoft-security-copilot-embedded-in-the-defender-portal-incident-su/">← Microsoft Security Copilot embedded in the Defender portal: </a><a href="../kql-for-hunting-has-vs-contains-in-and-has-any-let-statements-and-dyna/">KQL for hunting: has vs contains, in and has_any, let statem →</a></nav>
+</main>
+</body>
+</html>

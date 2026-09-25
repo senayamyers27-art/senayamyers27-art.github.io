@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Punted traffic and its effect on the control plane CPU · ENCOR Lesson</title>
+<meta name="description" content="A network device has several planes. The data plane forwards transit traffic, ideally in hardware.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Punted traffic and its effect on the control plane CPU · ENCOR Lesson">
+<meta property="og:description" content="A network device has several planes. The data plane forwards transit traffic, ideally in hardware.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ccnp-encor/lessons/punted-traffic-and-its-effect-on-the-control-plane-cpu/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ccnp-encor/lessons/punted-traffic-and-its-effect-on-the-control-plane-cpu/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">ENCOR</a> / <a href="../">Lessons</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2 · Domain 1: Architecture</p>
+<h1>Punted traffic and its effect on the control plane CPU</h1>
+<article class="lbody">
+<p>A network device has several planes. The data plane forwards transit traffic, ideally in hardware. The control plane runs routing protocols, spanning tree and other processes that build forwarding tables. The management plane handles SSH, SNMP and similar access. The control and management planes run on the route processor CPU, which is far slower than the forwarding hardware. Punting is when the data plane hands a packet up to the CPU instead of forwarding it in hardware.</p>
+<p>Some punts are legitimate and necessary. Packets addressed to the device itself are punted: routing protocol hellos and updates (OSPF, EIGRP, BGP), SSH and SNMP sessions, and ping to the device's address. Other packets are punted because they need processing that the hardware cannot do. Common examples are packets with an expired TTL (time to live), which require the CPU to generate an ICMP time exceeded message, as traceroute relies on; packets with IP options set; traffic that needs ARP resolution (the glean adjacency); packets that must be fragmented because they exceed the egress MTU; traffic matched by features configured with logging, such as an ACL entry with the <code>log</code> keyword; and traffic whose TCAM entries could not be programmed because the table is full.</p>
+<p>Why this matters: the CPU has limited capacity. If too much traffic is punted, CPU utilization climbs toward 100 percent. The processes that keep the network running then starve: routing protocol hellos are missed and adjacencies drop, spanning tree BPDUs are not processed on time, which can cause loops, first hop redundancy protocols flap, and management access becomes slow or impossible. A single misconfiguration can take down a stable network this way. Attackers can deliberately cause punting, for example by flooding a router with packets aimed at its own addresses or packets with expiring TTLs, as a denial of service against the control plane.</p>
+<p>To diagnose punting, check CPU with <code>show processes cpu sorted</code> and <code>show processes cpu history</code>. High utilization in interrupt context (the second number in the 'CPU utilization for five seconds: X%/Y%' line) suggests traffic being handled by the CPU, while high process utilization points to a specific process. On Catalyst IOS XE platforms, commands such as <code>show platform software fed switch active punt cause summary</code> or a CPU packet capture can show which punt causes and queues are busy.</p>
+<p>Protections include Control Plane Policing (CoPP), which rate-limits traffic to the CPU by class; hardware rate limiters on many platforms; avoiding the <code>log</code> keyword on high-volume ACL entries; fixing MTU mismatches to reduce fragmentation; and ensuring TCAM is sized so features stay in hardware. The goal is that the CPU only sees traffic it genuinely needs to process, at a rate it can handle.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Punt</dt><dd>Sending a packet from the hardware data plane up to the route processor CPU for software handling.</dd><dt>Control plane</dt><dd>The functions that build forwarding state, such as routing protocols and spanning tree, running on the CPU.</dd><dt>Data plane</dt><dd>The forwarding path that moves transit packets, ideally in hardware.</dd><dt>CoPP</dt><dd>Control Plane Policing: a QoS policy that rate-limits traffic destined to or punted to the CPU.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>After a change, a distribution switch shows 95 percent CPU and its OSPF neighbors flap. <code>show processes cpu sorted</code> shows high interrupt time, and punt statistics reveal a new ACL entry with the log keyword matching a busy backup flow. Removing the log keyword brings the traffic back into hardware and OSPF stabilizes.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> If a question links high CPU with flapping adjacencies, think punted traffic and protect with CoPP. TTL-expired packets, IP options, glean (ARP) and ACL logging are classic punt causes.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Name three kinds of transit traffic that are commonly punted to the CPU.</summary><p>Packets with TTL expiring (needing ICMP time exceeded), packets with IP options, and packets matching an ACL entry with the log keyword; also traffic needing ARP resolution or fragmentation.</p></details>
+<details class="sq"><summary>Why can excessive punting cause a routing outage?</summary><p>The CPU is saturated, so routing protocol hellos are not sent or processed in time, adjacencies time out and routes are withdrawn.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study ENCOR for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ccnp-encor/">Open the ENCOR study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../cam-and-tcam-tables-and-what-each-stores/">← CAM and TCAM tables and what each stores</a><a href="../hypervisors-type-1-vs-type-2-virtual-machines-and-virtual-switching/">Hypervisors: type 1 vs type 2, virtual machines and virtual  →</a></nav>
+</main>
+</body>
+</html>

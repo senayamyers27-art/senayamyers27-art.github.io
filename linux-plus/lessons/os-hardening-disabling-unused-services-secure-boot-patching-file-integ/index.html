@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OS hardening: disabling unused services, secure boot… · Linux+ Lesson</title>
+<meta name="description" content="Hardening means reducing a system's attack surface: removing what is not needed, locking down what remains, keeping software current, and watching for unau">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="OS hardening: disabling unused services, secure boot… · Linux+ Lesson">
+<meta property="og:description" content="Hardening means reducing a system's attack surface: removing what is not needed, locking down what remains, keeping software current, and watching for unau">
+<link rel="canonical" href="https://senayamyers27-art.github.io/linux-plus/lessons/os-hardening-disabling-unused-services-secure-boot-patching-file-integ/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/linux-plus/lessons/os-hardening-disabling-unused-services-secure-boot-patching-file-integ/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Linux+</a> / <a href="../">Lessons</a></p>
+<p class="note">CompTIA Linux+ XK0-006 · Domain 3: Security</p>
+<h1>OS hardening: disabling unused services, secure boot, patching, file integrity (AIDE)</h1>
+<article class="lbody">
+<p>Hardening means reducing a system's attack surface: removing what is not needed, locking down what remains, keeping software current, and watching for unauthorized change. No single control stops every attack, so hardening layers several defenses, an approach called defense in depth.</p>
+<p>Start with services. Every listening network service is a possible entry point, so run only what the server's role requires. <code>ss -tulpn</code> lists listening TCP and UDP ports with the owning process, and <code>systemctl list-unit-files --state=enabled</code> shows what starts at boot. For anything unnecessary, <code>systemctl disable --now name</code> stops it and prevents startup, and <code>systemctl mask</code> blocks it entirely. Better still, remove unneeded packages with dnf or apt so there is nothing to patch. Legacy cleartext protocols such as Telnet, rsh and plain FTP should be replaced with SSH and SFTP. Minimal installation images make this easier from the start.</p>
+<p>Secure Boot is a UEFI feature that verifies digital signatures on boot components so only trusted code runs before the operating system. Most distributions use a small signed shim loader that then verifies GRUB and the kernel, and the kernel can require signed modules. This defends against bootkits and rootkits that tamper with early boot. <code>mokutil --sb-state</code> shows whether Secure Boot is enabled. Third-party kernel modules, such as some drivers, must be signed with a key enrolled as a MOK (Machine Owner Key) or they will not load. Also protect firmware and GRUB with passwords so an attacker with console access cannot easily change boot parameters.</p>
+<p>Patching fixes known vulnerabilities, and unpatched software is one of the most common ways systems are compromised. Apply updates regularly with <code>dnf upgrade</code> or <code>apt update &amp;&amp; apt upgrade</code>, prioritizing security updates (<code>dnf updateinfo list --security</code>, or <code>dnf upgrade --security</code>). Automate where appropriate with dnf-automatic or unattended-upgrades. Kernel updates need a reboot to take effect, unless you use a live patching service. Test updates on non-production systems first, schedule maintenance windows, and keep a rollback plan, such as snapshots or <code>dnf history undo</code>.</p>
+<p>File integrity monitoring detects unauthorized changes to important files, a common sign of intrusion. AIDE (Advanced Intrusion Detection Environment) builds a database of file attributes and hashes, then compares later scans against it. Configuration is in <code>/etc/aide.conf</code> (or <code>/etc/aide/aide.conf</code>). Typical use: <code>aide --init</code> creates the database, you move the new file into place as the reference database (for example renaming <code>aide.db.new.gz</code> to <code>aide.db.gz</code>), then <code>aide --check</code> reports added, removed and changed files, usually from a daily cron job or timer. After legitimate changes such as patching, run <code>aide --update</code> and replace the database. Store a copy of the database offline or read-only, since an attacker with root could otherwise alter it.</p>
+<p>Other common hardening steps include strict SSH settings, a host firewall, SELinux or AppArmor enforcing, restrictive mount options (<code>noexec</code>, <code>nosuid</code>, <code>nodev</code> on /tmp), sensible sysctl network settings, disabling unused kernel modules, strong password policies and centralized logging. Hardening benchmarks bring these together into checklists.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Attack surface</dt><dd>The total set of services, software and interfaces an attacker could try to exploit.</dd><dt>Secure Boot</dt><dd>A UEFI feature that only runs signed boot loaders and kernels, blocking tampered boot code.</dd><dt>MOK</dt><dd>Machine Owner Key: a user-enrolled key used with shim to trust additional signed modules or kernels.</dd><dt>AIDE</dt><dd>Advanced Intrusion Detection Environment: a file integrity checker comparing files to a baseline database.</dd><dt>Patch management</dt><dd>The process of regularly testing and applying software updates to fix vulnerabilities.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Hardening a new mail relay, you run ss -tulpn and find cups and an old rpcbind listener. You disable and remove both packages, apply all security updates with dnf upgrade --security and reboot into the new kernel, confirm mokutil --sb-state reports Secure Boot enabled, and initialize AIDE so a nightly check will flag unexpected changes under /etc and /usr/bin.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> After legitimate updates, the AIDE baseline must be updated, or every patched binary will show up as a change and real intrusions will hide in the noise.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which command lists listening ports and the processes that own them?</summary><p>ss -tulpn.</p></details>
+<details class="sq"><summary>What threat does Secure Boot mainly defend against?</summary><p>Tampered or malicious boot loaders, kernels and early boot code such as bootkits and rootkits.</p></details>
+<details class="sq"><summary>What does aide --check compare?</summary><p>The current state of monitored files (hashes, permissions, ownership, sizes) against the stored baseline database.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Linux+ for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../linux-plus/">Open the Linux+ study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../cryptography-hashing-sha256sum-gpg-signatures-tls-certificates-luks-di/">← Cryptography: hashing (sha256sum), GPG signatures, TLS certi</a><a href="../compliance-and-auditing-auditd-log-review-vulnerability-scanning-cis-b/">Compliance and auditing: auditd, log review, vulnerability s →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kubernetes network model: one IP per Pod, NAT-free… · CKA Lesson</title>
+<meta name="description" content="Kubernetes makes networking simple for applications by setting a few strict rules and leaving the implementation to a plugin. Understanding the rules helps">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Kubernetes network model: one IP per Pod, NAT-free… · CKA Lesson">
+<meta property="og:description" content="Kubernetes makes networking simple for applications by setting a few strict rules and leaving the implementation to a plugin. Understanding the rules helps">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/kubernetes-network-model-one-ip-per-pod-nat-free-pod-to-pod-traffic-th/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/kubernetes-network-model-one-ip-per-pod-nat-free-pod-to-pod-traffic-th/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 3: Services and Networking</p>
+<h1>Kubernetes network model: one IP per Pod, NAT-free Pod-to-Pod traffic, the CNI plugin's role, Pod and Service CIDRs</h1>
+<article class="lbody">
+<p>Kubernetes makes networking simple for applications by setting a few strict rules and leaving the implementation to a plugin. Understanding the rules helps you reason about any connectivity problem.</p>
+<p>The model has three requirements. Every Pod gets its own IP address, shared by all containers in the Pod. Every Pod can communicate with every other Pod on any node without network address translation (NAT), so the source IP a receiver sees is the sender's real Pod IP. And agents on a node, such as the kubelet, can reach all Pods on that node. Within a Pod, containers share one network namespace, so they talk over <code>localhost</code> and must not use the same port. A small pause (sandbox) container holds that namespace open.</p>
+<p>Kubernetes itself does not implement these rules. The Container Network Interface (CNI) plugin does. When the kubelet creates a Pod sandbox, the runtime calls the CNI plugin, which creates a virtual interface in the Pod's network namespace, assigns an IP from the node's range and sets up routes. Between nodes, the plugin either routes Pod traffic natively (for example with BGP) or encapsulates it in an overlay such as VXLAN. Without a working CNI, Pods get stuck in ContainerCreating and nodes stay NotReady.</p>
+<p>Two address ranges must not overlap with each other or with your node network. The Pod CIDR is the range Pods draw from, set with <code>kubeadm init --pod-network-cidr</code> (it becomes the controller-manager's <code>--cluster-cidr</code>). With node IPAM, each node gets a slice recorded in <code>node.spec.podCIDR</code>, though many CNIs manage their own allocation. The Service CIDR is the range for Service virtual IPs, set by the API server's <code>--service-cluster-ip-range</code>; kubeadm's default is <code>10.96.0.0/12</code>, which is why the <code>kubernetes</code> Service is often 10.96.0.1 and CoreDNS is often 10.96.0.10.</p>
+<pre class="code" tabindex="0"><code>kubectl get pods -o wide                     # Pod IPs and nodes
+kubectl get nodes -o jsonpath='{.items[*].spec.podCIDR}'
+grep service-cluster-ip-range /etc/kubernetes/manifests/kube-apiserver.yaml
+kubectl cluster-info dump | grep -m1 cluster-cidr</code></pre>
+<p>Service IPs are different from Pod IPs: no interface owns them, and they exist only as forwarding rules programmed by kube-proxy (or a replacement such as Cilium). Pod IPs are real, routable addresses inside the cluster network. Keep that distinction in mind: pinging a Service IP often fails even when the Service works fine, while pinging a Pod IP should normally succeed.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Pod CIDR</dt><dd>The address range from which Pod IPs are allocated, set at cluster creation.</dd><dt>Service CIDR</dt><dd>The address range for Service ClusterIPs, set by --service-cluster-ip-range.</dd><dt>Pause container</dt><dd>The sandbox container that holds a Pod's shared network namespace.</dd><dt>Overlay network</dt><dd>An encapsulation (such as VXLAN) that carries Pod traffic between nodes over the node network.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A new cluster was built with a Pod CIDR of 192.168.0.0/16 while the nodes themselves are on 192.168.1.0/24. Pods on different nodes cannot reach each other and some node traffic is misrouted. Rebuilding with a non-overlapping Pod CIDR such as 10.244.0.0/16 fixes it, showing why ranges must be planned first.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Remember which component owns which range: the Pod CIDR is used by the CNI and controller-manager, the Service CIDR by the API server and kube-proxy. They must not overlap each other or the node subnet.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Do Pods need NAT to talk to Pods on other nodes?</summary><p>No, the network model requires NAT-free Pod-to-Pod communication.</p></details>
+<details class="sq"><summary>Where do you find the Service CIDR on a kubeadm cluster?</summary><p>In the --service-cluster-ip-range flag of the kube-apiserver static Pod manifest.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../static-pods-vs-scheduler-placed-pods-what-happens-when-the-scheduler-i/">← Static Pods vs scheduler-placed Pods; what happens when the </a><a href="../kube-proxy-modes-iptables-ipvs-nftables-and-how-service-virtual-ips-wo/">kube-proxy modes (iptables, IPVS, nftables) and how Service  →</a></nav>
+</main>
+</body>
+</html>

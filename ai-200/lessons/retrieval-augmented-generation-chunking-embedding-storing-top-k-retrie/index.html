@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Retrieval-augmented generation: chunking, embedding… · AI-200 Lesson</title>
+<meta name="description" content="A large language model only knows what was in its training data, and it may confidently invent answers about your private documents. Retrieval-augmented ge">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Retrieval-augmented generation: chunking, embedding… · AI-200 Lesson">
+<meta property="og:description" content="A large language model only knows what was in its training data, and it may confidently invent answers about your private documents. Retrieval-augmented ge">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/retrieval-augmented-generation-chunking-embedding-storing-top-k-retrie/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/retrieval-augmented-generation-chunking-embedding-storing-top-k-retrie/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 2: Develop AI solutions by using Azure data management services</p>
+<h1>Retrieval-augmented generation: chunking, embedding, storing, top-k retrieval with metadata filters, adding results to the prompt</h1>
+<article class="lbody">
+<p>A large language model only knows what was in its training data, and it may confidently invent answers about your private documents. Retrieval-augmented generation (RAG) fixes this by finding relevant passages from your own data at question time and putting them in the prompt, so the model answers from supplied facts. RAG has an ingestion pipeline and a query pipeline, and the data services from this domain sit in the middle.</p>
+<p>Ingestion starts with chunking: splitting documents into passages small enough to embed and to fit several into a prompt, yet large enough to carry meaning. Common strategies are fixed-size chunks measured in tokens with some overlap between neighbors (so a sentence cut at a boundary still appears whole in one chunk), or structure-aware splitting by headings, paragraphs or sentences. Chunks that are too big dilute the match; chunks that are too small lose context. Keep metadata with every chunk: source document, title, section, language, date, and access information such as tenant or allowed groups.</p>
+<p>Next is embedding. Each chunk goes through an embedding model, which returns a fixed-length vector. Use the same model for documents and for queries; vectors from different models are not comparable. Record the model name with the data so you know when to re-embed.</p>
+<p>Then storing: write the chunk text, metadata and vector to a vector-capable store, such as a Cosmos DB container with a vector policy, a PostgreSQL table with a <code>vector(n)</code> column, or a Redis index. Keep it current with the change feed or an event-driven job when source documents change.</p>
+<p>At query time, embed the user's question, then run top-k retrieval: fetch the k chunks whose vectors are nearest to the question vector, where k is typically small, such as 3 to 10. Apply metadata filters in the same query, for example the user's tenant, a product line or a language. Filters improve relevance and are essential for security: they ensure a user never retrieves chunks from documents they are not allowed to see. Some systems combine vector similarity with keyword search (hybrid search) or rerank results to improve quality.</p>
+<pre class="code" tabindex="0"><code>q_vec = embed(question)
+hits = container.query_items(
+  &quot;SELECT TOP 5 c.text, c.source FROM c WHERE c.tenantId = @t &quot;
+  &quot;ORDER BY VectorDistance(c.embedding, @v)&quot;,
+  parameters=[{&quot;name&quot;: &quot;@t&quot;, &quot;value&quot;: tenant}, {&quot;name&quot;: &quot;@v&quot;, &quot;value&quot;: q_vec}],
+  partition_key=tenant)
+context = &quot;\n\n&quot;.join(f&quot;[{h['source']}] {h['text']}&quot; for h in hits)
+messages = [
+  {&quot;role&quot;: &quot;system&quot;, &quot;content&quot;: &quot;Answer only from the sources below. If the answer is not there, say so. Cite sources.\n\n&quot; + context},
+  {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: question}]</code></pre>
+<p>Finally, add the results to the prompt. Place retrieved passages in a clearly delimited section, tell the model to answer only from them and to say when the answer is not present, and ask for citations so users can verify. Watch the model's context window: k times chunk size plus instructions must fit. Treat retrieved text as data, not instructions, since documents might contain text that tries to steer the model.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>RAG</dt><dd>Retrieval-augmented generation: retrieving relevant data at query time and adding it to the model prompt to ground answers.</dd><dt>Chunking</dt><dd>Splitting source documents into passages, often with overlap, before embedding them.</dd><dt>Top-k retrieval</dt><dd>Returning the k items whose vectors are most similar to the query vector.</dd><dt>Metadata filter</dt><dd>A condition on chunk properties, such as tenant or language, applied alongside vector search.</dd><dt>Grounding</dt><dd>Constraining a model's answer to supplied source content, often with instructions and citations.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An HR assistant answered a question about parental leave using another country's policy. The team added country and tenant metadata to every chunk, filtered retrieval on the user's country, lowered chunk size with a small overlap so policy sections stayed intact, and instructed the model to cite sources and say when no policy matched. Wrong-country answers stopped.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Use the same embedding model for chunks and queries; enforce access control with metadata filters at retrieval time, not by asking the model to ignore documents.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why add overlap between adjacent chunks?</summary><p>So sentences or ideas cut at a chunk boundary still appear intact in at least one chunk, improving retrieval.</p></details>
+<details class="sq"><summary>Where should tenant isolation be enforced in a RAG app?</summary><p>In the retrieval query as a metadata filter (or partition), so other tenants' chunks never reach the prompt.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../pgvector-vector-n-columns-distance-operators-l2-cosine-inner-product-h/">← pgvector: vector(n) columns, distance operators (&lt;-&gt; L2, &lt;=&gt;</a><a href="../azure-managed-redis-cache-aside-pattern-ttl-and-invalidation-eviction/">Azure Managed Redis: cache-aside pattern, TTL and invalidati →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GRE over IPsec and virtual tunnel interfaces for routing… · ENCOR Lesson</title>
+<meta name="description" content="Enterprises want two things from a site-to-site VPN: encryption across an untrusted network, and dynamic routing so that sites learn each other's prefixes ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="GRE over IPsec and virtual tunnel interfaces for routing… · ENCOR Lesson">
+<meta property="og:description" content="Enterprises want two things from a site-to-site VPN: encryption across an untrusted network, and dynamic routing so that sites learn each other's prefixes ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ccnp-encor/lessons/gre-over-ipsec-and-virtual-tunnel-interfaces-for-routing-protocols-ove/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ccnp-encor/lessons/gre-over-ipsec-and-virtual-tunnel-interfaces-for-routing-protocols-ove/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">ENCOR</a> / <a href="../">Lessons</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2 · Domain 2: Virtualization</p>
+<h1>GRE over IPsec and virtual tunnel interfaces for routing protocols over VPNs</h1>
+<article class="lbody">
+<p>Enterprises want two things from a site-to-site VPN: encryption across an untrusted network, and dynamic routing so that sites learn each other's prefixes and fail over automatically. GRE alone gives you routing but no encryption. A classic crypto map gives encryption but does not carry multicast, so routing protocols such as OSPF and EIGRP, which use multicast hellos, do not work across it. Two designs combine the strengths: GRE over IPsec and IPsec virtual tunnel interfaces (VTIs).</p>
+<p>In GRE over IPsec, you build a normal GRE tunnel and then encrypt the GRE packets. The routing protocol runs over the GRE tunnel interface just as it would over a physical link, and all its multicast and unicast traffic is encapsulated in GRE (unicast between the two router addresses), which IPsec can protect. The modern way to configure it is to apply an IPsec profile to the tunnel: <code>tunnel protection ipsec profile VPN-PROF</code>. Because GRE already adds a new IP header between the routers, IPsec can use transport mode, which saves the 20 bytes of an extra outer header; tunnel mode also works. The older approach applies a crypto map to the physical interface with an ACL matching GRE (protocol 47) between the tunnel endpoints.</p>
+<p>A static VTI removes GRE entirely. You create a tunnel interface with <code>tunnel mode ipsec ipv4</code> and apply the IPsec profile. The tunnel interface is itself an IPsec endpoint, so traffic routed into it is encrypted in IPsec tunnel mode directly, with no GRE header. It still behaves like a routable point-to-point interface, so routing protocols (including multicast hellos) work, you can apply QoS, ACLs and NetFlow on the tunnel interface, and the configuration is simpler than crypto maps. It uses less overhead than GRE over IPsec because there is no GRE header.</p>
+<pre class="code" tabindex="0"><code>crypto ipsec profile VPN-PROF
+ set transform-set TS-AES
+!
+interface Tunnel10
+ ip address 10.255.0.1 255.255.255.252
+ tunnel source GigabitEthernet0/0
+ tunnel destination 198.51.100.2
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile VPN-PROF</code></pre>
+<p>Choose between them by what the tunnel must carry. A VTI carries only one protocol family per tunnel (IPv4 or IPv6, depending on mode), and not non-IP traffic. GRE can carry multiple protocols over one tunnel and supports multipoint GRE (mGRE), which is the foundation of DMVPN (Dynamic Multipoint VPN) where spokes build tunnels to each other on demand. For a simple site-to-site link with IPv4 routing, a VTI is usually the cleanest choice. Dynamic VTIs, created from a virtual template on a hub, allow many remote peers to connect without a separate tunnel configuration for each.</p>
+<p>All the GRE lessons still apply: avoid recursive routing by keeping underlay addresses out of the overlay routing protocol, and account for overhead. Encryption adds ESP headers, padding and an integrity check on top of GRE, so tunnels commonly use <code>ip mtu 1400</code> and <code>ip tcp adjust-mss 1360</code> to avoid fragmentation. Verify with <code>show crypto ipsec sa</code> (counters should increase in both directions), <code>show interfaces tunnel</code> and the routing protocol's neighbor table.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>GRE over IPsec</dt><dd>A GRE tunnel whose packets are encrypted by IPsec, allowing routing protocols and multicast across an encrypted VPN.</dd><dt>Static VTI</dt><dd>An IPsec virtual tunnel interface (tunnel mode ipsec ipv4) that encrypts all traffic routed into it without a GRE header.</dd><dt>IPsec profile</dt><dd>A named set of IPsec parameters, such as the transform set, applied to a tunnel interface with tunnel protection.</dd><dt>DMVPN</dt><dd>Dynamic Multipoint VPN: hub-and-spoke mGRE plus NHRP and IPsec, letting spokes build direct tunnels on demand.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A company links its headquarters and a branch with a crypto map but finds that OSPF never forms an adjacency across it. It replaces the crypto map with a static VTI on each router and runs OSPF on the tunnel interfaces. The adjacency forms, branch prefixes appear in the headquarters routing table, and traffic counters rise in <code>show crypto ipsec sa</code>.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> If the scenario needs multicast or a routing protocol across an encrypted tunnel, pick GRE over IPsec or a VTI, not a crypto map. A VTI has less overhead but carries a single IP family; GRE can carry multiple protocols and supports multipoint designs.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why can GRE over IPsec use IPsec transport mode?</summary><p>GRE already adds a new outer IP header between the routers, so IPsec only needs to protect the GRE payload, saving the extra outer header.</p></details>
+<details class="sq"><summary>Which tunnel mode command turns a tunnel interface into a static VTI?</summary><p>tunnel mode ipsec ipv4 (or ipsec ipv6 for IPv6).</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study ENCOR for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ccnp-encor/">Open the ENCOR study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../ipsec-ike-phases-tunnel-vs-transport-mode-crypto-maps-vs-tunnel-protec/">← IPsec: IKE phases, tunnel vs transport mode, crypto maps vs </a><a href="../lisp-eid-rloc-map-server-and-map-resolver-itr-and-etr/">LISP: EID, RLOC, map server and map resolver, ITR and ETR →</a></nav>
+</main>
+</body>
+</html>

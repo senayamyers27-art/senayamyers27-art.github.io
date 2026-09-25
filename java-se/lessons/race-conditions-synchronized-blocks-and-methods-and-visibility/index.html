@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Race conditions, synchronized blocks and methods, and… · OCP Java Lesson</title>
+<meta name="description" content="A race condition occurs when the result of a program depends on the unpredictable timing of threads that share mutable data. The textbook case is count++ o">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Race conditions, synchronized blocks and methods, and… · OCP Java Lesson">
+<meta property="og:description" content="A race condition occurs when the result of a program depends on the unpredictable timing of threads that share mutable data. The textbook case is count++ o">
+<link rel="canonical" href="https://senayamyers27-art.github.io/java-se/lessons/race-conditions-synchronized-blocks-and-methods-and-visibility/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/java-se/lessons/race-conditions-synchronized-blocks-and-methods-and-visibility/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">OCP Java</a> / <a href="../">Lessons</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25) · Domain 8: Managing concurrent code execution</p>
+<h1>Race conditions, synchronized blocks and methods, and visibility</h1>
+<article class="lbody">
+<p>A race condition occurs when the result of a program depends on the unpredictable timing of threads that share mutable data. The textbook case is <code>count++</code> on a shared field. It looks like one step, but it is three: read count, add one, write it back. If two threads read the same value before either writes, both write the same new value and one increment is lost. Run a million increments on two threads and the total is usually less than two million.</p>
+<p>The <code>synchronized</code> keyword fixes this with mutual exclusion. Every object has an intrinsic lock, also called a monitor. A synchronized block, <code>synchronized (lock) { ... }</code>, lets only one thread at a time hold that lock and run code guarded by it; others trying to enter enter the BLOCKED state until the lock is released. A synchronized instance method is equivalent to <code>synchronized (this)</code> around its body, and a synchronized static method locks the Class object, such as <code>Counter.class</code>. Instance and static synchronized methods therefore use different locks and do not exclude each other.</p>
+<pre class="code" tabindex="0"><code>class Counter {
+    private int count;
+    private final Object lock = new Object();
+    void increment() { synchronized (lock) { count++; } }
+    synchronized int get() { return count; }   // locks this, not lock!
+}</code></pre>
+<p>Mutual exclusion only works if every access to the shared data uses the same lock. In the example above, <code>get()</code> locks <code>this</code> while <code>increment()</code> locks <code>lock</code>, so they are not coordinated; the fix is to use one lock for both. Intrinsic locks are reentrant: a thread already holding a lock can enter another block synchronized on the same object without deadlocking itself. The lock is released automatically when the block exits, even by exception.</p>
+<p>The second problem is visibility. For performance, threads may cache values and the compiler and CPU may reorder instructions, so without synchronization one thread may never see another thread's write. The Java Memory Model defines happens-before relationships: releasing a lock happens-before the next acquisition of the same lock, so everything written inside a synchronized block is visible to the next thread that takes the lock. <code>Thread.start()</code> and <code>join()</code> also create happens-before edges.</p>
+<p>The <code>volatile</code> keyword on a field guarantees visibility: every read sees the most recent write, and it prevents harmful reordering around it. It is ideal for a stop flag, <code>private volatile boolean running = true;</code>, written by one thread and read by another. But volatile does not make compound actions atomic, so <code>count++</code> on a volatile int is still a race condition. For that you need synchronized, a lock, or an atomic class.</p>
+<p>Other safe approaches are to avoid sharing: use immutable objects, confine data to one thread, or let a concurrent collection manage it. Synchronization adds contention, so keep synchronized regions short.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Race condition</dt><dd>A bug where the outcome depends on the timing of threads accessing shared mutable data.</dd><dt>Intrinsic lock (monitor)</dt><dd>The lock built into every object, acquired by synchronized blocks and methods.</dd><dt>synchronized method</dt><dd>A method whose body runs while holding the lock on this, or on the Class object for static methods.</dd><dt>Visibility</dt><dd>Whether a write by one thread is guaranteed to be seen by reads in another thread.</dd><dt>volatile</dt><dd>A field modifier guaranteeing visibility and ordering of reads and writes, but not atomicity of compound operations.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A web app counts page views with a plain int field updated by many request threads, and the daily total is always lower than the access log shows. Making the update synchronized, or switching to an AtomicLong, removes the lost updates.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> volatile gives visibility but not atomicity, so volatile count++ is still unsafe. Synchronized instance methods lock this and static ones lock the Class object; two methods only exclude each other if they use the same lock.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why is count++ unsafe when two threads run it on a shared field?</summary><p>It is a read, an add and a write; threads can interleave between those steps and overwrite each other's updates.</p></details>
+<details class="sq"><summary>Does a synchronized static method block a thread entering a synchronized instance method of the same class?</summary><p>No. They lock different objects: the Class object versus the instance.</p></details>
+<details class="sq"><summary>When is volatile enough?</summary><p>When one thread writes a value that others only read, such as a stop flag, and no read-modify-write is needed.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study OCP Java for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../java-se/">Open the OCP Java study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../thread-lifecycle-and-start-vs-run/">← Thread lifecycle and start() vs run()</a><a href="../atomic-classes-atomicinteger-atomiclong-and-locks-reentrantlock-tryloc/">Atomic classes (AtomicInteger, AtomicLong) and locks (Reentr →</a></nav>
+</main>
+</body>
+</html>

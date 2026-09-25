@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Deadlock, starvation and livelock · OCP Java Lesson</title>
+<meta name="description" content="These three are liveness problems: the program does not crash, but some or all threads stop making useful progress. The exam expects you to identify each f">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Deadlock, starvation and livelock · OCP Java Lesson">
+<meta property="og:description" content="These three are liveness problems: the program does not crash, but some or all threads stop making useful progress. The exam expects you to identify each f">
+<link rel="canonical" href="https://senayamyers27-art.github.io/java-se/lessons/deadlock-starvation-and-livelock/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/java-se/lessons/deadlock-starvation-and-livelock/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">OCP Java</a> / <a href="../">Lessons</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25) · Domain 8: Managing concurrent code execution</p>
+<h1>Deadlock, starvation and livelock</h1>
+<article class="lbody">
+<p>These three are liveness problems: the program does not crash, but some or all threads stop making useful progress. The exam expects you to identify each from a description or code sample and to know how to prevent it.</p>
+<p>Deadlock happens when two or more threads each hold a lock the other needs, and each waits forever for the other to release it. The classic case: thread 1 locks A then tries to lock B, while thread 2 locks B then tries to lock A. Both are stuck in the BLOCKED state (or WAITING, with explicit locks), and nothing will ever change. Four conditions are all required: mutual exclusion, holding a resource while waiting for another, no forced release, and a circular wait.</p>
+<pre class="code" tabindex="0"><code>// Thread 1                     // Thread 2
+synchronized (a) {               synchronized (b) {
+    synchronized (b) { ... }         synchronized (a) { ... }
+}                                }
+// Fix: both threads acquire a first, then b.</code></pre>
+<p>To prevent deadlock, break one condition. The most common fix is a consistent lock order: every thread acquires locks in the same global order, for example by account ID, so a circular wait cannot form. Other techniques are holding one lock at a time where possible, keeping synchronized regions small, and using <code>tryLock</code> with a timeout so a thread that cannot get the second lock releases the first and retries. To diagnose a live deadlock, take a thread dump, for example with the <code>jstack</code> tool or <code>jcmd &lt;pid&gt; Thread.print</code>; the JVM reports deadlocked threads and the locks they are waiting on.</p>
+<p>Starvation happens when a thread is ready to run but rarely or never gets the resource it needs because others keep taking it. Examples include a thread that always loses when competing for an unfair lock, a low-priority thread that other threads keep crowding out, or one thread holding a lock for a very long time. The fix is fairness: fair locks such as <code>new ReentrantLock(true)</code>, shorter critical sections and bounded work queues.</p>
+<p>Livelock happens when threads are not blocked but keep reacting to each other so that none progresses, like two people in a corridor who both step aside in the same direction repeatedly. In code, two threads that each detect a conflict, back off, release and retry at the same moment can repeat forever while using CPU. Thread states show RUNNABLE, which is what distinguishes livelock from deadlock. Adding randomized backoff, or making one side yield by priority, breaks the symmetry.</p>
+<p>A quick way to remember: deadlock means everyone waits and no one moves; livelock means everyone moves but no one gets anywhere; starvation means some threads get the resource and others never do.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Deadlock</dt><dd>Two or more threads each waiting forever for a lock held by another, forming a cycle.</dd><dt>Starvation</dt><dd>A thread is perpetually denied access to a resource it needs because other threads keep getting it.</dd><dt>Livelock</dt><dd>Threads stay active, repeatedly responding to one another, but make no progress.</dd><dt>Lock ordering</dt><dd>A prevention technique where all threads acquire multiple locks in the same global order.</dd><dt>Thread dump</dt><dd>A snapshot of every thread's state and stack, used to find deadlocks and blocked threads.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A banking service occasionally freezes during simultaneous transfers between the same two accounts. A thread dump shows two threads each holding one account's lock and waiting for the other. Locking accounts in order of account number fixes it.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Deadlocked threads are BLOCKED or WAITING; livelocked threads are RUNNABLE and busy. The standard deadlock fix in answer choices is acquiring locks in a consistent order.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Two threads repeatedly release and retry a lock in response to each other, never finishing, while CPU usage stays high. Which problem is this?</summary><p>Livelock.</p></details>
+<details class="sq"><summary>What is the simplest way to prevent the lock A / lock B deadlock?</summary><p>Make every thread acquire the locks in the same order.</p></details>
+<details class="sq"><summary>What tool output helps confirm a deadlock in a running JVM?</summary><p>A thread dump, for example from jstack or jcmd Thread.print, which reports deadlocked threads.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study OCP Java for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../java-se/">Open the OCP Java study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../concurrent-collections-concurrenthashmap-copyonwritearraylist-blocking/">← Concurrent collections: ConcurrentHashMap, CopyOnWriteArrayL</a><a href="../scoped-values-java-25-scopedvalue-where-run-as-an-alternative-to-threa/">Scoped values (Java 25): ScopedValue.where(...).run(...) as  →</a></nav>
+</main>
+</body>
+</html>

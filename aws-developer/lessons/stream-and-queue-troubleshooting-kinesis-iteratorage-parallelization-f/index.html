@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stream and queue troubleshooting: Kinesis IteratorAge… · Developer Associate Lesson</title>
+<meta name="description" content="When a stream or queue consumer falls behind or keeps failing, messages pile up and data arrives late. The exam describes these symptoms through specific m">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Stream and queue troubleshooting: Kinesis IteratorAge… · Developer Associate Lesson">
+<meta property="og:description" content="When a stream or queue consumer falls behind or keeps failing, messages pile up and data arrives late. The exam describes these symptoms through specific m">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/stream-and-queue-troubleshooting-kinesis-iteratorage-parallelization-f/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/stream-and-queue-troubleshooting-kinesis-iteratorage-parallelization-f/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 4: Troubleshooting and Optimization</p>
+<h1>Stream and queue troubleshooting: Kinesis IteratorAge, parallelization factor, SQS dead-letter queues and redrive</h1>
+<article class="lbody">
+<p>When a stream or queue consumer falls behind or keeps failing, messages pile up and data arrives late. The exam describes these symptoms through specific metrics, and you need to know what each one means and which setting fixes it.</p>
+<p>For Kinesis Data Streams and DynamoDB Streams consumed by Lambda, the key metric is <code>IteratorAge</code>: the age of the last record in the batch when Lambda processed it, in other words how far behind real time the consumer is. (Kinesis itself reports <code>GetRecords.IteratorAgeMilliseconds</code>.) A steadily growing iterator age means records arrive faster than they are processed, or processing is blocked. Records that stay unprocessed beyond the stream's retention period are lost, so a rising iterator age is urgent.</p>
+<p>Common causes and fixes: the function is erroring on a batch, and because stream processing is ordered per shard, Lambda keeps retrying that batch and the shard stalls. Check the <code>Errors</code> metric and logs, then configure maximum retry attempts, maximum record age, bisect batch on function error, partial batch responses and an on-failure destination so a bad record cannot block the shard indefinitely. If the function is simply slow, optimize it or raise its memory. If there is not enough parallelism, raise the parallelization factor on the event source mapping (from 1 up to 10), which lets Lambda process up to that many batches from each shard concurrently while still keeping order for records with the same partition key. Larger batch sizes and batching windows reduce per-invocation overhead. Adding shards increases throughput for both producers and consumers. When several applications read the same stream and compete for the shared read throughput, enhanced fan-out gives each registered consumer its own dedicated read throughput per shard.</p>
+<p>On the producer side, <code>ProvisionedThroughputExceededException</code> or <code>WriteProvisionedThroughputExceeded</code> means a shard's write capacity was exceeded, often because a poorly chosen partition key sends most records to one hot shard. Use a higher-cardinality partition key, add shards (or use on-demand mode), and retry with backoff.</p>
+<p>For SQS, watch <code>ApproximateNumberOfMessagesVisible</code> (backlog) and <code>ApproximateAgeOfOldestMessage</code> (how long the oldest message has waited). Rising values mean consumers are too slow, failing or not running. For Lambda consumers, check the function's errors and throttles and its maximum concurrency setting on the event source mapping. Also make sure the queue's visibility timeout is comfortably longer than the function's timeout (AWS recommends at least six times the function timeout for Lambda event sources); otherwise messages reappear and are processed twice while the first attempt is still running.</p>
+<p>A dead-letter queue catches messages that fail repeatedly. The source queue's redrive policy names the DLQ and <code>maxReceiveCount</code>; when a message has been received more than that many times without being deleted, SQS moves it to the DLQ. The DLQ must be the same type as the source (a FIFO queue needs a FIFO DLQ) and in the same account and Region, and its retention period should be longer than the source's, because for standard queues the original enqueue timestamp is kept when a message moves. A redrive allow policy on the DLQ controls which source queues may use it. Once you have fixed the bug, DLQ redrive moves messages back to the source queue (or another queue) for reprocessing, from the console or with the <code>StartMessageMoveTask</code> API. Always alarm on DLQ depth, or failures go unnoticed.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>IteratorAge</dt><dd>The metric showing how old the records being processed from a stream are, indicating how far behind a consumer is.</dd><dt>Parallelization factor</dt><dd>An event source mapping setting (1 to 10) for concurrent batches per shard, preserving order per partition key.</dd><dt>Enhanced fan-out</dt><dd>A Kinesis feature that gives each registered consumer dedicated read throughput per shard.</dd><dt>maxReceiveCount</dt><dd>The number of times an SQS message can be received before the redrive policy moves it to the DLQ.</dd><dt>DLQ redrive</dt><dd>Moving messages from a dead-letter queue back to a source queue for reprocessing after a fix.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A clickstream function's IteratorAge climbs from seconds to hours. Logs show no errors, but duration is high and the stream has only four shards. The team sets the parallelization factor to 5, so each shard is processed by up to five concurrent invocations, and the iterator age falls back to near zero.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Rising IteratorAge: look for errors blocking a shard (fix with bisect, retry limits, partial batch responses) or too little parallelism (raise the parallelization factor or add shards). Messages processed twice from SQS: visibility timeout shorter than processing time.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What does a steadily increasing IteratorAge indicate?</summary><p>The consumer is falling behind the stream, because it is too slow or blocked by failing batches, risking data loss when records expire.</p></details>
+<details class="sq"><summary>How does raising the parallelization factor keep ordering?</summary><p>Records with the same partition key are still processed in order; only different keys within a shard are processed concurrently.</p></details>
+<details class="sq"><summary>After fixing a bug, how do you reprocess messages sitting in an SQS DLQ?</summary><p>Use DLQ redrive (console or StartMessageMoveTask) to move them back to the source queue.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../lambda-performance-memory-cpu-tuning-cold-starts-provisioned-concurren/">← Lambda performance: memory/CPU tuning, cold starts, provisio</a><a href="../dynamodb-optimization-hot-partitions-key-design-on-demand-vs-provision/">DynamoDB optimization: hot partitions, key design, on-demand →</a></nav>
+</main>
+</body>
+</html>

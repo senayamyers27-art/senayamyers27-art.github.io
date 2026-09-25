@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Caching strategies with ElastiCache: lazy loading… · Developer Associate Lesson</title>
+<meta name="description" content="A cache keeps frequently read data in fast memory so your application does not hit the database for every request. Amazon ElastiCache is a managed in-memor">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Caching strategies with ElastiCache: lazy loading… · Developer Associate Lesson">
+<meta property="og:description" content="A cache keeps frequently read data in fast memory so your application does not hit the database for every request. Amazon ElastiCache is a managed in-memor">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/caching-strategies-with-elasticache-lazy-loading-write-through-ttls-ch/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/caching-strategies-with-elasticache-lazy-loading-write-through-ttls-ch/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 1: Development with AWS Services</p>
+<h1>Caching strategies with ElastiCache: lazy loading, write-through, TTLs; choosing between SQL, NoSQL and in-memory stores</h1>
+<article class="lbody">
+<p>A cache keeps frequently read data in fast memory so your application does not hit the database for every request. Amazon ElastiCache is a managed in-memory service that runs Redis OSS, Valkey or Memcached engines. The exam asks how to populate and expire the cache, and when a different type of data store is the right choice.</p>
+<p>Lazy loading (also called cache-aside) loads data into the cache only when it is requested. The application checks the cache; on a hit it returns the value; on a miss it reads from the database, writes the result to the cache, and returns it. Advantages: only requested data is cached, and a failed cache node is not fatal, because the application just falls back to the database. Disadvantages: every miss costs three trips (cache, database, cache write), and cached data can become stale because nothing updates it when the database changes.</p>
+<pre class="code" tabindex="0"><code>def get_product(pid):
+    cached = cache.get(f'product:{pid}')
+    if cached:
+        return json.loads(cached)
+    item = db_get_product(pid)
+    cache.set(f'product:{pid}', json.dumps(item), ex=300)  # 5-minute TTL
+    return item</code></pre>
+<p>Write-through updates the cache whenever the application writes to the database. Data in the cache is never stale, and reads are fast. The costs are a write penalty (two writes per update), and cache churn: much of what you write may never be read, wasting memory. Also, data is missing from the cache until it is written, so a new node starts empty; that is why write-through is usually combined with lazy loading.</p>
+<p>A time to live (TTL) on each key limits staleness and memory use: when it expires, the next read is a miss and reloads fresh data. Short TTLs mean fresher data but more database load; long TTLs mean the opposite. Adding a little random variation to TTLs avoids many keys expiring at once. When memory fills, the engine evicts keys according to its eviction policy, such as least recently used.</p>
+<p>Engine choice: Redis OSS and Valkey support rich data structures (sorted sets for leaderboards, hashes, lists), replication with automatic failover across Availability Zones, persistence, backups and pub/sub. Memcached is simpler, multi-threaded and horizontally partitioned, but has no replication or persistence. If a question mentions high availability, sorted leaderboards or session stores that must survive a node failure, pick Redis OSS or Valkey.</p>
+<p>Choosing the store: use a relational (SQL) database such as Amazon RDS or Amazon Aurora when you need joins, complex ad hoc queries and multi-row transactions over structured data. Use a NoSQL store such as DynamoDB for known access patterns at massive scale with single-digit-millisecond latency and flexible schemas. Use an in-memory store (ElastiCache, or DAX in front of DynamoDB) for microsecond-to-sub-millisecond reads of hot data, session state, rate counters and leaderboards, usually in front of a durable database rather than instead of it.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Lazy loading (cache-aside)</dt><dd>A strategy that populates the cache only on a cache miss, after reading from the database.</dd><dt>Write-through</dt><dd>A strategy that writes to the cache every time the database is updated, keeping cached data current.</dd><dt>TTL (time to live)</dt><dd>An expiry time on a cache key after which it is removed and reloaded on the next read.</dd><dt>Cache hit ratio</dt><dd>The proportion of reads served from the cache; a low ratio suggests poor keys, short TTLs or too small a cache.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A news site reads article pages from Aurora. It adds ElastiCache for Valkey with lazy loading and a 10-minute TTL, so popular articles are served from memory. When an editor updates an article, the CMS also writes the new version to the cache (write-through), so readers never see a stale headline.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Stale data complaint: add write-through or shorten the TTL. Cache filling with data nobody reads: that is write-through churn, so combine it with TTLs. Need replication, failover or sorted sets: Redis OSS or Valkey, not Memcached.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What is the main drawback of lazy loading?</summary><p>Data can become stale because the cache is only updated on a miss, and every miss adds latency from extra round trips.</p></details>
+<details class="sq"><summary>Why combine write-through with a TTL?</summary><p>Write-through caches every write, including rarely read data; a TTL expires unused keys so memory is not wasted.</p></details>
+<details class="sq"><summary>When would you choose ElastiCache for Redis OSS over Memcached?</summary><p>When you need replication and automatic failover, persistence, backups or advanced data structures such as sorted sets.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../amazon-s3-from-code-multipart-upload-storage-classes-and-lifecycle-eve/">← Amazon S3 from code: multipart upload, storage classes and l</a><a href="../iam-for-applications-execution-roles-instance-profiles-ecs-task-roles/">IAM for applications: execution roles, instance profiles, EC →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Windows Update, time service (w32tm) and Kerberos… · AZ-802 Lesson</title>
+<meta name="description" content="This lesson groups four common troubleshooting areas: updates that fail, clocks that drift, Kerberos authentication failures (often caused by clocks) and A">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Windows Update, time service (w32tm) and Kerberos… · AZ-802 Lesson">
+<meta property="og:description" content="This lesson groups four common troubleshooting areas: updates that fail, clocks that drift, Kerberos authentication failures (often caused by clocks) and A">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/windows-update-time-service-w32tm-and-kerberos-troubleshooting-arc-age/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/windows-update-time-service-w32tm-and-kerberos-troubleshooting-arc-age/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 7: Monitor and troubleshoot Windows Server environments</p>
+<h1>Windows Update, time service (w32tm) and Kerberos troubleshooting; Arc agent and extension troubleshooting (azcmagent check)</h1>
+<article class="lbody">
+<p>This lesson groups four common troubleshooting areas: updates that fail, clocks that drift, Kerberos authentication failures (often caused by clocks) and Azure Arc agents that stop reporting.</p>
+<p>When Windows Update fails, first read the error code in Settings or in Azure Update Manager, then look at the logs. <code>Get-WindowsUpdateLog</code> merges the update trace files into a readable <code>WindowsUpdate.log</code> on your desktop. The System log and the WindowsUpdateClient operational log also record installs and failures. Confirm the Windows Update (wuauserv) and Background Intelligent Transfer Service (BITS) services can run and that the server can reach its update source, whether Microsoft Update or a WSUS server set by Group Policy. If component store corruption is suspected, run <code>DISM /Online /Cleanup-Image /RestoreHealth</code> followed by <code>sfc /scannow</code>. As a last resort, stop the update services and rename the SoftwareDistribution folder so Windows rebuilds its download cache.</p>
+<p>Time matters because Kerberos rejects requests when client and server clocks differ by more than the maximum tolerance, five minutes by default. In an AD forest, time flows down a hierarchy: members sync from a DC in their domain, DCs sync from the PDC emulator of their domain, and the PDC emulator of the forest root domain is the authoritative source, which you configure to sync with a reliable external source, for example <code>w32tm /config /manualpeerlist:&quot;time.example.org&quot; /syncfromflags:manual /reliable:yes /update</code>. Useful checks are <code>w32tm /query /status</code> and <code>w32tm /query /source</code> (where am I syncing from), <code>w32tm /resync</code> and <code>w32tm /stripchart /computer:dc01</code> (offset to another computer). A classic mistake is a virtualized DC syncing time from its Hyper-V host through the time synchronization integration service instead of the domain hierarchy; if a DC's source shows the VM host, fix it.</p>
+<p>For Kerberos problems, check time first, then DNS (clients must find DCs through SRV records), then service principal names (SPNs). <code>klist</code> shows the tickets a user holds and <code>klist purge</code> clears them so you can retest after changes, such as new group membership. Duplicate or missing SPNs cause authentication failures or fallback to NTLM; find duplicates with <code>setspn -X</code> and query with <code>setspn -Q</code>. On DCs, Security events 4768 (TGT requested), 4769 (service ticket requested) and 4771 (pre-authentication failed) reveal failure codes.</p>
+<p>Azure Arc-enabled servers run the Connected Machine agent, whose command-line tool is <code>azcmagent</code>. <code>azcmagent show</code> reports the agent status, resource ID and whether it is Connected or Disconnected. <code>azcmagent check</code> tests network connectivity to the Azure endpoints the agent and extensions need, which quickly exposes a firewall or proxy block. <code>azcmagent logs</code> collects the logs into a zip for analysis. Agent logs live under <code>C:\ProgramData\AzureConnectedMachineAgent\Log</code> (for example <code>himds.log</code> and <code>azcmagent.log</code>), and extension logs under <code>C:\ProgramData\GuestConfig\extension_logs</code>. Check that the services Azure Hybrid Instance Metadata Service (himds), Guest Configuration Arc Service and Guest Configuration Extension Service are running. If the server uses a proxy, set it with <code>azcmagent config set proxy.url</code> followed by your proxy address. A failed extension, such as the Azure Monitor agent, often just needs to be removed and reinstalled from the portal after the underlying issue is fixed.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Get-WindowsUpdateLog</dt><dd>A cmdlet that converts Windows Update trace files into a readable WindowsUpdate.log.</dd><dt>PDC emulator (forest root)</dt><dd>The authoritative time source for an AD forest, which should sync with a reliable external time source.</dd><dt>w32tm</dt><dd>The command-line tool for configuring, querying and resyncing the Windows Time service.</dd><dt>klist</dt><dd>A command that lists or purges the Kerberos tickets cached for the current logon session.</dd><dt>azcmagent check</dt><dd>An Arc agent command that tests connectivity to the Azure endpoints required by the agent and its extensions.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Users on one site can't access file shares and see Kerberos errors. On their DC, w32tm /query /source shows 'VM IC Time Synchronization Provider' and the clock is seven minutes off. The admin turns off the Hyper-V time synchronization integration service for that DC VM, resyncs to the domain hierarchy with w32tm /resync, and after klist purge on a client, access works.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Kerberos failure plus clock skew over 5 minutes is a classic exam scenario; the fix is the time hierarchy anchored on the forest root PDC emulator. For Arc disconnected status, run azcmagent show and azcmagent check first.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which DC should sync time from an external source in an AD forest?</summary><p>The PDC emulator of the forest root domain.</p></details>
+<details class="sq"><summary>An Arc server shows Disconnected in the portal. Which command tests whether it can reach the required Azure endpoints?</summary><p>azcmagent check.</p></details>
+<details class="sq"><summary>A user was added to a group but still can't access a resource. What quick Kerberos step helps without logging off?</summary><p>Run klist purge to clear cached tickets so new tickets with the updated group membership are requested.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../troubleshooting-connectivity-and-name-resolution-test-netconnection-re/">← Troubleshooting connectivity and name resolution (Test-NetCo</a><a href="../azure-vm-troubleshooting-boot-diagnostics-serial-console-run-command-r/">Azure VM troubleshooting: boot diagnostics, Serial Console,  →</a></nav>
+</main>
+</body>
+</html>

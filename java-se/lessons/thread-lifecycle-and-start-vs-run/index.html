@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Thread lifecycle and start() vs run() · OCP Java Lesson</title>
+<meta name="description" content="Every Thread object moves through states defined in the Thread.State enum, and getState() reports the current one. NEW means the thread object exists but s">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Thread lifecycle and start() vs run() · OCP Java Lesson">
+<meta property="og:description" content="Every Thread object moves through states defined in the Thread.State enum, and getState() reports the current one. NEW means the thread object exists but s">
+<link rel="canonical" href="https://senayamyers27-art.github.io/java-se/lessons/thread-lifecycle-and-start-vs-run/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/java-se/lessons/thread-lifecycle-and-start-vs-run/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">OCP Java</a> / <a href="../">Lessons</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25) · Domain 8: Managing concurrent code execution</p>
+<h1>Thread lifecycle and start() vs run()</h1>
+<article class="lbody">
+<p>Every Thread object moves through states defined in the <code>Thread.State</code> enum, and <code>getState()</code> reports the current one. <code>NEW</code> means the thread object exists but <code>start()</code> has not been called. <code>RUNNABLE</code> means it is running or ready to run; Java does not separate running from waiting for a CPU. <code>BLOCKED</code> means it is waiting to acquire a monitor lock to enter a <code>synchronized</code> block or method. <code>WAITING</code> means it waits indefinitely for another thread, for example in <code>join()</code> without a timeout or <code>Object.wait()</code>. <code>TIMED_WAITING</code> is the same with a time limit, such as <code>Thread.sleep(100)</code> or <code>join(500)</code>. <code>TERMINATED</code> means <code>run()</code> has finished, normally or with an exception.</p>
+<p>The typical transitions are NEW to RUNNABLE on <code>start()</code>, RUNNABLE to BLOCKED, WAITING or TIMED_WAITING and back again as the thread waits for locks, other threads or time, and finally RUNNABLE to TERMINATED. A thread cannot be restarted: once terminated it stays terminated, and calling <code>start()</code> a second time on the same Thread object, in any state other than NEW, throws <code>IllegalThreadStateException</code>.</p>
+<p>The most tested distinction is <code>start()</code> versus <code>run()</code>. <code>start()</code> asks the JVM to create a new thread of execution, which then calls <code>run()</code>. Calling <code>run()</code> directly is just an ordinary method call: the code executes synchronously on the current thread, no new thread is created, and the Thread object stays in the NEW state.</p>
+<pre class="code" tabindex="0"><code>Runnable job = () -&gt; System.out.println(Thread.currentThread().getName());
+Thread t = new Thread(job, &quot;worker&quot;);
+
+t.run();    // prints main    (runs on the calling thread)
+t.start();  // prints worker  (runs on a new thread)
+// t.start();  // IllegalThreadStateException: already started</code></pre>
+<p>The order of output from multiple threads is not guaranteed. If main starts a thread and then prints, either line may appear first. The only way to force ordering is to coordinate, for example with <code>join()</code>, which waits for the other thread to terminate. <code>Thread.sleep</code> puts the current thread in TIMED_WAITING; it does not release locks it holds, and it throws the checked <code>InterruptedException</code>.</p>
+<p>Interruption is the cooperative way to ask a thread to stop. <code>t.interrupt()</code> sets the thread's interrupt flag; if the thread is sleeping, waiting or joining, that call throws <code>InterruptedException</code> and clears the flag. Well-behaved code checks <code>Thread.currentThread().isInterrupted()</code> in long loops and exits cleanly. The old <code>stop()</code> method is unsafe and no longer works; you should never rely on it.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Thread.State</dt><dd>The enum of thread states: NEW, RUNNABLE, BLOCKED, WAITING, TIMED_WAITING and TERMINATED.</dd><dt>BLOCKED</dt><dd>The state of a thread waiting to acquire a monitor lock for a synchronized block or method.</dd><dt>TIMED_WAITING</dt><dd>The state of a thread waiting with a time limit, as in sleep or join with a timeout.</dd><dt>IllegalThreadStateException</dt><dd>Thrown when start() is called on a thread that has already been started.</dd><dt>Interrupt</dt><dd>A cooperative signal that sets a thread's interrupt flag and wakes it from sleep, wait or join with InterruptedException.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A developer notices that their slow export still freezes the UI even though it is wrapped in a Thread. The code calls exportThread.run() instead of start(), so the export runs on the UI thread. Changing it to start() moves the work to a new thread.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Calling run() does not create a thread, so Thread.currentThread() inside it is the caller. Calling start() twice throws IllegalThreadStateException. Unless code uses join or another coordination tool, output order between threads is unpredictable.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What state is a thread in after it is created but before start() is called?</summary><p>NEW.</p></details>
+<details class="sq"><summary>Which state is a thread in while inside Thread.sleep(1000)?</summary><p>TIMED_WAITING.</p></details>
+<details class="sq"><summary>Does calling t.run() change t's state to RUNNABLE?</summary><p>No. run() executes on the calling thread; t stays NEW.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study OCP Java for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../java-se/">Open the OCP Java study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../executorservice-callable-and-future-shutdown-awaittermination-close/">← ExecutorService, Callable and Future; shutdown, awaitTermina</a><a href="../race-conditions-synchronized-blocks-and-methods-and-visibility/">Race conditions, synchronized blocks and methods, and visibi →</a></nav>
+</main>
+</body>
+</html>

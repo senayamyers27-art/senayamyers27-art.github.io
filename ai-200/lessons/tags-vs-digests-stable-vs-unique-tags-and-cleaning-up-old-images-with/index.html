@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tags vs digests, stable vs unique tags, and cleaning up… · AI-200 Lesson</title>
+<meta name="description" content="Every image in a registry has two kinds of names. A tag is a human-friendly, mutable label such as orders-api:1.4 or orders-api:latest.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Tags vs digests, stable vs unique tags, and cleaning up… · AI-200 Lesson">
+<meta property="og:description" content="Every image in a registry has two kinds of names. A tag is a human-friendly, mutable label such as orders-api:1.4 or orders-api:latest.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/tags-vs-digests-stable-vs-unique-tags-and-cleaning-up-old-images-with/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/tags-vs-digests-stable-vs-unique-tags-and-cleaning-up-old-images-with/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 1: Develop containerized solutions on Azure</p>
+<h1>Tags vs digests, stable vs unique tags, and cleaning up old images with `az acr repository` and purge tasks</h1>
+<article class="lbody">
+<p>Every image in a registry has two kinds of names. A tag is a human-friendly, mutable label such as <code>orders-api:1.4</code> or <code>orders-api:latest</code>. A digest is a SHA-256 hash of the image manifest, written like <code>orders-api@sha256:...</code>, and it is immutable: the same digest always refers to exactly the same bytes. A tag is a pointer that can be moved to a new image; a digest can never change.</p>
+<p>Microsoft's guidance distinguishes stable tags from unique tags. A stable tag, such as <code>1.4</code> or <code>latest</code>, is meant to move: when you publish a patch, the <code>1.4</code> tag is re-pointed to the new image. Stable tags suit base images that consumers want to track for updates. A unique tag is assigned once and never reused, for example a build ID, a Git commit hash or a date-time stamp. Unique tags suit deployments, because a deployment that references <code>orders-api:20260914.3</code> will pull the same image on every node and every scale-out, even weeks later.</p>
+<p>Why does this matter? If you deploy with a stable tag, a new node or a new replica may pull a newer image than the ones already running, and you end up with mixed versions and no clear record of what shipped. Deploying with a unique tag or a digest gives you repeatable deployments and simple rollbacks: point back to the previous unique tag. You can also lock an image or tag against changes with <code>az acr repository update --write-enabled false</code>.</p>
+<p>Unique tags accumulate, and storage costs money, so you need cleanup. The <code>az acr repository</code> commands inspect and delete content: <code>show-tags</code> lists tags (add <code>--orderby time_desc</code> to sort), <code>show-manifests</code> lists digests including untagged ones, <code>untag</code> removes a tag while keeping the manifest, and <code>delete --image repo:tag</code> or <code>delete --image repo@digest</code> deletes the manifest and all tags pointing to it. When a stable tag moves, the old manifest becomes untagged (dangling) but still uses storage.</p>
+<pre class="code" tabindex="0"><code>az acr repository show-tags --name myregistry --repository orders-api --orderby time_desc --output table
+az acr repository delete --name myregistry --image orders-api:20260101.1 --yes
+
+# Scheduled cleanup: delete tags older than 30 days and untagged manifests, keep the newest 10
+az acr task create --registry myregistry --name nightly-purge \
+  --cmd &quot;acr purge --filter 'orders-api:.*' --ago 30d --keep 10 --untagged&quot; \
+  --schedule &quot;0 2 * * *&quot; --context /dev/null</code></pre>
+<p>The <code>acr purge</code> command runs inside ACR Tasks. <code>--filter</code> takes a repository and a regular expression for tags, <code>--ago</code> sets the age threshold, <code>--untagged</code> also removes dangling manifests, and <code>--keep</code> preserves the most recent tags. Test it first with <code>--dry-run</code>, which lists what would be deleted. Scheduling purge with a timer-triggered task gives you hands-off retention; Premium registries can also use a retention policy for untagged manifests.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Tag</dt><dd>A mutable, human-readable label that points to an image manifest and can be moved to a newer image.</dd><dt>Digest</dt><dd>An immutable SHA-256 identifier of an image manifest that always refers to exactly the same content.</dd><dt>Unique tag</dt><dd>A tag used once and never reassigned, such as a build ID or commit hash, recommended for deployments.</dd><dt>Untagged manifest</dt><dd>An image whose tags have all been moved or removed; it still consumes storage until deleted.</dd><dt>acr purge</dt><dd>An ACR Tasks command that deletes tags and untagged manifests by filter and age, often run on a schedule.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>After a busy quarter, a team's registry held thousands of build-ID tags and its storage bill had grown steadily. They created a timer-triggered ACR task that runs acr purge nightly with --ago 30d --keep 10 --untagged, after first checking the output of a --dry-run. Deployments kept using unique tags, so production was never affected, and old images disappeared automatically.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> For a question about ensuring every replica runs exactly the same image, choose a unique tag or a digest, never latest; for automatic cleanup of old images, choose acr purge in a scheduled ACR task.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why is latest a poor choice in a production deployment manifest?</summary><p>It is a stable tag that moves, so new replicas may pull a different image than running ones and rollbacks are unclear; unique tags or digests are repeatable.</p></details>
+<details class="sq"><summary>What happens to an image when its only tag is moved to a newer build?</summary><p>It becomes an untagged manifest that still uses storage until it is deleted, for example with acr purge --untagged.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../build-and-push-images-with-az-acr-build-quick-tasks-and-acr-tasks-trig/">← Build and push images with `az acr build` (quick tasks) and </a><a href="../pull-images-without-passwords-managed-identity-with-the-acrpull-role-i/">Pull images without passwords: managed identity with the Acr →</a></nav>
+</main>
+</body>
+</html>

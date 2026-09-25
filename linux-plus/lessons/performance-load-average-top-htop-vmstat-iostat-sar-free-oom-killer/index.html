@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Performance: load average, top/htop, vmstat, iostat, sar… · Linux+ Lesson</title>
+<meta name="description" content="When users say a server is slow, you need to find which resource is the bottleneck: CPU, memory, disk I/O or something else. The approach is to observe fir">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Performance: load average, top/htop, vmstat, iostat, sar… · Linux+ Lesson">
+<meta property="og:description" content="When users say a server is slow, you need to find which resource is the bottleneck: CPU, memory, disk I/O or something else. The approach is to observe fir">
+<link rel="canonical" href="https://senayamyers27-art.github.io/linux-plus/lessons/performance-load-average-top-htop-vmstat-iostat-sar-free-oom-killer/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/linux-plus/lessons/performance-load-average-top-htop-vmstat-iostat-sar-free-oom-killer/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Linux+</a> / <a href="../">Lessons</a></p>
+<p class="note">CompTIA Linux+ XK0-006 · Domain 5: Troubleshooting</p>
+<h1>Performance: load average, top/htop, vmstat, iostat, sar, free, OOM killer</h1>
+<article class="lbody">
+<p>When users say a server is slow, you need to find which resource is the bottleneck: CPU, memory, disk I/O or something else. The approach is to observe first, identify the constrained resource, then find the process responsible. Each tool below answers part of that question.</p>
+<p>Load average appears in <code>uptime</code>, <code>top</code> and <code>/proc/loadavg</code> as three numbers: the average over 1, 5 and 15 minutes. On Linux it counts processes that are running or waiting for a CPU, plus those in uninterruptible sleep (usually waiting on disk or network storage). Interpret it relative to the number of CPU cores, shown by <code>nproc</code>: a load of 4 on a 4-core machine means roughly fully busy, while 12 on the same machine means work is queuing. Comparing the three values tells you whether load is rising or falling. A high load with low CPU use usually points to I/O waits.</p>
+<p><code>top</code> shows a live summary and per-process usage. In the CPU line, <code>us</code> is user time, <code>sy</code> system (kernel) time, <code>id</code> idle, <code>wa</code> time waiting on I/O and <code>st</code> time stolen by the hypervisor on virtual machines. Sort by memory with <code>M</code> and CPU with <code>P</code>, and press <code>1</code> to show each CPU separately. <code>htop</code> presents the same data with colored per-core bars, easier scrolling and tree views.</p>
+<p><code>free -h</code> shows memory use. Linux uses spare RAM for page cache to speed up disk access, so low 'free' memory is normal; the important column is 'available', an estimate of memory that can be given to applications without swapping. Heavy swap use, visible in <code>free</code> and in <code>vmstat</code>, means real memory pressure. <code>vmstat 2</code> prints a line every two seconds: <code>r</code> is the run queue (processes waiting for CPU), <code>b</code> processes blocked on I/O, <code>si</code> and <code>so</code> swap in and out, <code>bi</code> and <code>bo</code> blocks read and written, and CPU percentages including <code>wa</code>. Sustained non-zero si/so indicates memory pressure; high <code>wa</code> with many <code>b</code> suggests a storage bottleneck.</p>
+<p><code>iostat -xz 2</code>, from the sysstat package, shows per-device statistics: read and write operations and throughput, average wait time (<code>await</code>) and <code>%util</code>, how busy the device is. A disk near 100 percent utilization with rising await is saturated. <code>iotop</code> shows which processes are doing the I/O. <code>sar</code>, also from sysstat, collects performance data periodically in the background, so you can look at history: <code>sar -u</code> for CPU, <code>sar -r</code> for memory, <code>sar -b</code> or <code>sar -d</code> for I/O, <code>sar -n DEV</code> for network, and <code>sar -f</code> to read a specific day's file. That is invaluable when the problem happened overnight.</p>
+<p>When memory and swap are exhausted, the kernel's OOM (out-of-memory) killer chooses a process to kill to keep the system alive, based on a badness score that favors large memory users. You will see messages such as 'Out of memory: Killed process 1234 (java)' in <code>dmesg</code> or <code>journalctl -k</code>. Each process's score is in <code>/proc/&lt;PID&gt;/oom_score</code>, and <code>oom_score_adj</code> (from -1000 to 1000) biases the choice, so critical services can be protected (systemd units use <code>OOMScoreAdjust=</code>). The real fixes are adding memory, fixing leaks, limiting services with cgroup settings such as <code>MemoryMax=</code>, or tuning the application.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Load average</dt><dd>Average number of runnable plus uninterruptible processes over 1, 5 and 15 minutes; compare it to the core count.</dd><dt>I/O wait (wa)</dt><dd>CPU time spent idle while waiting for storage I/O to complete.</dd><dt>Available memory</dt><dd>free's estimate of memory usable by new workloads without swapping, including reclaimable cache.</dd><dt>sar</dt><dd>sysstat tool that records and reports historical CPU, memory, disk and network statistics.</dd><dt>OOM killer</dt><dd>Kernel mechanism that kills a process when the system runs out of memory, logged in the kernel log.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A 4-core database server shows a load average of 9 but top reports only 20 percent user CPU and 60 percent wa. iostat -xz 2 shows the data disk at 99 percent util with high await, and iotop points to a nightly backup reading the same disk. Rescheduling the backup and moving it to a snapshot brings load back under 3.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> A high load average does not automatically mean high CPU; check wa and iostat, because processes stuck waiting on I/O also count toward load on Linux.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Load average is 8.0 on a 2-core server. What does that suggest?</summary><p>Demand far exceeds capacity: on average about four times as many tasks want to run (or are waiting on I/O) as there are cores.</p></details>
+<details class="sq"><summary>free -h shows little free memory but a large available value. Is this a problem?</summary><p>Usually not; Linux uses spare memory for cache, and available shows memory that can still be handed to applications.</p></details>
+<details class="sq"><summary>Where do you find evidence that the OOM killer ended a process?</summary><p>In the kernel log, via dmesg or journalctl -k, with an 'Out of memory: Killed process' message.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Linux+ for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../linux-plus/">Open the Linux+ study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../storage-issues-full-disks-inode-exhaustion-df-i-deleted-but-open-files/">← Storage issues: full disks, inode exhaustion (df -i), delete</a><a href="../networking-ping-ip-route-ss-dig-resolvectl-traceroute-tracepath-mtr-tc/">Networking: ping, ip route, ss, dig/resolvectl, traceroute/t →</a></nav>
+</main>
+</body>
+</html>

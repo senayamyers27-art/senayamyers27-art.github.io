@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Configuration and deployment: app settings… · AI-200 Lesson</title>
+<meta name="description" content="A function app reads its configuration from several places, and knowing which file does what prevents a lot of &quot;works locally, fails in Azure&quot; problems.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Configuration and deployment: app settings… · AI-200 Lesson">
+<meta property="og:description" content="A function app reads its configuration from several places, and knowing which file does what prevents a lot of &quot;works locally, fails in Azure&quot; problems.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/configuration-and-deployment-app-settings-local-settings-json-host-jso/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/configuration-and-deployment-app-settings-local-settings-json-host-jso/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 3: Connect to and consume Azure services</p>
+<h1>Configuration and deployment: app settings, local.settings.json, host.json, identity-based connections, `func azure functionapp publish`</h1>
+<article class="lbody">
+<p>A function app reads its configuration from several places, and knowing which file does what prevents a lot of &quot;works locally, fails in Azure&quot; problems.</p>
+<p>App settings are the environment variables of the function app in Azure. They hold connection details, feature switches and required runtime settings such as <code>FUNCTIONS_WORKER_RUNTIME=python</code> and <code>AzureWebJobsStorage</code>. Your code reads them with <code>os.environ</code>, and bindings reference them by name through the <code>connection</code> argument. You manage them in the portal's Environment variables page or with <code>az functionapp config appsettings set</code>. Values can be Key Vault references so secrets live in Key Vault.</p>
+<p><code>local.settings.json</code> plays the same role on your machine. Core Tools loads its <code>Values</code> section as environment variables when you run <code>func start</code>. It is for local development only: it is not deployed by default and should be listed in <code>.gitignore</code> because it often contains secrets. Using Azurite, the local storage emulator, you can set <code>AzureWebJobsStorage</code> to <code>UseDevelopmentStorage=true</code>.</p>
+<pre class="code" tabindex="0"><code>{
+  &quot;IsEncrypted&quot;: false,
+  &quot;Values&quot;: {
+    &quot;FUNCTIONS_WORKER_RUNTIME&quot;: &quot;python&quot;,
+    &quot;AzureWebJobsStorage&quot;: &quot;UseDevelopmentStorage=true&quot;,
+    &quot;ServiceBusConn__fullyQualifiedNamespace&quot;: &quot;shop-sb.servicebus.windows.net&quot;
+  }
+}</code></pre>
+<p><code>host.json</code> configures the Functions runtime for every function in the app, and it is deployed with your code. It holds logging levels and Application Insights sampling, extension settings (for example Service Bus concurrency or whether messages auto-complete), the <code>functionTimeout</code>, retry settings and the extension bundle version that supplies non-HTTP bindings. A change to host.json affects all functions; app settings can override host.json values when you need per-environment differences.</p>
+<p>Identity-based connections replace connection strings with a managed identity. Instead of an app setting called <code>ServiceBusConn</code> containing a secret, you create settings that share the prefix, such as <code>ServiceBusConn__fullyQualifiedNamespace</code> for Service Bus, <code>DocsStorage__blobServiceUri</code> or <code>DocsStorage__accountName</code> for Storage, and <code>CosmosConn__accountEndpoint</code> for Cosmos DB. The runtime uses the app's system-assigned identity by default; for a user-assigned identity, add <code>__credential</code> set to <code>managedidentity</code> and <code>__clientId</code>. Then grant the identity the right data roles, such as Azure Service Bus Data Receiver or Storage Blob Data Owner for the host storage account. Locally, the same settings use your developer sign-in through the Azure credential chain.</p>
+<p>Deployment with Core Tools is <code>func azure functionapp publish &lt;APP_NAME&gt;</code>. It packages the project, uploads it, and (for Python) triggers a remote build that installs <code>requirements.txt</code> for Linux. Add <code>--publish-local-settings -i</code> if you want to push local values to Azure app settings, with care not to overwrite production values. In CI/CD you would use GitHub Actions or Azure Pipelines with the same zip-based deployment. After publishing, <code>func azure functionapp list-functions &lt;APP_NAME&gt;</code> confirms which functions were indexed.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>App settings</dt><dd>Environment variables for a function app in Azure, read by code and referenced by bindings.</dd><dt>local.settings.json</dt><dd>A local-only file whose Values section Core Tools loads as environment variables; not deployed by default.</dd><dt>host.json</dt><dd>An app-wide runtime configuration file for logging, extensions, timeouts and sampling, deployed with the code.</dd><dt>Identity-based connection</dt><dd>A binding connection defined by settings like Prefix__fullyQualifiedNamespace that authenticates with a managed identity.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A function worked locally but failed in Azure with a missing setting error. The developer had added ServiceBusConn__fullyQualifiedNamespace only to local.settings.json, which is not published. They added the app setting in Azure, granted the function app's identity Azure Service Bus Data Receiver on the queue, redeployed with func azure functionapp publish and the trigger started processing.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> local.settings.json is local-only and not deployed; host.json is app-wide runtime config and is deployed; identity-based connections use double-underscore settings such as __fullyQualifiedNamespace plus an RBAC role.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Where do you configure Service Bus concurrency or auto-complete behavior for all functions in an app?</summary><p>In host.json, under the Service Bus extension settings.</p></details>
+<details class="sq"><summary>Which app setting lets a Service Bus trigger connect with a managed identity instead of a connection string?</summary><p>A setting named &lt;connection&gt;__fullyQualifiedNamespace with the namespace host name, plus a data role on the namespace or entity.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../hosting-plans-flex-consumption-premium-and-dedicated-cold-starts-scale/">← Hosting plans: Flex Consumption, Premium and Dedicated; cold</a><a href="../managed-identities-system-assigned-vs-user-assigned-defaultazurecreden/">Managed identities: system-assigned vs user-assigned; Defaul →</a></nav>
+</main>
+</body>
+</html>

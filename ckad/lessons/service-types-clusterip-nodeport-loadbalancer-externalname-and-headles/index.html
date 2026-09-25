@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Service types: ClusterIP, NodePort, LoadBalancer… · CKAD Lesson</title>
+<meta name="description" content="Pods come and go and their IP addresses change. A Service gives a stable name and virtual IP address in front of a changing set of Pods, chosen by a label ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Service types: ClusterIP, NodePort, LoadBalancer… · CKAD Lesson">
+<meta property="og:description" content="Pods come and go and their IP addresses change. A Service gives a stable name and virtual IP address in front of a changing set of Pods, chosen by a label ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/service-types-clusterip-nodeport-loadbalancer-externalname-and-headles/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/service-types-clusterip-nodeport-loadbalancer-externalname-and-headles/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 5: Services and Networking</p>
+<h1>Service types: ClusterIP, NodePort, LoadBalancer, ExternalName and headless (clusterIP: None)</h1>
+<article class="lbody">
+<p>Pods come and go and their IP addresses change. A Service gives a stable name and virtual IP address in front of a changing set of Pods, chosen by a label selector, and spreads connections across them. The Service's <code>type</code> decides who can reach it.</p>
+<p>ClusterIP is the default. The Service gets a virtual IP reachable only from inside the cluster, plus a DNS name. kube-proxy (or the network plugin) on each node programs rules so traffic to that IP and port is forwarded to one of the ready Pods. Use it for internal back ends: databases, internal APIs, anything other Pods call.</p>
+<p>NodePort builds on ClusterIP and also opens the same port on every node, by default chosen from the range 30000 to 32767. Traffic to any node's IP on that port reaches the Service, even if no matching Pod runs on that node. It is simple for labs and testing, for example <code>curl &lt;node-ip&gt;:30080</code>, but exposes an unusual port and a node address to clients.</p>
+<p>LoadBalancer builds on NodePort and asks the cloud provider, or an add-on in bare-metal clusters, to create an external load balancer that forwards to the Service. Its address appears in the EXTERNAL-IP column. In a local cluster without such an integration, the column stays <code>&lt;pending&gt;</code>; minikube provides <code>minikube tunnel</code> to fill it. Each LoadBalancer Service usually means a separate cloud load balancer, which is why HTTP apps are often exposed through one Ingress instead.</p>
+<p>ExternalName has no selector and no Pods. It maps a Service name to an external DNS name by returning a CNAME record: <code>externalName: db.example.com</code> makes <code>db.&lt;namespace&gt;.svc.cluster.local</code> resolve to that host. It lets in-cluster code use a stable internal name while the real target lives elsewhere. No proxying or port mapping happens.</p>
+<p>A headless Service sets <code>clusterIP: None</code>. There is no virtual IP and no load balancing by kube-proxy; instead DNS returns the IP addresses of the individual ready Pods, and clients choose. StatefulSets use headless Services so each Pod gets its own DNS name, such as <code>db-0.db.prod.svc.cluster.local</code>.</p>
+<pre class="code" tabindex="0"><code>apiVersion: v1
+kind: Service
+metadata:
+  name: web
+spec:
+  type: NodePort
+  selector:
+    app: web
+  ports:
+  - port: 80
+    targetPort: 8080
+    nodePort: 30080</code></pre>
+<p><code>kubectl get svc</code> shows TYPE, CLUSTER-IP, EXTERNAL-IP and PORT(S), where a NodePort appears as <code>80:30080/TCP</code>. The type of an existing Service can be changed with <code>kubectl edit</code> or <code>kubectl patch svc web -p '{&quot;spec&quot;:{&quot;type&quot;:&quot;NodePort&quot;}}'</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>ClusterIP</dt><dd>Default Service type with an internal virtual IP reachable only inside the cluster.</dd><dt>NodePort</dt><dd>Service type that also opens a port (default range 30000-32767) on every node.</dd><dt>LoadBalancer</dt><dd>Service type that provisions an external load balancer through the cloud provider or an add-on.</dd><dt>ExternalName</dt><dd>Service type that returns a DNS CNAME to an external host, without proxying.</dd><dt>Headless Service</dt><dd>Service with clusterIP: None whose DNS returns individual Pod IPs.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An app uses a ClusterIP Service <code>orders</code> for its internal API, a LoadBalancer Service for its public gateway, an ExternalName Service <code>payments</code> pointing to a partner's hostname so code can call <code>payments</code> like any other Service, and a headless Service for its three-node StatefulSet database.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Each type builds on the previous one: LoadBalancer includes a NodePort, which includes a ClusterIP. ExternalName and headless are the odd ones out: no proxying and no virtual IP.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What is the default Service type?</summary><p>ClusterIP.</p></details>
+<details class="sq"><summary>A LoadBalancer Service in a local kind cluster shows EXTERNAL-IP &lt;pending&gt;. Why?</summary><p>There is no cloud provider or load balancer add-on to provision an external address.</p></details>
+<details class="sq"><summary>What does DNS return for a headless Service?</summary><p>The IP addresses of the individual ready Pods instead of a single virtual IP.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../linux-capabilities-add-drop-and-pod-security-admission-levels-privileg/">← Linux capabilities (add/drop) and Pod Security Admission lev</a><a href="../selectors-port-vs-targetport-vs-nodeport-named-ports/">Selectors, port vs targetPort vs nodePort, named ports →</a></nav>
+</main>
+</body>
+</html>

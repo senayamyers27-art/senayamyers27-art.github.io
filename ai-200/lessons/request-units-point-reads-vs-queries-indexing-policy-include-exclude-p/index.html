@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Request Units: point reads vs queries, indexing policy… · AI-200 Lesson</title>
+<meta name="description" content="Cosmos DB measures every operation in Request Units (RUs), a single currency that blends CPU, memory and I/O. You provision throughput as RU per second (ma">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Request Units: point reads vs queries, indexing policy… · AI-200 Lesson">
+<meta property="og:description" content="Cosmos DB measures every operation in Request Units (RUs), a single currency that blends CPU, memory and I/O. You provision throughput as RU per second (ma">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/request-units-point-reads-vs-queries-indexing-policy-include-exclude-p/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/request-units-point-reads-vs-queries-indexing-policy-include-exclude-p/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 2: Develop AI solutions by using Azure data management services</p>
+<h1>Request Units: point reads vs queries, indexing policy include/exclude paths, consistency levels and their RU cost</h1>
+<article class="lbody">
+<p>Cosmos DB measures every operation in Request Units (RUs), a single currency that blends CPU, memory and I/O. You provision throughput as RU per second (manual or autoscale) or pay per RU consumed in serverless mode. If you exceed your provisioned RU/s, requests are rate-limited with HTTP 429 and a retry-after hint. Every response reports its cost in the <code>x-ms-request-charge</code> header, which the Python SDK exposes through the last response headers, so you can measure rather than guess.</p>
+<p>The baseline is a point read: reading one 1 KB item by id and partition key costs about 1 RU. Writes cost more than reads because the item must be stored and indexed, and bigger items cost more. Queries vary widely: cost grows with the number of items scanned, the result size, the complexity of filters and functions, and whether the query spans partitions. A query that returns one item can easily cost several times a point read of that same item, so the cheapest design reads by id and partition key wherever possible.</p>
+<p>The indexing policy strongly affects write cost. By default, Cosmos DB indexes every property of every item (the include path <code>/*</code>), which makes any filter fast but makes each write pay to update many index entries. If you never filter on a large field, such as a document body or an embedding array, exclude it. You can also reverse the approach: exclude <code>/*</code> and include only the paths you query.</p>
+<pre class="code" tabindex="0"><code>{
+  &quot;indexingMode&quot;: &quot;consistent&quot;,
+  &quot;includedPaths&quot;: [ { &quot;path&quot;: &quot;/customerId/?&quot; }, { &quot;path&quot;: &quot;/status/?&quot; } ],
+  &quot;excludedPaths&quot;: [ { &quot;path&quot;: &quot;/*&quot; } ],
+  &quot;compositeIndexes&quot;: [[ { &quot;path&quot;: &quot;/status&quot; }, { &quot;path&quot;: &quot;/orderDate&quot;, &quot;order&quot;: &quot;descending&quot; } ]]
+}</code></pre>
+<p>A path ending in <code>/?</code> indexes a scalar value, and <code>/*</code> indexes everything below that point. Composite indexes support efficient ORDER BY on several properties. Setting <code>indexingMode</code> to <code>none</code> disables indexing entirely, which suits a pure key-value workload that only does point reads.</p>
+<p>Consistency levels, from strongest to weakest, are Strong, Bounded Staleness, Session, Consistent Prefix and Eventual. Session is the default: a client always reads its own writes, which fits most apps. Strong and Bounded Staleness make reads cost roughly twice as many RUs as the weaker levels, because reads are served with a quorum of replicas, and Strong also adds write latency across regions. Session, Consistent Prefix and Eventual reads cost about the same. You set a default level on the account, and a client can request a weaker level (never a stronger one) per client or request.</p>
+<p>When a question asks how to reduce RU consumption, look for these levers: switch queries to point reads, add the partition key to filters, exclude unqueried paths from the index, and relax consistency from Strong or Bounded Staleness if the scenario allows.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Request Unit (RU)</dt><dd>The normalized cost unit for Cosmos DB operations; a 1 KB point read costs about 1 RU.</dd><dt>Indexing policy</dt><dd>Container settings that choose which paths are indexed, the indexing mode and composite or vector indexes.</dd><dt>Session consistency</dt><dd>The default level, guaranteeing that a client reads its own writes within its session.</dd><dt>HTTP 429</dt><dd>The status returned when requests exceed provisioned throughput; clients should retry after the indicated delay.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A document store saw high RU charges on every write. Checking x-ms-request-charge showed large inserts costing far more than expected because the default policy indexed a big text field and every element of a 1536-number embedding. Excluding those paths cut write cost sharply, and switching reads from a query by id to read_item brought read charges down to about 1 RU each.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Strong and Bounded Staleness reads cost about double; excluding unused paths lowers write RUs; a point read beats any query. Clients can relax consistency per request but cannot strengthen it beyond the account default.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How can you lower the RU cost of writes for items with a large text field that is never filtered?</summary><p>Exclude that path in the indexing policy so writes do not maintain index entries for it.</p></details>
+<details class="sq"><summary>Which consistency levels roughly double read RU cost?</summary><p>Strong and Bounded Staleness, because reads require a quorum of replicas.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../partition-key-design-high-cardinality-even-spread-point-reads-hierarch/">← Partition key design: high cardinality, even spread, point r</a><a href="../cosmos-db-vector-search-container-vector-policy-path-data-type-dimensi/">Cosmos DB vector search: container vector policy (path, data →</a></nav>
+</main>
+</body>
+</html>

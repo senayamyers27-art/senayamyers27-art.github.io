@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Listing and identifying SELinux file and process contexts… · RHCSA Lesson</title>
+<meta name="description" content="Everything SELinux decides is based on labels called security contexts. Every file, directory, process, port and user session has one.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Listing and identifying SELinux file and process contexts… · RHCSA Lesson">
+<meta property="og:description" content="Everything SELinux decides is based on labels called security contexts. Every file, directory, process, port and user session has one.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/listing-and-identifying-selinux-file-and-process-contexts-ls-z-ps-ez-i/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/listing-and-identifying-selinux-file-and-process-contexts-ls-z-ps-ez-i/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 10: Manage security</p>
+<h1>Listing and identifying SELinux file and process contexts (ls -Z, ps -eZ, id -Z)</h1>
+<article class="lbody">
+<p>Everything SELinux decides is based on labels called security contexts. Every file, directory, process, port and user session has one. Before you can fix an SELinux problem, you need to read these labels and notice when one is wrong. Almost every RHCSA SELinux task starts with a <code>-Z</code> option.</p>
+<p>A context has four colon-separated fields: user, role, type and level, for example <code>system_u:object_r:httpd_sys_content_t:s0</code>. The SELinux user and role matter little in the default targeted policy. The type, ending in <code>_t</code>, is the part that matters: targeted policy rules are written as which process type may do what to which object type. This is called type enforcement. The level (<code>s0</code>) is used for multi-level security and can usually be ignored.</p>
+<p>Many standard commands accept <code>-Z</code>. <code>ls -Z</code> shows file contexts, and <code>ls -dZ</code> shows a directory itself. <code>ps -eZ</code> (or <code>ps axZ</code>) shows the context of every process, so you can see that the web server runs as <code>httpd_t</code>. <code>id -Z</code> shows your own context, usually <code>unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023</code> for a normal login, meaning your shell is not confined by targeted policy. <code>ss -Z</code> shows sockets with process contexts.</p>
+<pre class="code" tabindex="0"><code>ls -Z /var/www/html/index.html
+# unconfined_u:object_r:httpd_sys_content_t:s0 /var/www/html/index.html
+ps -eZ | grep httpd
+# system_u:system_r:httpd_t:s0   1234 ?  00:00:00 httpd
+id -Z</code></pre>
+<p>Reading these explains most failures. A process of type <code>httpd_t</code> may read files labeled <code>httpd_sys_content_t</code>, but not files labeled <code>user_home_t</code> or <code>admin_home_t</code>. So when a web page file shows the wrong type, that is your problem, even if its permission bits are fine.</p>
+<p>Where do file labels come from? A new file normally inherits the type of the directory it is created in. That is why <code>cp</code> into <code>/var/www/html</code> gives the right label, while <code>mv</code> from a home directory keeps the old home label, because moving does not create a new file. <code>cp -a</code> and <code>tar</code> with the <code>--selinux</code> option preserve the original labels. The policy's list of what the label should be for each path is shown with <code>semanage fcontext -l</code>, and <code>matchpathcon /path</code> prints the expected label for one path.</p>
+<p>Compare the actual label from <code>ls -Z</code> with the expected one; a mismatch is what the next lesson's <code>restorecon</code> fixes.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Security context</dt><dd>An SELinux label of the form user:role:type:level attached to files, processes and ports.</dd><dt>Type</dt><dd>The context field ending in _t that targeted policy uses to decide access.</dd><dt>Type enforcement</dt><dd>SELinux policy rules that allow a process type specific access to object types.</dd><dt>unconfined_t</dt><dd>The type of normal user login sessions, which targeted policy does not restrict.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A page you moved into /var/www/html gives 403 Forbidden while others work. ls -Z shows the new file is admin_home_t while the others are httpd_sys_content_t, and ps -eZ shows the server runs as httpd_t. The mismatch comes from using mv instead of cp, and relabeling the file fixes it.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> mv keeps a file's old context while cp creates a new file with the directory's context. A moved file with the wrong type is a classic exam trap.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which field of an SELinux context matters most in the targeted policy?</summary><p>The type field, ending in _t.</p></details>
+<details class="sq"><summary>How do you see the context of running httpd processes?</summary><p>ps -eZ | grep httpd (or ps axZ).</p></details>
+<details class="sq"><summary>Why does a file moved with mv keep the wrong context?</summary><p>mv keeps the existing file and its label, while a newly created file inherits the directory's type.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../setting-selinux-enforcing-and-permissive-modes-getenforce-setenforce-e/">← Setting SELinux enforcing and permissive modes (getenforce, </a><a href="../restoring-default-file-contexts-restorecon-rv-and-adding-rules-with-se/">Restoring default file contexts (restorecon -Rv) and adding  →</a></nav>
+</main>
+</body>
+</html>

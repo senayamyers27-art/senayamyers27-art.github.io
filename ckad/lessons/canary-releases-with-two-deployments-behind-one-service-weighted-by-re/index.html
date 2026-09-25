@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Canary releases with two Deployments behind one Service… · CKAD Lesson</title>
+<meta name="description" content="A canary release sends a small share of real traffic to a new version before rolling it out to everyone. If the canary behaves well, you gradually give it ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Canary releases with two Deployments behind one Service… · CKAD Lesson">
+<meta property="og:description" content="A canary release sends a small share of real traffic to a new version before rolling it out to everyone. If the canary behaves well, you gradually give it ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/canary-releases-with-two-deployments-behind-one-service-weighted-by-re/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/canary-releases-with-two-deployments-behind-one-service-weighted-by-re/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 2: Application Deployment</p>
+<h1>Canary releases with two Deployments behind one Service, weighted by replica count</h1>
+<article class="lbody">
+<p>A canary release sends a small share of real traffic to a new version before rolling it out to everyone. If the canary behaves well, you gradually give it more traffic; if it misbehaves, only a few users were affected and you remove it. The name comes from canaries once used to warn miners of bad air.</p>
+<p>Without a service mesh or special ingress features, you build a canary in Kubernetes with two Deployments and one Service. Both Deployments label their Pods with a shared label, such as <code>app: api</code>, plus a track label such as <code>track: stable</code> or <code>track: canary</code>. The Service selects only on the shared label, so it load-balances across every ready Pod from both Deployments.</p>
+<pre class="code" tabindex="0"><code># Service selects both tracks
+spec:
+  selector:
+    app: api
+---
+# api-stable: replicas: 9, labels app: api, track: stable, image api:1.0
+# api-canary: replicas: 1, labels app: api, track: canary, image api:1.1</code></pre>
+<p>Because a ClusterIP Service spreads connections roughly evenly across its endpoints, the traffic split follows the replica counts. With 9 stable Pods and 1 canary Pod, about 10% of connections reach the canary. To move to about 25%, you could run 3 stable and 1 canary, or 6 and 2. The split is approximate: it is per connection rather than per request, and long-lived connections or uneven load can skew it.</p>
+<p>A typical progression: deploy the canary with one replica, watch its logs, errors and latency (<code>kubectl logs -l track=canary</code>), then scale it up with <code>kubectl scale deploy api-canary --replicas=3</code> while scaling stable down to keep the total steady. When confident, update the stable Deployment to the new image and delete the canary. To abort, delete or scale the canary to zero; the Service immediately stops sending it traffic.</p>
+<p>The key difference from blue/green is that users see both versions at once, in proportion, and the Service selector never changes. The difference from a plain rolling update is control: a rolling update moves through the whole fleet automatically, while a canary lets you pause at a small percentage for as long as you want.</p>
+<p>When an exam task asks for, say, 20% of traffic on the new version with a total of 5 Pods, the answer is 4 stable and 1 canary, both carrying the label the Service selects. Check with <code>kubectl get endpointslices -l kubernetes.io/service-name=api</code> that all five Pod IPs appear.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Canary release</dt><dd>Sending a small share of traffic to a new version to test it with real users.</dd><dt>Track label</dt><dd>A label such as track: canary used to tell the two Deployments' Pods apart without affecting the Service.</dd><dt>Replica weighting</dt><dd>Using the ratio of Pod counts to approximate a traffic split behind one Service.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A search team runs <code>search-stable</code> with 8 replicas and adds <code>search-canary</code> with 2 replicas of the new ranking code, both labelled <code>app: search</code>. Roughly 20% of queries hit the canary; after a day of normal error rates they promote the new image to the stable Deployment and delete the canary.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Percent to canary is canary replicas divided by total replicas. The Service selector must match a label shared by both Deployments and must not include the track label.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>A Service fronts 3 stable Pods and 1 canary Pod. Roughly what share of traffic reaches the canary?</summary><p>About 25%, because traffic is spread across all four ready endpoints.</p></details>
+<details class="sq"><summary>Why must the Service selector not include <code>track: stable</code>?</summary><p>Then it would match only stable Pods, and the canary would receive no traffic.</p></details>
+<details class="sq"><summary>How do you quickly abort a canary?</summary><p>Scale the canary Deployment to zero or delete it; its Pods leave the Service endpoints.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../blue-green-deployments-by-switching-a-service-selector-between-two-dep/">← Blue/green deployments by switching a Service selector betwe</a><a href="../helm-basics-repositories-charts-releases-helm-repo-add-update-search-i/">Helm basics: repositories, charts, releases; helm repo add/u →</a></nav>
+</main>
+</body>
+</html>

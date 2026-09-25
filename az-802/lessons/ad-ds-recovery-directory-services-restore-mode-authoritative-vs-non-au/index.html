@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AD DS recovery: Directory Services Restore Mode… · AZ-802 Lesson</title>
+<meta name="description" content="Sooner or later someone deletes an OU full of users, or a DC's database becomes corrupted. To recover, you need a good system state backup and an understan">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="AD DS recovery: Directory Services Restore Mode… · AZ-802 Lesson">
+<meta property="og:description" content="Sooner or later someone deletes an OU full of users, or a DC's database becomes corrupted. To recover, you need a good system state backup and an understan">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/ad-ds-recovery-directory-services-restore-mode-authoritative-vs-non-au/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/ad-ds-recovery-directory-services-restore-mode-authoritative-vs-non-au/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 7: Monitor and troubleshoot Windows Server environments</p>
+<h1>AD DS recovery: Directory Services Restore Mode, authoritative vs non-authoritative restore, authoritative SYSVOL (DFSR) restore</h1>
+<article class="lbody">
+<p>Sooner or later someone deletes an OU full of users, or a DC's database becomes corrupted. To recover, you need a good system state backup and an understanding of how AD replication treats restored data. The central question is whether you want the restored data to be overwritten by replication partners, or to overwrite them.</p>
+<p>The AD database (<code>ntds.dit</code>) cannot be restored while AD DS is running on that DC. Directory Services Restore Mode (DSRM) is a special boot mode in which the DC starts without AD DS, and you sign in with the DSRM administrator account, a local account whose password was set during promotion and can be reset with <code>ntdsutil</code> using the 'set dsrm password' command. You enter DSRM by setting the boot option with <code>bcdedit /set safeboot dsrepair</code> and restarting (remove it afterwards with <code>bcdedit /deletevalue safeboot</code>), or through the advanced startup options. For offline maintenance such as defragmenting the database, you can instead stop the Active Directory Domain Services service, known as restartable AD DS.</p>
+<p>A non-authoritative restore brings back the DC's AD database from backup; when the DC restarts normally, replication partners send it every change made since the backup, including deletions. It's the right choice when a DC's database is damaged but the rest of the domain is fine; the DC simply catches up. It will not bring back deleted objects, because partners will replicate the deletion again.</p>
+<p>An authoritative restore is how you recover deleted objects from backup. After the non-authoritative restore, and before restarting, you run <code>ntdsutil</code>, activate the instance with <code>activate instance ntds</code>, enter <code>authoritative restore</code> and run <code>restore subtree &quot;OU=Sales,DC=contoso,DC=com&quot;</code> or <code>restore object</code> for a single object. Ntdsutil raises the version numbers of those objects' attributes by a large amount (by default 100,000 for each day since the backup), so after reboot they win replication and are copied back to all DCs. Ntdsutil also writes LDIF files for back-linked attributes, such as the objects' memberships in groups outside the subtree, which you import with <code>ldifde</code> to restore group membership. Backups older than the tombstone lifetime (commonly 180 days) must not be used. If the AD Recycle Bin is enabled, prefer <code>Restore-ADObject</code> or the Active Directory Administrative Center, which recovers objects with all attributes and no downtime.</p>
+<p>SYSVOL, which holds Group Policy templates and logon scripts, is replicated by DFS Replication, not by AD replication, so restoring AD doesn't fix it. For a single broken DC, a non-authoritative SYSVOL sync is enough: set <code>msDFSR-Enabled</code> to FALSE on that DC's SYSVOL subscription object, replicate, then set it to TRUE, and it pulls a fresh copy. If SYSVOL is broken everywhere, you perform an authoritative SYSVOL restore. On the DC with the good copy you set <code>msDFSR-Enabled</code> to FALSE and <code>msDFSR-Options</code> to 1 on its SYSVOL subscription object (under CN=SYSVOL Subscription in its DFSR-LocalSettings), and set <code>msDFSR-Enabled</code> to FALSE on all other DCs. After forcing AD replication with <code>repadmin /syncall</code>, you restart DFSR on the authoritative DC and set its <code>msDFSR-Enabled</code> back to TRUE, watching for event 4602, then re-enable the others, which sync from it.</p>
+<p>In short: DSRM is the tool, non-authoritative repairs one DC, authoritative wins against the others, and SYSVOL has its own DFSR procedure.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>DSRM</dt><dd>Directory Services Restore Mode: a DC boot mode without AD DS running, used for database restores with a local DSRM password.</dd><dt>Non-authoritative restore</dt><dd>Restoring a DC's AD database that then receives newer changes from replication partners.</dd><dt>Authoritative restore</dt><dd>Marking restored objects with higher version numbers via ntdsutil so they replicate out and overwrite partners.</dd><dt>Tombstone lifetime</dt><dd>How long deleted objects are kept as tombstones; backups older than this must not be restored.</dd><dt>msDFSR-Options</dt><dd>The SYSVOL subscription attribute set to 1 on the DC chosen as authoritative in a DFSR SYSVOL restore.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An admin accidentally deletes the Sales OU, and the AD Recycle Bin is not enabled. On DC2 they restart into DSRM, restore last night's system state with wbadmin, run ntdsutil authoritative restore on the Sales subtree, restart, and import the generated LDIF file with ldifde to restore the users' memberships in groups in other OUs.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Deleted objects need authoritative restore (or the Recycle Bin); a corrupt DC needs non-authoritative. SYSVOL is DFSR, restored separately with msDFSR-Enabled and msDFSR-Options on the subscription objects.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why won't a non-authoritative restore bring back a deleted OU?</summary><p>When the DC restarts, replication partners send the more recent deletion, which removes the restored objects again.</p></details>
+<details class="sq"><summary>What does ntdsutil do to objects during an authoritative restore?</summary><p>It increases their attribute version numbers so the restored versions win replication and overwrite the copies on other DCs.</p></details>
+<details class="sq"><summary>In an authoritative SYSVOL restore, which attributes do you set on the authoritative DC?</summary><p>msDFSR-Enabled to FALSE and msDFSR-Options to 1 on its SYSVOL subscription object, then later msDFSR-Enabled back to TRUE.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../azure-vm-troubleshooting-boot-diagnostics-serial-console-run-command-r/">← Azure VM troubleshooting: boot diagnostics, Serial Console, </a><a href="../backup-windows-server-backup-bare-metal-and-system-state-backup-azure/">Backup: Windows Server Backup, bare-metal and system state b →</a></nav>
+</main>
+</body>
+</html>

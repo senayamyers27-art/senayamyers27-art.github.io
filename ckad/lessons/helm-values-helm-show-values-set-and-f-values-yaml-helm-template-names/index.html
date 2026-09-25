@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Helm values: helm show values, --set and -f values.yaml… · CKAD Lesson</title>
+<meta name="description" content="Charts are customised through values. The chart's values.yaml holds defaults, and its templates read them with expressions such as {{ .Values.replicaCount ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Helm values: helm show values, --set and -f values.yaml… · CKAD Lesson">
+<meta property="og:description" content="Charts are customised through values. The chart's values.yaml holds defaults, and its templates read them with expressions such as {{ .Values.replicaCount ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/helm-values-helm-show-values-set-and-f-values-yaml-helm-template-names/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/helm-values-helm-show-values-set-and-f-values-yaml-helm-template-names/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 2: Application Deployment</p>
+<h1>Helm values: helm show values, --set and -f values.yaml, helm template, namespaces with -n and --create-namespace</h1>
+<article class="lbody">
+<p>Charts are customised through values. The chart's <code>values.yaml</code> holds defaults, and its templates read them with expressions such as <code>{{ .Values.replicaCount }}</code>. You override the defaults at install or upgrade time without editing the chart itself.</p>
+<p>Start by finding out what can be set. <code>helm show values bitnami/nginx</code> prints the chart's default values file; redirect it with <code>&gt; values.yaml</code> to get an editable copy. <code>helm show chart</code> prints the chart metadata and <code>helm show readme</code> its documentation. For a release that is already installed, <code>helm get values &lt;release&gt;</code> shows the values you supplied, and <code>--all</code> includes the computed defaults.</p>
+<p>There are two ways to override. <code>-f my-values.yaml</code> (or <code>--values</code>) supplies a file containing only the keys you want to change; you can pass several files. <code>--set key=value</code> sets individual values on the command line, using dots for nesting: <code>--set service.type=NodePort</code>, <code>--set image.tag=1.27</code>. Lists use indexes such as <code>--set ingress.hosts[0].name=shop.local</code>, and commas separate multiple pairs. When the same key is set more than once, the last source wins, and <code>--set</code> values take priority over <code>-f</code> files.</p>
+<pre class="code" tabindex="0"><code>helm show values bitnami/nginx &gt; values.yaml
+# edit values.yaml, keeping only what you change
+helm install web bitnami/nginx -f values.yaml --set replicaCount=2 \
+  -n shop --create-namespace
+helm get values web -n shop</code></pre>
+<p><code>helm template &lt;release&gt; &lt;chart&gt;</code> renders the manifests locally and prints them without contacting the cluster or creating a release. Use it to check what your values actually produce: <code>helm template web bitnami/nginx -f values.yaml | grep -A3 'kind: Service'</code>. You can also save the output and apply it with kubectl, though then Helm will not track it as a release. <code>helm install --dry-run</code> is similar but goes through the install process and prints what would be created.</p>
+<p>Namespaces follow the kubectl pattern. <code>-n shop</code> (or <code>--namespace</code>) chooses where the release and its resources go. If the namespace does not exist, install fails unless you add <code>--create-namespace</code>. Every later command on that release (<code>upgrade</code>, <code>rollback</code>, <code>uninstall</code>, <code>get values</code>) needs the same <code>-n</code>.</p>
+<p>On upgrade, be aware of how values carry over. By default, <code>helm upgrade</code> with no values flags reuses the previous release's values, but once you pass any <code>--set</code> or <code>-f</code>, it starts from the chart defaults plus what you pass. <code>--reuse-values</code> merges your new overrides onto the old ones, and <code>--reset-values</code> goes back to chart defaults. Check the outcome with <code>helm get values</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>values.yaml</dt><dd>The chart's default configuration file read by its templates.</dd><dt>--set</dt><dd>Command-line override of individual values using dotted keys.</dd><dt>-f / --values</dt><dd>Supplies a YAML file of value overrides; can be repeated.</dd><dt>helm template</dt><dd>Renders chart manifests locally without installing anything.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>To install a chart with a NodePort Service in a new namespace, a developer runs <code>helm show values</code> to find the key name, then <code>helm install api ./api-chart -n staging --create-namespace --set service.type=NodePort</code>, and confirms with <code>kubectl get svc -n staging</code>.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Find the exact key path with <code>helm show values</code> before using --set. A wrong key is silently ignored, so verify with <code>helm get values</code> or <code>helm template</code>.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>If a value is set both in a -f file and with --set, which wins?</summary><p>The --set value.</p></details>
+<details class="sq"><summary>Which command renders a chart's manifests without touching the cluster?</summary><p><code>helm template</code>.</p></details>
+<details class="sq"><summary>An install into namespace <code>qa</code> fails because the namespace is missing. What flag fixes it?</summary><p><code>--create-namespace</code> together with <code>-n qa</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../helm-basics-repositories-charts-releases-helm-repo-add-update-search-i/">← Helm basics: repositories, charts, releases; helm repo add/u</a><a href="../kustomize-kustomization-yaml-resources-nameprefix-namespace-commonlabe/">Kustomize: kustomization.yaml, resources, namePrefix, namesp →</a></nav>
+</main>
+</body>
+</html>

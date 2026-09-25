@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RBAC objects: Role, ClusterRole, RoleBinding… · CKAD Lesson</title>
+<meta name="description" content="Role-Based Access Control (RBAC) grants permissions through two kinds of objects: roles, which list what actions are allowed, and bindings, which give thos">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="RBAC objects: Role, ClusterRole, RoleBinding… · CKAD Lesson">
+<meta property="og:description" content="Role-Based Access Control (RBAC) grants permissions through two kinds of objects: roles, which list what actions are allowed, and bindings, which give thos">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/rbac-objects-role-clusterrole-rolebinding-clusterrolebinding-kubectl-a/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/rbac-objects-role-clusterrole-rolebinding-clusterrolebinding-kubectl-a/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 4: Application Environment, Configuration and Security</p>
+<h1>RBAC objects: Role, ClusterRole, RoleBinding, ClusterRoleBinding; kubectl auth can-i with --as</h1>
+<article class="lbody">
+<p>Role-Based Access Control (RBAC) grants permissions through two kinds of objects: roles, which list what actions are allowed, and bindings, which give those roles to users, groups or ServiceAccounts. Permissions are only ever added; there is no way to write a deny rule.</p>
+<p>A Role holds rules that apply within one namespace. Each rule lists <code>apiGroups</code>, <code>resources</code> and <code>verbs</code>. The core group, which holds Pods, Services, ConfigMaps and Secrets, is written as the empty string <code>&quot;&quot;</code>. Deployments are in <code>apps</code>, Jobs in <code>batch</code>. Resources are lowercase plurals, and subresources are written with a slash, such as <code>pods/log</code> or <code>pods/exec</code>. Verbs include <code>get</code>, <code>list</code>, <code>watch</code>, <code>create</code>, <code>update</code>, <code>patch</code>, <code>delete</code> and <code>*</code>. You can restrict a rule to named objects with <code>resourceNames</code>.</p>
+<p>A ClusterRole has the same structure but is not namespaced. It is used for cluster-scoped resources such as nodes or PersistentVolumes, for non-resource URLs, or as a reusable set of permissions for many namespaces. Kubernetes ships ClusterRoles such as <code>view</code>, <code>edit</code> and <code>admin</code>.</p>
+<p>A RoleBinding grants a Role, or a ClusterRole, to subjects within one namespace. Binding a ClusterRole with a RoleBinding is a common pattern: define <code>pod-reader</code> once as a ClusterRole, then grant it namespace by namespace. A ClusterRoleBinding grants a ClusterRole across all namespaces and for cluster-scoped resources. A binding's <code>roleRef</code> cannot be changed after creation; delete and recreate the binding to switch roles.</p>
+<pre class="code" tabindex="0"><code>kubectl create role pod-reader -n dev --verb=get,list,watch --resource=pods,pods/log
+kubectl create rolebinding ci-reads-pods -n dev --role=pod-reader \
+  --serviceaccount=dev:ci-bot --user=jane
+kubectl create clusterrole node-viewer --verb=get,list --resource=nodes
+kubectl create clusterrolebinding ops-nodes --clusterrole=node-viewer --group=ops</code></pre>
+<p>Subjects are of kind <code>User</code>, <code>Group</code> or <code>ServiceAccount</code>. On the command line, <code>--serviceaccount</code> takes <code>namespace:name</code>, a frequent source of mistakes. Inside YAML a ServiceAccount subject needs its <code>namespace</code> field.</p>
+<p>Test permissions without switching credentials by using impersonation. <code>kubectl auth can-i create deployments -n dev</code> checks yourself and prints yes or no. <code>kubectl auth can-i list pods -n dev --as=jane</code> checks as a user, and <code>--as=system:serviceaccount:dev:ci-bot</code> checks as a ServiceAccount. <code>kubectl auth can-i --list -n dev --as=system:serviceaccount:dev:ci-bot</code> lists everything that account may do. Impersonating requires that you yourself are allowed the <code>impersonate</code> verb, which cluster administrators normally are.</p>
+<p>Follow least privilege: grant only the verbs and resources an application needs, in the namespace it runs in, and prefer RoleBindings over ClusterRoleBindings. Remember that <code>get</code> or <code>list</code> on Secrets reveals their contents, and <code>create</code> on Pods can indirectly expose anything a Pod can mount, so treat those permissions as sensitive.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Role</dt><dd>Namespaced set of allowed verbs on resources.</dd><dt>ClusterRole</dt><dd>Non-namespaced set of permissions, usable cluster-wide or bound per namespace.</dd><dt>RoleBinding</dt><dd>Grants a Role or ClusterRole to subjects within one namespace.</dd><dt>ClusterRoleBinding</dt><dd>Grants a ClusterRole to subjects across the whole cluster.</dd><dt>kubectl auth can-i --as</dt><dd>Checks whether a user or ServiceAccount may perform an action, using impersonation.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A CI ServiceAccount must deploy to <code>staging</code> only. You create a Role allowing get, list, create, update and patch on deployments in the <code>apps</code> group, bind it with a RoleBinding in <code>staging</code>, then confirm with <code>kubectl auth can-i create deployments -n staging --as=system:serviceaccount:staging:ci</code> (yes) and the same check for <code>-n prod</code> (no).</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Core resources use apiGroups [&quot;&quot;], and --serviceaccount takes namespace:name. A ClusterRole bound by a RoleBinding only grants access in that binding's namespace.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What API group do you list in a Role rule for Pods?</summary><p>The core group, written as an empty string &quot;&quot;.</p></details>
+<details class="sq"><summary>What access does a RoleBinding to the ClusterRole <code>view</code> give?</summary><p>Read access to the covered resources only in the RoleBinding's namespace.</p></details>
+<details class="sq"><summary>How do you check whether ServiceAccount <code>bot</code> in namespace <code>qa</code> can delete Pods there?</summary><p><code>kubectl auth can-i delete pods -n qa --as=system:serviceaccount:qa:bot</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../request-flow-authentication-authorization-rbac-and-admission-control-m/">← Request flow: authentication, authorization (RBAC) and admis</a><a href="../resource-requests-and-limits-for-cpu-and-memory-units-m-mi-gi-qos-clas/">Resource requests and limits for CPU and memory; units (m, M →</a></nav>
+</main>
+</body>
+</html>

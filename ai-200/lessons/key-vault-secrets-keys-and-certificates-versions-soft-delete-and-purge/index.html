@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Key Vault: secrets, keys and certificates, versions, soft… · AI-200 Lesson</title>
+<meta name="description" content="Azure Key Vault is a managed service for storing and controlling access to sensitive material, so it never has to live in code, configuration files or cont">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Key Vault: secrets, keys and certificates, versions, soft… · AI-200 Lesson">
+<meta property="og:description" content="Azure Key Vault is a managed service for storing and controlling access to sensitive material, so it never has to live in code, configuration files or cont">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/key-vault-secrets-keys-and-certificates-versions-soft-delete-and-purge/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/key-vault-secrets-keys-and-certificates-versions-soft-delete-and-purge/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 4: Secure, monitor, and troubleshoot Azure solutions</p>
+<h1>Key Vault: secrets, keys and certificates, versions, soft delete and purge protection, RBAC vs access policies</h1>
+<article class="lbody">
+<p>Azure Key Vault is a managed service for storing and controlling access to sensitive material, so it never has to live in code, configuration files or container images. A vault holds three kinds of objects, and knowing which is which answers many questions.</p>
+<p>Secrets are arbitrary small values you store and read back: passwords, connection strings, API keys. The app retrieves the value itself. Keys are cryptographic keys (RSA or elliptic curve) used for operations such as encrypt, decrypt, sign, verify, wrap and unwrap. Key Vault performs the operation, and private key material is not meant to leave the vault; the Premium tier protects keys with HSMs (hardware security modules), and Managed HSM is a separate single-tenant service for stricter requirements. Certificates are X.509 certificates that Key Vault can create, import, renew automatically with integrated certificate authorities and track expiry for; each certificate has an associated key and secret behind the scenes.</p>
+<p>Every object has versions. When you set a new value for secret <code>db-password</code>, Key Vault creates a new version with its own identifier and keeps the older ones. A request without a version returns the current (latest) version; a request with a version ID returns exactly that one. Versions make rotation safe and allow rollback. Objects can also carry attributes such as an activation date, an expiration date, an enabled flag, tags and a content type.</p>
+<pre class="code" tabindex="0"><code>secrets = SecretClient(vault_url=VAULT_URL, credential=DefaultAzureCredential())
+secrets.set_secret(&quot;db-password&quot;, new_value, expires_on=expiry)
+current = secrets.get_secret(&quot;db-password&quot;)
+for p in secrets.list_properties_of_secret_versions(&quot;db-password&quot;):
+    print(p.version, p.created_on, p.enabled)</code></pre>
+<p>Soft delete protects against accidental or malicious deletion, and it is always enabled on vaults now. A deleted vault or object moves to a deleted state for a retention period you choose between 7 and 90 days (90 by default), during which it can be recovered. During that time its name is reserved, so creating a new secret with the same name fails until you recover or purge the old one. Purging permanently deletes it before retention ends. Purge protection, when enabled, blocks purging entirely until the retention period expires, even for administrators. Purge protection cannot be turned off once enabled, and it is often required by services that use Key Vault keys for encryption, such as customer-managed keys.</p>
+<p>Key Vault has two authorization models for the data plane. Vault access policies are the older model: a per-vault list of principals with permissions like Get and List for secrets, keys and certificates. They cannot be scoped to a single secret, and anyone with Contributor on the vault can edit the policies and grant themselves access. Azure RBAC is the recommended model: data-plane roles such as Key Vault Secrets User are assigned through Azure role assignments, can be scoped to an individual secret, key or certificate, and are governed and audited like the rest of Azure access. A vault uses one model or the other, selected by its permission model setting.</p>
+<p>Operationally, send Key Vault diagnostic logs to Log Analytics to audit who read what, restrict network access with firewalls or private endpoints, and cache secrets in your app rather than reading them on every request, since vault requests are throttled at high rates.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Secret</dt><dd>A small sensitive value, such as a password or connection string, that an app reads from Key Vault.</dd><dt>Key</dt><dd>A cryptographic key stored in Key Vault that performs operations inside the vault without exposing private material.</dd><dt>Soft delete</dt><dd>Retention of deleted vaults and objects for 7 to 90 days so they can be recovered.</dd><dt>Purge protection</dt><dd>A setting that prevents permanent deletion until the retention period ends; it cannot be disabled once on.</dd><dt>Access policy</dt><dd>The legacy Key Vault authorization model granting per-vault permissions, as opposed to Azure RBAC.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A script deleted a secret named api-key, and a redeployment that tried to recreate it failed with a conflict. Because soft delete reserves the name, the engineer recovered the deleted secret instead, restoring all versions. The team then enabled purge protection so no one could permanently destroy secrets before the retention period ended, and moved the vault to the RBAC permission model.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Secrets are values you read, keys do crypto inside the vault, certificates are X.509 with lifecycle management. Purge protection cannot be disabled once enabled; RBAC allows per-secret scope, access policies do not.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why might creating a secret with the name of a recently deleted secret fail?</summary><p>Soft delete keeps the deleted secret and reserves its name until it is recovered, purged or the retention period ends.</p></details>
+<details class="sq"><summary>Give one advantage of the Azure RBAC permission model over access policies.</summary><p>Roles can be scoped to individual secrets, keys or certificates, and access is governed centrally like other Azure permissions.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../azure-rbac-data-plane-roles-key-vault-secrets-user-service-bus-data-se/">← Azure RBAC data-plane roles: Key Vault Secrets User, Service</a><a href="../secret-rotation-and-key-vault-events-secretnearexpiry-through-event-gr/">Secret rotation and Key Vault events (SecretNearExpiry) thro →</a></nav>
+</main>
+</body>
+</html>

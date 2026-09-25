@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Policy-based forwarding with path monitoring; service… · NGFW Engineer Lesson</title>
+<meta name="description" content="Normally the firewall forwards by destination using the routing table. Policy-based forwarding (PBF) overrides that for traffic matching specific criteria,">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Policy-based forwarding with path monitoring; service… · NGFW Engineer Lesson">
+<meta property="og:description" content="Normally the firewall forwards by destination using the routing table. Policy-based forwarding (PBF) overrides that for traffic matching specific criteria,">
+<link rel="canonical" href="https://senayamyers27-art.github.io/palo-alto-ngfw/lessons/policy-based-forwarding-with-path-monitoring-service-routes-dhcp-serve/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/palo-alto-ngfw/lessons/policy-based-forwarding-with-path-monitoring-service-routes-dhcp-serve/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">NGFW Engineer</a> / <a href="../">Lessons</a></p>
+<p class="note">Palo Alto Networks Certified Next-Generation Firewall Engineer NGFW-Engineer · Domain 1: PAN-OS networking configuration</p>
+<h1>Policy-based forwarding with path monitoring; service routes; DHCP server/relay and DNS proxy</h1>
+<article class="lbody">
+<p>Normally the firewall forwards by destination using the routing table. Policy-based forwarding (PBF) overrides that for traffic matching specific criteria, for example sending guest traffic out a cheap broadband link while corporate traffic uses MPLS. PBF rules live under Policies &gt; Policy Based Forwarding and are evaluated before the route lookup for a new session.</p>
+<p>A PBF rule matches on source zone or interface, source address, source user, destination address, application and service. Its action is Forward (with an egress interface and optional next hop), Forward to vsys (on multi-vsys firewalls), Discard, or No PBF (use normal routing). Application-based PBF has a catch: PBF is decided on the first packet, before App-ID has identified the application. The firewall solves this with an application cache, so the first session of an application follows the routing table and later sessions match the PBF rule once the app is cached. Use service or address criteria where you can.</p>
+<p>Path monitoring makes PBF safe. You add a monitor profile and a monitored IP (often the next hop or something beyond it). If pings fail, the action Fail Over disables the rule so traffic falls back to the routing table, while Wait Recover keeps using the rule until the path returns. Symmetric Return, available on the forward action, makes replies to sessions that arrived on a particular interface leave by that same interface and next hop, which is important with two ISPs so return traffic does not exit the wrong provider.</p>
+<p>Service routes answer a different question: which interface does the firewall's own management plane use to reach services like DNS, NTP, software updates, syslog, LDAP, RADIUS or Panorama? By default everything leaves the dedicated MGT port. Under Device &gt; Setup &gt; Services &gt; Service Route Configuration you can pick a data interface and source address per service, which is common when the MGT network has no Internet access.</p>
+<p>On Layer 3 interfaces the firewall can act as a DHCP server, handing out addresses from a pool along with gateway, DNS and other options, and can inherit DNS settings from an upstream DHCP client interface. Or it can act as a DHCP relay, forwarding client broadcasts to a central DHCP server. An interface cannot be both server and relay. Configure these under Network &gt; DHCP.</p>
+<p>A DNS proxy (Network &gt; DNS Proxy) makes a firewall interface answer DNS queries for clients. It forwards queries to primary and secondary servers, can send specific domains to specific servers using domain rules (split DNS), can hold static FQDN-to-IP entries, and caches answers. It is handy for branches and is required by some features such as the web proxy.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Policy-based forwarding (PBF)</dt><dd>Rules that forward matching traffic by criteria like source, user or application instead of the routing table.</dd><dt>Symmetric return</dt><dd>A PBF option that sends replies back out the same interface and next hop on which the original traffic arrived.</dd><dt>Service route</dt><dd>A setting that makes a management-plane service such as DNS, updates or syslog source its traffic from a data interface instead of MGT.</dd><dt>DNS proxy</dt><dd>A firewall feature that answers client DNS queries, forwards them to chosen servers per domain and caches the results.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A retail branch has MPLS and a broadband link. A PBF rule sends the Guest zone to the broadband interface with path monitoring on the ISP gateway set to Fail Over. When the broadband link drops, the rule disables itself and guest traffic follows the default route over MPLS until the link recovers.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> PBF is evaluated before routing, but app-based PBF only applies after the app is in the application cache, so the first session uses the routing table. Service routes are for firewall-originated traffic, not user traffic.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why might the first session of an application ignore an app-based PBF rule?</summary><p>The PBF decision is made on the first packet before App-ID identifies the app; only later sessions match via the application cache.</p></details>
+<details class="sq"><summary>Your MGT port has no Internet access and dynamic updates fail. What do you configure?</summary><p>A service route so the update service (Palo Alto Networks services) uses a data interface with Internet access.</p></details>
+<details class="sq"><summary>What does Fail Over do in PBF path monitoring?</summary><p>It disables the PBF rule when monitoring fails so traffic falls back to the normal routing table.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study NGFW Engineer for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../palo-alto-ngfw/">Open the NGFW Engineer study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../routing-virtual-routers-vs-logical-routers-advanced-routing-engine-sta/">← Routing: virtual routers vs logical routers (Advanced Routin</a><a href="../nat-on-layer-3-interfaces-source-nat-dipp-dynamic-ip-static-destinatio/">NAT on Layer 3 interfaces: source NAT (DIPP, dynamic IP, sta →</a></nav>
+</main>
+</body>
+</html>

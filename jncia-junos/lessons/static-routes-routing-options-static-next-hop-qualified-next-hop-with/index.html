@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Static routes: `routing-options static`, next-hop… · JNCIA-Junos Lesson</title>
+<meta name="description" content="A static route is a route you configure by hand. It does not adapt to failures on its own the way a routing protocol does, but it is simple, predictable an">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Static routes: `routing-options static`, next-hop… · JNCIA-Junos Lesson">
+<meta property="og:description" content="A static route is a route you configure by hand. It does not adapt to failures on its own the way a routing protocol does, but it is simple, predictable an">
+<link rel="canonical" href="https://senayamyers27-art.github.io/jncia-junos/lessons/static-routes-routing-options-static-next-hop-qualified-next-hop-with/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/jncia-junos/lessons/static-routes-routing-options-static-next-hop-qualified-next-hop-with/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">JNCIA-Junos</a> / <a href="../">Lessons</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106 · Domain 6: Routing fundamentals</p>
+<h1>Static routes: `routing-options static`, next-hop, qualified-next-hop with preference (floating routes), discard and reject</h1>
+<article class="lbody">
+<p>A static route is a route you configure by hand. It does not adapt to failures on its own the way a routing protocol does, but it is simple, predictable and uses no protocol overhead. Static routes are common for default routes to an ISP, for stub sites with a single uplink and for backup paths. In Junos they live under <code>routing-options static</code> for the default instance, or under <code>routing-instances &lt;name&gt; routing-options static</code> for an instance. The basic form names a prefix and a next hop, as shown below.</p>
+<pre class="code" tabindex="0"><code>set routing-options static route 0.0.0.0/0 next-hop 203.0.113.1
+set routing-options static route 10.50.0.0/16 next-hop 10.1.12.2</code></pre>
+<p>By default the next-hop address must be on a directly connected subnet. If it is not reachable through a directly connected interface, the route stays inactive (hidden) because Junos cannot resolve which interface to use. If you really need a next hop several hops away, the <code>resolve</code> option lets Junos resolve it through other routes, but directly connected next hops are the normal case. Static routes have a default preference of 5. You can list several <code>next-hop</code> statements for the same route; they are treated as equal-cost next hops. A qualified next hop, by contrast, lets you give different next hops for the same route their own preference (and metric). This is how you build a primary and backup path inside one static route:</p>
+<pre class="code" tabindex="0"><code>set routing-options static route 0.0.0.0/0 next-hop 203.0.113.1
+set routing-options static route 0.0.0.0/0 qualified-next-hop 198.51.100.1 preference 7</code></pre>
+<p>Here the plain next hop uses preference 5 and is preferred. If the interface toward 203.0.113.1 goes down, that next hop becomes unusable and the qualified next hop with preference 7 takes over. A floating static route is the same idea applied between a static route and a dynamic protocol: you give the static route a preference higher than the protocol's, for example <code>set routing-options static route 10.50.0.0/16 next-hop 10.9.9.2 preference 200</code>. OSPF (10 or 150) and even BGP (170) then win while they are available, and the static route floats up to active only when the dynamic route disappears.</p>
+<p>Instead of a next hop, a static route can point to special actions. <code>discard</code> silently drops matching packets. <code>reject</code> drops them and returns an ICMP destination unreachable message to the sender. Both are useful for blackholing traffic, for example for a summary prefix you advertise so that packets to unused parts of it are dropped rather than looping, or to stop traffic to a bad destination. Discard is usually preferred facing the internet because it does not generate ICMP messages an attacker could use or that add load.</p>
+<p>Verify with <code>show route protocol static</code> and check that the route has the <code>*</code> for active. Other options you may see include <code>no-readvertise</code>, which keeps the route from being exported by routing policy, and <code>retain</code>, which keeps it in the forwarding table if the routing process restarts.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>next-hop</dt><dd>The directly connected address a static route forwards to; if unreachable, the route is not usable.</dd><dt>qualified-next-hop</dt><dd>A next hop within a static route that has its own preference or metric, used for backup paths.</dd><dt>Floating static route</dt><dd>A static route with a preference higher than a dynamic route, so it becomes active only when the dynamic route is gone.</dd><dt>discard vs reject</dt><dd>Both drop matching packets; reject also sends an ICMP unreachable message, discard stays silent.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A branch router has a fiber link to the main ISP and a cheaper LTE link. The engineer configures a default route with <code>next-hop</code> pointing to the fiber gateway and a <code>qualified-next-hop</code> to the LTE gateway with preference 7. When the fiber interface goes down, the default route immediately uses LTE, and it moves back when the fiber recovers.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> A static next hop must normally be directly connected, or the route will not become active. A higher preference makes a route a backup, and reject differs from discard only by sending an ICMP unreachable.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>You configure a static route whose next hop is on a remote network, and it does not appear as active. Why?</summary><p>Junos requires the next hop to be directly reachable by default; without <code>resolve</code> the next hop cannot be resolved.</p></details>
+<details class="sq"><summary>How do you make a static route that is used only if OSPF loses its route to the same prefix?</summary><p>Give the static route a preference higher than OSPF's, such as <code>preference 200</code>, creating a floating static route.</p></details>
+<details class="sq"><summary>What is the difference between discard and reject?</summary><p>Both drop traffic; reject sends an ICMP unreachable to the source, discard drops silently.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study JNCIA-Junos for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../jncia-junos/">Open the JNCIA-Junos study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../routing-instances-virtual-router-forwarding-and-vrf-types/">← Routing instances: virtual-router, forwarding and VRF types</a><a href="../default-routes-and-summarization-aggregate-routes/">Default routes and summarization (aggregate routes) →</a></nav>
+</main>
+</body>
+</html>

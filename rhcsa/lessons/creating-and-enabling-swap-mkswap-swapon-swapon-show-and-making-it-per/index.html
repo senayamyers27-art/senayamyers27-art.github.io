@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Creating and enabling swap (mkswap, swapon, swapon… · RHCSA Lesson</title>
+<meta name="description" content="Swap is disk space the kernel uses as overflow for memory. When RAM fills up, the kernel moves pages that have not been touched recently out to swap so act">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Creating and enabling swap (mkswap, swapon, swapon… · RHCSA Lesson">
+<meta property="og:description" content="Swap is disk space the kernel uses as overflow for memory. When RAM fills up, the kernel moves pages that have not been touched recently out to swap so act">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/creating-and-enabling-swap-mkswap-swapon-swapon-show-and-making-it-per/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/creating-and-enabling-swap-mkswap-swapon-swapon-show-and-making-it-per/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 5: Configure local storage</p>
+<h1>Creating and enabling swap (mkswap, swapon, swapon --show) and making it persistent</h1>
+<article class="lbody">
+<p>Swap is disk space the kernel uses as overflow for memory. When RAM fills up, the kernel moves pages that have not been touched recently out to swap so active programs can keep running. Swap is much slower than RAM, so it is a safety net rather than a performance feature, but many workloads and the RHCSA exam expect you to add it on request. Swap can live on a partition, on a logical volume or in a file; exam tasks usually ask for a partition or a logical volume of a given size.</p>
+<p>The workflow has three steps. First create the space: a partition (in <code>fdisk</code> set the type to Linux swap, in <code>parted</code> use <code>mkpart</code> with the <code>linux-swap</code> file system type, in <code>gdisk</code> use type code 8200) or a logical volume with <code>lvcreate</code>. Second, write a swap signature with <code>mkswap</code>, which also assigns a UUID (universally unique identifier). Third, activate it with <code>swapon</code>. Check the result with <code>swapon --show</code> or <code>free -h</code>.</p>
+<pre class="code" tabindex="0"><code>mkswap /dev/vdb2            # writes signature, prints UUID
+swapon /dev/vdb2            # activate now
+swapon --show               # list active swap areas
+free -h                     # Swap: line shows the new total</code></pre>
+<p>Activation with <code>swapon</code> does not survive a reboot. To make swap persistent, add a line to <code>/etc/fstab</code>. For swap, the mount point field is <code>none</code> (or <code>swap</code>), the type is <code>swap</code>, and the dump and fsck fields are both 0. Use the UUID from <code>mkswap</code> or <code>blkid</code> instead of the device name, because device names like <code>/dev/vdb</code> can change between boots.</p>
+<pre class="code" tabindex="0"><code>UUID=3f1c...-9a2e  none  swap  defaults  0 0</code></pre>
+<p>After editing <code>/etc/fstab</code>, test the entry without rebooting: run <code>swapon -a</code>, which activates every swap entry listed in the file, then <code>swapon --show</code> again. If you had already activated the device by hand, turn it off first with <code>swapoff /dev/vdb2</code> so that <code>swapon -a</code> proves the fstab line works. You can also set a priority with the <code>pri=</code> option; the kernel uses higher-priority swap areas first.</p>
+<p>Common mistakes are forgetting the <code>mkswap</code> step (swapon then fails with an invalid signature), putting a mount point path in the second field, or typing the UUID wrong. On the exam, a system that does not boot because of a broken fstab line costs far more than the swap task, so always test with <code>swapon -a</code> and <code>findmnt --verify</code> before you reboot.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Swap space</dt><dd>Disk space the kernel uses to hold memory pages that do not fit in RAM.</dd><dt>mkswap</dt><dd>Writes a swap signature and UUID to a partition, logical volume or file so it can be used as swap.</dd><dt>swapon / swapoff</dt><dd>Activate or deactivate swap areas; swapon -a activates every swap entry in /etc/fstab.</dd><dt>UUID</dt><dd>A universally unique identifier stored in a file system or swap signature, used to refer to a device reliably in /etc/fstab.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>You are asked to add a 512 MiB swap partition on /dev/vdb that is active after reboot. You create partition 2 with parted as linux-swap, run mkswap /dev/vdb2, copy the UUID into /etc/fstab with none, swap, defaults, 0 0, then run swapon -a and confirm with swapon --show before rebooting.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Persistence is the part graders check. A swap area activated only with swapon disappears at reboot, so the task fails unless the /etc/fstab line exists and swapon -a activates it cleanly.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What three commands take a new partition to active, verified swap?</summary><p>mkswap to write the signature, swapon to activate it, and swapon --show (or free -h) to verify it.</p></details>
+<details class="sq"><summary>What goes in the mount point and fsck fields of a swap line in /etc/fstab?</summary><p>The mount point is none (or swap) and both the dump and fsck order fields are 0, since swap is never mounted or checked.</p></details>
+<details class="sq"><summary>Why use the UUID rather than /dev/vdb2 in /etc/fstab?</summary><p>Device names can change between boots when disks are added or detected in a different order, while the UUID stays with the swap signature.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../adding-new-partitions-logical-volumes-and-swap-without-destroying-exis/">← Adding new partitions, logical volumes and swap without dest</a><a href="../creating-vfat-ext4-and-xfs-file-systems-mkfs-vfat-mkfs-ext4-mkfs-xfs/">Creating vfat, ext4 and xfs file systems (mkfs.vfat, mkfs.ex →</a></nav>
+</main>
+</body>
+</html>

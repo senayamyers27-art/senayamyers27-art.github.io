@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Creating volume groups and assigning physical volumes… · RHCSA Lesson</title>
+<meta name="description" content="A volume group (VG) is the storage pool in LVM. It combines the space of one or more physical volumes into a single pool, from which you allocate logical v">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Creating volume groups and assigning physical volumes… · RHCSA Lesson">
+<meta property="og:description" content="A volume group (VG) is the storage pool in LVM. It combines the space of one or more physical volumes into a single pool, from which you allocate logical v">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/creating-volume-groups-and-assigning-physical-volumes-vgcreate-s-vgext/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/creating-volume-groups-and-assigning-physical-volumes-vgcreate-s-vgext/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 5: Configure local storage</p>
+<h1>Creating volume groups and assigning physical volumes (vgcreate -s, vgextend, vgs)</h1>
+<article class="lbody">
+<p>A volume group (VG) is the storage pool in LVM. It combines the space of one or more physical volumes into a single pool, from which you allocate logical volumes. Because a logical volume draws from the pool rather than a single disk, it can be larger than any one device, and you can grow the pool later simply by adding another physical volume.</p>
+<p><code>vgcreate NAME PV...</code> creates a volume group from one or more physical volumes. If a device you list is not yet a PV, current versions of LVM initialise it automatically, but running <code>pvcreate</code> first is clearer. The name you choose becomes part of the device paths for its logical volumes, <code>/dev/NAME/LVNAME</code> and <code>/dev/mapper/NAME-LVNAME</code>, so exam tasks always specify it and you must use it exactly.</p>
+<p>The space in a VG is divided into physical extents (PEs), fixed-size units. Every logical volume is made of a whole number of extents, so the extent size is the granularity of allocation. The default extent size is 4 MiB. <code>vgcreate -s SIZE</code> sets a different size at creation, for example <code>-s 16M</code> for 16 MiB extents; it is normally a power of two. Exam tasks often specify the extent size and then ask for a logical volume measured in extents, so getting <code>-s</code> right matters. It is chosen when the VG is created and is not something you would normally change later.</p>
+<pre class="code" tabindex="0"><code>vgcreate -s 16M datavg /dev/vdb1
+vgs                          # summary
+vgdisplay datavg             # PE Size, Total PE, Free PE
+pvcreate /dev/vdc1
+vgextend datavg /dev/vdc1    # add space to the pool
+vgs datavg
+vgreduce datavg /dev/vdc1    # remove an unused PV
+vgremove datavg              # delete the VG (after removing its LVs)</code></pre>
+<p><code>vgs</code> lists volume groups with the number of PVs and LVs, attributes, total size (VSize) and free space (VFree). <code>vgdisplay NAME</code> shows much more, including 'PE Size', 'Total PE', 'Alloc PE / Size' and 'Free PE / Size'. Those lines tell you how many extents are available, which you need when a task asks for a volume of a given number of extents or for all remaining space.</p>
+<p><code>vgextend VG PV</code> adds a physical volume to an existing group, increasing its free space immediately without affecting existing logical volumes. This is the standard first step when a logical volume needs to grow but the VG is full. The reverse, <code>vgreduce VG PV</code>, removes a PV that holds no allocated extents; <code>pvmove</code> can first migrate extents off it to other PVs in the group. <code>vgremove</code> deletes a whole group once its logical volumes are gone.</p>
+<p>As with PVs, a VG needs no configuration file to persist. Its metadata is stored on its physical volumes and is found automatically at boot.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Volume group (VG)</dt><dd>An LVM storage pool made from one or more physical volumes.</dd><dt>Physical extent (PE)</dt><dd>The fixed-size allocation unit of a volume group; 4 MiB by default.</dd><dt>vgcreate -s</dt><dd>Creates a volume group with a specified physical extent size.</dd><dt>vgextend</dt><dd>Adds physical volumes to an existing volume group to increase its capacity.</dd><dt>vgdisplay</dt><dd>Shows detailed volume group information including PE size and free extents.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A task asks for a volume group named research with 8 MiB extents on /dev/vdb2. You run <code>pvcreate /dev/vdb2</code> and <code>vgcreate -s 8M research /dev/vdb2</code>, and <code>vgdisplay research | grep 'PE Size'</code> confirms 8.00 MiB.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Read the task for an extent size: vgcreate -s must be set at creation. Later, an LV of -l 50 in a VG with 16 MiB extents is 800 MiB, not 200 MiB.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What is the default physical extent size?</summary><p>4 MiB.</p></details>
+<details class="sq"><summary>How do you add /dev/vdd1 to the existing VG datavg?</summary><p>pvcreate /dev/vdd1 (if needed), then vgextend datavg /dev/vdd1.</p></details>
+<details class="sq"><summary>Where can you see how many free extents a VG has?</summary><p>vgdisplay (Free PE / Size line), or vgs -o +vg_free_count.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../creating-and-removing-physical-volumes-pvcreate-pvremove-pvs/">← Creating and removing physical volumes (pvcreate, pvremove, </a><a href="../creating-and-deleting-logical-volumes-by-size-l-or-extent-count-l-lvcr/">Creating and deleting logical volumes by size (-L) or extent →</a></nav>
+</main>
+</body>
+</html>

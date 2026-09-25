@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Encryption: BitLocker on servers and Azure VM disk… · AZ-802 Lesson</title>
+<meta name="description" content="Encryption protects data in two states: at rest on disks and in transit across the network. For Windows Server you should know BitLocker for on-premises di">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Encryption: BitLocker on servers and Azure VM disk… · AZ-802 Lesson">
+<meta property="og:description" content="Encryption protects data in two states: at rest on disks and in transit across the network. For Windows Server you should know BitLocker for on-premises di">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/encryption-bitlocker-on-servers-and-azure-vm-disk-encryption-options-s/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/encryption-bitlocker-on-servers-and-azure-vm-disk-encryption-options-s/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 6: Secure Windows Server infrastructure</p>
+<h1>Encryption: BitLocker on servers and Azure VM disk encryption options; SMB signing and encryption</h1>
+<article class="lbody">
+<p>Encryption protects data in two states: at rest on disks and in transit across the network. For Windows Server you should know BitLocker for on-premises disks, the several ways Azure encrypts VM disks, and SMB signing and encryption for file traffic.</p>
+<p>BitLocker Drive Encryption encrypts whole volumes so that a stolen disk or server is unreadable. On Windows Server it is an optional feature you add with <code>Install-WindowsFeature BitLocker -IncludeAllSubFeature -IncludeManagementTools</code>, followed by a restart. The OS volume is normally protected by the TPM (Trusted Platform Module), which releases the key only if the boot components are unchanged; data volumes can use auto-unlock. Always create a recovery password protector and back it up, for example to AD DS through Group Policy, so you can recover if the TPM measurements change. Commands include <code>Enable-BitLocker -MountPoint C: -TpmProtector</code>, <code>Add-BitLockerKeyProtector -RecoveryPasswordProtector</code> and <code>manage-bde -status</code>. Servers in a datacenter that must restart unattended with a PIN-protected setup can use BitLocker Network Unlock, which releases the key when the server boots on the trusted corporate network. BitLocker also supports Cluster Shared Volumes and is valuable for branch office servers with weak physical security.</p>
+<p>Azure VM disks are encrypted in several layers. Server-side encryption (SSE) is always on for managed disks, encrypting data at rest in Azure storage with platform-managed keys by default. You can switch to customer-managed keys stored in Azure Key Vault through a disk encryption set, when policy requires you to control and rotate the key. Encryption at host extends protection so that the VM's temporary disk and the OS and data disk caches on the physical host are encrypted too, with data encrypted before it flows to storage. Azure Disk Encryption (ADE) is the older option that runs BitLocker inside the Windows guest, with keys kept in Key Vault; Microsoft has announced its retirement and recommends encryption at host for new deployments. Confidential VMs add confidential disk encryption that binds keys to the VM's TPM.</p>
+<p>Distinguish them by where encryption happens: SSE encrypts in the storage service, encryption at host encrypts on the Hyper-V host before storage, and ADE encrypts inside the guest OS. SSE with platform keys needs no action at all; questions about controlling your own keys point to customer-managed keys; questions about temp disk and cache point to encryption at host.</p>
+<p>For data in transit between Windows machines, SMB offers two protections you met in the SMB security lesson. SMB signing adds a signature to each message, protecting integrity and preventing relay attacks, but traffic is still readable. SMB encryption (SMB 3.x) encrypts the payload, giving confidentiality and integrity, and can be required per share with <code>Set-SmbShare -EncryptData $true</code> or server-wide. Newer Windows versions require signing by default in more cases, and signing is unnecessary on a connection that is already encrypted.</p>
+<p>A complete design for a sensitive file server might be: BitLocker on the server's volumes, SMB encryption on its shares, and, if it runs in Azure, customer-managed keys plus encryption at host on its disks.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>BitLocker</dt><dd>Windows full-volume encryption, usually protected by a TPM, with recovery passwords that should be backed up to AD DS.</dd><dt>BitLocker Network Unlock</dt><dd>A feature that automatically unlocks BitLocker-protected servers at boot when they are on the trusted wired corporate network.</dd><dt>Server-side encryption</dt><dd>Always-on encryption of Azure managed disks at rest, with platform-managed or customer-managed keys.</dd><dt>Encryption at host</dt><dd>Azure encryption performed on the VM's host, covering temp disks and disk caches as well as data flowing to storage.</dd><dt>Azure Disk Encryption</dt><dd>The older option using BitLocker inside the guest with keys in Key Vault, announced for retirement.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A regulated company requires control of its own encryption keys and encryption of every byte on the VM host. For its Azure file servers it creates a disk encryption set pointing to a key in Key Vault for customer-managed SSE, enables encryption at host on the VMs, and requires SMB encryption on the shares. On-premises branch servers use BitLocker with recovery passwords backed up to AD DS.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Where the encryption happens is the key: SSE in storage (always on), encryption at host on the host (covers temp disk and cache), ADE inside the guest via BitLocker. Customer control of keys means customer-managed keys in Key Vault.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which Azure option encrypts a VM's temporary disk and disk caches without running anything inside the guest?</summary><p>Encryption at host.</p></details>
+<details class="sq"><summary>What should you always do after enabling BitLocker on a server's OS volume?</summary><p>Create a recovery password protector and back it up, for example to AD DS, so the volume can be recovered if TPM validation fails.</p></details>
+<details class="sq"><summary>Are Azure managed disks encrypted if you configure nothing?</summary><p>Yes. Server-side encryption with platform-managed keys is always on for managed disks.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../microsoft-defender-for-servers-via-defender-for-cloud-onboarding-arc-a/">← Microsoft Defender for Servers via Defender for Cloud: onboa</a><a href="../performance-monitor-counters-and-data-collector-sets-baselines-resourc/">Performance Monitor counters and data collector sets; baseli →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ConfigMaps: create from literals, files and env files… · CKAD Lesson</title>
+<meta name="description" content="A ConfigMap stores non-secret configuration as key-value pairs, separate from the container image. The same image can then run in development and productio">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="ConfigMaps: create from literals, files and env files… · CKAD Lesson">
+<meta property="og:description" content="A ConfigMap stores non-secret configuration as key-value pairs, separate from the container image. The same image can then run in development and productio">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/configmaps-create-from-literals-files-and-env-files-consume-as-env-env/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/configmaps-create-from-literals-files-and-env-files-consume-as-env-env/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 4: Application Environment, Configuration and Security</p>
+<h1>ConfigMaps: create from literals, files and env files; consume as env, envFrom and volumes</h1>
+<article class="lbody">
+<p>A ConfigMap stores non-secret configuration as key-value pairs, separate from the container image. The same image can then run in development and production with different settings, and you change configuration without rebuilding. Values are plain text; for passwords and keys use a Secret instead.</p>
+<p>There are three imperative ways to create one. <code>--from-literal=KEY=value</code> adds one pair per flag. <code>--from-file=path</code> adds a key named after the file with the file's contents as the value; <code>--from-file=mykey=path</code> chooses the key name, and pointing it at a directory adds one key per file. <code>--from-env-file=path</code> reads a file of <code>KEY=value</code> lines and turns each line into its own key. The difference between the last two is a favourite exam trap: <code>--from-file=app.env</code> produces a single key <code>app.env</code> holding the whole file, while <code>--from-env-file=app.env</code> produces one key per line.</p>
+<pre class="code" tabindex="0"><code>kubectl create configmap app-config --from-literal=LOG_LEVEL=info --from-literal=MODE=prod
+kubectl create configmap nginx-conf --from-file=default.conf
+kubectl create configmap app-env --from-env-file=app.env
+kubectl get configmap app-config -o yaml</code></pre>
+<p>Pods consume ConfigMaps in three ways. To set a single environment variable, use <code>env</code> with <code>valueFrom.configMapKeyRef</code>, naming the ConfigMap and key; the variable name can differ from the key. To import every key as a variable, use <code>envFrom</code> with <code>configMapRef</code>, optionally with a <code>prefix</code>; keys that are not valid variable names are skipped and reported in an event (recent Kubernetes versions accept almost any printable characters in names, so this is now rare). To expose keys as files, mount a <code>configMap</code> volume, where each key becomes a file under the mount path.</p>
+<pre class="code" tabindex="0"><code>containers:
+- name: app
+  image: app:1.0
+  env:
+  - name: LEVEL
+    valueFrom:
+      configMapKeyRef:
+        name: app-config
+        key: LOG_LEVEL
+  envFrom:
+  - configMapRef:
+      name: app-env
+    prefix: CFG_
+  volumeMounts:
+  - name: conf
+    mountPath: /etc/nginx/conf.d
+volumes:
+- name: conf
+  configMap:
+    name: nginx-conf</code></pre>
+<p>Environment variables are read only when the container starts. If you change the ConfigMap, running containers keep the old values until they are restarted, for example with <code>kubectl rollout restart deploy/app</code>. Mounted files are updated automatically after a short delay (except subPath mounts), but the application must notice and reload them.</p>
+<p>A ConfigMap must exist in the same namespace as the Pod. If it is missing, the Pod fails to start with CreateContainerConfigError (for env) or waits in ContainerCreating (for volumes). Mark a reference <code>optional: true</code> if the Pod should start without it. Setting <code>immutable: true</code> on a ConfigMap prevents accidental edits and reduces load on the API server; to change it, you create a new ConfigMap.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>ConfigMap</dt><dd>An object holding non-secret configuration as key-value pairs.</dd><dt>--from-env-file</dt><dd>Creates one ConfigMap key per KEY=value line in a file.</dd><dt>configMapKeyRef</dt><dd>Sets one environment variable from one ConfigMap key.</dd><dt>envFrom</dt><dd>Imports all keys of a ConfigMap or Secret as environment variables.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A team keeps <code>LOG_LEVEL</code> and <code>FEATURE_X</code> in a ConfigMap loaded with envFrom. To enable debug logging in staging, they edit the ConfigMap and run <code>kubectl rollout restart deploy/api</code>, because environment variables are only read at container start.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> --from-file=app.env makes one key holding the whole file; --from-env-file=app.env makes one key per line. And env values do not update until the Pod restarts.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How do you set the variable DB_HOST from key <code>host</code> in ConfigMap <code>db</code>?</summary><p>An env entry named DB_HOST with valueFrom.configMapKeyRef name db and key host.</p></details>
+<details class="sq"><summary>You updated a ConfigMap used via envFrom. Why do Pods still see old values?</summary><p>Environment variables are set at container start; the Pods must be restarted.</p></details>
+<details class="sq"><summary>What does mounting a ConfigMap as a volume produce?</summary><p>One file per key under the mount path, containing the key's value.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../namespace-resourcequota-and-limitrange-defaults/">← Namespace ResourceQuota and LimitRange defaults</a><a href="../secrets-generic-docker-registry-and-tls-types-base64-encoding-vs-encry/">Secrets: generic, docker-registry and tls types; base64 enco →</a></nav>
+</main>
+</body>
+</html>

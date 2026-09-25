@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Output values and local values · Terraform Associate Lesson</title>
+<meta name="description" content="Output values and local values both give names to expressions, but they face in different directions. Outputs expose values from a module to whoever uses i">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Output values and local values · Terraform Associate Lesson">
+<meta property="og:description" content="Output values and local values both give names to expressions, but they face in different directions. Outputs expose values from a module to whoever uses i">
+<link rel="canonical" href="https://senayamyers27-art.github.io/terraform/lessons/output-values-and-local-values/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/terraform/lessons/output-values-and-local-values/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Terraform Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004) · Domain 4: Terraform configuration</p>
+<h1>Output values and local values</h1>
+<article class="lbody">
+<p>Output values and local values both give names to expressions, but they face in different directions. Outputs expose values from a module to whoever uses it. Locals name intermediate values inside a module to avoid repetition, and cannot be set from outside.</p>
+<pre class="code" tabindex="0"><code>output &quot;web_ip&quot; {
+  value       = aws_instance.web.public_ip
+  description = &quot;Public IP of the web server.&quot;
+}
+
+output &quot;db_password&quot; {
+  value     = random_password.db.result
+  sensitive = true
+}</code></pre>
+<p>An <code>output</code> block needs a <code>value</code>, and can have a <code>description</code>, <code>sensitive</code>, a <code>depends_on</code> for rare hidden dependencies, and <code>precondition</code> checks. In the root module, outputs are printed at the end of <code>terraform apply</code> and stored in state. You can read them later with <code>terraform output</code>, one of them with <code>terraform output web_ip</code>, the raw string without quotes with <code>terraform output -raw web_ip</code>, and all of them as JSON with <code>terraform output -json</code>. Sensitive outputs are shown as <code>&lt;sensitive&gt;</code> in the apply summary and the plain <code>terraform output</code> listing, but <code>terraform output -raw</code> and <code>-json</code> print them in plain text, because the value itself is in state.</p>
+<p>In a child module, outputs are the only way to pass values back to the calling module. If a module called <code>network</code> declares <code>output &quot;subnet_ids&quot;</code>, the root module uses <code>module.network.subnet_ids</code>. Anything not exported as an output is invisible outside the module. Outputs from one root module can also be read by another configuration through the <code>terraform_remote_state</code> data source or, in HCP Terraform, the <code>tfe_outputs</code> data source, which is how separate stacks share values such as network IDs.</p>
+<p>Local values are declared in a <code>locals</code> block (plural) and referenced with <code>local.NAME</code> (singular), a spelling difference the exam likes to test.</p>
+<pre class="code" tabindex="0"><code>locals {
+  name_prefix = &quot;${var.project}-${var.environment}&quot;
+  common_tags = {
+    Project     = var.project
+    Environment = var.environment
+    ManagedBy   = &quot;terraform&quot;
+  }
+}
+
+resource &quot;aws_s3_bucket&quot; &quot;logs&quot; {
+  bucket = &quot;${local.name_prefix}-logs&quot;
+  tags   = local.common_tags
+}</code></pre>
+<p>Locals shine when the same expression would otherwise be repeated, or when naming a complex expression makes code clearer. They can reference variables, resources, data sources and other locals. Unlike variables, they cannot be overridden by a caller, tfvars file or command line, which makes them a good place for values that should be computed consistently. Overusing them, however, can make code harder to follow, since readers must jump to the definition to see what a value is.</p>
+<p>To summarize the trio: variables are a module's inputs, locals are its private working names, and outputs are its return values.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Output value</dt><dd>A named value a module exports, printed for the root module and accessed as <code>module.NAME.OUTPUT</code> for child modules.</dd><dt>Local value</dt><dd>A named expression defined in a <code>locals</code> block and referenced as <code>local.NAME</code>, usable only inside its module.</dd><dt>terraform output</dt><dd>Command that reads root module output values from state, with <code>-raw</code> and <code>-json</code> options.</dd><dt>terraform_remote_state</dt><dd>Data source that reads the root module outputs of another configuration's state.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A networking team's configuration outputs <code>private_subnet_ids</code>. An application team's configuration reads those outputs with a remote state data source, and uses a local <code>common_tags</code> map so every resource gets the same Project and Environment tags.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> The block is <code>locals</code> but the reference is <code>local.name</code>. Child module values are reachable only through outputs, as <code>module.NAME.OUTPUT_NAME</code>.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How does a root module read a value produced inside a child module named <code>db</code>?</summary><p>The child must declare an output, for example <code>endpoint</code>, and the root references it as <code>module.db.endpoint</code>.</p></details>
+<details class="sq"><summary>Can a local value be overridden with <code>-var</code>?</summary><p>No. Locals are internal to the module; only input variables can be set from outside.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Terraform Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../terraform/">Open the Terraform Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../input-variables-type-default-description-sensitive-nullable-and-value/">← Input variables: `type`, `default`, `description`, `sensitiv</a><a href="../complex-types-list-map-set-object-tuple-type-conversion/">Complex types: list, map, set, object, tuple; type conversio →</a></nav>
+</main>
+</body>
+</html>

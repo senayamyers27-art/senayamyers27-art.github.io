@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Locating and reading system logs: /var/log/messages… · RHCSA Lesson</title>
+<meta name="description" content="Logs are the first place to look when something fails: a service that will not start, a login that is refused, a disk that will not mount. RHEL has two coo">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Locating and reading system logs: /var/log/messages… · RHCSA Lesson">
+<meta property="og:description" content="Logs are the first place to look when something fails: a service that will not start, a login that is refused, a disk that will not mount. RHEL has two coo">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/locating-and-reading-system-logs-var-log-messages-var-log-secure-journ/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/locating-and-reading-system-logs-var-log-messages-var-log-secure-journ/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 4: Operate running systems</p>
+<h1>Locating and reading system logs: /var/log/messages, /var/log/secure, journalctl -u, -p, -b, --since</h1>
+<article class="lbody">
+<p>Logs are the first place to look when something fails: a service that will not start, a login that is refused, a disk that will not mount. RHEL has two cooperating logging systems. systemd-journald collects messages from the kernel, the boot process, services and programs into a structured binary journal. rsyslog, a traditional syslog daemon, receives messages from the journal and writes them to plain text files in <code>/var/log/</code>, sorted by type.</p>
+<p>The text files are easy to search with <code>less</code>, <code>tail</code> and <code>grep</code>. <code>/var/log/messages</code> holds most general system messages. <code>/var/log/secure</code> holds security and authentication events: logins, sudo use, SSH connections and failed passwords. <code>/var/log/cron</code> records scheduled jobs, <code>/var/log/maillog</code> mail activity and <code>/var/log/boot.log</code> boot messages. <code>tail -f /var/log/secure</code> follows a file live, which is useful while you reproduce a problem in another terminal. Which messages go to which file is decided by rules in <code>/etc/rsyslog.conf</code>. Many services also keep their own logs, for example the web server under <code>/var/log/httpd/</code>.</p>
+<p><code>journalctl</code> reads the journal and can filter it far more precisely. On its own it shows everything, oldest first, in a pager. <code>-e</code> jumps to the end and <code>-f</code> follows new entries. <code>-n 20</code> shows the last 20 entries. The most useful filters are these.</p>
+<pre class="code" tabindex="0"><code>journalctl -u sshd               # one unit (service)
+journalctl -p err                # priority err and more severe
+journalctl -b                    # current boot only
+journalctl -b -1                 # previous boot (needs persistence)
+journalctl --since '1 hour ago'
+journalctl --since '2026-09-25 08:00' --until '2026-09-25 09:00'
+journalctl -u httpd -p warning --since today</code></pre>
+<p><code>-u UNIT</code> shows messages from one systemd unit, which is the fastest way to see why a service failed; <code>systemctl status UNIT</code> also shows its last few journal lines. <code>-p</code> filters by priority, and includes everything at that level and above. The syslog priorities from most to least severe are emerg (0), alert (1), crit (2), err (3), warning (4), notice (5), info (6) and debug (7). <code>-b</code> limits output to a boot; <code>-b -1</code> is the previous one and <code>--list-boots</code> shows those available. <code>--since</code> and <code>--until</code> accept dates like <code>'2026-09-25 14:00'</code> and words such as <code>today</code>, <code>yesterday</code> or <code>'10 min ago'</code>.</p>
+<p>Other handy options are <code>-o verbose</code> to show all stored fields of each entry, <code>_PID=1234</code> or <code>_COMM=sshd</code> to filter by fields, and <code>-k</code> for kernel messages only. You need to be root or a member of a group allowed to read the system journal, such as <code>systemd-journal</code>, to see all entries; other normal users see only their own.</p>
+<p>Remember that by default on RHEL the journal may be kept only in memory under <code>/run/log/journal</code>, so journal entries from previous boots can be missing. The text files in <code>/var/log</code> survive reboots regardless, because rsyslog writes them to disk.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>systemd-journald</dt><dd>Service that collects log messages into the structured systemd journal.</dd><dt>rsyslog</dt><dd>Syslog daemon that writes messages to text files under /var/log according to /etc/rsyslog.conf.</dd><dt>/var/log/secure</dt><dd>Text log for authentication and security events such as logins and sudo.</dd><dt>journalctl -u</dt><dd>Shows journal entries for a specific systemd unit.</dd><dt>Syslog priority</dt><dd>Severity level from emerg (0) to debug (7); journalctl -p shows that level and more severe ones.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Users say SSH logins to serverb fail. You run <code>tail -n 30 /var/log/secure</code> and see repeated 'Failed password' lines for one account, then <code>journalctl -u sshd --since '30 min ago'</code> shows sshd restarted with a configuration warning, pointing you to the bad setting.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> journalctl -p err shows err AND everything more severe (crit, alert, emerg). Authentication problems go to /var/log/secure, not /var/log/messages.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which file records failed SSH logins and sudo usage?</summary><p>/var/log/secure.</p></details>
+<details class="sq"><summary>How do you show only this boot's messages from the chronyd service?</summary><p>journalctl -b -u chronyd.</p></details>
+<details class="sq"><summary>What does journalctl -p warning include?</summary><p>Messages with priority warning and all more severe priorities (err, crit, alert, emerg).</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../managing-tuning-profiles-with-tuned-adm-active-recommend-profile/">← Managing tuning profiles with tuned-adm (active, recommend, </a><a href="../preserving-the-systemd-journal-across-reboots-storage-persistent-var-l/">Preserving the systemd journal across reboots (Storage=persi →</a></nav>
+</main>
+</body>
+</html>

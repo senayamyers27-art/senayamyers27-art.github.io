@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Testing with `test policy` · JNCIA-Junos Lesson</title>
+<meta name="description" content="Routing policies can have wide effects, and a mistake in a route filter or term order can advertise or block far more than you intended. Junos gives you a ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Testing with `test policy` · JNCIA-Junos Lesson">
+<meta property="og:description" content="Routing policies can have wide effects, and a mistake in a route filter or term order can advertise or block far more than you intended. Junos gives you a ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/jncia-junos/lessons/testing-with-test-policy/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/jncia-junos/lessons/testing-with-test-policy/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">JNCIA-Junos</a> / <a href="../">Lessons</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106 · Domain 7: Routing policy and firewall filters</p>
+<h1>Testing with `test policy`</h1>
+<article class="lbody">
+<p>Routing policies can have wide effects, and a mistake in a route filter or term order can advertise or block far more than you intended. Junos gives you a way to see what a policy would match before you trust it: the operational-mode command <code>test policy</code>.</p>
+<p>The syntax is <code>test policy &lt;policy-name&gt; &lt;prefix&gt;</code>. Junos takes the routes currently in the routing table (inet.0 by default) that fall within the prefix you give, runs each through the named policy, and displays the routes the policy accepts. To test against every route in the table, use <code>0.0.0.0/0</code> as the prefix. Because the command works on routes already in the routing table, it is a good way to check export policies, which operate on routes the device already has.</p>
+<pre class="code" tabindex="0"><code>user@R1&gt; test policy ADVERTISE-AGG 0.0.0.0/0
+inet.0: 25 destinations, 27 routes (25 active, 0 holddown, 0 hidden)
++ = Active Route, - = Last Active, * = Both
+198.51.100.0/24    *[Aggregate/130] 01:12:04
+                       Reject
+Policy ADVERTISE-AGG: 1 prefix accepted, 24 prefix rejected</code></pre>
+<p>There is one behavior you must remember: the default action of <code>test policy</code> is accept. When a route passes through all the terms without hitting a terminating action, <code>test policy</code> treats it as accepted and shows it. It does not apply the default policy of whatever protocol you will eventually use the policy with, because it is not tied to any protocol. So if your policy has no final reject term, <code>test policy</code> may show many more accepted routes than the protocol will actually advertise, or the reverse depending on the protocol's default. The cleanest approach is to end policies with an explicit terminating term, which also makes the test output match reality.</p>
+<p><code>test policy</code> is a check of logic, not a full simulation. It does not show attribute changes such as metric or community modifications, and it cannot tell you what a BGP neighbor will do with the routes. For those, look at the real results after committing: <code>show route advertising-protocol bgp &lt;neighbor&gt;</code> shows what is actually being sent, and <code>show route receive-protocol bgp &lt;neighbor&gt;</code> shows what is received before import policy. Comparing test output with those commands is a solid habit.</p>
+<p>A practical workflow is: write or change the policy in configuration mode, commit it (the policy has no effect until it is applied, so committing an unapplied policy is harmless), run <code>test policy</code> with <code>0.0.0.0/0</code> and specific prefixes, and only then apply it under the protocol. Using <code>commit confirmed</code> for the final step gives you an automatic rollback if the change cuts off your access.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>test policy</dt><dd>An operational command that runs routing table entries through a policy and shows the routes it accepts.</dd><dt>Default accept in test policy</dt><dd>Routes not explicitly rejected by the tested policy are shown as accepted.</dd><dt>advertising-protocol</dt><dd><code>show route advertising-protocol bgp &lt;neighbor&gt;</code> shows the routes actually being advertised to a BGP neighbor.</dd><dt>commit confirmed</dt><dd>A commit that rolls back automatically unless confirmed within a set time, useful when applying risky policy changes.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Before applying a new BGP export policy, an engineer commits the policy definition without applying it and runs <code>test policy EXPORT-ISP 0.0.0.0/0</code>. The output shows 400 routes accepted instead of the expected 2. She realizes the policy lacks a final reject term, adds it, retests to see only the two aggregates, and then applies the policy.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> <code>test policy</code> accepts by default any route the policy does not explicitly reject, regardless of the protocol's default policy. Use <code>0.0.0.0/0</code> to test the whole table.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What prefix do you give <code>test policy</code> to evaluate every route in inet.0?</summary><p><code>0.0.0.0/0</code>.</p></details>
+<details class="sq"><summary>A route matches no term in the tested policy. How does <code>test policy</code> show it?</summary><p>As accepted, because the default action of <code>test policy</code> is accept.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study JNCIA-Junos for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../jncia-junos/">Open the JNCIA-Junos study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../route-filters-and-match-types-exact-orlonger-longer-upto-prefix-length/">← Route filters and match types: exact, orlonger, longer, upto</a><a href="../firewall-filters-stateless-term-order-match-conditions-implicit-discar/">Firewall filters: stateless, term order, match conditions, i →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ServiceAccounts: serviceAccountName, token projection… · CKAD Lesson</title>
+<meta name="description" content="Humans authenticate to the API server with their own credentials; applications running in Pods use ServiceAccounts. A ServiceAccount is a namespaced object">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="ServiceAccounts: serviceAccountName, token projection… · CKAD Lesson">
+<meta property="og:description" content="Humans authenticate to the API server with their own credentials; applications running in Pods use ServiceAccounts. A ServiceAccount is a namespaced object">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/serviceaccounts-serviceaccountname-token-projection-automountserviceac/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/serviceaccounts-serviceaccountname-token-projection-automountserviceac/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 4: Application Environment, Configuration and Security</p>
+<h1>ServiceAccounts: serviceAccountName, token projection, automountServiceAccountToken, kubectl create token</h1>
+<article class="lbody">
+<p>Humans authenticate to the API server with their own credentials; applications running in Pods use ServiceAccounts. A ServiceAccount is a namespaced object that gives a Pod an identity, which RBAC can then grant permissions to. Every namespace automatically has one called <code>default</code>, and a Pod that does not name a ServiceAccount runs as that one.</p>
+<p>Create a dedicated account with <code>kubectl create serviceaccount ci-bot -n dev</code> (short form <code>sa</code>) and assign it in the Pod template with <code>spec.serviceAccountName: ci-bot</code>. The field is set when the Pod is created and cannot be changed on a running Pod; for a Deployment, change the template and let it roll out, or use <code>kubectl set serviceaccount deploy/app ci-bot</code>. The ServiceAccount must exist in the Pod's namespace, or the Pod is rejected at admission. In RBAC and in <code>kubectl auth can-i --as</code>, the account's full name is <code>system:serviceaccount:dev:ci-bot</code>.</p>
+<p>By default the kubelet gives each Pod a token for its ServiceAccount through a projected volume, mounted at <code>/var/run/secrets/kubernetes.io/serviceaccount</code>. The directory contains <code>token</code> (a signed JSON Web Token), <code>ca.crt</code> (to verify the API server's certificate) and <code>namespace</code>. Client libraries find these files automatically. Current tokens are bound tokens: they carry an audience, expire after a limited time, are tied to the specific Pod, and are refreshed by the kubelet before they expire. Older clusters created long-lived tokens stored in Secrets automatically; that no longer happens, which reduces the damage a leaked token can do.</p>
+<p>Most applications never talk to the Kubernetes API, and for them the token is an unnecessary risk: if an attacker compromises the container, they can use the token with whatever permissions the account has. Turn mounting off with <code>automountServiceAccountToken: false</code>, either on the ServiceAccount (affecting every Pod that uses it) or in the Pod spec. If both are set, the Pod's setting wins.</p>
+<pre class="code" tabindex="0"><code>apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: web
+  namespace: shop
+automountServiceAccountToken: false
+---
+# Pod spec excerpt
+spec:
+  serviceAccountName: web
+  automountServiceAccountToken: false</code></pre>
+<p>When a tool outside the cluster needs a token, request a short-lived one: <code>kubectl create token ci-bot -n dev</code> prints a token, and <code>--duration=1h</code> or <code>--audience=&lt;aud&gt;</code> adjust it. You can use it as a bearer token to test what the account can do. If you truly need a long-lived token, you can create a Secret of type <code>kubernetes.io/service-account-token</code> annotated with the account name and the control plane will fill it in, but short-lived tokens are the safer default.</p>
+<p>You can also project a token with a custom audience and expiry into a Pod using a <code>serviceAccountToken</code> source in a projected volume, for example to authenticate to an external service that trusts the cluster's tokens. Verify identity with <code>kubectl get pod app -o jsonpath='{.spec.serviceAccountName}'</code> and <code>kubectl exec app -- ls /var/run/secrets/kubernetes.io/serviceaccount</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>ServiceAccount</dt><dd>A namespaced identity for processes running in Pods.</dd><dt>serviceAccountName</dt><dd>Pod spec field choosing which ServiceAccount the Pod runs as.</dd><dt>Bound (projected) token</dt><dd>A short-lived, audience-scoped token tied to a Pod and refreshed by the kubelet.</dd><dt>automountServiceAccountToken</dt><dd>Setting on a ServiceAccount or Pod that controls whether the token is mounted.</dd><dt>kubectl create token</dt><dd>Command that issues a short-lived token for a ServiceAccount.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A Pod that lists ConfigMaps gets 403 errors. It runs as <code>default</code>, which has no permissions. The developer creates ServiceAccount <code>config-reader</code>, binds a Role allowing get and list on configmaps, sets <code>serviceAccountName: config-reader</code> in the Deployment, and verifies with <code>kubectl auth can-i list configmaps --as=system:serviceaccount:app:config-reader -n app</code>.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> The Pod field is <code>serviceAccountName</code> (older <code>serviceAccount</code> is deprecated), the Pod-level automount setting overrides the ServiceAccount's, and you cannot change a running Pod's ServiceAccount.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which ServiceAccount does a Pod use if none is specified?</summary><p>The <code>default</code> ServiceAccount in its namespace.</p></details>
+<details class="sq"><summary>Where is the ServiceAccount token mounted in a container?</summary><p>/var/run/secrets/kubernetes.io/serviceaccount, as the file token alongside ca.crt and namespace.</p></details>
+<details class="sq"><summary>Why set automountServiceAccountToken to false?</summary><p>Apps that do not call the Kubernetes API do not need a token, and removing it limits what an attacker could do after compromising the container.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../secrets-generic-docker-registry-and-tls-types-base64-encoding-vs-encry/">← Secrets: generic, docker-registry and tls types; base64 enco</a><a href="../securitycontext-at-pod-and-container-level-runasuser-runasnonroot-fsgr/">SecurityContext at Pod and container level: runAsUser, runAs →</a></nav>
+</main>
+</body>
+</html>

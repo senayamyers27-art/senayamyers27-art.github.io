@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Packet forwarding decisions: longest-prefix match, next… · JNCIA-Junos Lesson</title>
+<meta name="description" content="A router's core job is to decide, for every packet, where to send it next. Junos makes that decision in two stages.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Packet forwarding decisions: longest-prefix match, next… · JNCIA-Junos Lesson">
+<meta property="og:description" content="A router's core job is to decide, for every packet, where to send it next. Junos makes that decision in two stages.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/jncia-junos/lessons/packet-forwarding-decisions-longest-prefix-match-next-hops-active-vs-i/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/jncia-junos/lessons/packet-forwarding-decisions-longest-prefix-match-next-hops-active-vs-i/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">JNCIA-Junos</a> / <a href="../">Lessons</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106 · Domain 6: Routing fundamentals</p>
+<h1>Packet forwarding decisions: longest-prefix match, next hops, active vs inactive routes (`*`)</h1>
+<article class="lbody">
+<p>A router's core job is to decide, for every packet, where to send it next. Junos makes that decision in two stages. The Routing Engine collects routes from all sources (directly connected interfaces, static configuration and routing protocols) into routing tables and picks the best route for each destination prefix. Those best routes are copied into the forwarding table, which the Packet Forwarding Engine (PFE) uses to forward packets at high speed.</p>
+<p>When a packet arrives, the forwarding decision uses longest-prefix match. The router compares the destination address with all prefixes in the forwarding table and picks the most specific one that contains it, meaning the one with the longest prefix length. Suppose the table has 0.0.0.0/0, 10.0.0.0/8 and 10.1.1.0/24. A packet to 10.1.1.7 matches all three, but /24 is the longest, so that route wins. A packet to 10.2.3.4 matches the /8 and the default route and uses the /8. A packet to 8.8.8.8 matches only the default route. Longest match always wins over route preference or metric, because those only compare routes to the same prefix.</p>
+<p>Each route points to a next hop: the neighboring router's address and the outgoing interface. There are also special next hops. A local route (/32 for the device's own address) sends packets up to the Routing Engine. A discard next hop drops packets silently, and a reject next hop drops them and sends an ICMP unreachable message. When several equal next hops exist, a route can list more than one.</p>
+<p>Now the active versus inactive idea. For a single prefix, Junos may learn several routes, for example a static route and an OSPF route to 10.5.0.0/16. Only one of them becomes the active route, chosen mainly by route preference (lower is better) and then by tie-breakers such as metric. The active route is the only one placed in the forwarding table. In <code>show route</code> output, the active route is marked with an asterisk <code>*</code>. You may also see <code>+</code> for the active route and <code>-</code> for the previously active route, which appear in the legend line at the top of the output.</p>
+<pre class="code" tabindex="0"><code>user@R1&gt; show route 10.5.0.0/16
+inet.0: 12 destinations, 13 routes (12 active, 0 holddown, 0 hidden)
++ = Active Route, - = Last Active, * = Both
+10.5.0.0/16  *[Static/5] 00:12:40
+              &gt;  to 10.1.12.2 via ge-0/0/1.0
+              [OSPF/10] 00:03:11, metric 20
+              &gt;  to 10.1.13.2 via ge-0/0/2.0</code></pre>
+<p>Inactive routes are not useless; they are backups. If the active route disappears, the next-best route for that prefix becomes active and is installed in the forwarding table. The <code>&gt;</code> symbol marks the next hop actually selected when a route has more than one. To see exactly what the PFE is using, run <code>show route forwarding-table destination 10.5.1.1</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Longest-prefix match</dt><dd>The forwarding rule that chooses the most specific matching prefix for a destination address.</dd><dt>Next hop</dt><dd>The neighboring address and outgoing interface to which a packet is sent.</dd><dt>Active route</dt><dd>The single best route for a prefix, marked <code>*</code> in <code>show route</code>, and the only one installed in the forwarding table.</dd><dt>Forwarding table</dt><dd>The table built from active routes that the Packet Forwarding Engine uses to forward packets.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A router has a default route to an ISP and a static route for 172.16.0.0/12 to a partner. A server sends traffic to 172.16.40.9. Even though the default route also matches, the /12 is more specific, so the packet goes to the partner. Traffic to any public address falls through to the default route.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Longest match is decided first; preference only chooses among routes to the exact same prefix. The <code>*</code> marks the active route and <code>&gt;</code> marks the selected next hop.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>A router has routes to 10.0.0.0/8 (static) and 10.20.0.0/16 (OSPF). Which is used for 10.20.5.5?</summary><p>The /16 learned from OSPF, because longest-prefix match beats preference.</p></details>
+<details class="sq"><summary>What does an asterisk before a route in <code>show route</code> mean?</summary><p>It is the active route for that prefix and is installed in the forwarding table.</p></details>
+<details class="sq"><summary>What happens to an inactive route when the active route is withdrawn?</summary><p>It can become the new active route and be installed in the forwarding table.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study JNCIA-Junos for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../jncia-junos/">Open the JNCIA-Junos study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../ntp-snmp-and-remote-syslog-for-ongoing-operations/">← NTP, SNMP and remote syslog for ongoing operations</a><a href="../routing-tables-inet-0-inet6-0-inet-3-and-instance-tables-such-as-vr1-i/">Routing tables: inet.0, inet6.0, inet.3, and instance tables →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scoped values (Java 25): ScopedValue.where(...).run(...)… · OCP Java Lesson</title>
+<meta name="description" content="Applications often need to pass contextual data, such as the current user or a request ID, down through many method calls without adding a parameter to eve">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Scoped values (Java 25): ScopedValue.where(...).run(...)… · OCP Java Lesson">
+<meta property="og:description" content="Applications often need to pass contextual data, such as the current user or a request ID, down through many method calls without adding a parameter to eve">
+<link rel="canonical" href="https://senayamyers27-art.github.io/java-se/lessons/scoped-values-java-25-scopedvalue-where-run-as-an-alternative-to-threa/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/java-se/lessons/scoped-values-java-25-scopedvalue-where-run-as-an-alternative-to-threa/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">OCP Java</a> / <a href="../">Lessons</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25) · Domain 8: Managing concurrent code execution</p>
+<h1>Scoped values (Java 25): ScopedValue.where(...).run(...) as an alternative to ThreadLocal</h1>
+<article class="lbody">
+<p>Applications often need to pass contextual data, such as the current user or a request ID, down through many method calls without adding a parameter to every method. The traditional tool is <code>ThreadLocal</code>, a variable with a separate value per thread. It has drawbacks: any code can call <code>set</code> at any time, so data flow is hard to follow; values live until explicitly removed, which leaks data and memory in thread pools; and child threads that inherit values must copy them. With huge numbers of virtual threads these costs grow.</p>
+<p>Scoped values, final in Java 25 in <code>java.lang.ScopedValue</code>, solve the same problem differently. A scoped value is bound to a value for the duration of a call, the dynamic scope, and is automatically unbound when that call returns. Within the scope, any method called directly or indirectly can read it. Outside the scope it has no value. There is no <code>set</code> method, so the binding is effectively immutable for the whole call.</p>
+<pre class="code" tabindex="0"><code>static final ScopedValue&lt;String&gt; USER = ScopedValue.newInstance();
+
+void handle(Request req) {
+    ScopedValue.where(USER, req.user()).run(() -&gt; service());
+    // here USER is no longer bound
+}
+void service() { audit(); }
+void audit() {
+    String who = USER.isBound() ? USER.get() : &quot;anonymous&quot;;
+    System.out.println(&quot;action by &quot; + who);
+}</code></pre>
+<p>You create a key with <code>ScopedValue.newInstance()</code>, usually as a <code>static final</code> field. <code>ScopedValue.where(key, value)</code> returns a carrier, and <code>run(Runnable)</code> executes code with the binding in place; <code>call(...)</code> does the same for code that returns a result. Several bindings can be chained: <code>where(USER, u).where(REQ_ID, id).run(...)</code>. Inside, <code>key.get()</code> returns the value, <code>isBound()</code> checks whether there is one, and <code>orElse(other)</code> gives a fallback. Calling <code>get()</code> when the value is not bound throws <code>NoSuchElementException</code>.</p>
+<p>Although a binding cannot be changed, a nested call can rebind the same key with its own <code>where(...).run(...)</code>. Inside the nested scope the new value is visible; when it returns, the outer value is visible again. This gives a clear, one-way flow of data from caller to callee, which is easier to reason about than ThreadLocal's arbitrary set calls.</p>
+<p>Because bindings end when the scope ends, there is nothing to clean up and no risk of one request's data leaking into the next task on a pooled thread. Scoped values are also designed to be cheap to read and to be shared efficiently with child threads created through structured concurrency. Choose ThreadLocal when code truly needs a mutable per-thread cache; choose scoped values to pass read-only context through a bounded piece of work.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>ScopedValue</dt><dd>A value bound for the duration of a call and readable by all code in that call's dynamic scope, then automatically unbound.</dd><dt>ScopedValue.where</dt><dd>Creates a binding of a scoped value key to a value, followed by run or call to execute code with it.</dd><dt>Dynamic scope</dt><dd>The set of code executed during a call, including methods called indirectly, where a binding is visible.</dd><dt>ThreadLocal</dt><dd>A variable with a separate mutable value per thread that persists until removed.</dd><dt>Rebinding</dt><dd>Binding an already bound scoped value to a new value in a nested where(...).run(...) call.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A web framework binds the authenticated user with ScopedValue.where(CURRENT_USER, user).run(() -&gt; handler.handle(request)). Deep inside, an audit logger reads CURRENT_USER.get() without the user being passed through every layer, and the binding disappears when the request finishes.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Scoped values have no set method; the only way to change the visible value is to rebind in a nested scope. get() outside any binding throws NoSuchElementException, so use isBound or orElse when the value may be missing.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>After ScopedValue.where(K, &quot;x&quot;).run(task) returns, is K still bound in the caller?</summary><p>No. The binding lasts only for the duration of run.</p></details>
+<details class="sq"><summary>How do you give a scoped value a different value for part of a computation?</summary><p>Rebind it with a nested ScopedValue.where(K, newValue).run(...) call.</p></details>
+<details class="sq"><summary>What is one advantage of scoped values over ThreadLocal in thread pools?</summary><p>Bindings end automatically when the scope ends, so data cannot leak into later tasks and nothing needs removing.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study OCP Java for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../java-se/">Open the OCP Java study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../deadlock-starvation-and-livelock/">← Deadlock, starvation and livelock</a><a href="../path-creation-and-operations-resolve-relativize-normalize-getfilename/">Path creation and operations: resolve, relativize, normalize →</a></nav>
+</main>
+</body>
+</html>

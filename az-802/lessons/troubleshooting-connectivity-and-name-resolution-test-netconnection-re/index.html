@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Troubleshooting connectivity and name resolution… · AZ-802 Lesson</title>
+<meta name="description" content="Most 'the server is down' tickets are really network or name resolution problems. A disciplined approach saves time: start with the local configuration, th">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Troubleshooting connectivity and name resolution… · AZ-802 Lesson">
+<meta property="og:description" content="Most 'the server is down' tickets are really network or name resolution problems. A disciplined approach saves time: start with the local configuration, th">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/troubleshooting-connectivity-and-name-resolution-test-netconnection-re/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/troubleshooting-connectivity-and-name-resolution-test-netconnection-re/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 7: Monitor and troubleshoot Windows Server environments</p>
+<h1>Troubleshooting connectivity and name resolution (Test-NetConnection, Resolve-DnsName, ipconfig /flushdns)</h1>
+<article class="lbody">
+<p>Most 'the server is down' tickets are really network or name resolution problems. A disciplined approach saves time: start with the local configuration, then test reachability, then the specific port, then name resolution, and change one thing at a time. Windows Server gives you PowerShell cmdlets and classic commands for each step.</p>
+<p>Start with the local IP configuration. <code>ipconfig /all</code> or <code>Get-NetIPConfiguration</code> shows the address, mask, default gateway and DNS servers for each adapter. Red flags include an address starting with 169.254 (APIPA, Automatic Private IP Addressing, meaning DHCP failed), a missing default gateway, or DNS servers pointing to a public resolver on a domain member, which breaks AD name lookups. On Azure VMs, remember the guest should use DHCP and the settings come from the NIC and VNet.</p>
+<p>Next, test reachability. <code>Test-NetConnection</code> combines several tools. With just a name, <code>Test-NetConnection srv01</code> resolves the name and pings it. With a port, <code>Test-NetConnection srv01 -Port 445</code> tells you whether a TCP connection succeeds (<code>TcpTestSucceeded : True</code>), which is far more useful than ping because many servers block ICMP (Internet Control Message Protocol) while the service port is open. <code>-TraceRoute</code> shows the path, and <code>-CommonTCPPort RDP</code> or <code>SMB</code> saves typing. If ping fails but the TCP test succeeds, ICMP is simply blocked; if both fail, check routing, firewalls and network security groups. <code>tracert</code> and <code>pathping</code> are the classic path tools, and <code>Get-NetTCPConnection</code> or <code>netstat -ano</code> show which ports a server is listening on.</p>
+<p>For name resolution, <code>Resolve-DnsName</code> is the preferred cmdlet. <code>Resolve-DnsName srv01.contoso.com</code> uses the normal client path; <code>-Server 10.0.0.10</code> queries a specific DNS server, which lets you compare servers; <code>-Type SRV</code> or <code>-Type MX</code> looks up other record types, such as <code>_ldap._tcp.dc._msdcs.contoso.com</code> to find domain controllers; <code>-DnsOnly</code> skips other methods like LLMNR and NetBIOS; and <code>-NoHostsFile</code> ignores the hosts file. Remember <code>nslookup</code> always queries a DNS server directly, bypassing the client cache and hosts file, so it can disagree with what applications actually see.</p>
+<p>The DNS client cache stores recent answers, including negative answers (name not found), for the record's time to live. After you fix a record, a client may keep using the old or negative answer until it expires. <code>ipconfig /displaydns</code> or <code>Get-DnsClientCache</code> shows the cache, and <code>ipconfig /flushdns</code> or <code>Clear-DnsClientCache</code> empties it. <code>ipconfig /registerdns</code> makes the client re-register its own A and PTR records, useful when a server's record is missing. Also check the hosts file in <code>C:\Windows\System32\drivers\etc</code>, which overrides DNS, and name resolution policy table (NRPT) rules with <code>Get-DnsClientNrptPolicy</code>, which can send certain namespaces to specific servers.</p>
+<p>A good order to remember: configuration, ping or TCP test by IP, TCP test by name, then Resolve-DnsName against each DNS server. If it works by IP but not by name, it's DNS; if it fails by IP too, it's network or firewall.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Test-NetConnection</dt><dd>A PowerShell cmdlet that tests ping, TCP port connectivity and route tracing to a host.</dd><dt>Resolve-DnsName</dt><dd>A PowerShell cmdlet for DNS lookups that can target a specific server, record type or DNS-only resolution.</dd><dt>DNS client cache</dt><dd>Locally stored DNS answers, including negative ones, kept until their TTL expires; cleared with ipconfig /flushdns.</dd><dt>APIPA</dt><dd>Automatic Private IP Addressing: a 169.254.x.x address Windows assigns when DHCP fails.</dd><dt>Hosts file</dt><dd>A local file mapping names to IPs that takes priority over DNS queries in the client resolution path.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Users can't open \\files01\share after the server was moved to a new IP. Test-NetConnection to the new IP on port 445 succeeds, but Resolve-DnsName files01 on a client returns the old IP. Resolve-DnsName -Server against each DC shows one DNS server still has the old record; after fixing replication and running ipconfig /flushdns on clients, access returns.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Works by IP but not by name means DNS. Ping failing does not prove a service is down; test the port. nslookup bypasses the client cache and hosts file, so use Resolve-DnsName to see what apps see.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How do you check whether a remote server accepts connections on TCP 3389?</summary><p>Run Test-NetConnection &lt;server&gt; -Port 3389 and check TcpTestSucceeded.</p></details>
+<details class="sq"><summary>A DNS record was corrected, but one client still gets 'name not found'. Why and how do you fix it?</summary><p>The client cached the negative answer; run ipconfig /flushdns (or Clear-DnsClientCache) to clear it.</p></details>
+<details class="sq"><summary>How can you ask a specific DNS server for SRV records that locate domain controllers?</summary><p>Resolve-DnsName _ldap._tcp.dc._msdcs.contoso.com -Type SRV -Server &lt;DNS server IP&gt;.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../azure-monitor-agent-data-collection-rules-vm-insights-and-log-analytic/">← Azure Monitor agent, data collection rules, VM insights and </a><a href="../windows-update-time-service-w32tm-and-kerberos-troubleshooting-arc-age/">Windows Update, time service (w32tm) and Kerberos troublesho →</a></nav>
+</main>
+</body>
+</html>

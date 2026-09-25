@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ARP: resolving an IPv4 next hop to a MAC address… · JNCIA-Junos Lesson</title>
+<meta name="description" content="IP addresses tell a device where a packet is going, but on an Ethernet link the frame still needs a destination MAC address. ARP (Address Resolution Protoc">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="ARP: resolving an IPv4 next hop to a MAC address… · JNCIA-Junos Lesson">
+<meta property="og:description" content="IP addresses tell a device where a packet is going, but on an Ethernet link the frame still needs a destination MAC address. ARP (Address Resolution Protoc">
+<link rel="canonical" href="https://senayamyers27-art.github.io/jncia-junos/lessons/arp-resolving-an-ipv4-next-hop-to-a-mac-address-gratuitous-arp-show-ar/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/jncia-junos/lessons/arp-resolving-an-ipv4-next-hop-to-a-mac-address-gratuitous-arp-show-ar/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">JNCIA-Junos</a> / <a href="../">Lessons</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106 · Domain 1: Networking fundamentals</p>
+<h1>ARP: resolving an IPv4 next hop to a MAC address; gratuitous ARP; `show arp`</h1>
+<article class="lbody">
+<p>IP addresses tell a device where a packet is going, but on an Ethernet link the frame still needs a destination MAC address. ARP (Address Resolution Protocol) bridges that gap for IPv4. Every time a Junos router sends a packet out an Ethernet interface to a next hop, it needs that next hop's MAC address, and ARP is how it gets it.</p>
+<p>The process has two messages. First, the sender checks its ARP cache. If there is no entry, it broadcasts an ARP request to ff:ff:ff:ff:ff:ff asking, in effect, 'who has 10.0.0.2? tell 10.0.0.1'. Every host in the broadcast domain receives it, but only the owner of 10.0.0.2 answers, with a unicast ARP reply containing its MAC address. The sender stores the mapping in its ARP cache and sends the waiting packet. The target usually also caches the requester's mapping, since it will probably need to reply.</p>
+<p>A key point: a host or router only ARPs for addresses on its own subnet. If the final destination is on another network, the sender ARPs for the next hop (for a host, its default gateway), not for the far-away destination. That is why a wrong default gateway or wrong subnet mask shows up as missing or incorrect ARP entries.</p>
+<p>Gratuitous ARP is an ARP message a device sends about its own address without being asked, typically a request or reply where the sender and target IP are the same. Devices send it when an interface comes up or an address changes, for three reasons: to detect a duplicate IP address (if someone answers, the address is already in use), to update other hosts' caches after a MAC change, and to announce a new active device after a failover, for example when a VRRP (Virtual Router Redundancy Protocol) backup takes over a virtual IP. Because ARP has no authentication, attackers can abuse unsolicited replies to poison caches; switch features such as dynamic ARP inspection help defend against that.</p>
+<p>On Junos, operational mode commands let you inspect the cache. <code>show arp</code> lists entries with MAC address, IP address, name and interface. <code>show arp no-resolve</code> skips reverse DNS lookups, which makes output faster and avoids long pauses when DNS is unreachable. <code>show arp interface ge-0/0/0.0</code> narrows the view, and <code>clear arp</code> removes dynamic entries so they are relearned. Junos ages dynamic ARP entries out after a timer (20 minutes by default), which you can change under <code>[edit system arp]</code>.</p>
+<pre class="code" tabindex="0"><code>user@r1&gt; show arp no-resolve
+MAC Address       Address         Interface      Flags
+2c:6b:f5:10:22:01 10.0.12.2       ge-0/0/0.0     none</code></pre>
+<h2>Key terms</h2>
+<dl class="terms"><dt>ARP</dt><dd>Address Resolution Protocol: maps an IPv4 address to a MAC address on the local link using a broadcast request and a unicast reply.</dd><dt>ARP cache</dt><dd>The table of learned IP-to-MAC mappings, shown on Junos with <code>show arp</code>.</dd><dt>Gratuitous ARP</dt><dd>An unsolicited ARP about the sender's own IP, used for duplicate address detection and to update neighbors' caches.</dd><dt>no-resolve</dt><dd>A Junos output option that stops the command from doing reverse DNS lookups on addresses.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>After configuring 10.0.12.1/30 on r1 and 10.0.12.2/30 on r2, you ping r2 from r1. The first ping may be slightly slower while ARP runs. Afterward, <code>show arp no-resolve</code> on r1 shows r2's MAC against 10.0.12.2 on ge-0/0/0.0, and r2 shows r1's entry too, proving Layer 2 reachability across the link.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Remember that an ARP request is a broadcast and an ARP reply is normally unicast, and that a device ARPs for its next hop, not for a remote destination.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>A host at 192.168.1.10/24 sends to 8.8.8.8. Whose MAC address does it ARP for?</summary><p>Its default gateway's, because 8.8.8.8 is not on the local subnet; the frame goes to the gateway, which routes it onward.</p></details>
+<details class="sq"><summary>Name two reasons a device sends a gratuitous ARP.</summary><p>To detect a duplicate IP address and to update other devices' ARP caches, for example after a failover moves a virtual IP to a new MAC.</p></details>
+<details class="sq"><summary>Why use <code>show arp no-resolve</code> instead of <code>show arp</code>?</summary><p>It skips reverse DNS lookups, so the output appears immediately and is not delayed when DNS is slow or unreachable.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study JNCIA-Junos for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../jncia-junos/">Open the JNCIA-Junos study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../ethernet-frames-mac-addresses-48-bits-oui-and-the-mac-learning-floodin/">← Ethernet frames, MAC addresses (48 bits, OUI) and the MAC le</a><a href="../ipv4-addressing-classes-private-ranges-subnet-masks-cidr-prefixes-and/">IPv4 addressing: classes, private ranges, subnet masks, CIDR →</a></nav>
+</main>
+</body>
+</html>

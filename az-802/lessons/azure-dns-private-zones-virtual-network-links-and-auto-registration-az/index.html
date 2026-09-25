@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Azure DNS private zones, virtual network links and… · AZ-802 Lesson</title>
+<meta name="description" content="When you move Windows Servers into Azure, name resolution has to work in three directions: between Azure VMs, from Azure to on-premises, and from on-premis">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Azure DNS private zones, virtual network links and… · AZ-802 Lesson">
+<meta property="og:description" content="When you move Windows Servers into Azure, name resolution has to work in three directions: between Azure VMs, from Azure to on-premises, and from on-premis">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/azure-dns-private-zones-virtual-network-links-and-auto-registration-az/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/azure-dns-private-zones-virtual-network-links-and-auto-registration-az/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 4: Implement and manage an on-premises and hybrid networking infrastructure</p>
+<h1>Azure DNS private zones, virtual network links and auto-registration; Azure DNS Private Resolver</h1>
+<article class="lbody">
+<p>When you move Windows Servers into Azure, name resolution has to work in three directions: between Azure VMs, from Azure to on-premises, and from on-premises into Azure. Azure gives every virtual network (VNet) a built-in resolver at the special address <code>168.63.129.16</code>, but that resolver only answers for names Azure knows about. Azure DNS private zones and Azure DNS Private Resolver are the two services that let you extend it cleanly.</p>
+<p>An Azure DNS private zone is a DNS zone, such as <code>corp.contoso.internal</code>, that is only resolvable from VNets you choose. You connect a zone to a VNet with a virtual network link. Any VM in a linked VNet that uses Azure-provided DNS can then resolve records in the zone. A link can optionally have auto-registration turned on: Azure then creates and maintains A records for the VMs in that VNet automatically, updating them when VMs are created, change IP or are deleted. A VNet can be linked to many private zones for resolution, but auto-registration can be enabled for only one private zone per VNet. Private zones are also how private endpoints work: a zone such as <code>privatelink.file.core.windows.net</code> holds the private IP of a storage account so the normal public name resolves to a private address inside your network.</p>
+<p>The catch is that on-premises servers cannot send queries to <code>168.63.129.16</code>; that address is only reachable from inside Azure. Before Private Resolver existed, you deployed DNS forwarder VMs in Azure. Azure DNS Private Resolver replaces those VMs with a managed service deployed into your VNet. It has two kinds of endpoints, each in its own dedicated subnet delegated to the service. An inbound endpoint gets a private IP address in the VNet; on-premises DNS servers create a conditional forwarder for your Azure zones pointing at that IP, and queries arrive over VPN or ExpressRoute. An outbound endpoint, combined with a DNS forwarding ruleset, sends queries from Azure to other DNS servers, for example forwarding <code>contoso.local</code> to your on-premises domain controllers.</p>
+<p>The exam likes to ask which piece solves which direction. On-premises clients resolving Azure private names need the inbound endpoint plus a conditional forwarder on the on-premises DNS servers. Azure VMs resolving on-premises Active Directory names need the outbound endpoint and a forwarding rule, with the ruleset linked to the VNets that should use it. VMs that must register their own names automatically need a private zone link with auto-registration. Note that domain-joined VMs that use your domain controllers as their DNS servers (a custom DNS setting on the VNet) bypass Azure-provided DNS, so the DCs themselves must forward Azure private zone queries to <code>168.63.129.16</code>.</p>
+<p>In a lab you will see these as separate resources in the portal: the private DNS zone, its Virtual network links blade with an Enable auto registration checkbox, and the DNS private resolver with Inbound endpoints, Outbound endpoints and linked forwarding rulesets. Testing is done from a VM with <code>Resolve-DnsName vm1.corp.contoso.internal</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Private DNS zone</dt><dd>An Azure DNS zone that resolves only from virtual networks linked to it, not from the internet.</dd><dt>Virtual network link</dt><dd>The connection between a private zone and a VNet that lets the VNet resolve the zone and optionally auto-register VM records.</dd><dt>Auto-registration</dt><dd>A link setting that makes Azure create and maintain A records for VMs in the linked VNet; allowed for only one private zone per VNet.</dd><dt>Inbound endpoint</dt><dd>A Private Resolver IP address in the VNet that on-premises DNS servers forward queries to for Azure private names.</dd><dt>Outbound endpoint and forwarding ruleset</dt><dd>The Private Resolver components that forward queries for chosen domains from Azure to other DNS servers, such as on-premises DCs.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Contoso moves an app tier into Azure. The VMs auto-register in the private zone azure.contoso.internal. On-premises DNS servers get a conditional forwarder for that zone to the Private Resolver inbound endpoint, and a forwarding ruleset sends contoso.local queries from Azure back to the on-premises DCs over the site-to-site VPN. No forwarder VMs are needed.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Match direction to component: on-premises to Azure uses the inbound endpoint and a conditional forwarder; Azure to on-premises uses the outbound endpoint and a forwarding ruleset. Only one auto-registration zone per VNet.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why can't an on-premises DNS server simply forward queries to 168.63.129.16?</summary><p>That address is only reachable from inside Azure. On-premises servers need a reachable private IP, which the Private Resolver inbound endpoint (or a forwarder VM) provides.</p></details>
+<details class="sq"><summary>A VNet already auto-registers in zone A. Can you enable auto-registration for zone B on the same VNet?</summary><p>No. A VNet can be linked to multiple zones for resolution, but auto-registration is allowed for only one private zone per VNet.</p></details>
+<details class="sq"><summary>Which resource lets Azure VMs resolve contoso.local names hosted on on-premises DCs without custom DNS servers?</summary><p>An Azure DNS Private Resolver outbound endpoint with a forwarding ruleset containing a rule for contoso.local that points to the on-premises DNS servers, linked to the VNet.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../dnssec-signing-trust-anchors-and-the-name-resolution-policy-table-nrpt/">← DNSSEC signing, trust anchors and the Name Resolution Policy</a><a href="../dhcp-scopes-reservations-options-and-relay-authorization-in-ad/">DHCP scopes, reservations, options and relay; authorization  →</a></nav>
+</main>
+</body>
+</html>

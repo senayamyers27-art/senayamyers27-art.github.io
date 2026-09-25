@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>kubectl rollout status, history, undo (--to-revision)… · CKAD Lesson</title>
+<meta name="description" content="Deployments keep a history of revisions, one per Pod template change, and kubectl gives you a small set of commands to drive and inspect them. These comman">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="kubectl rollout status, history, undo (--to-revision)… · CKAD Lesson">
+<meta property="og:description" content="Deployments keep a history of revisions, one per Pod template change, and kubectl gives you a small set of commands to drive and inspect them. These comman">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/kubectl-rollout-status-history-undo-to-revision-pause-and-resume-kubec/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/kubectl-rollout-status-history-undo-to-revision-pause-and-resume-kubec/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 2: Application Deployment</p>
+<h1>kubectl rollout status, history, undo (--to-revision), pause and resume; kubectl set image and scale</h1>
+<article class="lbody">
+<p>Deployments keep a history of revisions, one per Pod template change, and kubectl gives you a small set of commands to drive and inspect them. These commands are fast to type and appear constantly on the exam, so it pays to know them by heart.</p>
+<p><code>kubectl set image deployment/web nginx=nginx:1.27</code> changes the image of the container named <code>nginx</code> in the Deployment <code>web</code>, which starts a rolling update. The part before <code>=</code> is the container name, not the image name; get it wrong and kubectl reports that the container was not found. <code>kubectl scale deployment/web --replicas=5</code> changes the replica count without creating a new revision. <code>kubectl rollout restart deployment/web</code> triggers a fresh rollout with the same spec (it adds a timestamp annotation to the template), useful for picking up a changed ConfigMap consumed as environment variables.</p>
+<p><code>kubectl rollout status deployment/web</code> waits and reports progress until the rollout finishes or fails, returning a non-zero exit code on failure. <code>kubectl rollout history deployment/web</code> lists revisions, and <code>--revision=3</code> shows the Pod template for a specific one. The CHANGE-CAUSE column is filled from the <code>kubernetes.io/change-cause</code> annotation; set it yourself with <code>kubectl annotate deployment/web kubernetes.io/change-cause=&quot;upgrade to 1.27&quot;</code>, since the old <code>--record</code> flag is deprecated.</p>
+<pre class="code" tabindex="0"><code>kubectl set image deploy/web nginx=nginx:1.27
+kubectl rollout status deploy/web
+kubectl rollout history deploy/web
+kubectl rollout history deploy/web --revision=2
+kubectl rollout undo deploy/web
+kubectl rollout undo deploy/web --to-revision=1</code></pre>
+<p><code>kubectl rollout undo deployment/web</code> goes back to the previous revision; <code>--to-revision=N</code> picks a specific one. Undo works by copying that old template forward, so the restored template gets a new, higher revision number and the old number disappears from the list. Rollback only affects the Pod template; it does not undo replica count changes, and it does not restore ConfigMaps or Secrets the Pods read.</p>
+<p><code>kubectl rollout pause deployment/web</code> stops the controller from acting on template changes. While paused you can make several edits, for example <code>set image</code> and <code>set resources</code>, without triggering a rollout for each. <code>kubectl rollout resume deployment/web</code> then rolls them out together as one revision. Scaling still works while paused. You cannot undo a paused Deployment; resume it first.</p>
+<p>These commands also accept the short form <code>deploy/web</code> and work on DaemonSets and StatefulSets for status, history, undo and restart. After any change, confirm the result with <code>kubectl get deploy web -o wide</code> (which shows images) or <code>kubectl describe deploy web</code>, whose events show each scaling step of the ReplicaSets.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Revision</dt><dd>A numbered version of a Deployment's Pod template kept for rollback.</dd><dt>rollout undo</dt><dd>Returns the Deployment to the previous or a chosen revision by reapplying its template.</dd><dt>rollout pause / resume</dt><dd>Temporarily stops and restarts rollouts so several changes can be applied as one.</dd><dt>change-cause</dt><dd>The kubernetes.io/change-cause annotation shown in rollout history.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>After <code>kubectl set image deploy/api api=api:2.1</code>, error rates spike. The on-call developer runs <code>kubectl rollout history deploy/api</code> to spot the last good revision, then <code>kubectl rollout undo deploy/api --to-revision=4</code> and watches <code>kubectl rollout status deploy/api</code> until it reports success.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> In <code>kubectl set image</code>, the left side is the container name. Use <code>kubectl get deploy web -o jsonpath='{.spec.template.spec.containers[*].name}'</code> if you are unsure.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Does <code>kubectl scale</code> create a new rollout revision?</summary><p>No; only Pod template changes create revisions.</p></details>
+<details class="sq"><summary>After undoing to revision 2 from revision 4, what revision number is the Deployment on?</summary><p>Revision 5; the old template is copied forward with a new number, and revision 2 no longer appears separately.</p></details>
+<details class="sq"><summary>Why pause a Deployment?</summary><p>To batch several template changes into a single rollout instead of one rollout per change.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../rolling-updates-maxsurge-maxunavailable-minreadyseconds-the-recreate-s/">← Rolling updates: maxSurge, maxUnavailable, minReadySeconds; </a><a href="../blue-green-deployments-by-switching-a-service-selector-between-two-dep/">Blue/green deployments by switching a Service selector betwe →</a></nav>
+</main>
+</body>
+</html>

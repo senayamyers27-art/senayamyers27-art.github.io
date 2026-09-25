@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Azure App Configuration: key-values, labels, feature… · AI-200 Lesson</title>
+<meta name="description" content="Azure App Configuration is a managed service for centralizing application settings and feature flags. Instead of every app and environment carrying its own">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Azure App Configuration: key-values, labels, feature… · AI-200 Lesson">
+<meta property="og:description" content="Azure App Configuration is a managed service for centralizing application settings and feature flags. Instead of every app and environment carrying its own">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/azure-app-configuration-key-values-labels-feature-flags-key-vault-refe/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/azure-app-configuration-key-values-labels-feature-flags-key-vault-refe/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 4: Secure, monitor, and troubleshoot Azure solutions</p>
+<h1>Azure App Configuration: key-values, labels, feature flags, Key Vault references, sentinel-key refresh and snapshots</h1>
+<article class="lbody">
+<p>Azure App Configuration is a managed service for centralizing application settings and feature flags. Instead of every app and environment carrying its own copies of settings, apps load them at startup from one store and can refresh them at runtime without redeploying. It complements Key Vault: App Configuration holds ordinary settings, while secrets stay in Key Vault.</p>
+<p>The basic item is a key-value. Keys are strings, often hierarchical with a separator such as <code>:</code> or <code>/</code>, like <code>Orders:MaxBatchSize</code>. Labels add another dimension: the same key can have several values distinguished by label, such as <code>Dev</code>, <code>Test</code> and <code>Prod</code>, or version numbers. An app selects the keys it needs with a key filter and chooses a label filter for its environment; to fall back to unlabeled values, it loads the unlabeled keys first and then the environment's label, so labeled values override them. Values can have a content type, such as JSON.</p>
+<p>Feature flags are special key-values (stored under the <code>.appconfig.featureflag/</code> prefix) that turn features on or off at runtime. A flag can be simply enabled or disabled, or use filters such as a percentage rollout, a time window or targeting specific users and groups. Feature management libraries evaluate the flags in your code, which lets you ship code dark and enable it gradually, then turn it off instantly if something goes wrong.</p>
+<p>App Configuration can hold Key Vault references: a key-value whose content marks it as a pointer to a Key Vault secret URI. App Configuration never reads the secret itself. The client provider resolves it by calling Key Vault with the app's credential, so the app's identity needs both App Configuration Data Reader and Key Vault Secrets User. This gives one place to discover settings while secrets stay protected.</p>
+<pre class="code" tabindex="0"><code>from azure.appconfiguration.provider import load, SettingSelector, WatchKey
+cred = DefaultAzureCredential()
+config = load(endpoint=APPCONFIG_ENDPOINT, credential=cred,
+    selects=[SettingSelector(key_filter=&quot;Orders:*&quot;, label_filter=&quot;Prod&quot;)],
+    keyvault_credential=cred,
+    refresh_on=[WatchKey(&quot;Orders:Sentinel&quot;)], refresh_interval=60,
+    feature_flag_enabled=True)
+batch = config[&quot;Orders:MaxBatchSize&quot;]
+config.refresh()   # call periodically, e.g. per request; reloads only if the sentinel changed</code></pre>
+<p>Refreshing many keys individually is inefficient and can load a half-updated set. The sentinel key pattern solves this: you watch a single key, such as <code>Orders:Sentinel</code>. When you finish updating a group of settings, you change the sentinel's value last. The provider checks the sentinel after the refresh interval, and only when it changes does it reload all selected settings together. Your code calls <code>refresh()</code> regularly; it is cheap until the interval passes. Refresh can also be driven by Event Grid events from App Configuration for push-based updates.</p>
+<p>Snapshots are immutable, named point-in-time copies of a set of key-values chosen by filters. Once created, a snapshot never changes, so an app that loads a snapshot gets exactly the same configuration every time, which is useful for safe deployments and rollbacks: deploy release 12 with snapshot <code>release-12</code>, and roll back to the previous snapshot if needed. Other features to know: point-in-time restore of revisions, import and export, geo-replicas for resiliency, and several pricing tiers (Free and Standard among them) with different quotas and features. For security, prefer Microsoft Entra authentication with App Configuration Data Reader over access keys.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Label</dt><dd>A value that distinguishes versions of the same key, commonly used for environments such as Dev and Prod.</dd><dt>Feature flag</dt><dd>A key-value that turns a feature on or off at runtime, optionally with filters like percentage or targeting.</dd><dt>Sentinel key</dt><dd>A single watched key whose change signals the app to reload all its configuration at once.</dd><dt>Snapshot</dt><dd>An immutable, named copy of selected key-values that always returns the same configuration.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A team runs one set of container apps in three environments. They store all settings in App Configuration with Dev, Test and Prod labels, keep passwords as Key Vault references, and ship a new checkout flow behind a feature flag with a 10 percent rollout. When they change a batch of throttling settings, they update the sentinel key last, and every app reloads the new values within a minute without a restart.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Environment-specific values mean labels; runtime on/off means feature flags; reload everything consistently means sentinel key; never-changing config for a release means snapshots. Secrets stay in Key Vault, referenced from App Configuration.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why update the sentinel key last when changing several settings?</summary><p>The app reloads all settings only when the sentinel changes, so it picks up the complete, consistent set rather than a partial update.</p></details>
+<details class="sq"><summary>What permissions does an app need to resolve a Key Vault reference stored in App Configuration?</summary><p>Read access to App Configuration (App Configuration Data Reader) and to the secret in Key Vault (Key Vault Secrets User).</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../key-vault-references-in-app-service-functions-and-container-apps-setti/">← Key Vault references in App Service, Functions and Container</a><a href="../application-insights-with-the-azure-monitor-opentelemetry-distro-for-p/">Application Insights with the Azure Monitor OpenTelemetry Di →</a></nav>
+</main>
+</body>
+</html>

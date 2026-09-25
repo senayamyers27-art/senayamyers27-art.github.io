@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Azure Files with AD DS authentication; share-level RBAC… · AZ-802 Lesson</title>
+<meta name="description" content="By default you mount an Azure file share with the storage account key, which is like a single all-powerful password. For real file server use you want user">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Azure Files with AD DS authentication; share-level RBAC… · AZ-802 Lesson">
+<meta property="og:description" content="By default you mount an Azure file share with the storage account key, which is like a single all-powerful password. For real file server use you want user">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/azure-files-with-ad-ds-authentication-share-level-rbac-vs-ntfs-permiss/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/azure-files-with-ad-ds-authentication-share-level-rbac-vs-ntfs-permiss/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 5: Manage storage and file services</p>
+<h1>Azure Files with AD DS authentication; share-level RBAC vs NTFS permissions</h1>
+<article class="lbody">
+<p>By default you mount an Azure file share with the storage account key, which is like a single all-powerful password. For real file server use you want users to connect with their normal domain identity and get per-user permissions. Azure Files supports identity-based access over SMB with on-premises Active Directory Domain Services (AD DS), Microsoft Entra Domain Services, or Microsoft Entra Kerberos for hybrid identities. This lesson focuses on AD DS.</p>
+<p>Enabling AD DS authentication means creating an identity for the storage account in your domain. You typically use the AzFilesHybrid PowerShell module and run <code>Join-AzStorageAccount</code> from a domain-joined machine, which creates a computer account (or a service logon account) representing the storage account in an OU you choose and configures the storage account with your domain information. The users who will access the share must be synced to Microsoft Entra ID by Entra Connect (or Cloud Sync), because share permissions are assigned in Azure to Entra identities. Clients need to reach the storage account on TCP port 445 and must be able to get Kerberos tickets from a DC.</p>
+<p>Access is then checked in two layers, just like a traditional Windows share. The first layer is share-level permissions, set with Azure role-based access control (RBAC). The built-in roles are Storage File Data SMB Share Reader (read), Storage File Data SMB Share Contributor (read, write, delete) and Storage File Data SMB Share Elevated Contributor (also change NTFS permissions). You can assign them to users or groups on the share, or configure a default share-level permission that applies to all authenticated identities, which is handy when you want NTFS to do all the fine-grained work.</p>
+<p>The second layer is directory and file-level permissions: ordinary Windows NTFS access control lists (ACLs). You set them by mounting the share and using File Explorer or <code>icacls</code>, just as on a Windows server. Initial configuration is often done by mounting once with the storage account key, which acts as a superuser, or by a user with the Elevated Contributor role. Azure File Sync preserves these ACLs too.</p>
+<p>Effective access is the most restrictive combination of the two layers. A user with Share Contributor but only Read in NTFS can only read; a user with Full Control in NTFS but no share role cannot connect at all. Note the difference from normal Azure data roles such as Storage Blob Data Contributor or the management role Owner: management-plane roles like Owner or Contributor let you configure the storage account but do not grant SMB data access by themselves.</p>
+<p>When troubleshooting, check in order: port 445 reachable, the storage account joined to AD with the right domain, the user synced to Entra ID, a share-level role (or default permission), then the NTFS ACL. The <code>Debug-AzStorageAccountAuth</code> cmdlet in AzFilesHybrid runs many of these checks.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>AD DS authentication for Azure Files</dt><dd>A configuration that represents the storage account as an AD object so domain users can access SMB shares with Kerberos.</dd><dt>Share-level permissions</dt><dd>Azure RBAC roles assigned on a file share that control whether an identity can connect and with what maximum access.</dd><dt>Storage File Data SMB Share Elevated Contributor</dt><dd>The share role that allows read, write, delete and modifying NTFS permissions.</dd><dt>NTFS permissions</dt><dd>Directory and file ACLs enforced inside the share, set with Explorer or icacls just as on a Windows file server.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An admin joins a storage account to contoso.com with Join-AzStorageAccount, gives the synced group Finance-Users the Storage File Data SMB Share Contributor role on the finance share, then mounts it and uses icacls so Finance-Users can modify only the Reports folder and read the rest. A finance user maps the share with their own sign-in and no key.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Both layers apply and the most restrictive wins. Share access is Azure RBAC on synced Entra identities; fine-grained control is NTFS. Owner or Contributor on the storage account does not give SMB data access.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why must users be synced to Microsoft Entra ID when Azure Files uses AD DS authentication?</summary><p>Share-level permissions are Azure RBAC role assignments, which are granted to Entra identities; Kerberos then validates the matching AD account.</p></details>
+<details class="sq"><summary>A user has Full Control in NTFS on a folder but no share-level role and no default share permission. What access do they get?</summary><p>None; without share-level permission they cannot access the share, because both layers must allow access.</p></details>
+<details class="sq"><summary>Which share role lets a user change NTFS permissions on files?</summary><p>Storage File Data SMB Share Elevated Contributor.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../azure-file-sync-sync-groups-cloud-and-server-endpoints-cloud-tiering-p/">← Azure File Sync: sync groups, cloud and server endpoints, cl</a><a href="../smb-security-encryption-signing-smb-over-quic-removing-smbv1/">SMB security: encryption, signing, SMB over QUIC, removing S →</a></nav>
+</main>
+</body>
+</html>

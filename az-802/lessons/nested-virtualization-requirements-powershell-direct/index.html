@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nested virtualization requirements; PowerShell Direct · AZ-802 Lesson</title>
+<meta name="description" content="Nested virtualization means running Hyper-V inside a Hyper-V virtual machine, so that VM can host its own VMs. It is used for labs and training, testing Hy">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Nested virtualization requirements; PowerShell Direct · AZ-802 Lesson">
+<meta property="og:description" content="Nested virtualization means running Hyper-V inside a Hyper-V virtual machine, so that VM can host its own VMs. It is used for labs and training, testing Hy">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/nested-virtualization-requirements-powershell-direct/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/nested-virtualization-requirements-powershell-direct/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 3: Manage virtual machines</p>
+<h1>Nested virtualization requirements; PowerShell Direct</h1>
+<article class="lbody">
+<p>Nested virtualization means running Hyper-V inside a Hyper-V virtual machine, so that VM can host its own VMs. It is used for labs and training, testing Hyper-V clusters without extra hardware, running Windows containers with Hyper-V isolation inside a VM, and building environments in Azure. Performance is lower than on bare metal, so it is generally used for development, test and training rather than heavy production.</p>
+<p>Requirements come on both levels. The physical host needs a CPU with hardware virtualization and second-level address translation: Intel VT-x with EPT, or AMD-V with RVI on processors and Windows versions that support nested virtualization on AMD (support arrived later for AMD than for Intel). The host and the VM that will run Hyper-V must be recent Windows Server or Windows versions, and the VM should use a recent configuration version. The VM must be turned off when you enable the feature.</p>
+<pre class="code" tabindex="0"><code>Set-VMProcessor -VMName HV-NESTED -ExposeVirtualizationExtensions $true
+Set-VMMemory -VMName HV-NESTED -DynamicMemoryEnabled $false -StartupBytes 8GB
+Get-VMNetworkAdapter -VMName HV-NESTED | Set-VMNetworkAdapter -MacAddressSpoofing On</code></pre>
+<p>Each line solves a known issue. Exposing virtualization extensions passes the CPU features into the VM so Hyper-V can install there. Dynamic memory is not supported for a VM running nested Hyper-V, so give it static memory with enough RAM for its own VMs. Networking for the inner VMs needs either MAC address spoofing enabled on the outer VM's adapter (so frames from inner VMs with their own MAC addresses are allowed out) or a NAT virtual switch inside the outer VM. Some other features, such as checkpoints or live migration of the nested host, have been restricted in some versions, so check the documentation for your release. In Azure, only VM sizes that support nested virtualization can run Hyper-V inside, and many current general-purpose and memory-optimized sizes do.</p>
+<p>PowerShell Direct is a different feature that also uses the host-to-guest channel. It lets you run PowerShell inside a VM from its Hyper-V host over the VMBus, without any network connectivity, remote management configuration or firewall rules in the guest. That is invaluable when a VM's network is misconfigured, it is on an isolated or private switch, or you are automating the first configuration of a freshly deployed VM.</p>
+<p>You use the familiar remoting cmdlets but target the VM instead of a computer: <code>Enter-PSSession -VMName DC01</code>, <code>Invoke-Command -VMName DC01 -ScriptBlock { ... }</code>, or <code>-VMId</code> with the VM's GUID. You can also create a session with <code>New-PSSession -VMName</code> and copy files with <code>Copy-Item -ToSession</code>. Requirements: you must run the command on the Hyper-V host that runs the VM, as a Hyper-V administrator; the VM must be running and the guest OS must be Windows 10 or Windows Server 2016 or later; and you must supply credentials valid inside the guest, because PowerShell Direct does not pass host credentials into the VM.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Nested virtualization</dt><dd>Running Hyper-V inside a VM so that VM can host its own VMs.</dd><dt>ExposeVirtualizationExtensions</dt><dd>Set-VMProcessor parameter that passes hardware virtualization features into a VM.</dd><dt>MAC address spoofing</dt><dd>Allowing a VM adapter to send frames with MAC addresses other than its own, needed for inner VM networking.</dd><dt>PowerShell Direct</dt><dd>Running PowerShell in a VM from its Hyper-V host over VMBus with no network required.</dd><dt>VMBus</dt><dd>The high-speed channel between a Hyper-V host and its guests used by integration services and PowerShell Direct.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A trainer builds a two-node failover cluster lab on a single laptop. She creates two VMs, turns them off, exposes virtualization extensions, gives each 8 GB static memory, enables MAC spoofing, installs Hyper-V inside both and configures them with Invoke-Command -VMName before their networking is even set up.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Nested Hyper-V fails to install inside a VM when ExposeVirtualizationExtensions is not set (and the VM must be off to set it). Inner VMs with no network usually point to missing MAC address spoofing. PowerShell Direct needs guest credentials and must run on the same host.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What must be true of the VM before you run Set-VMProcessor -ExposeVirtualizationExtensions $true?</summary><p>It must be turned off.</p></details>
+<details class="sq"><summary>Why enable MAC address spoofing on a VM that hosts nested VMs?</summary><p>So network frames from the inner VMs, which use their own MAC addresses, are allowed through the outer VM's adapter.</p></details>
+<details class="sq"><summary>Can you use PowerShell Direct from your admin workstation to a VM on a remote host?</summary><p>No. It works only from the Hyper-V host running the VM (though you could remote to the host first).</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../hyper-v-vm-configuration-generation-1-vs-2-dynamic-memory-integration/">← Hyper-V VM configuration: generation 1 vs 2, dynamic memory,</a><a href="../virtual-disks-vhd-vs-vhdx-fixed-dynamic-and-differencing-disks-shared/">Virtual disks: VHD vs VHDX, fixed, dynamic and differencing  →</a></nav>
+</main>
+</body>
+</html>

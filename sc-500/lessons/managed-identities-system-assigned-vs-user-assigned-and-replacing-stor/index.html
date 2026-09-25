@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Managed identities: system-assigned vs user-assigned, and… · SC-500 Lesson</title>
+<meta name="description" content="Applications often need to call other services: an App Service reading from Key Vault, a VM writing to Storage, a Function querying Azure SQL. The old way ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Managed identities: system-assigned vs user-assigned, and… · SC-500 Lesson">
+<meta property="og:description" content="Applications often need to call other services: an App Service reading from Key Vault, a VM writing to Storage, a Function querying Azure SQL. The old way ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/sc-500/lessons/managed-identities-system-assigned-vs-user-assigned-and-replacing-stor/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/sc-500/lessons/managed-identities-system-assigned-vs-user-assigned-and-replacing-stor/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">SC-500</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Cloud and AI Security Engineer Associate (replaces Azure Security Engineer Associate / AZ-500) SC-500 · Domain 1: Manage identity, access, and governance</p>
+<h1>Managed identities: system-assigned vs user-assigned, and replacing stored secrets with token-based access</h1>
+<article class="lbody">
+<p>Applications often need to call other services: an App Service reading from Key Vault, a VM writing to Storage, a Function querying Azure SQL. The old way was to store a connection string, key or client secret in configuration, which can leak, expire or be forgotten in a code repository. A managed identity solves this by giving the Azure resource its own identity in Microsoft Entra ID, whose credentials Azure creates, stores and rotates for you. Your code never sees a secret.</p>
+<p>A system-assigned managed identity is enabled on one resource (for example, the Identity blade of a VM or web app) and is tied to that resource's life cycle. It is created with the resource, can only be used by that resource, and is deleted when the resource is deleted. A user-assigned managed identity is a standalone Azure resource (<code>Microsoft.ManagedIdentity/userAssignedIdentities</code>) that you create first and then attach to one or many resources. It survives when those resources are deleted.</p>
+<p>Choose system-assigned when a single resource needs its own identity and you want clean-up to be automatic. Choose user-assigned when several resources need the same permissions (for example, a pool of VMs in a scale set or many function apps), when you want to pre-create identities and grant access before resources are deployed, or when resources are frequently recreated and you don't want to redo role assignments each time. A resource can have one system-assigned identity and several user-assigned identities at the same time.</p>
+<p>Under the hood, a managed identity is a special service principal. Code running on the resource requests an access token from a local endpoint: the Azure Instance Metadata Service (IMDS) at the link-local address <code>169.254.169.254</code> on VMs, or an identity endpoint provided through environment variables on App Service and Functions. The token is then presented to the target service, which must accept Entra authentication. In code, the Azure Identity library's <code>DefaultAzureCredential</code> or <code>ManagedIdentityCredential</code> handles all of this.</p>
+<p>Getting a token is only half the job; the identity also needs permission. You grant it an Azure RBAC role on the target, such as Key Vault Secrets User on a vault, Storage Blob Data Contributor on a container, or you create a contained database user for it in Azure SQL. Apply least privilege and the narrowest scope.</p>
+<p>Replacing secrets typically goes: enable the identity, grant it the right data-plane role, change the app to use token-based credentials, remove the stored key or connection string, and finally rotate or disable the old key (for example by disabling Shared Key access on the storage account) so the leaked-secret risk is truly gone.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Managed identity</dt><dd>An Entra identity for an Azure resource whose credentials Azure manages and rotates automatically.</dd><dt>System-assigned identity</dt><dd>A managed identity created on and tied to one resource's life cycle.</dd><dt>User-assigned identity</dt><dd>A standalone managed identity resource that can be attached to many resources and persists independently.</dd><dt>IMDS</dt><dd>The Azure Instance Metadata Service at 169.254.169.254 that VMs use to request managed identity tokens.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A web app stored a storage account key in its app settings. You enable the web app's system-assigned identity, give it Storage Blob Data Reader on the container, update the code to use DefaultAzureCredential, delete the app setting and then rotate both storage keys so the old one stops working.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> If several resources must share one identity, or the identity must survive resource deletion, pick user-assigned. If the scenario says 'no credentials stored in code or configuration', the answer is a managed identity plus an RBAC role on the target.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What happens to a system-assigned identity when its VM is deleted?</summary><p>It is deleted with the VM, along with its role assignments' ability to be used.</p></details>
+<details class="sq"><summary>A VM has a managed identity but gets 403 errors reading Key Vault secrets. What is missing?</summary><p>Authorization on the vault, such as the Key Vault Secrets User role (RBAC model) or an access policy granting Get on secrets.</p></details>
+<details class="sq"><summary>Why might you pre-create a user-assigned identity?</summary><p>So you can grant it roles before the resources exist and reuse it across many resources or redeployments.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study SC-500 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../sc-500/">Open the SC-500 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../mfa-and-authentication-methods-policy-phishing-resistant-methods-fido2/">← MFA and authentication methods policy, phishing-resistant me</a><a href="../app-registrations-vs-enterprise-applications-service-principals-api-pe/">App registrations vs enterprise applications (service princi →</a></nav>
+</main>
+</body>
+</html>

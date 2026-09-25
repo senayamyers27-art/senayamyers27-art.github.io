@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Reading Pod status: Pending, ImagePullBackOff… · CKAD Lesson</title>
+<meta name="description" content="The STATUS column of kubectl get pods is a compact summary of a Pod's phase and its containers' states. Learning to read it tells you where to look next an">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Reading Pod status: Pending, ImagePullBackOff… · CKAD Lesson">
+<meta property="og:description" content="The STATUS column of kubectl get pods is a compact summary of a Pod's phase and its containers' states. Learning to read it tells you where to look next an">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/reading-pod-status-pending-imagepullbackoff-crashloopbackoff-oomkilled/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/reading-pod-status-pending-imagepullbackoff-crashloopbackoff-oomkilled/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 3: Application Observability and Maintenance</p>
+<h1>Reading Pod status: Pending, ImagePullBackOff, CrashLoopBackOff, OOMKilled, Completed, exit codes</h1>
+<article class="lbody">
+<p>The STATUS column of <code>kubectl get pods</code> is a compact summary of a Pod's phase and its containers' states. Learning to read it tells you where to look next and saves a lot of guessing.</p>
+<p>Pending means the Pod was accepted but its containers are not running yet. Either it has not been scheduled (not enough CPU or memory on any node, a nodeSelector or taint that no node satisfies, or an unbound PVC) or it is scheduled and still pulling images or setting up volumes. <code>kubectl describe pod</code> shows which: a FailedScheduling event, or a ContainerCreating state with events about volumes. A missing ConfigMap or Secret referenced by the Pod typically shows as ContainerCreating or CreateContainerConfigError.</p>
+<p>ErrImagePull and then ImagePullBackOff mean the kubelet cannot pull the image: a typo in the image name or tag, a private registry without <code>imagePullSecrets</code>, or no network path to the registry. BackOff means Kubernetes is waiting longer and longer between retries. The event text, such as 'manifest unknown' or 'unauthorized', tells you which problem it is.</p>
+<p>CrashLoopBackOff means the container starts, exits, is restarted and exits again, with growing delays between attempts. The container itself is the problem: the application errors on start-up, the command is wrong, a required file or variable is missing, or a liveness probe keeps killing it. Check <code>kubectl logs --previous</code> and the Last State section in <code>kubectl describe pod</code>, which shows the reason and exit code.</p>
+<p>OOMKilled means the container used more memory than its limit, so the kernel killed it. It appears as the termination reason in Last State, usually with exit code 137, and often leads to CrashLoopBackOff. The fix is to raise the memory limit or reduce the application's memory use. Completed means all containers exited with code 0, which is the normal end state for Job Pods; for a Deployment Pod, which should run forever, it means the command finished when it should have kept running, and because its restartPolicy is Always the kubelet restarts it until it shows CrashLoopBackOff.</p>
+<p>Exit codes tell you how a process ended. 0 is success. 1 (or another small number) is a general application error. 126 means the command was found but could not be executed, often a permission problem. 127 means command not found, typically a typo in <code>command</code> or a binary missing from the image. Codes above 128 mean the process was killed by a signal, where the code is 128 plus the signal number: 137 is 128 + 9 (SIGKILL, as used by the OOM killer or after a forced termination) and 143 is 128 + 15 (SIGTERM, a normal graceful stop).</p>
+<pre class="code" tabindex="0"><code>kubectl get pods
+kubectl describe pod api-7c9 | grep -A5 'Last State'
+kubectl get pod api-7c9 -o jsonpath='{.status.containerStatuses[0].lastState.terminated.exitCode}'</code></pre>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Pending</dt><dd>Pod accepted but containers not running yet, often unscheduled or still creating.</dd><dt>ImagePullBackOff</dt><dd>The image cannot be pulled and Kubernetes is backing off between retries.</dd><dt>CrashLoopBackOff</dt><dd>The container keeps exiting after start and is restarted with increasing delays.</dd><dt>OOMKilled</dt><dd>The container was killed for exceeding its memory limit, usually with exit code 137.</dd><dt>Exit code 128+n</dt><dd>A process killed by signal n, such as 137 for SIGKILL or 143 for SIGTERM.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A new Pod shows ImagePullBackOff. <code>kubectl describe pod</code> shows 'failed to pull image &quot;ngnix:1.27&quot;: not found'. The image name was misspelled; after fixing it with <code>kubectl set image</code> the Pod starts. Another Pod in the same app shows OOMKilled with exit code 137, so its memory limit is raised.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Map status to the next command: Pending and ImagePullBackOff lead to <code>describe</code>, CrashLoopBackOff leads to <code>logs --previous</code>, and OOMKilled leads to the memory limit.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What does exit code 127 usually mean?</summary><p>Command not found: a wrong command or a binary missing from the image.</p></details>
+<details class="sq"><summary>A container shows OOMKilled with exit code 137. What caused it?</summary><p>It exceeded its memory limit and was killed with SIGKILL (128 + 9).</p></details>
+<details class="sq"><summary>A Deployment's Pod shows Completed and keeps restarting. What is likely wrong?</summary><p>Its command runs to completion instead of staying in the foreground; with restartPolicy Always the kubelet keeps restarting the container, which soon shows CrashLoopBackOff.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../container-logs-kubectl-logs-with-c-f-previous-tail-since-l-and-deploy/">← Container logs: kubectl logs with -c, -f, --previous, --tail</a><a href="../debugging-kubectl-exec-kubectl-debug-ephemeral-containers-and-pod-copi/">Debugging: kubectl exec, kubectl debug (ephemeral containers →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ingress controllers (for example ingress-nginx) and… · CKAD Lesson</title>
+<meta name="description" content="An Ingress object does nothing on its own. An Ingress controller is the component that watches Ingress resources through the API and configures a reverse p">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Ingress controllers (for example ingress-nginx) and… · CKAD Lesson">
+<meta property="og:description" content="An Ingress object does nothing on its own. An Ingress controller is the component that watches Ingress resources through the API and configures a reverse p">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/ingress-controllers-for-example-ingress-nginx-and-testing-with-curl-an/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/ingress-controllers-for-example-ingress-nginx-and-testing-with-curl-an/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 5: Services and Networking</p>
+<h1>Ingress controllers (for example ingress-nginx) and testing with curl and Host headers</h1>
+<article class="lbody">
+<p>An Ingress object does nothing on its own. An Ingress controller is the component that watches Ingress resources through the API and configures a reverse proxy to route traffic accordingly. Kubernetes does not ship a controller in its core; the cluster needs one installed. If none is running, Ingresses are accepted but no traffic is routed, and the ADDRESS column of <code>kubectl get ingress</code> stays empty.</p>
+<p>ingress-nginx has long been the most widely used example, though the Kubernetes project retired it in March 2026 (no further releases or security fixes), so new clusters should pick another controller; the concepts and testing steps below are the same. It runs the NGINX web server as Pods, typically in a namespace named <code>ingress-nginx</code>, and exposes them through a Service, often of type NodePort or LoadBalancer. Other controllers include Traefik, HAProxy-based controllers, cloud provider controllers and Envoy-based ones. Each controller registers an IngressClass; the class's <code>spec.controller</code> field identifies the controller, and an Ingress picks one with <code>ingressClassName</code>. An IngressClass can be marked as the cluster default with the annotation <code>ingressclass.kubernetes.io/is-default-class: &quot;true&quot;</code>.</p>
+<p>In practice labs, minikube provides one with <code>minikube addons enable ingress</code>, and kind clusters can install ingress-nginx from its project's manifests with the right port mappings. Confirm it is running with <code>kubectl get pods -n ingress-nginx</code> and <code>kubectl get ingressclass</code>.</p>
+<p>Testing is mostly done with curl. Because routing depends on the host name, but you usually have no DNS record for a test host, you send the request to the controller's address and set the HTTP <code>Host</code> header yourself. Find the entry point first: the EXTERNAL-IP of a LoadBalancer Service, or a node IP plus the NodePort of the controller's Service.</p>
+<pre class="code" tabindex="0"><code>kubectl get svc -n ingress-nginx
+kubectl get ingress shop            # ADDRESS, HOSTS, PORTS
+curl -H 'Host: shop.example.com' 192.168.49.2/api/health
+curl -H 'Host: shop.example.com' 192.168.49.2:30080/</code></pre>
+<p>For HTTPS, use <code>curl -k --resolve shop.example.com:443:192.168.49.2</code> followed by the HTTPS URL of shop.example.com. The <code>--resolve host:port:ip</code> option tells curl to use a given IP for a host name, which is better than a Host header for HTTPS, because it also sends the right name for the TLS handshake (SNI, Server Name Indication) so the controller picks the right certificate. <code>-k</code> skips certificate verification for self-signed test certificates; <code>-v</code> shows the headers and certificate details. Adding the name to <code>/etc/hosts</code> on your machine is another option.</p>
+<p>Reading the results: a 404 from the controller (often an NGINX-branded page) means the request reached the controller but no rule matched, usually a wrong host, path or pathType, or the Ingress is not using this controller's class. A 503 or 502 means a rule matched but the backend Service has no ready endpoints or the port is wrong. A connection timeout means you are not reaching the controller at all. <code>kubectl describe ingress</code> lists backends and endpoints, and <code>kubectl logs -n ingress-nginx deploy/ingress-nginx-controller</code> shows each request the controller handled.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Ingress controller</dt><dd>The component that watches Ingress objects and runs the proxy that routes traffic.</dd><dt>IngressClass</dt><dd>Object identifying a controller that Ingresses select with ingressClassName.</dd><dt>Host header</dt><dd>HTTP header naming the requested host, used by Ingress host rules.</dd><dt>curl --resolve</dt><dd>Makes curl connect to a chosen IP for a host name, keeping the correct name for TLS.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>After creating an Ingress for <code>shop.local</code>, <code>curl 192.168.49.2</code> returns a 404. Repeating it with <code>curl -H 'Host: shop.local' 192.168.49.2</code> returns the shop page: the controller was fine all along, but it routes by host and the first request carried the IP as its host.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> 404 from the controller means no rule matched (host, path or class); 503 means the rule matched but the Service has no ready endpoints. Always set the Host header when testing by IP.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>An Ingress shows no ADDRESS and nothing routes. What is the most likely cause?</summary><p>No Ingress controller for its class is running (or the Ingress names a class no controller handles).</p></details>
+<details class="sq"><summary>Why add a Host header when curling the controller's IP?</summary><p>Ingress rules match on host name, and curling an IP sends the IP as the host, so no host rule matches.</p></details>
+<details class="sq"><summary>A request through the Ingress returns 503. Where do you look next?</summary><p>At the backend Service's endpoints and targetPort; the rule matched but no ready backend is available.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../ingress-resources-ingressclassname-host-and-path-rules-pathtype-prefix/">← Ingress resources: ingressClassName, host and path rules, pa</a></nav>
+</main>
+</body>
+</html>

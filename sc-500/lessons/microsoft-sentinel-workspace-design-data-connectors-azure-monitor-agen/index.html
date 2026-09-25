@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Microsoft Sentinel workspace design, data connectors… · SC-500 Lesson</title>
+<meta name="description" content="Microsoft Sentinel is Microsoft's cloud-native security information and event management (SIEM) and security orchestration, automation and response (SOAR) ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Microsoft Sentinel workspace design, data connectors… · SC-500 Lesson">
+<meta property="og:description" content="Microsoft Sentinel is Microsoft's cloud-native security information and event management (SIEM) and security orchestration, automation and response (SOAR) ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/sc-500/lessons/microsoft-sentinel-workspace-design-data-connectors-azure-monitor-agen/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/sc-500/lessons/microsoft-sentinel-workspace-design-data-connectors-azure-monitor-agen/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">SC-500</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Cloud and AI Security Engineer Associate (replaces Azure Security Engineer Associate / AZ-500) SC-500 · Domain 4: Manage and monitor security posture</p>
+<h1>Microsoft Sentinel workspace design, data connectors, Azure Monitor Agent with data collection rules, Syslog and CEF, Windows security events</h1>
+<article class="lbody">
+<p>Microsoft Sentinel is Microsoft's cloud-native security information and event management (SIEM) and security orchestration, automation and response (SOAR) solution. It is enabled on top of a Log Analytics workspace, where all collected data is stored and queried with KQL. Sentinel is increasingly managed from the Microsoft Defender portal alongside Defender XDR, though the concepts are the same as in the Azure portal.</p>
+<p>Workspace design is the first decision. Microsoft recommends as few workspaces as possible, ideally one per tenant, because correlation and hunting are easiest when data is together. Reasons to add workspaces include data residency or sovereignty requirements (data must stay in a region), separate tenants (managed service providers use Azure Lighthouse across customer workspaces), and billing separation. Access within a single workspace can be limited with resource-context RBAC or table-level RBAC rather than splitting it. Sentinel roles include Microsoft Sentinel Reader, Responder, Contributor and Automation Contributor, plus Log Analytics roles for the workspace.</p>
+<p>Data connectors bring data in. They are distributed through the Content hub as solutions that package connectors, analytics rules, workbooks and playbooks. Service-to-service connectors ingest Microsoft sources easily: Microsoft Entra ID sign-in and audit logs, Azure Activity, Microsoft Defender XDR (incidents and raw events), Defender for Cloud alerts, Microsoft 365 and Office activity. Third-party sources use agent-based collection, API-based codeless connectors, or Azure Functions.</p>
+<p>The Azure Monitor Agent (AMA) is the current agent for collecting logs from Windows and Linux machines in Azure and, with Azure Arc, elsewhere; it replaces the legacy Log Analytics agent (MMA/OMS), which is retired. AMA is configured by data collection rules (DCRs), which define what to collect (event IDs, Syslog facilities and levels, performance counters), optional transformations written in KQL that filter or modify data before ingestion, and the destination workspace and table. One DCR can be associated with many machines, and a machine can have several DCRs, so you can manage collection centrally and cheaply.</p>
+<p>Windows security events are collected with the Windows Security Events via AMA connector, choosing a set: All events, Common (a recommended audit set), Minimal, or Custom with XPath queries for specific event IDs such as 4624 (successful logon) or 4625 (failed logon). They land in the SecurityEvent table. Windows Forwarded Events via AMA supports Windows Event Forwarding collectors.</p>
+<p>Linux and network devices send Syslog. With AMA, the Syslog via AMA connector collects facilities and severities into the Syslog table. Many firewalls and appliances send Common Event Format (CEF), a standardized Syslog message format, which the Common Event Format via AMA connector parses into the CommonSecurityLog table. Because appliances cannot run an agent, you deploy a Linux log forwarder VM with rsyslog or syslog-ng and AMA, point devices at it on UDP or TCP 514, and associate DCRs with the forwarder. Be careful not to collect the same messages into both the Syslog and CommonSecurityLog tables, which duplicates cost.</p>
+<p>Plan costs early: ingestion volume drives price, and DCR transformations are the main tool for dropping noise before it is billed.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Log Analytics workspace</dt><dd>The data store underlying Microsoft Sentinel, queried with KQL.</dd><dt>Azure Monitor Agent</dt><dd>The current agent for collecting logs from Windows and Linux machines, configured by data collection rules.</dd><dt>Data collection rule</dt><dd>A configuration defining what data AMA collects, optional KQL transformations and the destination.</dd><dt>CEF</dt><dd>Common Event Format, a standardized Syslog message format used by many security appliances, stored in CommonSecurityLog.</dd><dt>Log forwarder</dt><dd>A Linux VM with AMA that receives Syslog or CEF from devices and sends it to the workspace.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A company deploys Sentinel on a single workspace in its home region. It installs the Microsoft Entra ID, Defender XDR and Azure Activity solutions, uses Windows Security Events via AMA with the Common set on domain controllers, and builds a Linux forwarder with AMA to receive CEF from its firewalls, with a DCR transformation that drops noisy allow logs from a test network.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Default to one workspace unless residency, tenant boundaries or billing force more. AMA plus DCRs is the collection method; the legacy agent is retired. CEF goes to CommonSecurityLog via a Linux forwarder; Windows events go to SecurityEvent; DCR transformations filter data before ingestion.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which table stores parsed CEF messages?</summary><p>CommonSecurityLog.</p></details>
+<details class="sq"><summary>How do you collect logs from a firewall appliance that cannot run an agent?</summary><p>Send its Syslog/CEF to a Linux log forwarder running AMA, with the CEF via AMA connector and a DCR.</p></details>
+<details class="sq"><summary>What is a valid reason to create a second Sentinel workspace?</summary><p>A data residency requirement that forces some data to stay in a different region (or a separate tenant or billing boundary).</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study SC-500 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../sc-500/">Open the SC-500 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../multicloud-connectors-for-aws-and-gcp-and-workflow-automation-with-log/">← Multicloud connectors for AWS and GCP, and workflow automati</a><a href="../sentinel-analytics-rules-scheduled-near-real-time-microsoft-security-i/">Sentinel analytics rules: scheduled, near-real-time, Microso →</a></nav>
+</main>
+</body>
+</html>

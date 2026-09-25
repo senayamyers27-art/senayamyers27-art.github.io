@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Deploying domain controllers: Install-ADDSForest /… · AZ-802 Lesson</title>
+<meta name="description" content="A domain controller (DC) is a Windows Server that holds a writable or read-only copy of the Active Directory Domain Services (AD DS) database, authenticate">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Deploying domain controllers: Install-ADDSForest /… · AZ-802 Lesson">
+<meta property="og:description" content="A domain controller (DC) is a Windows Server that holds a writable or read-only copy of the Active Directory Domain Services (AD DS) database, authenticate">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/deploying-domain-controllers-install-addsforest-install-addsdomaincont/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/deploying-domain-controllers-install-addsforest-install-addsdomaincont/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 1: Deploy and manage AD DS</p>
+<h1>Deploying domain controllers: Install-ADDSForest / Install-ADDSDomainController, install from media (IFM), read-only DCs, DCs on Azure VMs (static private IP on the NIC, NTDS on a data disk with host caching off)</h1>
+<article class="lbody">
+<p>A domain controller (DC) is a Windows Server that holds a writable or read-only copy of the Active Directory Domain Services (AD DS) database, authenticates users and computers with Kerberos, and replicates changes with other DCs. Almost everything else in a Windows environment depends on DCs being healthy, so how you deploy them matters. Deployment is a two-step process: first you install the role binaries with <code>Install-WindowsFeature AD-Domain-Services -IncludeManagementTools</code>, then you promote the server, which creates or joins a domain.</p>
+<p>Promotion uses one of three PowerShell cmdlets from the ADDSDeployment module. <code>Install-ADDSForest</code> creates a brand-new forest and its first (root) domain; you supply <code>-DomainName</code>, <code>-DomainNetbiosName</code>, forest and domain modes, and a Directory Services Restore Mode (DSRM) password. <code>Install-ADDSDomainController</code> adds another DC to an existing domain, which is how you get redundancy. <code>Install-ADDSDomain</code> creates a new child or tree domain in an existing forest. Each cmdlet has a <code>Test-</code> twin (for example <code>Test-ADDSDomainControllerInstallation</code>) that runs the prerequisite checks without changing anything, and Server Manager's wizard can export the exact PowerShell it would run.</p>
+<p>Install from media (IFM) solves a bandwidth problem. A new DC normally pulls the whole database over the network during its first replication. With IFM you run <code>ntdsutil</code> on an existing DC (<code>activate instance ntds</code>, <code>ifm</code>, <code>create sysvol full C:\IFM</code>) to produce a copy of the database and SYSVOL, carry it to the remote site, and promote with <code>-InstallationMediaPath</code>. Only changes made since the media was created then replicate across the WAN. Media from a writable DC can build a writable DC or an RODC; media created as RODC media can only build an RODC. Treat IFM media as highly sensitive, because it contains password hashes.</p>
+<p>A read-only domain controller (RODC) is designed for branch offices with weak physical security. It holds a read-only copy of the directory, does not cache passwords by default, and only caches credentials for accounts you allow in its Password Replication Policy (the Allowed and Denied RODC Password Replication Groups). You can delegate local administration of an RODC to a branch technician without making them a Domain Admin. Before you can add the first RODC, the forest must have a writable DC running a supported OS, and historically you needed <code>adprep /rodcprep</code>; modern promotion runs the required preparation automatically.</p>
+<p>Running DCs as Azure virtual machines extends your domain into the cloud, but Azure has specific rules. Give the VM a static private IP address on its network interface (NIC) in Azure, not inside the guest OS; the guest keeps using DHCP and Azure always hands it the same address. Point the virtual network's DNS servers at your DCs. Put the AD database (NTDS.dit), logs and SYSVOL on a separate managed data disk with host caching set to None, because the OS disk uses write caching, which can let AD believe data is written when it is not and risk corruption. Spread DCs across availability zones or an availability set, and define an AD site for the Azure subnet.</p>
+<pre class="code" tabindex="0"><code>Install-WindowsFeature AD-Domain-Services -IncludeManagementTools
+Install-ADDSDomainController -DomainName corp.contoso.com -InstallDns `
+  -DatabasePath F:\NTDS -LogPath F:\NTDS -SysvolPath F:\SYSVOL `
+  -Credential (Get-Credential)</code></pre>
+<h2>Key terms</h2>
+<dl class="terms"><dt>DSRM</dt><dd>Directory Services Restore Mode: a special boot mode for offline AD maintenance, protected by a local password set during promotion.</dd><dt>IFM</dt><dd>Install from media: promoting a DC from an ntdsutil-created copy of the database so initial replication does not cross the WAN.</dd><dt>RODC</dt><dd>Read-only domain controller: holds a read-only directory copy and caches only passwords allowed by its Password Replication Policy.</dd><dt>Password Replication Policy</dt><dd>The allow and deny lists that decide which accounts' credentials an RODC may cache.</dd><dt>Host caching</dt><dd>An Azure disk setting (None, ReadOnly, ReadWrite); DC data disks holding NTDS should use None.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A retailer adds a DC at a store with a slow link. The admin runs ntdsutil IFM on a hub DC, ships the encrypted media on a USB drive, and promotes an RODC with -InstallationMediaPath. Only a few megabytes of recent changes replicate, and only the store staff's passwords are cached locally.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> For Azure DCs, the static IP is set on the Azure NIC, not in the guest, and NTDS goes on a data disk with caching None. Answers that suggest setting a static IP inside Windows or keeping NTDS on the OS disk are the traps.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which cmdlet creates the first DC of a new forest, and which adds a DC to an existing domain?</summary><p>Install-ADDSForest creates a new forest; Install-ADDSDomainController adds a DC to an existing domain.</p></details>
+<details class="sq"><summary>Why should NTDS.dit on an Azure VM live on a data disk with host caching set to None?</summary><p>The OS disk uses write-back caching, which can break AD's assumption that writes are durable and risks database corruption; a data disk with caching None avoids that.</p></details>
+<details class="sq"><summary>What limits which user passwords an RODC stores?</summary><p>Its Password Replication Policy, managed through the Allowed and Denied RODC Password Replication Groups and per-RODC settings.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><span></span><a href="../fsmo-roles-schema-master-domain-naming-master-rid-master-pdc-emulator/">FSMO roles (schema master, domain naming master, RID master, →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ConfigMaps and Secrets: creation, env and volume… · CKA Lesson</title>
+<meta name="description" content="ConfigMaps and Secrets separate configuration from container images. A ConfigMap holds non-sensitive key-value data; a Secret holds sensitive values such a">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="ConfigMaps and Secrets: creation, env and volume… · CKA Lesson">
+<meta property="og:description" content="ConfigMaps and Secrets separate configuration from container images. A ConfigMap holds non-sensitive key-value data; a Secret holds sensitive values such a">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/configmaps-and-secrets-creation-env-and-volume-consumption-immutable-o/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/configmaps-and-secrets-creation-env-and-volume-consumption-immutable-o/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 2: Workloads and Scheduling</p>
+<h1>ConfigMaps and Secrets: creation, env and volume consumption, immutable objects, restarting workloads after changes</h1>
+<article class="lbody">
+<p>ConfigMaps and Secrets separate configuration from container images. A ConfigMap holds non-sensitive key-value data; a Secret holds sensitive values such as passwords, tokens and TLS keys. Their data is only base64-encoded, which is not encryption, so protect Secrets with RBAC and, ideally, encryption at rest configured on the API server.</p>
+<p>Create them imperatively from literals, files or env files. Generic Secrets are the most common type; <code>tls</code> Secrets hold a certificate and key; <code>docker-registry</code> Secrets hold image pull credentials.</p>
+<pre class="code" tabindex="0"><code>kubectl create configmap app-cfg --from-literal=MODE=prod --from-file=app.properties
+kubectl create secret generic db-cred --from-literal=user=app --from-literal=password='S3cure!'
+kubectl create secret tls web-tls --cert=tls.crt --key=tls.key
+kubectl get secret db-cred -o jsonpath='{.data.password}' | base64 -d</code></pre>
+<p>Pods consume them in two ways. As environment variables, you either reference individual keys with <code>env[].valueFrom.configMapKeyRef</code> or <code>secretKeyRef</code>, or import all keys with <code>envFrom</code>. As volumes, each key becomes a file in the mount directory, which suits configuration files and certificates; you can pick specific keys with <code>items</code> and set file permissions with <code>defaultMode</code>.</p>
+<pre class="code" tabindex="0"><code>containers:
+- name: app
+  image: myapp:1.0
+  envFrom:
+  - configMapRef: {name: app-cfg}
+  env:
+  - name: DB_PASSWORD
+    valueFrom: {secretKeyRef: {name: db-cred, key: password}}
+  volumeMounts:
+  - {name: cfg, mountPath: /etc/app, readOnly: true}
+volumes:
+- name: cfg
+  configMap: {name: app-cfg}</code></pre>
+<p>Updates behave differently for each method, and this is a favourite exam distinction. Environment variables are read once when the container starts, so changing the ConfigMap does not affect a running container. Volume-mounted ConfigMaps and Secrets are refreshed by the kubelet after a short delay, though the application must re-read the file to notice. Volumes mounted with <code>subPath</code> are never updated. The dependable way to apply a change is <code>kubectl rollout restart deployment/&lt;name&gt;</code>.</p>
+<p>Setting <code>immutable: true</code> on a ConfigMap or Secret prevents changes to its data. It protects against accidental edits and lets the kubelet stop watching it, which reduces API server load in large clusters. To change an immutable object you must delete and recreate it (or create a new one with a new name and update the workload to reference it). If a referenced ConfigMap or Secret does not exist, the Pod stays in ContainerCreating or shows CreateContainerConfigError unless the reference is marked <code>optional: true</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>ConfigMap</dt><dd>An object holding non-confidential configuration as key-value pairs.</dd><dt>Secret</dt><dd>An object for sensitive data; values are base64-encoded, not encrypted, by default.</dd><dt>envFrom</dt><dd>Imports every key of a ConfigMap or Secret as environment variables.</dd><dt>Immutable ConfigMap/Secret</dt><dd>An object with immutable: true whose data cannot be changed after creation.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>You update the LOG_LEVEL key in a ConfigMap that a Deployment consumes through envFrom, but the logs are still verbose. Running <code>kubectl exec</code> and <code>env</code> shows the old value, because env vars are fixed at container start. <code>kubectl rollout restart deployment/api</code> brings the new value in.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Env-var consumption never updates live; volume consumption does (except with subPath). If a task says 'make the Pods use the new value', restart the workload.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Is base64 in a Secret a form of encryption?</summary><p>No, it is only encoding; anyone who can read the Secret can decode it.</p></details>
+<details class="sq"><summary>What error might a Pod show when it references a missing ConfigMap key in env?</summary><p>CreateContainerConfigError, unless the reference is optional.</p></details>
+<details class="sq"><summary>How do you change data in an immutable ConfigMap?</summary><p>Delete and recreate it, or create a new ConfigMap and point the workload at it.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../daemonsets-and-statefulsets-from-an-operator-s-point-of-view-including/">← DaemonSets and StatefulSets from an operator's point of view</a><a href="../resource-requests-and-limits-limitrange-and-resourcequota-as-admission/">Resource requests and limits, LimitRange and ResourceQuota a →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sessions for ordered processing, duplicate detection… · AI-200 Lesson</title>
+<meta name="description" content="Standard and Premium Service Bus add features that solve common messaging problems: strict ordering, accidental duplicates, delayed delivery and routing. E">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Sessions for ordered processing, duplicate detection… · AI-200 Lesson">
+<meta property="og:description" content="Standard and Premium Service Bus add features that solve common messaging problems: strict ordering, accidental duplicates, delayed delivery and routing. E">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/sessions-for-ordered-processing-duplicate-detection-scheduled-messages/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/sessions-for-ordered-processing-duplicate-detection-scheduled-messages/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 3: Connect to and consume Azure services</p>
+<h1>Sessions for ordered processing, duplicate detection, scheduled messages and subscription filters (SQL and correlation)</h1>
+<article class="lbody">
+<p>Standard and Premium Service Bus add features that solve common messaging problems: strict ordering, accidental duplicates, delayed delivery and routing. Each maps cleanly to a scenario, so learn them as problem-solution pairs.</p>
+<p>Sessions give ordered processing of related messages. You enable sessions (requires session) when you create a queue or subscription, and every message must then carry a <code>session_id</code>, such as an order ID or customer ID. Service Bus guarantees first-in, first-out delivery within a session, and a receiver locks a whole session, so only one receiver processes a given session at a time while other receivers handle other sessions in parallel. Sessions also offer session state, a small stored value per session for tracking progress.</p>
+<pre class="code" tabindex="0"><code>from azure.servicebus import NEXT_AVAILABLE_SESSION
+sender.send_messages(ServiceBusMessage(body, session_id=&quot;order-1001&quot;))
+with client.get_queue_receiver(&quot;order-steps&quot;, session_id=NEXT_AVAILABLE_SESSION) as r:
+    print(r.session.session_id)
+    for msg in r.receive_messages(max_wait_time=5):
+        r.complete_message(msg)</code></pre>
+<p>Duplicate detection handles the case where a sender retries after a network error and the broker receives the same message twice. When enabled on a queue or topic at creation, Service Bus remembers each <code>message_id</code> for a configurable duplicate detection history window and silently drops any later message with the same ID within that window. It only works if the sender sets a meaningful message ID derived from the business data, such as the order number, rather than a random value.</p>
+<p>Scheduled messages are sent now but become visible only at a chosen time. Set <code>scheduled_enqueue_time_utc</code> on the message, or call <code>sender.schedule_messages(msg, when)</code>, which returns sequence numbers you can pass to <code>cancel_scheduled_messages</code> if plans change. Use them for reminders, delayed retries or time-based workflows. (Scheduled enqueue time is available in Basic too.)</p>
+<p>Subscription filters decide which topic messages each subscription receives. Every new subscription starts with a default rule that accepts all messages. A SQL filter uses a SQL-like condition over message properties, for example <code>region = 'EU' AND amount &gt; 100</code>, and it is flexible but evaluated at more cost. A correlation filter matches exact values of system properties (such as subject, correlation ID, message ID, content type) and user properties; it is simpler and more efficient, so prefer it when you only need equality matches. Rules can also include a SQL action that modifies message properties as they enter the subscription. A Boolean true or false filter accepts everything or nothing.</p>
+<pre class="code" tabindex="0"><code>az servicebus topic subscription rule create -g rg --namespace-name shop-sb \
+  --topic-name orders --subscription-name eu-large --name EuLarge \
+  --filter-sql-expression &quot;region = 'EU' AND amount &gt; 100&quot;</code></pre>
+<p>Remember to delete the default rule when you add your own filter, or the subscription will keep receiving every message.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Session</dt><dd>A group of messages sharing a session ID that Service Bus delivers in order to one receiver at a time.</dd><dt>Duplicate detection</dt><dd>A queue or topic setting that drops messages whose message ID was already seen within a history window.</dd><dt>Scheduled message</dt><dd>A message that is accepted immediately but becomes available to receivers only at a specified UTC time.</dd><dt>SQL filter</dt><dd>A subscription rule using a SQL-like expression over message properties.</dd><dt>Correlation filter</dt><dd>A subscription rule that matches exact values of system or user properties, cheaper than a SQL filter.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Order events for the same order occasionally ran out of sequence, shipping before payment. The team enabled sessions on the order-steps queue and used the order ID as session ID, which forced in-order processing per order. They also enabled duplicate detection keyed on an event ID because the upstream system retried sends, and used a correlation filter on subject to route refunds to a separate subscription.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> FIFO per customer or order means sessions; retried sends creating duplicates means duplicate detection with business message IDs; routing on exact property values prefers correlation filters over SQL filters.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What must a sender set for duplicate detection to work?</summary><p>A consistent message_id derived from the business data, so a retried send carries the same ID and is dropped.</p></details>
+<details class="sq"><summary>Why might a subscription with a new SQL filter still receive every message?</summary><p>The default rule that accepts all messages is still present; it must be removed.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../dead-letter-queues-max-delivery-count-ttl-expiry-reading-the-deadlette/">← Dead-letter queues: max delivery count, TTL expiry, reading </a><a href="../event-grid-system-and-custom-topics-event-subscriptions-filters-event/">Event Grid: system and custom topics, event subscriptions, f →</a></nav>
+</main>
+</body>
+</html>

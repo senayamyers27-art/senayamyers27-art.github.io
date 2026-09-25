@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scheduling: nodeSelector, nodeName, node affinity… · CKA Lesson</title>
+<meta name="description" content="By default the scheduler places a Pod on any node with enough resources. Often you need more control: GPUs on some nodes, SSDs on others, a workload that m">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Scheduling: nodeSelector, nodeName, node affinity… · CKA Lesson">
+<meta property="og:description" content="By default the scheduler places a Pod on any node with enough resources. Often you need more control: GPUs on some nodes, SSDs on others, a workload that m">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/scheduling-nodeselector-nodename-node-affinity-required-vs-preferred/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/scheduling-nodeselector-nodename-node-affinity-required-vs-preferred/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 2: Workloads and Scheduling</p>
+<h1>Scheduling: nodeSelector, nodeName, node affinity (required vs preferred)</h1>
+<article class="lbody">
+<p>By default the scheduler places a Pod on any node with enough resources. Often you need more control: GPUs on some nodes, SSDs on others, a workload that must stay in one zone. Kubernetes gives you several tools, from blunt to expressive.</p>
+<p><code>nodeName</code> is the bluntest. Setting <code>spec.nodeName: node02</code> bypasses the scheduler entirely: the kubelet on node02 simply runs the Pod. NoSchedule taints are not enforced for it and there is no fallback if the node is missing or full; the Pod may fail rather than wait. It is useful for tests or when the scheduler is down, but not for normal workloads.</p>
+<p><code>nodeSelector</code> is the simplest scheduler-aware method. It is a map of labels, and the Pod can only go to nodes that carry all of them. Label nodes first with <code>kubectl label node node02 disktype=ssd</code>, then add the selector. Well-known labels such as <code>kubernetes.io/hostname</code>, <code>kubernetes.io/os</code> and <code>topology.kubernetes.io/zone</code> are available too. Check labels with <code>kubectl get nodes --show-labels</code> or <code>-L disktype</code>.</p>
+<pre class="code" tabindex="0"><code>spec:
+  nodeSelector:
+    disktype: ssd
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - {key: topology.kubernetes.io/zone, operator: In, values: [zone-a, zone-b]}
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 50
+        preference:
+          matchExpressions:
+          - {key: gpu, operator: Exists}</code></pre>
+<p>Node affinity is the expressive form. Its operators are In, NotIn, Exists, DoesNotExist, Gt and Lt. The required variant, <code>requiredDuringSchedulingIgnoredDuringExecution</code>, is a hard rule: if no node matches, the Pod stays Pending. The preferred variant is soft: each term has a weight from 1 to 100, the scheduler adds the weights of matching terms to a node's score, but will still place the Pod elsewhere if nothing matches.</p>
+<p>Two structural details are commonly tested. Multiple <code>nodeSelectorTerms</code> are ORed, while multiple <code>matchExpressions</code> within one term are ANDed. And the 'IgnoredDuringExecution' part means rules are only checked at scheduling time: if you remove a label from a node later, Pods already running there stay put. If both nodeSelector and node affinity are set, both must be satisfied.</p>
+<p>To keep other workloads off special nodes, combine affinity with taints and tolerations; affinity attracts Pods, taints repel them.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>nodeName</dt><dd>A Pod field that pins the Pod to a node directly, bypassing the scheduler.</dd><dt>nodeSelector</dt><dd>A simple label map a node must fully match for the Pod to be scheduled there.</dd><dt>Required node affinity</dt><dd>A hard scheduling rule; the Pod stays Pending if no node satisfies it.</dd><dt>Preferred node affinity</dt><dd>A weighted soft rule that influences scoring but does not block scheduling.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A task asks you to run a Pod only on nodes labelled <code>tier=frontend</code>, but none are labelled. After adding the nodeSelector the Pod shows Pending with '0/3 nodes are available: 3 node(s) didn't match Pod's node affinity/selector'. <code>kubectl label node node01 tier=frontend</code> lets it schedule immediately.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Terms are ORed, expressions within a term are ANDed. And a missing label with required affinity or nodeSelector means Pending forever, never a fallback.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Does removing a node label evict Pods that were scheduled there because of required node affinity?</summary><p>No. IgnoredDuringExecution means the rule is only evaluated at scheduling time.</p></details>
+<details class="sq"><summary>What happens to a Pod whose preferred node affinity matches no node?</summary><p>It is scheduled on another suitable node; preferences only affect scoring.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../resource-requests-and-limits-limitrange-and-resourcequota-as-admission/">← Resource requests and limits, LimitRange and ResourceQuota a</a><a href="../taints-and-tolerations-noschedule-prefernoschedule-noexecute-and-toler/">Taints and tolerations: NoSchedule, PreferNoSchedule, NoExec →</a></nav>
+</main>
+</body>
+</html>

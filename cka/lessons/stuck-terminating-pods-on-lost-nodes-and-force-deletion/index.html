@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stuck Terminating Pods on lost nodes and force deletion · CKA Lesson</title>
+<meta name="description" content="Deleting a Pod is normally a conversation. The API server marks the Pod with a deletion timestamp and a grace period, the kubelet on its node stops the con">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Stuck Terminating Pods on lost nodes and force deletion · CKA Lesson">
+<meta property="og:description" content="Deleting a Pod is normally a conversation. The API server marks the Pod with a deletion timestamp and a grace period, the kubelet on its node stops the con">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/stuck-terminating-pods-on-lost-nodes-and-force-deletion/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/stuck-terminating-pods-on-lost-nodes-and-force-deletion/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 5: Troubleshooting</p>
+<h1>Stuck Terminating Pods on lost nodes and force deletion</h1>
+<article class="lbody">
+<p>Deleting a Pod is normally a conversation. The API server marks the Pod with a deletion timestamp and a grace period, the kubelet on its node stops the containers, sending SIGTERM and later SIGKILL, and then confirms, after which the Pod object is removed. If the node is powered off, partitioned or its kubelet is dead, no confirmation ever comes, and the Pod stays in <code>Terminating</code> indefinitely.</p>
+<p>This is deliberate. The control plane cannot tell a dead node from a node that is merely unreachable but still running the Pod. Removing the Pod object too early could allow a replacement to start while the original is still running and writing to the same data. For Deployments that is often tolerable, so after the node's unreachable taint takes effect (the default toleration is 300 seconds), the ReplicaSet creates replacement Pods elsewhere even though the old ones still show Terminating. For StatefulSets it is not tolerable: a StatefulSet will not create a new <code>db-1</code> until the old <code>db-1</code> is really gone, because it guarantees at most one Pod per identity. So a StatefulSet Pod on a lost node stays down.</p>
+<p>When you are certain the node is truly dead or its workloads are stopped, you can force-delete the Pod. This removes the object from the API immediately, without waiting for the kubelet.</p>
+<pre class="code" tabindex="0"><code>kubectl get pods -o wide | grep Terminating
+kubectl get node node03            # NotReady / Unknown
+kubectl delete pod db-1 --grace-period=0 --force</code></pre>
+<p>kubectl warns that immediate deletion does not wait for confirmation that the process has stopped. That is the risk: if the node comes back with the container still running, you briefly have two copies, which for a database can mean split-brain or corruption. Force deletion is a decision, not a routine cleanup step.</p>
+<p>Safer, broader options exist. Deleting the Node object (<code>kubectl delete node node03</code>) after confirming it is gone lets the Pod garbage collector remove all Pods bound to it. For a node that was shut down without draining, Kubernetes supports the <code>node.kubernetes.io/out-of-service</code> taint (for example with value nodeshutdown and effect NoExecute): applying it tells the control plane the node is really out of service, so its Pods are force-deleted and volumes detached, letting StatefulSet Pods and their volumes move elsewhere. Remove the taint after the node is recovered.</p>
+<p>Sometimes a Pod, or any object, is stuck Terminating for another reason: a finalizer that no controller will remove. <code>kubectl get pod x -o jsonpath='{.metadata.finalizers}'</code> shows it. Removing finalizers with a patch forces deletion but skips whatever cleanup they guarded, so understand the owner first.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Terminating</dt><dd>Pod state shown when a deletion timestamp is set but deletion has not been confirmed.</dd><dt>Force deletion</dt><dd>Removing a Pod object immediately with --grace-period=0 --force, without kubelet confirmation.</dd><dt>out-of-service taint</dt><dd>A node taint marking a node as shut down so its Pods and volume attachments are cleaned up.</dd><dt>Grace period</dt><dd>Time allowed between SIGTERM and SIGKILL for a container to shut down, 30 seconds by default.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>node03 lost power. The Deployment's Pods were recreated elsewhere after about five minutes, but StatefulSet Pod mq-2 is still Terminating on node03 and no replacement appears. After confirming with the data centre team that node03 is off, you force-delete mq-2; the StatefulSet recreates it on node01 and it reattaches its volume once the old attachment is cleaned up.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> StatefulSet Pods on a lost node are not replaced automatically; force deletion (or the out-of-service taint) is the fix, but only after confirming the node is really down.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why does Kubernetes leave a Pod Terminating on an unreachable node rather than deleting it?</summary><p>It cannot confirm the containers stopped, and deleting too early could let a second copy run at the same time.</p></details>
+<details class="sq"><summary>What command force-deletes a Pod?</summary><p><code>kubectl delete pod &lt;name&gt; --grace-period=0 --force</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../output-handling-for-tasks-o-jsonpath-custom-columns-sort-by-writing-an/">← Output handling for tasks: -o jsonpath, custom-columns, --so</a></nav>
+</main>
+</body>
+</html>

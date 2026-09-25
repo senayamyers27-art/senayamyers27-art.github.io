@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Preparing artifacts: .zip packages vs container images in… · Developer Associate Lesson</title>
+<meta name="description" content="Before code can run on Lambda or another service, it must be packaged as a deployment artifact. The exam tests the two Lambda packaging formats, their limi">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Preparing artifacts: .zip packages vs container images in… · Developer Associate Lesson">
+<meta property="og:description" content="Before code can run on Lambda or another service, it must be packaged as a deployment artifact. The exam tests the two Lambda packaging formats, their limi">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/preparing-artifacts-zip-packages-vs-container-images-in-ecr-lambda-lay/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/preparing-artifacts-zip-packages-vs-container-images-in-ecr-lambda-lay/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 3: Deployment</p>
+<h1>Preparing artifacts: .zip packages vs container images in ECR, Lambda layers, dependency packaging, CodeArtifact</h1>
+<article class="lbody">
+<p>Before code can run on Lambda or another service, it must be packaged as a deployment artifact. The exam tests the two Lambda packaging formats, their limits, and how to manage dependencies cleanly.</p>
+<p>A .zip file archive contains your code and its dependencies. You can upload it directly (up to 50 MB zipped) or from S3 for larger files, and the unzipped size of the function plus all its layers must be at most 250 MB. Lambda runs it on a managed runtime such as Python, Node.js or Java, which AWS patches for you. A container image is built from a Dockerfile, usually based on an AWS-provided base image for your runtime (which includes the Lambda Runtime Interface Client), pushed to Amazon Elastic Container Registry (ECR) and referenced by the function. Images can be up to 10 GB, which suits large dependencies such as machine learning libraries, and let you reuse existing container tooling. The trade-off: you rebuild and redeploy to pick up runtime patches, and the image must be in ECR in the same Region (cross-account ECR access is possible with repository permissions). You cannot switch an existing function between .zip and image; you create a new function.</p>
+<p>Dependencies must be packaged for the Lambda environment, which runs Amazon Linux on x86_64 or arm64. For interpreted languages this means installing libraries into the package directory, for example <code>pip install -r requirements.txt -t package/</code> then zipping the package folder with your handler. Libraries with native compiled code must be built for the right OS and architecture; building on a Mac or Windows machine can produce binaries that fail with import errors on Lambda. Build inside a matching container (for example with <code>sam build --use-container</code>) or use platform-specific wheels. Keep packages small by excluding tests, dev dependencies and SDK versions already in the runtime, unless you need to pin a specific SDK version.</p>
+<p>Lambda layers package shared dependencies or common code separately so that many functions can reuse them and each function's own package stays small (which also lets you edit code in the console). Layer content is extracted to <code>/opt</code>, and runtimes look in specific subfolders, for example <code>python/</code> for Python libraries and <code>nodejs/node_modules/</code> for Node.js. A function can use up to five layers. Layers also deliver Lambda extensions, such as monitoring agents.</p>
+<p>AWS CodeArtifact is a managed artifact repository for software packages: npm, PyPI, Maven, NuGet and others. A domain groups repositories, and repositories can have upstream repositories and external connections (for example to the public npm registry), so your builds pull public packages through a controlled, cached copy while you also publish private internal packages. Developers and CodeBuild authenticate with a short-lived token, for example <code>aws codeartifact login --tool pip --domain my-domain --repository my-repo</code>, which configures the package manager. This gives consistent builds, an audit of which packages are used, and protection if a public package disappears.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>.zip deployment package</dt><dd>An archive of function code and dependencies deployed to a managed Lambda runtime.</dd><dt>Container image function</dt><dd>A Lambda function packaged as an OCI image up to 10 GB, stored in Amazon ECR.</dd><dt>Amazon ECR</dt><dd>Elastic Container Registry, AWS's managed registry for container images.</dd><dt>AWS CodeArtifact</dt><dd>A managed package repository that proxies public registries and hosts private packages for build tools.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A data science team's function needs 3 GB of Python libraries, far above the 250 MB unzipped limit for .zip packages. They build a container image from the AWS Python base image, push it to ECR and create the function from the image URI.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Dependencies larger than 250 MB unzipped point to container images (up to 10 GB). Import errors for native libraries usually mean the package was built on a different OS or architecture than Lambda's.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What is the maximum size of a Lambda container image?</summary><p>10 GB.</p></details>
+<details class="sq"><summary>Where are layer contents made available inside the execution environment?</summary><p>Under /opt, in runtime-specific subdirectories such as /opt/python.</p></details>
+<details class="sq"><summary>Why use CodeArtifact external connections?</summary><p>To fetch public packages through a managed, cached repository so builds are consistent, auditable and resilient to public registry changes.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../presigned-urls-for-temporary-s3-access-iam-access-analyzer-for-least-p/">← Presigned URLs for temporary S3 access; IAM Access Analyzer </a><a href="../aws-sam-template-structure-sam-build-sam-deploy-guided-sam-local-invok/">AWS SAM: template structure, sam build, sam deploy --guided, →</a></nav>
+</main>
+</body>
+</html>

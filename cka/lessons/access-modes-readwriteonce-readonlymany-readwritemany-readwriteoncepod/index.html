@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Access modes: ReadWriteOnce, ReadOnlyMany, ReadWriteMany… · CKA Lesson</title>
+<meta name="description" content="Access modes describe how a volume can be mounted. They appear in both PVs (what the storage supports) and PVCs (what the workload needs), and a claim only">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Access modes: ReadWriteOnce, ReadOnlyMany, ReadWriteMany… · CKA Lesson">
+<meta property="og:description" content="Access modes describe how a volume can be mounted. They appear in both PVs (what the storage supports) and PVCs (what the workload needs), and a claim only">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/access-modes-readwriteonce-readonlymany-readwritemany-readwriteoncepod/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/access-modes-readwriteonce-readonlymany-readwritemany-readwriteoncepod/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 4: Storage</p>
+<h1>Access modes: ReadWriteOnce, ReadOnlyMany, ReadWriteMany, ReadWriteOncePod</h1>
+<article class="lbody">
+<p>Access modes describe how a volume can be mounted. They appear in both PVs (what the storage supports) and PVCs (what the workload needs), and a claim only binds to a volume that supports the requested modes. There are four, each with a short form you will see in kubectl output.</p>
+<p>ReadWriteOnce (RWO) means the volume can be mounted read-write by a single node. It is the most common mode and what typical block storage, such as a cloud disk or an iSCSI LUN, supports. Note the word node: several Pods on the same node can use an RWO volume at the same time. If a second Pod that needs the volume is scheduled onto a different node, it gets stuck in ContainerCreating with a Multi-Attach error.</p>
+<p>ReadOnlyMany (ROX) means many nodes can mount the volume read-only. It suits shared reference data or static content. ReadWriteMany (RWX) means many nodes can mount it read-write at the same time; it requires shared or network file storage such as NFS, CephFS or cloud file services. Block devices formatted with an ordinary filesystem cannot safely support RWX, because two machines writing the same filesystem would corrupt it.</p>
+<p>ReadWriteOncePod (RWOP) restricts the volume to a single Pod in the whole cluster. It is useful when an application must be the only writer, for example to prevent a second replica from starting against the same data. It is supported only for CSI volumes, and it is enforced: a second Pod using the claim will not start.</p>
+<pre class="code" tabindex="0"><code>spec:
+  accessModes:
+  - ReadWriteOncePod
+  resources:
+    requests: {storage: 10Gi}</code></pre>
+<p>Important subtleties are tested. A PV can list several modes it supports, but a given volume is only mounted using one mode at a time. Access modes are matching constraints for binding and attach decisions, not a general write-protection mechanism; to mount read-only, set <code>readOnly: true</code> on the volumeMount or the persistentVolumeClaim volume source. Supported modes depend on the volume plugin or CSI driver, so check the driver's documentation rather than assuming.</p>
+<p>In <code>kubectl get pv</code>, the ACCESS MODES column shows RWO, ROX, RWX or RWOP. When choosing a mode, ask where the Pods will run: one Pod, one node, or many nodes. A Deployment with several replicas spread across nodes that all write the same data needs RWX; a StatefulSet usually gives each replica its own RWO claim instead.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>ReadWriteOnce (RWO)</dt><dd>Read-write by a single node; multiple Pods on that node may share it.</dd><dt>ReadOnlyMany (ROX)</dt><dd>Read-only by many nodes.</dd><dt>ReadWriteMany (RWX)</dt><dd>Read-write by many nodes, requiring shared file storage.</dd><dt>ReadWriteOncePod (RWOP)</dt><dd>Read-write by exactly one Pod cluster-wide, supported for CSI volumes.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A 3-replica Deployment shares one RWO PVC. The Pods on node01 run, but the replica scheduled on node02 is stuck with a Multi-Attach error. Switching to an NFS-backed RWX StorageClass, or converting to a StatefulSet with per-replica claims, resolves it.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> RWO is per node, not per Pod. If the question says only one Pod may ever use the volume, the answer is ReadWriteOncePod.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Can two Pods on the same node both mount an RWO volume read-write?</summary><p>Yes, RWO limits the volume to one node, not one Pod.</p></details>
+<details class="sq"><summary>Which access mode requires shared storage such as NFS?</summary><p>ReadWriteMany.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../volumes-vs-persistentvolumes-pv-and-pvc-lifecycle-available-bound-rele/">← Volumes vs PersistentVolumes; PV and PVC lifecycle (Availabl</a><a href="../reclaim-policies-retain-and-delete-recycle-deprecated-and-cleaning-up/">Reclaim policies: Retain and Delete (Recycle deprecated) and →</a></nav>
+</main>
+</body>
+</html>

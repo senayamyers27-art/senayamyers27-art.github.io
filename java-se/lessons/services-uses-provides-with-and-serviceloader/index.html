@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Services: uses, provides ... with, and ServiceLoader · OCP Java Lesson</title>
+<meta name="description" content="A service lets one module use an implementation without knowing, at compile time, which module supplies it. It is Java's built-in plug-in mechanism.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Services: uses, provides ... with, and ServiceLoader · OCP Java Lesson">
+<meta property="og:description" content="A service lets one module use an implementation without knowing, at compile time, which module supplies it. It is Java's built-in plug-in mechanism.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/java-se/lessons/services-uses-provides-with-and-serviceloader/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/java-se/lessons/services-uses-provides-with-and-serviceloader/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">OCP Java</a> / <a href="../">Lessons</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25) · Domain 7: Packaging and deploying Java code</p>
+<h1>Services: uses, provides ... with, and ServiceLoader</h1>
+<article class="lbody">
+<p>A service lets one module use an implementation without knowing, at compile time, which module supplies it. It is Java's built-in plug-in mechanism. There are four roles: the service type (usually an interface) in an exported package, the consumer that uses it, one or more provider modules that implement it, and <code>java.util.ServiceLoader</code>, which finds the providers at run time. This keeps the consumer loosely coupled: you can add or remove a provider JAR on the module path without recompiling the consumer.</p>
+<p>The consumer module declares <code>uses</code> with the service interface, and requires the module that defines the interface. A provider module declares <code>provides &lt;interface&gt; with &lt;implementation class&gt;</code>. The implementation class does not need to be in an exported package, which keeps it hidden from everyone except the ServiceLoader. The provider must also require the module containing the interface.</p>
+<pre class="code" tabindex="0"><code>// module com.pay.api
+module com.pay.api { exports com.pay.api; }            // contains interface PaymentGateway
+
+// provider
+module com.pay.stripe {
+    requires com.pay.api;
+    provides com.pay.api.PaymentGateway with com.pay.stripe.internal.StripeGateway;
+}
+
+// consumer
+module com.shop.app {
+    requires com.pay.api;
+    uses com.pay.api.PaymentGateway;
+}</code></pre>
+<p>In the consumer's code, <code>ServiceLoader.load(PaymentGateway.class)</code> returns a ServiceLoader that is Iterable over provider instances, so a for-each loop creates and returns each implementation. <code>findFirst()</code> returns an <code>Optional&lt;PaymentGateway&gt;</code>, empty if none is present. <code>stream()</code> returns a <code>Stream&lt;ServiceLoader.Provider&lt;PaymentGateway&gt;&gt;</code>; each Provider has <code>type()</code> to inspect the class without instantiating it and <code>get()</code> to create the instance. That lets you filter providers by annotation or class before creating any.</p>
+<p>The provider class must have either a public no-argument constructor or a public static no-argument method named <code>provider()</code> that returns an instance. If the consumer module forgets the <code>uses</code> directive, calling <code>ServiceLoader.load</code> for that service throws a <code>ServiceConfigurationError</code>. Loading happens lazily and the loader caches instances; <code>reload()</code> clears the cache.</p>
+<p>For code on the class path, the older mechanism still works: a text file named <code>META-INF/services/</code> followed by the fully qualified interface name, listing implementation class names. Modular JARs use <code>provides</code> instead. The exam expects you to know which module declares which directive: <code>uses</code> in the consumer, <code>provides ... with</code> in the provider, and <code>exports</code> of the interface package in the API module.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Service interface</dt><dd>The type, usually an interface in an exported package, that consumers depend on and providers implement.</dd><dt>uses</dt><dd>A module directive in the consumer declaring that it looks up implementations of a service with ServiceLoader.</dd><dt>provides ... with</dt><dd>A module directive in the provider naming the service interface and the implementation class that supplies it.</dd><dt>ServiceLoader</dt><dd>The class that discovers and instantiates service providers at run time via load, iteration, findFirst or stream.</dd><dt>ServiceLoader.Provider</dt><dd>A handle to a provider that exposes type() without instantiation and get() to create the instance.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A photo editor defines an ImageFilter service interface. Each filter ships as its own module that provides ImageFilter with its class. The editor calls ServiceLoader.load(ImageFilter.class).stream() to list available filters in its menu, so a new filter appears simply by dropping its JAR on the module path.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Keep the directive owners straight: uses goes in the consumer, provides ... with goes in the provider, and the interface's package must be exported by whoever defines it. The implementation's package does not need to be exported.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which module declares uses com.pay.api.PaymentGateway?</summary><p>The consumer module that calls ServiceLoader.load(PaymentGateway.class).</p></details>
+<details class="sq"><summary>What does ServiceLoader.findFirst() return when no provider is found?</summary><p>An empty Optional.</p></details>
+<details class="sq"><summary>What must a provider class have so ServiceLoader can create it?</summary><p>A public no-argument constructor or a public static provider() method.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study OCP Java for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../java-se/">Open the OCP Java study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../module-info-java-module-requires-requires-transitive-exports-opens/">← module-info.java: module, requires, requires transitive, exp</a><a href="../module-path-vs-class-path-named-automatic-and-unnamed-modules/">Module path vs class path, named, automatic and unnamed modu →</a></nav>
+</main>
+</body>
+</html>

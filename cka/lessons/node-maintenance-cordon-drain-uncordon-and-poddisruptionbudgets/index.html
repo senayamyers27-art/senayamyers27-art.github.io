@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Node maintenance: cordon, drain, uncordon and… · CKA Lesson</title>
+<meta name="description" content="Nodes need maintenance: kernel patches, kubelet upgrades, hardware swaps. Kubernetes gives you three commands to take a node out of service gracefully and ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Node maintenance: cordon, drain, uncordon and… · CKA Lesson">
+<meta property="og:description" content="Nodes need maintenance: kernel patches, kubelet upgrades, hardware swaps. Kubernetes gives you three commands to take a node out of service gracefully and ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/node-maintenance-cordon-drain-uncordon-and-poddisruptionbudgets/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/node-maintenance-cordon-drain-uncordon-and-poddisruptionbudgets/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 1: Cluster Architecture, Installation and Configuration</p>
+<h1>Node maintenance: cordon, drain, uncordon and PodDisruptionBudgets</h1>
+<article class="lbody">
+<p>Nodes need maintenance: kernel patches, kubelet upgrades, hardware swaps. Kubernetes gives you three commands to take a node out of service gracefully and bring it back.</p>
+<p><code>kubectl cordon node01</code> marks the node unschedulable. It sets <code>spec.unschedulable: true</code>, which shows up as <code>SchedulingDisabled</code> in <code>kubectl get nodes</code>. Existing Pods keep running; only new Pods are kept away. Use it when you want to stop new work landing on a node while you investigate.</p>
+<p><code>kubectl drain node01</code> cordons the node and then evicts its Pods so their controllers recreate them elsewhere. Drain refuses to proceed in some situations, and the flags that override those checks are exam material. DaemonSet Pods cannot be moved (the DaemonSet would immediately recreate them), so you add <code>--ignore-daemonsets</code> to leave them in place. Pods using emptyDir volumes lose that data when evicted, so drain wants <code>--delete-emptydir-data</code> as an acknowledgement. Bare Pods not managed by any controller would be deleted forever, so drain requires <code>--force</code> for them. Static Pods are not evicted at all.</p>
+<p>When the work is done, <code>kubectl uncordon node01</code> makes the node schedulable again. Note that uncordon does not move existing Pods back; new Pods, and Pods rescheduled for other reasons, will gradually use it.</p>
+<p>Drain uses the Eviction API rather than plain deletion, and evictions respect PodDisruptionBudgets (PDBs). A PDB states how many Pods matching a selector must stay up during voluntary disruptions like drains: either <code>minAvailable</code> or <code>maxUnavailable</code>, as a number or a percentage. If evicting a Pod would violate the budget, the eviction is refused and drain keeps retrying, which can look like drain hanging. That is the PDB protecting your application; it waits until replacement Pods become Ready elsewhere.</p>
+<pre class="code" tabindex="0"><code>kubectl create pdb web-pdb --selector=app=web --min-available=2
+kubectl get pdb   # ALLOWED DISRUPTIONS column
+kubectl drain node01 --ignore-daemonsets --delete-emptydir-data --timeout=120s</code></pre>
+<p>PDBs do not protect against involuntary disruptions such as a node crash, and a PDB with minAvailable equal to the replica count means zero allowed disruptions, so drains will block forever. If you see <code>Cannot evict pod as it would violate the pod's disruption budget</code>, check <code>kubectl get pdb</code> before reaching for <code>--disable-eviction</code>, which bypasses PDBs and should be a deliberate last resort.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Cordon</dt><dd>Marks a node unschedulable without touching running Pods.</dd><dt>Drain</dt><dd>Cordons a node and evicts its Pods so they are rescheduled elsewhere.</dd><dt>PodDisruptionBudget</dt><dd>A policy limiting how many selected Pods can be down at once due to voluntary disruptions.</dd><dt>Eviction API</dt><dd>The API drain uses to remove Pods, which honours PodDisruptionBudgets.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>You drain node02 for a kernel update and the command pauses on a Pod from a 3-replica Deployment whose PDB requires minAvailable 3. <code>kubectl get pdb</code> shows 0 allowed disruptions. After agreeing with the app team, you change the PDB to minAvailable 2; the eviction succeeds, the Pod restarts on node03 and drain completes.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> The exam often wants <code>kubectl drain &lt;node&gt; --ignore-daemonsets</code> (plus --delete-emptydir-data if needed). If drain errors about DaemonSet-managed Pods, you forgot --ignore-daemonsets; if it complains about unmanaged Pods, it needs --force.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What is the difference between cordon and drain?</summary><p>Cordon only blocks new scheduling; drain also evicts the node's existing Pods.</p></details>
+<details class="sq"><summary>Why might kubectl drain appear to hang?</summary><p>An eviction would violate a PodDisruptionBudget, so drain keeps retrying until the budget allows it.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../rbac-roles-clusterroles-rolebindings-clusterrolebindings-aggregated-an/">← RBAC: Roles, ClusterRoles, RoleBindings, ClusterRoleBindings</a><a href="../helm-repo-add-update-upgrade-install-version-values-and-kustomize-kube/">Helm (repo add/update, upgrade --install, --version, values) →</a></nav>
+</main>
+</body>
+</html>

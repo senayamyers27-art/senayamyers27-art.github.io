@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Azure Database for PostgreSQL flexible server… · AI-200 Lesson</title>
+<meta name="description" content="Azure Database for PostgreSQL flexible server is Azure's managed PostgreSQL service. Azure handles patching, backups, high availability and scaling of comp">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Azure Database for PostgreSQL flexible server… · AI-200 Lesson">
+<meta property="og:description" content="Azure Database for PostgreSQL flexible server is Azure's managed PostgreSQL service. Azure handles patching, backups, high availability and scaling of comp">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/azure-database-for-postgresql-flexible-server-allow-listing-and-enabli/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/azure-database-for-postgresql-flexible-server-allow-listing-and-enabli/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 2: Develop AI solutions by using Azure data management services</p>
+<h1>Azure Database for PostgreSQL flexible server: allow-listing and enabling the vector (pgvector) extension</h1>
+<article class="lbody">
+<p>Azure Database for PostgreSQL flexible server is Azure's managed PostgreSQL service. Azure handles patching, backups, high availability and scaling of compute and storage, and you get standard PostgreSQL that works with psycopg, SQLAlchemy and every other PostgreSQL tool. Many AI apps already have relational data in PostgreSQL, and pgvector lets them add vector search to that same database.</p>
+<p>pgvector is an open-source PostgreSQL extension that adds a <code>vector</code> data type, distance operators and approximate nearest neighbor indexes. On a server you run yourself, you install it and run <code>CREATE EXTENSION vector;</code>. On a managed flexible server, there is an extra step, and it is exactly what the exam tests: extensions must be allow-listed before they can be created.</p>
+<p>Step one is allow-listing. Flexible server has a server parameter named <code>azure.extensions</code> that lists which extensions users are permitted to create. You add <code>VECTOR</code> to it in the portal (Server parameters) or with the CLI. If you skip this step, <code>CREATE EXTENSION vector</code> fails with an error saying the extension is not allow-listed. A few extensions also need <code>shared_preload_libraries</code> and a restart, but pgvector does not.</p>
+<pre class="code" tabindex="0"><code>az postgres flexible-server parameter set -g rg --server-name pg-ai \
+  --name azure.extensions --value VECTOR
+# keep existing entries: use a comma-separated list, for example VECTOR,PG_TRGM</code></pre>
+<p>Step two is creating the extension in each database that will use it. Extensions are per database, not per server. Connect to the target database with a role that has permission (the server admin or a member of the <code>azure_pg_admin</code> role) and run the statement. Note that the extension's SQL name is <code>vector</code>, even though the project is called pgvector.</p>
+<pre class="code" tabindex="0"><code>CREATE EXTENSION IF NOT EXISTS vector;
+SELECT extname, extversion FROM pg_extension WHERE extname = 'vector';</code></pre>
+<p>For connectivity, choose between public access with firewall rules and private access through VNet integration or a private endpoint. For authentication, flexible server supports Microsoft Entra ID, so your app's managed identity can get an access token with <code>DefaultAzureCredential</code> and use it as the password instead of storing one. Size compute for vector workloads: approximate nearest neighbor indexes, especially HNSW (Hierarchical Navigable Small World), perform best when they fit in memory, and building them benefits from higher <code>maintenance_work_mem</code>.</p>
+<p>A related extension, <code>azure_ai</code>, lets SQL call Azure AI services (for example to create embeddings inside the database). It follows the same allow-listing rule, which makes the pattern worth remembering: allow-list in <code>azure.extensions</code>, then <code>CREATE EXTENSION</code> per database.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Flexible server</dt><dd>The deployment option of Azure Database for PostgreSQL that offers managed PostgreSQL with configurable compute, HA and networking.</dd><dt>azure.extensions</dt><dd>The server parameter that allow-lists which extensions may be created on a flexible server.</dd><dt>pgvector</dt><dd>An open-source PostgreSQL extension, created as vector, that adds a vector type, distance operators and ANN indexes.</dd><dt>azure_pg_admin</dt><dd>A role on flexible server whose members can perform administrative actions such as creating allow-listed extensions.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A developer runs CREATE EXTENSION vector on a new flexible server and receives an error that the extension is not allow-listed. They add VECTOR to the azure.extensions server parameter, reconnect to the app database and run the statement again, which succeeds. A colleague later finds the type missing in a second database and learns that extensions must be created in each database.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Two steps in order: add VECTOR to the azure.extensions server parameter, then run CREATE EXTENSION vector in each database; the extension's SQL name is vector, not pgvector.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why does CREATE EXTENSION vector fail on a new flexible server?</summary><p>The extension has not been allow-listed; add VECTOR to the azure.extensions server parameter first.</p></details>
+<details class="sq"><summary>Is an extension created once per server or once per database?</summary><p>Once per database; each database that uses vectors needs its own CREATE EXTENSION.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../change-feed-change-feed-processor-with-a-lease-container-azure-functio/">← Change feed: change feed processor with a lease container, A</a><a href="../pgvector-vector-n-columns-distance-operators-l2-cosine-inner-product-h/">pgvector: vector(n) columns, distance operators (&lt;-&gt; L2, &lt;=&gt; →</a></nav>
+</main>
+</body>
+</html>

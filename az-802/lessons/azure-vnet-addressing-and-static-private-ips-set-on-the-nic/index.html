@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Azure VNet addressing and static private IPs set on the NIC · AZ-802 Lesson</title>
+<meta name="description" content="An Azure virtual network (VNet) is your private network in Azure. When you create it, you give it one or more address spaces written in CIDR (Classless Int">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Azure VNet addressing and static private IPs set on the NIC · AZ-802 Lesson">
+<meta property="og:description" content="An Azure virtual network (VNet) is your private network in Azure. When you create it, you give it one or more address spaces written in CIDR (Classless Int">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/azure-vnet-addressing-and-static-private-ips-set-on-the-nic/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/azure-vnet-addressing-and-static-private-ips-set-on-the-nic/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 4: Implement and manage an on-premises and hybrid networking infrastructure</p>
+<h1>Azure VNet addressing and static private IPs set on the NIC</h1>
+<article class="lbody">
+<p>An Azure virtual network (VNet) is your private network in Azure. When you create it, you give it one or more address spaces written in CIDR (Classless Inter-Domain Routing) notation, such as <code>10.20.0.0/16</code>, normally from the private ranges defined in RFC 1918 (10.0.0.0/8, 172.16.0.0/12 and 192.168.0.0/16). You then carve that space into subnets, such as <code>10.20.1.0/24</code> for servers and <code>10.20.2.0/24</code> for management. Every VM network interface card (NIC) lives in one subnet.</p>
+<p>Plan address space before you build. VNets that you will connect by peering, or connect to on-premises by VPN or ExpressRoute, must not overlap with each other or with your on-premises ranges, because routing cannot tell two identical prefixes apart. Leave room to grow, and remember that some services need dedicated subnets with specific names or delegations, such as <code>GatewaySubnet</code> for a VPN or ExpressRoute gateway, or delegated subnets for DNS Private Resolver endpoints.</p>
+<p>Azure reserves five addresses in every subnet: the network address, the first three host addresses (used for the default gateway and Azure DNS mapping) and the broadcast address. So a /24 gives you 251 usable addresses, not 254, and the first address you can assign in <code>10.20.1.0/24</code> is <code>10.20.1.4</code>. The smallest subnet you can create is a /29, which leaves only three usable addresses. Exam questions often test this arithmetic.</p>
+<p>Each NIC IP configuration has a private IP that is either dynamic or static. With dynamic, Azure picks the next free address in the subnet. With static, you choose an address from the subnet (or promote the current one) and Azure guarantees it stays with that NIC until you change it or delete the NIC. Servers that other machines point to by IP, above all domain controllers and DNS servers, should use static assignment. You set it in the portal on the NIC's IP configurations blade, or with PowerShell by setting <code>PrivateIpAllocationMethod</code> to Static on the IP configuration and running <code>Set-AzNetworkInterface</code>.</p>
+<p>The key rule: in Azure you set the static IP on the NIC, not inside Windows. The guest operating system should stay on DHCP, and Azure's DHCP will always hand it the address you configured on the NIC. If you type a static address in the Windows adapter settings and it doesn't match, or later the NIC changes, the VM can lose network connectivity and you will need tools such as Run Command or the Serial Console to recover. The same idea applies to DNS servers: set custom DNS servers on the VNet (or on a NIC to override) rather than in the guest, so that every VM picks them up through DHCP.</p>
+<p>A typical hybrid pattern is to deploy two DC VMs with static private IPs on their NICs, then set the VNet's DNS servers to those two addresses and restart the other VMs so they receive the new DNS settings.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Address space</dt><dd>The CIDR range or ranges assigned to a VNet, from which its subnets are allocated.</dd><dt>Reserved addresses</dt><dd>The five addresses Azure keeps in every subnet: the network address, the first three host addresses and the broadcast address.</dd><dt>Static private IP</dt><dd>A NIC IP configuration setting that pins a chosen private address to the NIC so it never changes until you change it.</dd><dt>Custom DNS servers</dt><dd>DNS server addresses configured on a VNet or NIC that Azure's DHCP gives to VMs instead of Azure-provided DNS.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An admin builds DC1 in subnet 10.50.1.0/24 and sets its NIC to static 10.50.1.4. Inside Windows the adapter stays on DHCP. The VNet's DNS servers are changed to 10.50.1.4 and 10.50.1.5, and after restarting the app servers they resolve contoso.com through the DCs and can join the domain.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> If an answer choice says to configure a static IP in the guest OS network adapter of an Azure VM, it's the trap. Set static on the NIC in Azure; keep the guest on DHCP. Also remember 5 reserved addresses per subnet.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How many usable addresses does a /27 subnet in Azure provide?</summary><p>27 usable. A /27 has 32 addresses and Azure reserves 5.</p></details>
+<details class="sq"><summary>You need a DC VM in Azure to keep 10.0.1.10 permanently. Where do you set it?</summary><p>On the VM NIC's IP configuration in Azure as a static private IP; leave the Windows adapter set to obtain an address automatically.</p></details>
+<details class="sq"><summary>Why must a VNet's address space not overlap your on-premises network if you plan a site-to-site VPN?</summary><p>Routing cannot distinguish two identical prefixes, so traffic to overlapping addresses would not reach the correct side.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../dhcp-high-availability-failover-in-load-balance-and-hot-standby-modes/">← DHCP high availability: failover in load balance and hot sta</a><a href="../hybrid-connectivity-site-to-site-and-point-to-site-vpn-expressroute-az/">Hybrid connectivity: site-to-site and point-to-site VPN, Exp →</a></nav>
+</main>
+</body>
+</html>

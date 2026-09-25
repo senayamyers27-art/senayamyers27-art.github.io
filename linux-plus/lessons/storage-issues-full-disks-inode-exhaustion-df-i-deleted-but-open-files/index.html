@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Storage issues: full disks, inode exhaustion (df -i)… · Linux+ Lesson</title>
+<meta name="description" content="Storage problems are among the most common Linux incidents: services fail to start, logs stop being written, databases crash and users cannot save work. Th">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Storage issues: full disks, inode exhaustion (df -i)… · Linux+ Lesson">
+<meta property="og:description" content="Storage problems are among the most common Linux incidents: services fail to start, logs stop being written, databases crash and users cannot save work. Th">
+<link rel="canonical" href="https://senayamyers27-art.github.io/linux-plus/lessons/storage-issues-full-disks-inode-exhaustion-df-i-deleted-but-open-files/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/linux-plus/lessons/storage-issues-full-disks-inode-exhaustion-df-i-deleted-but-open-files/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Linux+</a> / <a href="../">Lessons</a></p>
+<p class="note">CompTIA Linux+ XK0-006 · Domain 5: Troubleshooting</p>
+<h1>Storage issues: full disks, inode exhaustion (df -i), deleted-but-open files (lsof +L1), fsck/xfs_repair</h1>
+<article class="lbody">
+<p>Storage problems are among the most common Linux incidents: services fail to start, logs stop being written, databases crash and users cannot save work. The symptoms often look alike, usually 'No space left on device', so you need a systematic way to find the real cause.</p>
+<p>Start with <code>df -h</code> to see which filesystem is full. Then drill down with <code>du</code>: <code>du -xh --max-depth=1 /var | sort -h</code> lists the largest directories on that filesystem only (<code>-x</code> stays on one filesystem). <code>find /var -xdev -type f -size +500M</code> finds large files. Common culprits are runaway logs, core dumps, old kernels in <code>/boot</code>, package caches (<code>dnf clean all</code>, <code>apt clean</code>), container images and volumes, and forgotten backups. Remember that ext4 reserves a percentage of blocks for root by default (adjustable with <code>tune2fs -m</code>), so a filesystem can be full for users while root can still write.</p>
+<p>Inode exhaustion is the classic trick question. Each file uses one inode, and on ext4 the number of inodes is fixed when the filesystem is created. If millions of tiny files, such as session files or mail queue entries, use up every inode, you get 'No space left on device' even though <code>df -h</code> shows plenty of free space. <code>df -i</code> shows inode usage; at 100 percent <code>IUse%</code> you have found the cause. Find the directories with the most files, for example with <code>find /var -xdev -type f | cut -d/ -f2-4 | sort | uniq -c | sort -rn | head</code>, then delete or archive the unneeded files and fix whatever creates them. XFS allocates inodes dynamically, so it is less prone to this.</p>
+<p>Deleted-but-open files explain why <code>df</code> and <code>du</code> disagree. When you delete a file that a process still has open, the name disappears, so <code>du</code> no longer counts it, but the kernel keeps the data blocks until the last process closes the file, so <code>df</code> still shows the space used. This often happens when someone deletes a huge log instead of rotating it. <code>lsof +L1</code> lists open files whose link count is below one, meaning deleted; <code>lsof | grep deleted</code> works too. The fix is to restart or reload the process holding it (or have it reopen its logs). In an emergency, truncating the file through <code>/proc/&lt;PID&gt;/fd/&lt;N&gt;</code> frees space, but restarting the service is the clean solution. Use <code>logrotate</code> or truncate with <code>&gt; file</code> instead of <code>rm</code> for active logs.</p>
+<p>Filesystem corruption, after a crash, power loss or failing disk, is repaired with check tools, and they must run on unmounted filesystems (or the root filesystem at boot or from rescue media) to avoid causing more damage. For ext2/3/4, <code>fsck /dev/sdb1</code> calls <code>e2fsck</code>; <code>-y</code> answers yes to fixes and <code>-f</code> forces a check. Setting the sixth fstab field makes boot-time checks happen automatically. For XFS, <code>fsck</code> does nothing useful; use <code>xfs_repair /dev/sdb1</code> on the unmounted device. If it complains about a dirty log, mounting and cleanly unmounting the filesystem replays the log; <code>xfs_repair -L</code> zeroes the log but can lose recent changes, so it is a last resort. Btrfs uses <code>btrfs scrub</code> and <code>btrfs check</code>. Always check the disk's health (SMART data, kernel messages) too, because corruption may be a symptom of failing hardware.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Inode exhaustion</dt><dd>A filesystem running out of inodes, blocking new files even though free space remains; seen with df -i.</dd><dt>Deleted-but-open file</dt><dd>A file whose name was removed while a process still holds it open, so its space is not freed.</dd><dt>lsof +L1</dt><dd>Lists open files with a link count below one, revealing deleted files still consuming space.</dd><dt>fsck / e2fsck</dt><dd>Filesystem check and repair tools for ext-family filesystems, run on unmounted devices.</dd><dt>xfs_repair</dt><dd>The repair tool for XFS filesystems; fsck is not used for XFS.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A mail server reports 'No space left on device' but df -h shows 40 percent used. df -i shows /var at 100 percent inode use, and counting files reveals millions of stale entries in a spool directory from a stuck job. After fixing the job and clearing the old entries, inode use drops and mail flows again.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> If df -h shows free space but writes fail, think inodes (df -i). If df shows full but du cannot find the data, think deleted-but-open files (lsof +L1).</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which command confirms inode exhaustion?</summary><p>df -i, which shows inode usage (IUse%) for each filesystem.</p></details>
+<details class="sq"><summary>You deleted a 20 GB log but df still shows the space used. Why, and what fixes it?</summary><p>The logging process still holds the deleted file open; restart or signal that process so it closes the file, which frees the space.</p></details>
+<details class="sq"><summary>Which tool repairs a corrupted XFS filesystem, and in what state must it be?</summary><p>xfs_repair, run on the unmounted device.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Linux+ for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../linux-plus/">Open the Linux+ study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../responsible-use-of-ai-tools-for-scripting-review-testing-keeping-secre/">← Responsible use of AI tools for scripting: review, testing, </a><a href="../performance-load-average-top-htop-vmstat-iostat-sar-free-oom-killer/">Performance: load average, top/htop, vmstat, iostat, sar, fr →</a></nav>
+</main>
+</body>
+</html>

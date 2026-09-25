@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CodeDeploy appspec.yml lifecycle hooks for EC2, Lambda… · Developer Associate Lesson</title>
+<meta name="description" content="AWS CodeDeploy automates deploying application revisions to three compute platforms: EC2 and on-premises servers, Lambda, and Amazon ECS. For each deployme">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="CodeDeploy appspec.yml lifecycle hooks for EC2, Lambda… · Developer Associate Lesson">
+<meta property="og:description" content="AWS CodeDeploy automates deploying application revisions to three compute platforms: EC2 and on-premises servers, Lambda, and Amazon ECS. For each deployme">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/codedeploy-appspec-yml-lifecycle-hooks-for-ec2-lambda-and-ecs-the-code/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/codedeploy-appspec-yml-lifecycle-hooks-for-ec2-lambda-and-ecs-the-code/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 3: Deployment</p>
+<h1>CodeDeploy appspec.yml lifecycle hooks for EC2, Lambda and ECS; the CodeDeploy agent</h1>
+<article class="lbody">
+<p>AWS CodeDeploy automates deploying application revisions to three compute platforms: EC2 and on-premises servers, Lambda, and Amazon ECS. For each deployment it reads an application specification file, <code>appspec.yml</code> (or JSON for Lambda and ECS), which describes what to deploy and which lifecycle event hooks to run. The exam tests the hook order and which hooks exist on each platform.</p>
+<p>For EC2 and on-premises servers, CodeDeploy relies on the CodeDeploy agent, a program installed and running on each instance. The agent polls CodeDeploy for work, downloads the revision (from S3 or GitHub), copies files as described in the <code>files</code> section, sets <code>permissions</code>, and runs your hook scripts. The instance also needs an instance profile allowing it to read the revision from S3. If deployments hang or fail immediately on an instance, check that the agent is installed and running and that its logs (under the agent's log directory) show no permission errors.</p>
+<p>The EC2 in-place lifecycle order is: <code>ApplicationStop</code>, <code>DownloadBundle</code>, <code>BeforeInstall</code>, <code>Install</code>, <code>AfterInstall</code>, <code>ApplicationStart</code>, <code>ValidateService</code>. With a load balancer, <code>BeforeBlockTraffic</code>, <code>BlockTraffic</code> and <code>AfterBlockTraffic</code> come first, and <code>BeforeAllowTraffic</code>, <code>AllowTraffic</code> and <code>AfterAllowTraffic</code> come at the end. You can attach scripts to the hooks but not to the events CodeDeploy runs itself (<code>DownloadBundle</code>, <code>Install</code>, <code>BlockTraffic</code>, <code>AllowTraffic</code>). Note that <code>ApplicationStop</code> runs the script from the previously deployed revision, which is why a broken stop script from an old revision can fail a new deployment.</p>
+<pre class="code" tabindex="0"><code>version: 0.0
+os: linux
+files:
+  - source: /
+    destination: /var/www/app
+hooks:
+  ApplicationStop:
+    - location: scripts/stop.sh
+      timeout: 60
+  AfterInstall:
+    - location: scripts/install_deps.sh
+  ApplicationStart:
+    - location: scripts/start.sh
+  ValidateService:
+    - location: scripts/health_check.sh</code></pre>
+<p>For Lambda, there are no instances or files. The AppSpec names the function, alias, current version and target version, and CodeDeploy shifts the alias's traffic according to the deployment configuration (canary, linear or all at once). The only hooks are <code>BeforeAllowTraffic</code> and <code>AfterAllowTraffic</code>, and each names a Lambda function that runs validation tests and reports success or failure back to CodeDeploy with <code>PutLifecycleEventHookExecutionStatus</code>.</p>
+<p>For ECS, CodeDeploy performs blue/green deployments: it starts a replacement (green) task set with the new task definition behind a load balancer's test listener, then shifts production traffic from the blue task set. The AppSpec gives the task definition, container name and port. Hooks, each a Lambda function, are <code>BeforeInstall</code>, <code>AfterInstall</code>, <code>AfterAllowTestTraffic</code>, <code>BeforeAllowTraffic</code> and <code>AfterAllowTraffic</code>; <code>AfterAllowTestTraffic</code> is where you run tests through the test listener before real users arrive.</p>
+<p>Deployment settings to know: EC2 deployment configurations such as <code>CodeDeployDefault.OneAtATime</code>, <code>HalfAtATime</code> and <code>AllAtOnce</code>; in-place versus blue/green for EC2; and automatic rollback when a deployment fails or a CloudWatch alarm fires, which redeploys the last known good revision.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>appspec.yml</dt><dd>The CodeDeploy application specification file describing files to deploy and lifecycle hook scripts or functions.</dd><dt>CodeDeploy agent</dt><dd>Software on EC2 or on-premises instances that pulls revisions from CodeDeploy and runs lifecycle hooks.</dd><dt>Lifecycle event hook</dt><dd>A point in a deployment where CodeDeploy runs your script or Lambda function, such as AfterInstall.</dd><dt>AfterAllowTestTraffic</dt><dd>An ECS deployment hook that runs after the test listener sends traffic to the new task set, before production traffic shifts.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Deployments to a group of EC2 instances fail at ApplicationStop on one host only. The deployment log shows the script from the previous revision is missing. The developer reruns the deployment with the option to ignore ApplicationStop failures, and then fixes the stop script in the new revision so future deployments succeed.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Memorize the EC2 order: ApplicationStop, DownloadBundle, BeforeInstall, Install, AfterInstall, ApplicationStart, ValidateService. Lambda has only BeforeAllowTraffic and AfterAllowTraffic. EC2 deployments that never start usually mean the agent is not running.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which hook would you use to verify an EC2 application is healthy after it starts?</summary><p>ValidateService.</p></details>
+<details class="sq"><summary>Which lifecycle hooks can a Lambda deployment use?</summary><p>BeforeAllowTraffic and AfterAllowTraffic.</p></details>
+<details class="sq"><summary>What must be installed on EC2 instances for CodeDeploy to work?</summary><p>The CodeDeploy agent, plus an instance profile that allows access to the revision location.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../codepipeline-stages-and-actions-manual-approvals-codebuild-buildspec-p/">← CodePipeline stages and actions, manual approvals; CodeBuild</a><a href="../testing-in-development-environments-unit-tests-in-ci-integration-tests/">Testing in development environments: unit tests in CI, integ →</a></nav>
+</main>
+</body>
+</html>

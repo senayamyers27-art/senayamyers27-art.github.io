@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Build and push images with `az acr build` (quick tasks)… · AI-200 Lesson</title>
+<meta name="description" content="You do not need Docker installed locally to produce an image for Azure. ACR Tasks is a set of build features inside Azure Container Registry that runs buil">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Build and push images with `az acr build` (quick tasks)… · AI-200 Lesson">
+<meta property="og:description" content="You do not need Docker installed locally to produce an image for Azure. ACR Tasks is a set of build features inside Azure Container Registry that runs buil">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/build-and-push-images-with-az-acr-build-quick-tasks-and-acr-tasks-trig/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/build-and-push-images-with-az-acr-build-quick-tasks-and-acr-tasks-trig/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 1: Develop containerized solutions on Azure</p>
+<h1>Build and push images with `az acr build` (quick tasks) and ACR Tasks triggered by commits, base-image updates or schedules</h1>
+<article class="lbody">
+<p>You do not need Docker installed locally to produce an image for Azure. ACR Tasks is a set of build features inside Azure Container Registry that runs builds on Azure-managed compute and pushes the result straight into your registry. This matters in locked-down developer machines, in cloud shells and in CI pipelines where you would rather not run a Docker daemon.</p>
+<p>The simplest form is a quick task. <code>az acr build --registry myregistry --image orders-api:{{.Run.ID}} .</code> uploads the current directory (the build context, filtered by <code>.dockerignore</code>) to ACR, builds the Dockerfile there, streams the build log back to your terminal and pushes the image if the build succeeds. <code>{{.Run.ID}}</code> is a placeholder ACR replaces with the unique run ID, which gives you a unique tag for every build. You can add <code>--file</code> to point at a different Dockerfile and <code>--platform</code> to target another operating system or architecture.</p>
+<p>Quick tasks are one-off and manual. When you want builds to happen automatically, you create a task with <code>az acr task create</code>. A task stores the build definition (context, Dockerfile, image name) and one or more triggers. Its context is usually a Git repository, for example a GitHub repository URL with a branch, plus a personal access token so ACR can read the repository and register a webhook.</p>
+<p>The three trigger types are worth memorizing. A source code update trigger (commit trigger) runs the task when a commit is pushed, or a pull request is opened, on the configured branch. A base image update trigger runs the task when the base image your Dockerfile's <code>FROM</code> line depends on is updated in ACR or a public registry, so your app image automatically picks up operating system and runtime patches. A timer trigger runs the task on a schedule defined with a cron expression through <code>--schedule</code>, useful for nightly rebuilds or maintenance jobs.</p>
+<pre class="code" tabindex="0"><code>az acr task create --registry myregistry --name build-orders \
+  --image orders-api:{{.Run.ID}} \
+  --context &lt;git-repo-url&gt;#main \
+  --file Dockerfile --git-access-token $PAT
+
+az acr task run --registry myregistry --name build-orders
+az acr task list-runs --registry myregistry --output table</code></pre>
+<p>Base image update triggers are enabled by default when you create a task, and they are the feature most likely to appear in a scenario about keeping images patched without developer effort. For more complex flows, a multi-step task defined in a YAML file (run with <code>az acr run</code>) can build, test and push several images in sequence, and it is also how you run maintenance commands such as the purge command covered in the next lesson.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Quick task</dt><dd>A one-off cloud build started with az acr build that uploads the context, builds in ACR and pushes the image.</dd><dt>ACR task</dt><dd>A saved build definition in a registry that runs automatically on triggers such as commits, base-image updates or a schedule.</dd><dt>Base image update trigger</dt><dd>An ACR Tasks trigger that rebuilds your app image when the image in its FROM line is updated.</dd><dt>Run ID</dt><dd>The unique identifier of each ACR Tasks run, available as the {{.Run.ID}} placeholder for unique tags.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A security team wants every app image rebuilt whenever the Python base image receives a security patch, without developers noticing. The platform team creates an ACR task per app with a commit trigger on main and the default base image update trigger. When a patched base image is published, ACR rebuilds each dependent app image and pushes a new unique tag, and the deployment pipeline picks it up.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Match the trigger to the wording: code pushed means a commit trigger, OS or runtime patches in the parent image mean a base image update trigger, and nightly or weekly means a timer trigger with a cron schedule.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What does az acr build do that docker build plus docker push do not?</summary><p>It uploads the build context and runs the build on Azure-managed compute, then pushes to ACR, so no local Docker engine is required.</p></details>
+<details class="sq"><summary>Which ACR Tasks trigger keeps an app image patched when its parent image changes?</summary><p>The base image update trigger, which rebuilds the image when the image in its FROM line is updated.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../azure-container-registry-basic-standard-and-premium-tiers-geo-replicat/">← Azure Container Registry: Basic, Standard and Premium tiers;</a><a href="../tags-vs-digests-stable-vs-unique-tags-and-cleaning-up-old-images-with/">Tags vs digests, stable vs unique tags, and cleaning up old  →</a></nav>
+</main>
+</body>
+</html>

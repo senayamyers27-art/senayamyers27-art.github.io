@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OSPF adjacency requirements: area, subnet, hello/dead… · CCNA Lesson</title>
+<meta name="description" content="Two OSPF routers on the same link will not always become neighbours. OSPF checks several parameters in hello packets, and some after that, and if they disa">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="OSPF adjacency requirements: area, subnet, hello/dead… · CCNA Lesson">
+<meta property="og:description" content="Two OSPF routers on the same link will not always become neighbours. OSPF checks several parameters in hello packets, and some after that, and if they disa">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ccna/lessons/ospf-adjacency-requirements-area-subnet-hello-dead-timers-mtu-authenti/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ccna/lessons/ospf-adjacency-requirements-area-subnet-hello-dead-timers-mtu-authenti/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CCNA</a> / <a href="../">Lessons</a></p>
+<p class="note">Cisco CCNA 200-301 v2.0 · Domain 3: IP routing</p>
+<h1>OSPF adjacency requirements: area, subnet, hello/dead timers, MTU, authentication, unique router ID</h1>
+<article class="lbody">
+<p>Two OSPF routers on the same link will not always become neighbours. OSPF checks several parameters in hello packets, and some after that, and if they disagree the relationship stalls. Knowing each requirement, and the state where each mismatch leaves the neighbour, lets you diagnose adjacency problems quickly.</p>
+<p>The following must match in the hello packets, or the routers ignore each other and never get past Down or Init. The area ID: both interfaces must be in the same area, such as area 0. The subnet and mask: on broadcast and point-to-point Ethernet links, both interfaces must be in the same subnet with the same mask. The hello and dead intervals: if one router uses 10 and 40 seconds and the other 5 and 20, they will not become neighbours. Authentication: if one side uses OSPF authentication and the other does not, or the keys differ, hellos are rejected. The stub area flag must also match, though stub areas are beyond single-area CCNA scope.</p>
+<p>Router IDs must be unique. If two routers have the same RID, they will not form an adjacency, and IOS logs a duplicate router-id message. This often happens when a configuration is copied between routers including the <code>router-id</code> line.</p>
+<p>MTU (maximum transmission unit) is checked later, during database exchange. If the interface MTUs differ, the routers see each other and reach ExStart or Exchange, but the database description packets are rejected and they get stuck there. The fix is to make the MTU values match; the command <code>ip ospf mtu-ignore</code> exists but hides the real issue.</p>
+<p>Other conditions also prevent adjacency. A passive interface sends no hellos, so no neighbour forms on it. An interface that is not enabled for OSPF by a network statement or <code>ip ospf</code> command also sends nothing. An ACL that blocks OSPF (IP protocol 89) or the 224.0.0.5 and 224.0.0.6 multicasts breaks hellos. On broadcast segments, if both routers have priority 0, neither can become DR, so no full adjacency forms. A network type mismatch (one side broadcast, the other point-to-point) may still reach Full but routes will not install properly, because the two sides describe the link differently.</p>
+<pre class="code" tabindex="0"><code>R1# show ip ospf interface g0/0
+  Internet Address 10.0.12.1/24, Area 0
+  Process ID 1, Router ID 1.1.1.1, Network Type BROADCAST, Cost: 1
+  Timer intervals configured, Hello 10, Dead 40, Wait 40, Retransmit 5</code></pre>
+<p>Troubleshoot by comparing <code>show ip ospf interface</code> on both ends: area, address and mask, network type and timers are all there. <code>show ip ospf neighbor</code> shows the state reached. <code>debug ip ospf adj</code> and <code>debug ip ospf hello</code> (used carefully) reveal messages such as mismatched hello parameters or authentication errors.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Hello/dead interval</dt><dd>How often hellos are sent and how long to wait before declaring a neighbour down; 10 and 40 seconds by default on broadcast and point-to-point links.</dd><dt>MTU mismatch</dt><dd>Different maximum transmission units on two ends, leaving OSPF neighbours stuck in ExStart or Exchange.</dd><dt>OSPF authentication</dt><dd>Verification of OSPF packets with a shared key; both sides must use the same type and key.</dd><dt>Duplicate router ID</dt><dd>Two routers using the same RID, which prevents adjacency and causes log errors.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>R1 and R2 connect over an Ethernet link, but <code>show ip ospf neighbor</code> on R1 is empty. <code>show ip ospf interface g0/0</code> on each router reveals R1 has 10.0.12.1/24 while R2 has 10.0.12.2/25. Both are in the same range, but the masks differ, so hellos are rejected. Correcting R2's mask to /24 brings the neighbour to FULL within seconds.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Neighbours stuck in EXSTART or EXCHANGE point to an MTU mismatch. No neighbour at all points to hello-level mismatches: area, subnet/mask, timers, authentication, or a passive interface.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which OSPF parameters must match in hello packets for two routers to become neighbours?</summary><p>Area ID, subnet and mask, hello and dead intervals, authentication, and the stub flag; router IDs must also be unique.</p></details>
+<details class="sq"><summary>Two neighbours are stuck in EXSTART. What is the most likely cause?</summary><p>An MTU mismatch between the two interfaces.</p></details>
+<details class="sq"><summary>Does the OSPF process ID need to match between neighbours?</summary><p>No. The process ID is locally significant; only parameters such as area, subnet, timers and authentication must match.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CCNA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ccna/">Open the CCNA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../ospf-cost-and-reference-bandwidth/">← OSPF cost and reference bandwidth</a><a href="../first-hop-redundancy-hsrp-and-vrrp-virtual-ip-priority-preemption/">First hop redundancy: HSRP and VRRP virtual IP, priority, pr →</a></nav>
+</main>
+</body>
+</html>

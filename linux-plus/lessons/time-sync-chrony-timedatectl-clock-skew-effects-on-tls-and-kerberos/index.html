@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Time sync: chrony, timedatectl, clock skew effects on TLS… · Linux+ Lesson</title>
+<meta name="description" content="Accurate time sounds like a nicety, but many systems depend on it. Log correlation across servers, scheduled jobs, certificate validation, authentication p">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Time sync: chrony, timedatectl, clock skew effects on TLS… · Linux+ Lesson">
+<meta property="og:description" content="Accurate time sounds like a nicety, but many systems depend on it. Log correlation across servers, scheduled jobs, certificate validation, authentication p">
+<link rel="canonical" href="https://senayamyers27-art.github.io/linux-plus/lessons/time-sync-chrony-timedatectl-clock-skew-effects-on-tls-and-kerberos/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/linux-plus/lessons/time-sync-chrony-timedatectl-clock-skew-effects-on-tls-and-kerberos/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Linux+</a> / <a href="../">Lessons</a></p>
+<p class="note">CompTIA Linux+ XK0-006 · Domain 5: Troubleshooting</p>
+<h1>Time sync: chrony, timedatectl, clock skew effects on TLS and Kerberos</h1>
+<article class="lbody">
+<p>Accurate time sounds like a nicety, but many systems depend on it. Log correlation across servers, scheduled jobs, certificate validation, authentication protocols, distributed databases and backups all break in confusing ways when clocks disagree. Linux+ expects you to configure time synchronization and recognize the symptoms of clock skew.</p>
+<p>Linux has two clocks: the system clock maintained by the kernel while running, and the hardware clock, also called the RTC (real-time clock), which keeps time while the machine is off. <code>timedatectl</code> shows both, along with the time zone and whether synchronization is active ('System clock synchronized: yes' and 'NTP service: active'). Use <code>timedatectl set-timezone America/Chicago</code> to change the zone (<code>timedatectl list-timezones</code> lists them), <code>timedatectl set-ntp true</code> to enable automatic synchronization, and <code>timedatectl set-time</code> only when NTP is off. Servers commonly keep the RTC in UTC (Coordinated Universal Time). <code>hwclock --systohc</code> copies the system time to the hardware clock.</p>
+<p>NTP (Network Time Protocol) keeps the system clock accurate by querying time servers, over UDP port 123. On most current distributions the NTP implementation is chrony, whose daemon is <code>chronyd</code> and whose configuration is <code>/etc/chrony.conf</code> (or <code>/etc/chrony/chrony.conf</code>). <code>server ntp1.example.com iburst</code> adds a server, and <code>iburst</code> speeds up initial synchronization; <code>pool</code> lines use a set of servers from a pool; <code>makestep 1.0 3</code> allows the clock to jump instead of slewing gradually when it is far off during the first few updates; and <code>allow 10.0.0.0/8</code> lets chrony serve time to other hosts. Some systems use the simpler <code>systemd-timesyncd</code> client instead; only one time service should run at a time.</p>
+<p>Verify with <code>chronyc</code>: <code>chronyc sources -v</code> lists servers, where <code>^*</code> marks the currently selected source and <code>^?</code> an unreachable one; <code>chronyc tracking</code> shows the current offset from true time, stratum and frequency error; <code>chronyc makestep</code> forces an immediate correction. If no source is reachable, check the firewall for outbound UDP 123, DNS resolution of the server names, and whether the servers themselves are healthy. Virtual machines can drift noticeably after being paused or migrated, so they need synchronization too.</p>
+<p>Clock skew effects are exam favorites. TLS (Transport Layer Security) certificates have 'not before' and 'not after' validity dates, so a client whose clock is wrong may reject a valid certificate as expired or not yet valid, causing HTTPS, package repository and API failures with errors mentioning certificate validity. Kerberos tickets carry timestamps to prevent replay attacks, and by default the KDC rejects requests if the client and server clocks differ by more than about five minutes, producing 'Clock skew too great' errors and failed domain logins through SSSD. Time-based one-time passwords used for MFA also fail when the clock is off. Beyond outright failures, skewed clocks make logs from different hosts impossible to line up during an incident investigation, and can make cron jobs and timers run at unexpected times.</p>
+<p>So when you see certificate errors on only one machine, Kerberos or Active Directory authentication failures, or MFA codes being rejected, check the time first with <code>timedatectl</code> and <code>chronyc tracking</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>NTP</dt><dd>Network Time Protocol, which synchronizes clocks with time servers over UDP port 123.</dd><dt>chrony</dt><dd>The common Linux NTP implementation (chronyd daemon, chronyc client, /etc/chrony.conf).</dd><dt>timedatectl</dt><dd>systemd tool to view and set time, time zone and whether NTP synchronization is enabled.</dd><dt>RTC</dt><dd>Real-time clock: the hardware clock that keeps time while the system is powered off.</dd><dt>Clock skew</dt><dd>The difference between clocks on different systems; Kerberos by default tolerates only about five minutes.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Users on one Linux workstation cannot log in with their Active Directory accounts, and the SSSD logs mention clock skew. timedatectl shows 'System clock synchronized: no', and chronyc sources shows every server as unreachable because a new firewall rule blocks outbound UDP 123. After allowing it, chronyc makestep corrects the clock and domain logins work again.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Certificate 'not yet valid' errors on a single host, Kerberos 'clock skew too great' messages and rejected MFA codes are all classic signs of a wrong system clock.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which command shows whether the system clock is currently synchronized?</summary><p>timedatectl (look for 'System clock synchronized: yes'), or chronyc tracking for details.</p></details>
+<details class="sq"><summary>What does ^* mean in chronyc sources output?</summary><p>It marks the time source chrony has currently selected for synchronization.</p></details>
+<details class="sq"><summary>Why can a wrong clock break HTTPS connections?</summary><p>Certificate validity dates are checked against the local clock, so a valid certificate may appear expired or not yet valid.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Linux+ for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../linux-plus/">Open the Linux+ study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../hardware-dmesg-lspci-lsusb-smartctl-failing-disks-and-raid-degradation/">← Hardware: dmesg, lspci, lsusb, smartctl, failing disks and R</a><a href="../package-problems-broken-dependencies-repository-errors-held-packages/">Package problems: broken dependencies, repository errors, he →</a></nav>
+</main>
+</body>
+</html>

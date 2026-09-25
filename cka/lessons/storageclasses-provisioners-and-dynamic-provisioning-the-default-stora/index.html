@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>StorageClasses, provisioners and dynamic provisioning… · CKA Lesson</title>
+<meta name="description" content="Creating PVs by hand does not scale. With dynamic provisioning, a PVC names a StorageClass, and a provisioner automatically creates a matching volume and P">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="StorageClasses, provisioners and dynamic provisioning… · CKA Lesson">
+<meta property="og:description" content="Creating PVs by hand does not scale. With dynamic provisioning, a PVC names a StorageClass, and a provisioner automatically creates a matching volume and P">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/storageclasses-provisioners-and-dynamic-provisioning-the-default-stora/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/storageclasses-provisioners-and-dynamic-provisioning-the-default-stora/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 4: Storage</p>
+<h1>StorageClasses, provisioners and dynamic provisioning; the default StorageClass annotation</h1>
+<article class="lbody">
+<p>Creating PVs by hand does not scale. With dynamic provisioning, a PVC names a StorageClass, and a provisioner automatically creates a matching volume and PV the moment it is needed. This is how most real clusters handle storage.</p>
+<p>A StorageClass is a cluster-scoped object describing a 'class' of storage. Its key fields are <code>provisioner</code> (which driver creates volumes, usually a CSI driver name), <code>parameters</code> (driver-specific options such as disk type or replication), <code>reclaimPolicy</code> (Delete by default, or Retain), <code>volumeBindingMode</code> (Immediate or WaitForFirstConsumer), <code>allowVolumeExpansion</code> and optional <code>mountOptions</code>. Core fields such as the provisioner, parameters and reclaim policy cannot be changed after creation, so to change them you create a new class.</p>
+<pre class="code" tabindex="0"><code>apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast
+  annotations:
+    storageclass.kubernetes.io/is-default-class: &quot;true&quot;
+provisioner: example.csi.vendor.com
+parameters:
+  type: ssd
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true</code></pre>
+<p>The provisioner does the work. For a CSI driver, an external-provisioner sidecar watches PVCs referencing its class, calls the driver to create a volume, and creates a PV bound to the claim. Lab clusters often use a simple provisioner that carves directories out of node disks, and some classes use <code>kubernetes.io/no-provisioner</code>, meaning no dynamic provisioning at all; PVs for that class must be created manually.</p>
+<p>One StorageClass can be the default, marked with the annotation <code>storageclass.kubernetes.io/is-default-class: &quot;true&quot;</code> and shown as <code>(default)</code> in <code>kubectl get storageclass</code>. A PVC that omits <code>storageClassName</code> receives the default class. A PVC that sets <code>storageClassName: &quot;&quot;</code> explicitly opts out and will only bind to PVs with no class. If more than one class is marked default, recent versions pick the newest, but you should avoid that ambiguity.</p>
+<pre class="code" tabindex="0"><code>kubectl get sc
+kubectl patch sc standard -p '{&quot;metadata&quot;:{&quot;annotations&quot;:{&quot;storageclass.kubernetes.io/is-default-class&quot;:&quot;false&quot;}}}'
+kubectl patch sc fast -p '{&quot;metadata&quot;:{&quot;annotations&quot;:{&quot;storageclass.kubernetes.io/is-default-class&quot;:&quot;true&quot;}}}'</code></pre>
+<p>When a dynamic claim stays Pending, run <code>kubectl describe pvc</code>. Events such as 'waiting for a volume to be created by external provisioner' point to the provisioner (check its Pods and logs), while 'no persistent volumes available for this claim and no storage class is set' means the claim has no class and no default exists.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>StorageClass</dt><dd>A cluster-scoped description of a type of storage and how to provision it.</dd><dt>Provisioner</dt><dd>The component, usually a CSI driver, that creates volumes for a StorageClass.</dd><dt>Dynamic provisioning</dt><dd>Automatic creation of a PV when a PVC requests a StorageClass.</dd><dt>Default StorageClass</dt><dd>The class annotated is-default-class true, applied to PVCs without storageClassName.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A task says new PVCs without a class should use <code>fast</code> instead of <code>standard</code>. You remove the default annotation from standard (set it to false) and add it to fast. A test PVC without storageClassName then gets class fast and a volume is provisioned for it.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Omitting storageClassName means 'use the default'; setting it to an empty string means 'no class'. They behave very differently.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What annotation makes a StorageClass the default?</summary><p>storageclass.kubernetes.io/is-default-class: &quot;true&quot;.</p></details>
+<details class="sq"><summary>What reclaim policy do dynamically provisioned PVs get if the StorageClass does not specify one?</summary><p>Delete.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../reclaim-policies-retain-and-delete-recycle-deprecated-and-cleaning-up/">← Reclaim policies: Retain and Delete (Recycle deprecated) and</a><a href="../volumebindingmode-immediate-vs-waitforfirstconsumer/">volumeBindingMode Immediate vs WaitForFirstConsumer →</a></nav>
+</main>
+</body>
+</html>

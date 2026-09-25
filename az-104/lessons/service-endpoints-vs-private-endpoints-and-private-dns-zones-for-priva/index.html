@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Service endpoints vs private endpoints, and private DNS… · Azure Administrator Lesson</title>
+<meta name="description" content="Many Azure platform services, such as Azure Storage, Azure SQL Database and Key Vault, are reached by default through public endpoints on the internet. Two">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Service endpoints vs private endpoints, and private DNS… · Azure Administrator Lesson">
+<meta property="og:description" content="Many Azure platform services, such as Azure Storage, Azure SQL Database and Key Vault, are reached by default through public endpoints on the internet. Two">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-104/lessons/service-endpoints-vs-private-endpoints-and-private-dns-zones-for-priva/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-104/lessons/service-endpoints-vs-private-endpoints-and-private-dns-zones-for-priva/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Azure Administrator</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure Administrator Associate AZ-104 · Domain 4: Implement and manage virtual networking</p>
+<h1>Service endpoints vs private endpoints, and private DNS zones for private link</h1>
+<article class="lbody">
+<p>Many Azure platform services, such as Azure Storage, Azure SQL Database and Key Vault, are reached by default through public endpoints on the internet. Two features let VNet resources reach them more securely: service endpoints and private endpoints. They sound alike but work very differently, and choosing between them is a frequent exam scenario.</p>
+<p>A service endpoint is a setting on a subnet, such as <code>Microsoft.Storage</code> or <code>Microsoft.Sql</code>. Once enabled, traffic from that subnet to the service travels over the Azure backbone and carries the subnet's identity. The service's firewall can then allow that specific subnet (a virtual network rule) and deny everything else. The service still uses its public IP address, and the VM keeps connecting to the public name. Service endpoints are free, quick to set up, only work for traffic originating in Azure subnets (not from on-premises over VPN), and allow access to every instance of that service type, unless you add a service endpoint policy (available for Storage) that limits which accounts can be reached.</p>
+<p>A private endpoint is a network interface placed in your subnet with a private IP address, connected through Azure Private Link to one specific resource, such as the blob service of one storage account or one SQL server. Clients connect to that private IP. Because it is a real address in your VNet, it is reachable from peered VNets and from on-premises over VPN or ExpressRoute, and you can then disable public network access on the resource entirely. Because it maps to one resource instance, it also helps prevent data exfiltration to other accounts. Private endpoints are billed per hour and per gigabyte processed.</p>
+<p>Private endpoints only work if clients resolve the service's normal name to the private IP. When you create a private endpoint, the public DNS name, such as <code>contoso.blob.core.windows.net</code>, gets a CNAME to a <code>privatelink</code> name, such as <code>contoso.privatelink.blob.core.windows.net</code>. You create an Azure private DNS zone with that privatelink name, link it to your VNets, and add an A record for the private IP. The portal does this for you when you choose 'Integrate with private DNS zone', by attaching a DNS zone group to the endpoint so records are maintained automatically. Examples: <code>privatelink.blob.core.windows.net</code> for blobs, <code>privatelink.file.core.windows.net</code> for files, <code>privatelink.database.windows.net</code> for Azure SQL, <code>privatelink.vaultcore.azure.net</code> for Key Vault.</p>
+<p>In a hub-and-spoke network, keep the privatelink zones in one place and link them to every VNet that needs resolution. On-premises DNS servers must forward queries for those zones into Azure, usually to an Azure DNS Private Resolver inbound endpoint, because on-premises machines cannot query Azure DNS at 168.63.129.16 directly. A classic symptom of broken DNS: <code>nslookup</code> returns a public IP instead of the private one, and the connection is refused because public access is disabled.</p>
+<p>Rule of thumb: service endpoint for a simple, free way to lock a service to Azure subnets; private endpoint when you need a private IP, on-premises access, per-resource scope or public access disabled.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Service endpoint</dt><dd>A subnet setting that sends traffic to an Azure service over the backbone with the subnet's identity, while the service keeps its public IP.</dd><dt>Private endpoint</dt><dd>A NIC with a private IP in your VNet that connects to one specific resource through Private Link.</dd><dt>Private DNS zone</dt><dd>An Azure DNS zone resolvable only from linked VNets, used to map privatelink names to private IPs.</dd><dt>Service endpoint policy</dt><dd>A policy that restricts service endpoint traffic to specific Azure Storage accounts.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A SQL database must be reachable only from an app subnet in Azure and from an on-premises reporting server over VPN, with public access disabled. A service endpoint cannot serve the on-premises server, so the administrator creates a private endpoint, integrates it with the privatelink.database.windows.net zone linked to the VNet, and configures on-premises DNS to forward that zone to a DNS Private Resolver inbound endpoint.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> On-premises access, disabling public access or scoping to one resource instance means private endpoint. If a private endpoint connection fails, check DNS first: the name must resolve to the private IP through a privatelink zone.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which option gives an Azure SQL database a private IP address in your VNet?</summary><p>A private endpoint.</p></details>
+<details class="sq"><summary>After creating a private endpoint, a VM's nslookup still returns a public IP. What is missing?</summary><p>A private DNS zone (such as privatelink.database.windows.net) linked to the VM's VNet with an A record for the endpoint.</p></details>
+<details class="sq"><summary>Which is free and configured on a subnet: service endpoint or private endpoint?</summary><p>Service endpoint.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Azure Administrator for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-104/">Open the Azure Administrator study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../azure-bastion-azurebastionsubnet-skus-browser-and-native-client-access/">← Azure Bastion: AzureBastionSubnet, SKUs, browser and native </a><a href="../azure-dns-public-zones-delegation-record-sets-alias-records-private-dn/">Azure DNS: public zones, delegation, record sets, alias reco →</a></nav>
+</main>
+</body>
+</html>

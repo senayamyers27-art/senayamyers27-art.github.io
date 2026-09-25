@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Resource requests and limits, LimitRange and… · CKA Lesson</title>
+<meta name="description" content="Each container can declare resource requests and limits for CPU and memory. They drive scheduling, runtime enforcement and Quality of Service, and administ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Resource requests and limits, LimitRange and… · CKA Lesson">
+<meta property="og:description" content="Each container can declare resource requests and limits for CPU and memory. They drive scheduling, runtime enforcement and Quality of Service, and administ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/resource-requests-and-limits-limitrange-and-resourcequota-as-admission/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/resource-requests-and-limits-limitrange-and-resourcequota-as-admission/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 2: Workloads and Scheduling</p>
+<h1>Resource requests and limits, LimitRange and ResourceQuota as admission controls</h1>
+<article class="lbody">
+<p>Each container can declare resource requests and limits for CPU and memory. They drive scheduling, runtime enforcement and Quality of Service, and administrators enforce policies on them with LimitRange and ResourceQuota.</p>
+<p>A request is what the scheduler reserves. A node is only chosen if the sum of requests of Pods already there plus the new Pod's requests fits within the node's allocatable capacity. Actual usage does not matter to the scheduler. A limit is a ceiling enforced at runtime: a container that exceeds its CPU limit is throttled, while a container that exceeds its memory limit is killed by the kernel with an OOMKilled status. CPU is measured in cores or millicores (<code>500m</code> is half a core), memory in bytes with suffixes like <code>Mi</code> and <code>Gi</code>.</p>
+<pre class="code" tabindex="0"><code>resources:
+  requests: {cpu: 250m, memory: 128Mi}
+  limits:   {cpu: 500m, memory: 256Mi}</code></pre>
+<p>Requests and limits also set a Pod's QoS class. Guaranteed means every container has requests equal to limits for both CPU and memory. Burstable means at least one request or limit is set but not Guaranteed. BestEffort means none at all. Under memory pressure, the kubelet evicts BestEffort Pods first, then Burstable Pods using more than their requests.</p>
+<p>A LimitRange is a namespaced policy enforced at admission. It can set default requests and limits for containers that omit them (<code>defaultRequest</code> and <code>default</code>), and minimum, maximum and maximum limit-to-request ratio per container or Pod. It applies only to Pods created after it exists; existing Pods are not changed. A Pod that violates the min or max is rejected with a clear error from the API server.</p>
+<p>A ResourceQuota caps total consumption in a namespace: sums such as <code>requests.cpu</code>, <code>limits.memory</code> and <code>requests.storage</code>, and object counts such as <code>pods</code>, <code>services</code> or <code>persistentvolumeclaims</code>. Once a quota on compute resources exists, every new Pod in that namespace must specify those requests or limits, or be given defaults by a LimitRange, otherwise it is rejected. Check usage with <code>kubectl describe quota -n &lt;ns&gt;</code>, which shows Used and Hard for each resource.</p>
+<pre class="code" tabindex="0"><code>kubectl create quota team-a --hard=requests.cpu=2,requests.memory=4Gi,pods=10 -n team-a</code></pre>
+<p>Both are admission controls, so their rejections happen at creation time. When a Deployment's Pods are refused by a quota, the Deployment object itself is created fine, but its ReplicaSet cannot create Pods. You see the reason in <code>kubectl describe rs</code> or in namespace events, not in <code>kubectl get pods</code>, which simply shows fewer Pods than expected.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Request</dt><dd>The amount of CPU or memory reserved for a container and used for scheduling decisions.</dd><dt>Limit</dt><dd>The maximum CPU (throttled) or memory (OOM-killed) a container may use.</dd><dt>LimitRange</dt><dd>A namespaced admission policy for per-container or per-Pod defaults, minimums and maximums.</dd><dt>ResourceQuota</dt><dd>A namespaced cap on aggregate resource usage and object counts.</dd><dt>QoS class</dt><dd>Guaranteed, Burstable or BestEffort, derived from requests and limits and used for eviction order.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A Deployment in namespace team-a shows 0/3 ready and no Pods at all. <code>kubectl describe rs</code> reports 'failed quota: must specify limits.memory'. Adding a LimitRange with default memory limits, or adding limits to the Pod template, lets the ReplicaSet create the Pods.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Pods missing entirely usually means admission rejected them (quota or LimitRange), so look at ReplicaSet events. Pods existing but Pending usually means scheduling failed on insufficient requests.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What happens when a container exceeds its memory limit versus its CPU limit?</summary><p>Memory: it is OOM-killed. CPU: it is throttled but keeps running.</p></details>
+<details class="sq"><summary>Which QoS class does a Pod get when every container sets equal CPU and memory requests and limits?</summary><p>Guaranteed.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../configmaps-and-secrets-creation-env-and-volume-consumption-immutable-o/">← ConfigMaps and Secrets: creation, env and volume consumption</a><a href="../scheduling-nodeselector-nodename-node-affinity-required-vs-preferred/">Scheduling: nodeSelector, nodeName, node affinity (required  →</a></nav>
+</main>
+</body>
+</html>

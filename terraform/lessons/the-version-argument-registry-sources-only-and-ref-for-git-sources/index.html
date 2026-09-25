@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The `version` argument (registry sources only) and `ref`… · Terraform Associate Lesson</title>
+<meta name="description" content="Modules change over time, and an unpinned module can silently pull in a new release that renames resources or changes defaults. Terraform gives you two dif">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="The `version` argument (registry sources only) and `ref`… · Terraform Associate Lesson">
+<meta property="og:description" content="Modules change over time, and an unpinned module can silently pull in a new release that renames resources or changes defaults. Terraform gives you two dif">
+<link rel="canonical" href="https://senayamyers27-art.github.io/terraform/lessons/the-version-argument-registry-sources-only-and-ref-for-git-sources/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/terraform/lessons/the-version-argument-registry-sources-only-and-ref-for-git-sources/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Terraform Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004) · Domain 5: Terraform modules</p>
+<h1>The `version` argument (registry sources only) and `ref` for Git sources</h1>
+<article class="lbody">
+<p>Modules change over time, and an unpinned module can silently pull in a new release that renames resources or changes defaults. Terraform gives you two different pinning mechanisms depending on where the module comes from, and the exam tests which one applies to which source.</p>
+<p>For modules from a registry, either the public Terraform Registry or a private registry such as HCP Terraform's, you use the <code>version</code> argument in the module block. It accepts the same constraint syntax as provider versions: an exact version (<code>&quot;1.4.0&quot;</code> or <code>&quot;= 1.4.0&quot;</code>), comparisons (<code>&quot;&gt;= 1.2.0, &lt; 2.0.0&quot;</code>), exclusions (<code>&quot;!= 1.3.1&quot;</code>) and the pessimistic operator <code>~&gt;</code>. <code>~&gt; 1.4</code> allows 1.4 and any later 1.x release but not 2.0; <code>~&gt; 1.4.0</code> allows only 1.4.x patch releases. During <code>terraform init</code>, Terraform picks the newest available version that satisfies the constraint.</p>
+<p>The <code>version</code> argument works only with registry sources. Put it on a local path or Git source and Terraform reports an error, because those sources have no registry version list to choose from. Local modules are versioned together with the code around them, so they need no pin.</p>
+<p>For Git sources you pin with the <code>ref</code> query parameter in the source string. It can name a tag, a branch or a full commit SHA: <code>source = &quot;git::ssh://git@example.com/infra/modules.git//vpc?ref=v2.1.0&quot;</code>. Tags give readable, stable releases. A commit SHA is the most exact and cannot be moved, which is attractive for strict supply-chain control. A branch name is the weakest choice, because the branch moves as people push to it, so two runs of <code>terraform init</code> could fetch different code. Without any <code>ref</code>, Terraform uses the repository's default branch.</p>
+<pre class="code" tabindex="0"><code>module &quot;vpc&quot; {
+  source  = &quot;app.terraform.io/example-org/vpc/aws&quot;
+  version = &quot;~&gt; 3.2&quot;
+}
+
+module &quot;dns&quot; {
+  source = &quot;git::ssh://git@example.com/infra/dns.git?ref=v1.0.4&quot;
+}</code></pre>
+<p>Unlike providers, module versions are not recorded in the dependency lock file (<code>.terraform.lock.hcl</code>). That file tracks provider versions and checksums only. So for modules, the constraint in your code is your only protection, which is why exact or tightly bounded versions, or immutable tags and SHAs, are recommended for production. To move to a newer allowed module version, run <code>terraform init -upgrade</code> (or <code>terraform get -update</code>).</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>version argument</dt><dd>A module block argument that sets a version constraint; valid only for registry module sources.</dd><dt>ref parameter</dt><dd>A query parameter in a Git source address that selects a tag, branch or commit to check out.</dd><dt>Pessimistic constraint (~&gt;)</dt><dd>A version operator that allows only the rightmost specified component to increase, such as ~&gt; 1.4 allowing 1.x from 1.4 up.</dd><dt>Dependency lock file</dt><dd>.terraform.lock.hcl, which records provider versions and hashes but not module versions.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A team pinned its Git module to ?ref=main. One morning a colleague merged a breaking change to main, and the next CI run pulled it in and planned to replace a load balancer. They switched to ?ref=v4.2.0 tags so module upgrades happen only when someone edits the ref deliberately.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> version is for registry modules only; Git modules pin with ?ref=. Also remember that the lock file does not pin module versions.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>You add version = &quot;1.0.0&quot; to a module whose source is ./modules/app. What happens?</summary><p>Terraform reports an error, because the version argument is only supported for registry sources.</p></details>
+<details class="sq"><summary>Which Git ref is the most immutable choice?</summary><p>A full commit SHA, since tags can technically be moved and branches move constantly.</p></details>
+<details class="sq"><summary>Does .terraform.lock.hcl record module versions?</summary><p>No. It records only provider versions and checksums.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Terraform Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../terraform/">Open the Terraform Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../passing-provider-configurations-to-modules-with-the-providers-argument/">← Passing provider configurations to modules with the `provide</a><a href="../terraform-init-or-terraform-get-to-install-modules-into-terraform-modu/">`terraform init` or `terraform get` to install modules into  →</a></nav>
+</main>
+</body>
+</html>

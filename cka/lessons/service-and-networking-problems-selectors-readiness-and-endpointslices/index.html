@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Service and networking problems: selectors, readiness and… · CKA Lesson</title>
+<meta name="description" content="Network problems feel mysterious until you follow the path a request takes: client Pod, DNS, Service virtual IP, kube-proxy rules, EndpointSlice, backend P">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Service and networking problems: selectors, readiness and… · CKA Lesson">
+<meta property="og:description" content="Network problems feel mysterious until you follow the path a request takes: client Pod, DNS, Service virtual IP, kube-proxy rules, EndpointSlice, backend P">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/service-and-networking-problems-selectors-readiness-and-endpointslices/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/service-and-networking-problems-selectors-readiness-and-endpointslices/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 5: Troubleshooting</p>
+<h1>Service and networking problems: selectors, readiness and EndpointSlices, kube-proxy, cross-node CNI traffic, sandbox network errors</h1>
+<article class="lbody">
+<p>Network problems feel mysterious until you follow the path a request takes: client Pod, DNS, Service virtual IP, kube-proxy rules, EndpointSlice, backend Pod, and the CNI network between nodes. Check each hop in order and the fault usually becomes obvious.</p>
+<p>Start with the Service and its endpoints. <code>kubectl get endpointslices -l kubernetes.io/service-name=web</code> (or <code>kubectl describe svc web</code>, which lists endpoints) should show backend IPs. If it is empty, compare the Service's selector with the Pods' labels: <code>kubectl get svc web -o jsonpath='{.spec.selector}'</code> and <code>kubectl get pods --show-labels</code>. A single typo, such as <code>app: web</code> versus <code>app: webapp</code>, leaves the Service with no backends. If Pods match but are listed as not ready, their readiness probe is failing; <code>kubectl describe pod</code> shows the probe errors. Kubernetes deliberately withholds traffic from unready Pods.</p>
+<p>Next check ports. The Service's <code>targetPort</code> must match the port the container actually listens on. A mismatch gives 'connection refused' even though endpoints exist. Test the Pod IP and container port directly from a temporary Pod; if that works but the Service does not, the Service definition or kube-proxy is at fault.</p>
+<p>If Services fail only from certain nodes, check kube-proxy there: <code>kubectl get pods -n kube-system -o wide -l k8s-app=kube-proxy</code>, then its logs. A crashing kube-proxy, a broken kube-proxy ConfigMap, or missing kernel modules for the chosen mode leave that node without Service rules.</p>
+<pre class="code" tabindex="0"><code>kubectl describe svc web
+kubectl get endpointslices -l kubernetes.io/service-name=web -o wide
+kubectl get pods -l app=web -o wide
+kubectl logs -n kube-system -l k8s-app=kube-proxy --tail=20
+kubectl get pods -n kube-system -o wide | grep -Ei 'calico|cilium|flannel'</code></pre>
+<p>Cross-node problems point at the CNI. If Pods on the same node can reach each other but Pods on different nodes cannot, the overlay or routing between nodes is broken: a CNI agent Pod is down on one node, a firewall between nodes blocks the encapsulation or routing protocol the CNI uses (for example, Flannel's VXLAN traffic over UDP, or Calico's BGP on TCP 179), or the Pod CIDR overlaps the node network.</p>
+<p>Finally, sandbox errors. If Pods stay in ContainerCreating with events like 'Failed to create pod sandbox' and a message about the network plugin not being ready or failing to set up the network, the CNI on that node is not working. Check <code>/etc/cni/net.d/</code> for a config file, <code>/opt/cni/bin/</code> for the plugin binaries, the CNI agent Pod on that node, and whether the plugin has run out of IP addresses in the node's range.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Empty EndpointSlice</dt><dd>A Service with no backends, usually from a selector mismatch or unready Pods.</dd><dt>Readiness probe</dt><dd>A check that decides whether a Pod receives Service traffic.</dd><dt>Pod sandbox</dt><dd>The Pod's network namespace and pause container, set up via the CNI before containers start.</dd><dt>Cross-node traffic</dt><dd>Pod-to-Pod traffic between nodes, carried by the CNI's overlay or routing.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Service api returns connection refused. Its EndpointSlice lists three ready Pod IPs on port 80, but the containers listen on 8080. Changing the Service's targetPort to 8080 fixes it, which a direct test to PodIP:8080 had already hinted at.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Empty endpoints means selector or readiness; endpoints present but refused means targetPort or the app; works on one node but not another means kube-proxy or the CNI on that node.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What is the first thing to check when a Service has no endpoints?</summary><p>Whether its selector matches the labels of Ready Pods.</p></details>
+<details class="sq"><summary>Pods on the same node can talk, but not across nodes. What is the likely culprit?</summary><p>The CNI's inter-node networking: a failing agent, blocked overlay or routing traffic, or overlapping CIDRs.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../events-kubectl-get-events-with-field-selectors-and-sorting/">← Events: kubectl get events with field selectors and sorting</a><a href="../dns-problems-coredns-pods-and-logs-loop-detection-with-systemd-resolve/">DNS problems: CoreDNS Pods and logs, loop detection with sys →</a></nav>
+</main>
+</body>
+</html>

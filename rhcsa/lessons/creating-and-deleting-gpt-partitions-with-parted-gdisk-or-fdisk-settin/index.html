@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Creating and deleting GPT partitions with parted, gdisk… · RHCSA Lesson</title>
+<meta name="description" content="Partitioning divides a disk into independent sections that can each hold a file system, swap space or an LVM physical volume. RHEL supports two partition t">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Creating and deleting GPT partitions with parted, gdisk… · RHCSA Lesson">
+<meta property="og:description" content="Partitioning divides a disk into independent sections that can each hold a file system, swap space or an LVM physical volume. RHEL supports two partition t">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/creating-and-deleting-gpt-partitions-with-parted-gdisk-or-fdisk-settin/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/creating-and-deleting-gpt-partitions-with-parted-gdisk-or-fdisk-settin/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 5: Configure local storage</p>
+<h1>Creating and deleting GPT partitions with parted, gdisk or fdisk; setting the partition type (lvm, swap)</h1>
+<article class="lbody">
+<p>Partitioning divides a disk into independent sections that can each hold a file system, swap space or an LVM physical volume. RHEL supports two partition table schemes. The older MBR (Master Boot Record, shown as 'dos') allows only four primary partitions and disks up to 2 TiB. GPT (GUID Partition Table) allows many partitions (128 by default) and very large disks, stores a backup copy of the table at the end of the disk, and is the norm on modern and UEFI systems. Exam tasks may ask for GPT specifically.</p>
+<p>Three tools can do the job. <code>fdisk</code> is interactive and handles both MBR and GPT. <code>gdisk</code> is an fdisk-like tool for GPT only. <code>parted</code> works interactively or with commands on one line, which suits scripts. Changes in fdisk and gdisk are held in memory until you write them (<code>w</code>), while parted applies each command immediately.</p>
+<pre class="code" tabindex="0"><code>fdisk /dev/vdb
+  g            create a new empty GPT table (only on an empty disk!)
+  n            new partition: accept number and first sector,
+               last sector +1G for a 1 GiB partition
+  t            change type: enter lvm, swap or linux (L lists aliases)
+  p            print the table to check
+  w            write and exit (q quits without saving)</code></pre>
+<p>With parted, the same work is: <code>parted /dev/vdb mklabel gpt</code> to create the table, <code>parted /dev/vdb mkpart data xfs 1MiB 1025MiB</code> to create a partition, where for GPT the first argument is a partition name and the file system type only sets a type hint, and <code>parted /dev/vdb set 1 lvm on</code> or <code>set 2 swap on</code> to set the type flag. <code>parted /dev/vdb print</code> shows the result and <code>rm 1</code> deletes partition 1. Starting at 1MiB keeps partitions aligned for performance.</p>
+<p>In gdisk, <code>n</code> also creates partitions, and the type is given as a four-digit hex code: <code>8300</code> Linux filesystem (the default), <code>8e00</code> Linux LVM and <code>8200</code> Linux swap; <code>l</code> lists them and <code>w</code> writes. In fdisk on a GPT disk, the <code>t</code> command accepts aliases such as <code>lvm</code> and <code>swap</code>. Setting the right type is required when a task says so, and it documents the partition's purpose for tools and administrators, even though the kernel will let you use a partition of any type.</p>
+<p>Deleting is <code>d</code> in fdisk or gdisk (then choose the number) and <code>rm NUMBER</code> in parted. Deleting a partition destroys access to its data, so first make sure it is unmounted, not used as swap and not a physical volume in a volume group; remove it from <code>/etc/fstab</code> too.</p>
+<p>After writing, run <code>lsblk</code> to confirm the kernel sees the new partitions. If the disk was in use and the kernel could not reread the table, run <code>partprobe /dev/vdb</code> or <code>udevadm settle</code>. Never create a new partition table (<code>g</code>, <code>o</code> or <code>mklabel</code>) on a disk that already holds data you need; it effectively wipes all existing partitions.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>GPT</dt><dd>GUID Partition Table: modern scheme supporting many partitions and very large disks, with a backup table.</dd><dt>MBR (dos)</dt><dd>Older partition scheme limited to four primary partitions and 2 TiB disks.</dd><dt>Partition type</dt><dd>Identifier describing a partition's purpose, such as Linux LVM (8e00) or Linux swap (8200).</dd><dt>mklabel</dt><dd>parted command that creates a new, empty partition table (msdos or gpt).</dd><dt>partprobe</dt><dd>Asks the kernel to reread a disk's partition table after changes.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>You need a 2 GiB LVM partition on the empty disk /dev/vdc. You run <code>parted /dev/vdc mklabel gpt</code>, <code>parted /dev/vdc mkpart lvmpart 1MiB 2049MiB</code>, <code>parted /dev/vdc set 1 lvm on</code>, then <code>lsblk /dev/vdc</code> shows vdc1 at 2G and <code>fdisk -l /dev/vdc</code> shows its type as Linux LVM.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> fdisk and gdisk change nothing until you press w; parted applies each command immediately. Creating a new label (g, o, mklabel) on a disk with data wipes its partitions.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What is the gdisk type code for a Linux LVM partition?</summary><p>8e00 (8200 is Linux swap, 8300 Linux filesystem).</p></details>
+<details class="sq"><summary>How do you mark partition 1 as LVM with parted?</summary><p>parted /dev/DISK set 1 lvm on.</p></details>
+<details class="sq"><summary>Why use +1G at the last-sector prompt in fdisk?</summary><p>It creates a partition 1 GiB in size starting at the chosen first sector, without calculating sectors by hand.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../listing-disks-and-partitions-with-lsblk-blkid-and-fdisk-l/">← Listing disks and partitions with lsblk, blkid and fdisk -l</a><a href="../creating-and-removing-physical-volumes-pvcreate-pvremove-pvs/">Creating and removing physical volumes (pvcreate, pvremove,  →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Azure Container Apps: environments, ingress (external vs… · AI-200 Lesson</title>
+<meta name="description" content="Azure Container Apps is a serverless container platform built on Kubernetes and open-source components such as KEDA (Kubernetes Event-driven Autoscaling), ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Azure Container Apps: environments, ingress (external vs… · AI-200 Lesson">
+<meta property="og:description" content="Azure Container Apps is a serverless container platform built on Kubernetes and open-source components such as KEDA (Kubernetes Event-driven Autoscaling), ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/azure-container-apps-environments-ingress-external-vs-internal-secrets/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/azure-container-apps-environments-ingress-external-vs-internal-secrets/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 1: Develop containerized solutions on Azure</p>
+<h1>Azure Container Apps: environments, ingress (external vs internal), secrets and managed identity</h1>
+<article class="lbody">
+<p>Azure Container Apps is a serverless container platform built on Kubernetes and open-source components such as KEDA (Kubernetes Event-driven Autoscaling), Envoy and Dapr, without exposing the Kubernetes API. You deploy container images and describe scaling and networking; Azure runs the cluster. It fits APIs, background processors and microservices that need to scale, including down to zero.</p>
+<p>Every container app lives in a Container Apps environment, a secure boundary around a group of apps. Apps in the same environment share a virtual network and write logs to the same Log Analytics workspace, and they can call each other by name. You create one with <code>az containerapp env create</code>, optionally in your own VNet. Put apps that communicate or share a lifecycle in one environment; separate environments when you need isolation, for example between production and test.</p>
+<p>Ingress controls how HTTP or TCP traffic reaches your app. With ingress disabled, the app receives no inbound traffic, which suits queue workers. With external ingress, the app gets a public fully qualified domain name reachable from the internet (or from the VNet, for an environment configured with an internal load balancer). With internal ingress, the app is reachable only from inside the environment, for example from other container apps, which is the usual setting for back-end services. You also set the target port your container listens on, the transport (HTTP/1, HTTP/2 or TCP) and whether insecure HTTP is allowed.</p>
+<pre class="code" tabindex="0"><code>az containerapp create -n orders -g rg --environment prod-env \
+  --image myregistry.azurecr.io/orders-api:20260914.3 \
+  --ingress internal --target-port 8000 \
+  --secrets db-pass=$DB_PASS \
+  --env-vars DB_PASSWORD=secretref:db-pass \
+  --user-assigned &lt;identity-resource-id&gt;</code></pre>
+<p>Secrets are defined at the app level and are available to every revision. You then reference them from environment variables with <code>secretref:</code> (as above) or mount them as files in a volume. Changing a secret's value does not create a new revision or restart existing ones; you must restart or create a new revision for running replicas to pick it up. Rather than storing the value directly, a secret can be a Key Vault reference, where Container Apps reads it from Key Vault using a managed identity.</p>
+<p>Container Apps supports both system-assigned and user-assigned managed identities. The same identity can pull images from ACR (AcrPull), read Key Vault secrets and call data services such as Cosmos DB or Service Bus through <code>DefaultAzureCredential</code> in your Python code, so the app has no connection strings at all. Remember that inbound ingress and outbound identity are separate concerns: ingress decides who can reach the app, identity decides what the app can reach.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Container Apps environment</dt><dd>A boundary that groups container apps sharing a virtual network and Log Analytics workspace.</dd><dt>External ingress</dt><dd>Ingress that exposes the app outside the environment, typically with a public endpoint.</dd><dt>Internal ingress</dt><dd>Ingress that makes the app reachable only from within its environment.</dd><dt>secretref</dt><dd>The prefix used in a container app environment variable to take its value from an app-level secret.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A shop runs a public web front end and a private orders API. Both are container apps in one environment: the front end has external ingress on port 8000, and the orders API has internal ingress, so only the front end can call it by name. Each app has a user-assigned identity with AcrPull and Key Vault Secrets User, and database passwords are Key Vault references surfaced through secretref environment variables.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Back-end services that only other apps in the environment should call use internal ingress; queue-only workers need no ingress at all. Also remember that updating a secret does not by itself restart replicas.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What do apps in the same Container Apps environment share?</summary><p>A virtual network boundary and a Log Analytics workspace, and they can reach each other directly.</p></details>
+<details class="sq"><summary>How does a container read an app-level secret as an environment variable?</summary><p>Set the variable's value to secretref:&lt;secret-name&gt;, which injects the secret at runtime.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../app-service-custom-containers-on-linux-websites-port-continuous-deploy/">← App Service custom containers on Linux: WEBSITES_PORT, conti</a><a href="../container-apps-revisions-single-vs-multiple-revision-mode-traffic-spli/">Container Apps revisions: single vs multiple revision mode,  →</a></nav>
+</main>
+</body>
+</html>

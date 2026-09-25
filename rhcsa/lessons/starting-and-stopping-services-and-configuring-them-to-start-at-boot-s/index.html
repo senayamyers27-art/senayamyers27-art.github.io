@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Starting and stopping services and configuring them to… · RHCSA Lesson</title>
+<meta name="description" content="systemd is RHEL's init system and service manager. It starts services, called units, and tracks their state.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Starting and stopping services and configuring them to… · RHCSA Lesson">
+<meta property="og:description" content="systemd is RHEL's init system and service manager. It starts services, called units, and tracks their state.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/starting-and-stopping-services-and-configuring-them-to-start-at-boot-s/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/starting-and-stopping-services-and-configuring-them-to-start-at-boot-s/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 7: Deploy, configure and maintain systems</p>
+<h1>Starting and stopping services and configuring them to start at boot (systemctl enable --now, disable, mask)</h1>
+<article class="lbody">
+<p>systemd is RHEL's init system and service manager. It starts services, called units, and tracks their state. Two questions are separate and the exam tests both: is the service running right now (active), and will it start at boot (enabled)? A service can be running but not enabled, which means it disappears after the reboot that graders perform.</p>
+<p><code>systemctl start</code>, <code>stop</code> and <code>restart</code> change the current state. <code>reload</code> asks a running service to reread its configuration without stopping, if it supports that. <code>systemctl status sshd</code> shows whether it is active, whether it is enabled, its main process and its latest log lines. Quick checks: <code>systemctl is-active sshd</code> and <code>systemctl is-enabled sshd</code>.</p>
+<p><code>systemctl enable httpd</code> creates symlinks in the <code>.wants</code> directory of the target named in the unit's <code>[Install]</code> section, usually <code>multi-user.target</code>, so it starts at boot. <code>disable</code> removes those links. Neither changes the current state, which is why <code>enable --now</code> exists: it enables and starts in one command. Likewise <code>disable --now</code> disables and stops.</p>
+<pre class="code" tabindex="0"><code>systemctl enable --now httpd     # start now and at every boot
+systemctl status httpd
+systemctl disable --now cups     # stop now and at boot
+systemctl mask cups              # block it entirely
+systemctl unmask cups
+systemctl list-units --type=service --state=running
+systemctl list-unit-files --type=service</code></pre>
+<p>Masking is stronger than disabling. A disabled service can still be started manually or pulled in as a dependency of another unit. <code>mask</code> links the unit to <code>/dev/null</code>, so nothing can start it until you <code>unmask</code> it. Use it to keep conflicting services off, for example when two services would compete for the same port.</p>
+<p>If you edit a unit file or create a new one, run <code>systemctl daemon-reload</code> so systemd reads it. If a service fails to start, <code>systemctl status</code> and <code>journalctl -u name</code> usually show the reason, such as a configuration error, a port already in use or an SELinux denial. Some services, such as those started by a socket or timer, are enabled through the <code>.socket</code> or <code>.timer</code> unit instead of the service.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Unit</dt><dd>An object managed by systemd, such as a .service, .socket, .timer, .mount or .target.</dd><dt>enable --now</dt><dd>Configures a unit to start at boot and starts it immediately in one command.</dd><dt>mask</dt><dd>Links a unit to /dev/null so it cannot be started manually or as a dependency until unmasked.</dd><dt>daemon-reload</dt><dd>Makes systemd reread unit files after they are created or changed.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>After installing httpd you run systemctl start httpd and the web page works. That is not enough for the exam: after reboot httpd is stopped. Running systemctl enable --now httpd, then checking that is-enabled prints enabled and is-active prints active, makes the result survive the reboot.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Enabled and active are independent. Exam answers that only start a service, or only enable it, are both incomplete; enable --now covers both.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What is the difference between disable and mask?</summary><p>disable removes boot-time links but the unit can still be started manually or by dependencies; mask links it to /dev/null so it cannot start at all.</p></details>
+<details class="sq"><summary>You edited /etc/systemd/system/app.service. What must you run before restarting it?</summary><p>systemctl daemon-reload, so systemd rereads the unit file.</p></details>
+<details class="sq"><summary>Which single command stops a service and prevents it starting at boot?</summary><p>systemctl disable --now name.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../scheduling-tasks-with-at-cron-crontab-e-etc-cron-d-and-systemd-timer-u/">← Scheduling tasks with at, cron (crontab -e, /etc/cron.d) and</a><a href="../setting-the-default-boot-target-systemctl-get-default-set-default/">Setting the default boot target (systemctl get-default, set- →</a></nav>
+</main>
+</body>
+</html>

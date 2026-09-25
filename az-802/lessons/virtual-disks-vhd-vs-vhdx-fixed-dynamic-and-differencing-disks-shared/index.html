@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Virtual disks: VHD vs VHDX, fixed, dynamic and… · AZ-802 Lesson</title>
+<meta name="description" content="A Hyper-V virtual hard disk is a file on the host that the VM sees as a physical disk. There are two formats.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Virtual disks: VHD vs VHDX, fixed, dynamic and… · AZ-802 Lesson">
+<meta property="og:description" content="A Hyper-V virtual hard disk is a file on the host that the VM sees as a physical disk. There are two formats.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/virtual-disks-vhd-vs-vhdx-fixed-dynamic-and-differencing-disks-shared/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/virtual-disks-vhd-vs-vhdx-fixed-dynamic-and-differencing-disks-shared/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 3: Manage virtual machines</p>
+<h1>Virtual disks: VHD vs VHDX, fixed, dynamic and differencing disks; shared VHDX / VHD Set</h1>
+<article class="lbody">
+<p>A Hyper-V virtual hard disk is a file on the host that the VM sees as a physical disk. There are two formats. VHD is the original format, limited to about 2 TB (2,040 GB) and 512-byte sectors; it survives mainly for compatibility with older systems and some tools. VHDX, introduced with Windows Server 2012, supports disks up to 64 TB, 4 KB logical sectors that match modern physical disks, an internal metadata log that protects against corruption after a power failure, and TRIM/UNMAP so freed space can be returned to the storage. Generation 2 VMs boot only from VHDX. Use VHDX unless you have a specific reason not to.</p>
+<p>Each disk also has a type. A fixed-size disk allocates all its space up front: a 100 GB fixed disk is a 100 GB file immediately. It gives predictable performance and cannot run the host out of space later, which is why it is often preferred for production databases. A dynamically expanding disk starts small and grows as data is written, up to its maximum size. It saves space, and with VHDX its performance is close to fixed, but you must monitor the host volume because overcommitted dynamic disks can fill it and pause VMs.</p>
+<p>A differencing disk is a child disk that records only the changes relative to a read-only parent disk. Many VMs can share one parent (for example a sysprepped base image), each with its own small child. Rules: never modify the parent, or every child breaks; keep parent and child reachable; and understand that a long chain slows I/O. You can merge a child into its parent with <code>Merge-VHD</code> when you no longer need the separation. Checkpoints use the same mechanism with AVHDX files.</p>
+<p>Useful cmdlets: <code>New-VHD -Path D:\VMs\data.vhdx -SizeBytes 200GB -Dynamic</code> (or <code>-Fixed</code>, or <code>-ParentPath</code> for differencing), <code>Convert-VHD</code> to change format or type (the VM must be off for that disk), <code>Resize-VHD</code> to grow or shrink (VHDX attached to a SCSI controller can be resized while the VM runs), <code>Optimize-VHD</code> to compact a dynamic disk, and <code>Mount-VHD</code> to attach a disk to the host for offline servicing.</p>
+<p>Guest clustering, where two or more VMs form a failover cluster, needs a disk that all nodes can use at once. Shared VHDX, introduced in Windows Server 2012 R2, allowed a VHDX to be attached to several VMs. It had limits: no online resize, no host-level backup and no Hyper-V Replica. Windows Server 2016 introduced the VHD Set (a <code>.vhds</code> file plus a backing <code>.avhdx</code> file) as its replacement. VHD Sets support online resizing, host-based backup and Hyper-V Replica, and they are the choice for new guest clusters. Store them on Cluster Shared Volumes or a Scale-Out File Server SMB share, attach them to each VM's SCSI controller, and enable persistent reservations. You can convert an existing shared VHDX to a VHD Set with <code>Convert-VHD</code> while the VMs are off.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>VHDX</dt><dd>Hyper-V disk format supporting up to 64 TB, 4 KB sectors, corruption-resistant metadata and TRIM.</dd><dt>Fixed-size disk</dt><dd>A virtual disk that allocates its full size at creation for predictable performance.</dd><dt>Dynamically expanding disk</dt><dd>A virtual disk that grows as data is written, up to its configured maximum.</dd><dt>Differencing disk</dt><dd>A child disk storing only changes relative to a read-only parent.</dd><dt>VHD Set</dt><dd>A .vhds shared disk format for guest clusters supporting online resize, host backup and Hyper-V Replica.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A training lab needs 20 identical Windows Server VMs on limited storage. The admin generalizes one VM with Sysprep, marks its VHDX read-only as a parent and creates 20 small differencing disks from it, saving hundreds of gigabytes. For a separate two-node guest SQL cluster, he uses a VHD Set on a CSV.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Guest cluster shared storage that must support online resize, host backup or replica is a VHD Set, not shared VHDX. Disks over 2 TB or for generation 2 boot must be VHDX.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What is the maximum size of a VHDX disk?</summary><p>64 TB (VHD is limited to about 2 TB).</p></details>
+<details class="sq"><summary>What happens to differencing children if their parent disk is modified?</summary><p>They become invalid, because each child records changes relative to the parent's exact original state.</p></details>
+<details class="sq"><summary>Which shared disk option should you use for a new guest cluster on Windows Server 2016 or later?</summary><p>A VHD Set (.vhds).</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../nested-virtualization-requirements-powershell-direct/">← Nested virtualization requirements; PowerShell Direct</a><a href="../checkpoints-production-vs-standard-why-checkpoints-are-not-backups/">Checkpoints: production vs standard; why checkpoints are not →</a></nav>
+</main>
+</body>
+</html>

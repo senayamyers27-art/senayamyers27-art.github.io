@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Calling AWS services with the SDKs and CLI: credential… · Developer Associate Lesson</title>
+<meta name="description" content="Every call your code makes to AWS, whether through an AWS SDK (for Python it is Boto3, for JavaScript it is the AWS SDK for JavaScript v3, and so on) or th">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Calling AWS services with the SDKs and CLI: credential… · Developer Associate Lesson">
+<meta property="og:description" content="Every call your code makes to AWS, whether through an AWS SDK (for Python it is Boto3, for JavaScript it is the AWS SDK for JavaScript v3, and so on) or th">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/calling-aws-services-with-the-sdks-and-cli-credential-provider-chain-p/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/calling-aws-services-with-the-sdks-and-cli-credential-provider-chain-p/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 1: Development with AWS Services</p>
+<h1>Calling AWS services with the SDKs and CLI: credential provider chain, pagination, waiters, error handling</h1>
+<article class="lbody">
+<p>Every call your code makes to AWS, whether through an AWS SDK (for Python it is Boto3, for JavaScript it is the AWS SDK for JavaScript v3, and so on) or the AWS Command Line Interface (CLI), is an HTTPS request to a service API, signed with Signature Version 4 (SigV4) using credentials. Knowing where those credentials come from, and how to handle multi-page results, long operations and errors, is core developer knowledge.</p>
+<p>The SDKs and CLI look for credentials in a fixed order called the default credential provider chain. The exact order varies slightly by SDK, but broadly it is: credentials passed explicitly in code, environment variables (<code>AWS_ACCESS_KEY_ID</code>, <code>AWS_SECRET_ACCESS_KEY</code>, <code>AWS_SESSION_TOKEN</code>), the shared credentials and config files (<code>~/.aws/credentials</code> and <code>~/.aws/config</code>, including named profiles, IAM Identity Center (SSO) profiles and assume-role profiles), and finally the credentials of the compute environment: a Lambda execution role, an Amazon ECS task role, or an Amazon EC2 instance profile through the instance metadata service. The first source that provides credentials wins. That is why the right way to give code on AWS permissions is to attach a role and not put any keys in code or config; the chain finds the role credentials automatically and refreshes them before they expire. A classic troubleshooting case: an EC2 instance uses unexpected permissions because someone left access keys in environment variables or a credentials file, which take precedence over the instance profile.</p>
+<p>List and describe APIs return results in pages. A response includes a token such as <code>NextToken</code>, <code>Marker</code>, or for DynamoDB <code>LastEvaluatedKey</code>, and you pass it back to get the next page until no token is returned. SDKs provide paginators that loop for you. The CLI paginates automatically by default; <code>--max-items</code> and <code>--starting-token</code> control it, and <code>--page-size</code> changes how many items each underlying call fetches, which can help avoid timeouts without changing the total output.</p>
+<pre class="code" tabindex="0"><code>import boto3
+s3 = boto3.client('s3')
+for page in s3.get_paginator('list_objects_v2').paginate(Bucket='my-bucket'):
+    for obj in page.get('Contents', []):
+        print(obj['Key'])</code></pre>
+<p>Waiters poll a describe call until a resource reaches a desired state, such as <code>bucket_exists</code>, an EC2 instance <code>instance_running</code> or a DynamoDB <code>table_exists</code>, then return, or raise an error after a maximum number of attempts. In the CLI they look like <code>aws dynamodb wait table-exists --table-name Orders</code>. Use them instead of writing your own sleep loops.</p>
+<p>For error handling, SDKs raise service exceptions carrying an error code and HTTP status. Catch specific codes: <code>ConditionalCheckFailedException</code>, <code>ResourceNotFoundException</code>, <code>AccessDeniedException</code>, <code>ThrottlingException</code>. The SDKs automatically retry throttling and transient errors with exponential backoff; you can set the retry mode (<code>standard</code> or <code>adaptive</code> in many SDKs) and maximum attempts in code or with <code>AWS_RETRY_MODE</code> and <code>AWS_MAX_ATTEMPTS</code>. Log the request ID from failed calls, since AWS Support and CloudTrail use it to trace a request. For debugging from the CLI, <code>--debug</code> shows the full request and response, and <code>aws sts get-caller-identity</code> shows which identity your credentials actually resolve to.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Default credential provider chain</dt><dd>The ordered list of places an SDK or the CLI looks for credentials, ending with the role credentials of the compute environment.</dd><dt>Paginator</dt><dd>An SDK helper that automatically follows continuation tokens to return every page of a list API's results.</dd><dt>Waiter</dt><dd>An SDK or CLI helper that polls until a resource reaches a specified state or a maximum number of attempts is reached.</dd><dt>SigV4</dt><dd>Signature Version 4, the process that signs AWS API requests with credentials so the service can authenticate them.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A script run by a CI job lists every object in a bucket with 50,000 objects but only processes the first 1,000. The developer switches from a single list_objects_v2 call to the list_objects_v2 paginator, and the script now follows ContinuationToken through every page.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> If code on EC2, ECS or Lambda uses the wrong permissions, suspect hardcoded or environment-variable credentials winning over the role in the credential chain. Run aws sts get-caller-identity to confirm who you are.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why should Lambda code not contain access keys?</summary><p>The execution role's temporary credentials are provided automatically through the credential chain and rotated; embedded keys are long-lived, can leak and override the intended role.</p></details>
+<details class="sq"><summary>A DynamoDB Scan returns a LastEvaluatedKey. What does that mean?</summary><p>The results are paginated; pass that key as ExclusiveStartKey in the next request to continue until no LastEvaluatedKey is returned.</p></details>
+<details class="sq"><summary>What is a waiter for?</summary><p>It polls a resource's status until it reaches a desired state, such as a table becoming ACTIVE, replacing hand-written sleep-and-check loops.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../aws-step-functions-standard-vs-express-workflows-retry-catch-task-toke/">← AWS Step Functions: Standard vs Express workflows, retry/cat</a><a href="../lambda-configuration-memory-timeout-15-minute-max-ephemeral-tmp-storag/">Lambda configuration: memory, timeout (15-minute max), ephem →</a></nav>
+</main>
+</body>
+</html>

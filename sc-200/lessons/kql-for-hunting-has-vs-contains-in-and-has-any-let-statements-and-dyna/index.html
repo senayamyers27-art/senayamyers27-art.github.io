@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KQL for hunting: has vs contains, in and has_any, let… · SC-200 Lesson</title>
+<meta name="description" content="Hunting queries need more than the basics. This lesson covers the operators that make searches fast, reusable and able to combine data.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="KQL for hunting: has vs contains, in and has_any, let… · SC-200 Lesson">
+<meta property="og:description" content="Hunting queries need more than the basics. This lesson covers the operators that make searches fast, reusable and able to combine data.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/sc-200/lessons/kql-for-hunting-has-vs-contains-in-and-has-any-let-statements-and-dyna/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/sc-200/lessons/kql-for-hunting-has-vs-contains-in-and-has-any-let-statements-and-dyna/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">SC-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Security Operations Analyst Associate SC-200 · Domain 3: Perform threat hunting</p>
+<h1>KQL for hunting: has vs contains, in and has_any, let statements and dynamic lists, join kinds, union, parse_json and mv-expand, make-series with anomaly functions</h1>
+<article class="lbody">
+<p>Hunting queries need more than the basics. This lesson covers the operators that make searches fast, reusable and able to combine data.</p>
+<p>String matching first. <code>has</code> looks for a whole term using the index that Kusto builds from words in text, so it is fast. <code>contains</code> looks for any substring and has to scan the text, so it is slower. <code>ProcessCommandLine has &quot;mimikatz&quot;</code> matches the word mimikatz; <code>contains &quot;katz&quot;</code> would match inside a longer word. Both are case-insensitive; <code>has_cs</code> and <code>contains_cs</code> are the case-sensitive forms. Use <code>has</code> whenever you are searching for a complete word, and <code>startswith</code> or <code>endswith</code> when position matters.</p>
+<p>For lists, <code>in</code> checks exact equality against a set of values, for example <code>FileName in (&quot;psexec.exe&quot;, &quot;wmic.exe&quot;)</code>, and <code>in~</code> does so case-insensitively. <code>has_any</code> checks whether a text column contains any of a list of terms, which suits command lines. <code>let</code> statements name a value, list or even a whole query so you can reuse it. A dynamic list looks like <code>let SuspiciousTools = dynamic([&quot;procdump&quot;, &quot;rclone&quot;]);</code> and is then used in <code>where ProcessCommandLine has_any (SuspiciousTools)</code>. Let statements end with a semicolon and make queries easier to read and maintain.</p>
+<p><code>join</code> combines two tables on matching columns. The default kind is innerunique, which removes duplicate left-side keys before matching and can surprise you. <code>inner</code> keeps all matching combinations, <code>leftouter</code> keeps every left row even without a match, <code>leftanti</code> keeps left rows with no match (great for 'accounts that logged on but never passed MFA'), and <code>leftsemi</code> keeps left rows that do have a match without adding right columns. Put the smaller table on the left for performance, and filter both sides by time first. <code>union</code> is different: it stacks rows from several tables, for example <code>union DeviceProcessEvents, DeviceNetworkEvents</code>, which is useful when the same indicator might appear in different sources.</p>
+<p>Many columns hold JSON, such as <code>AdditionalFields</code> or <code>RawEventData</code>. <code>parse_json()</code> (also called <code>todynamic()</code>) turns a JSON string into a dynamic object whose properties you access with dot or bracket notation. When a property is an array, <code>mv-expand</code> creates one row per array element, so you can filter or summarize individual items, such as each permission granted to an app.</p>
+<pre class="code" tabindex="0"><code>let lookback = 14d;
+SigninLogs
+| where TimeGenerated &gt; ago(lookback)
+| make-series Signins = count() default = 0 on TimeGenerated from ago(lookback) to now() step 1h by UserPrincipalName
+| extend (Anomalies, Score, Baseline) = series_decompose_anomalies(Signins)</code></pre>
+<p><code>make-series</code> builds a time series per group, filling empty buckets with a default so the series is regular. Series functions then analyze it: <code>series_decompose_anomalies()</code> flags points that deviate from the expected pattern, taking seasonality and trend into account, and returns anomaly flags, scores and a baseline. You typically <code>mv-expand</code> the result to see which hours were anomalous. This is how you find a user whose sign-in volume suddenly spikes.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>has vs contains</dt><dd>has matches whole indexed terms quickly; contains matches any substring and is slower.</dd><dt>let</dt><dd>A statement that names a value, list or query for reuse later in the query.</dd><dt>leftanti join</dt><dd>A join that returns left-side rows with no match on the right.</dd><dt>make-series</dt><dd>An operator that builds regular time series for analysis with functions such as series_decompose_anomalies().</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A hunter defines a let list of remote-access tool names, uses has_any against ProcessCommandLine in DeviceProcessEvents, and leftanti joins the results against a watchlist of approved admin hosts. Twelve devices remain, and two of them also show outbound connections to a rare domain when she unions in DeviceNetworkEvents.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> The exam likes asking which join kind finds records without a match (leftanti) and why has is preferred over contains (performance on whole terms). Remember the default join kind is innerunique.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which operator turns each element of an array column into its own row?</summary><p>mv-expand.</p></details>
+<details class="sq"><summary>What is the difference between union and join?</summary><p>union stacks rows from several tables; join combines columns from two tables where key values match.</p></details>
+<details class="sq"><summary>Which function flags unusual points in a time series built with make-series?</summary><p>series_decompose_anomalies().</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study SC-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../sc-200/">Open the SC-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../kql-basics-where-project-extend-summarize-count-bin-ago-order-by-take/">← KQL basics: where, project, extend, summarize, count, bin, a</a><a href="../advanced-hunting-schema-deviceprocessevents-devicenetworkevents-device/">Advanced hunting schema: DeviceProcessEvents, DeviceNetworkE →</a></nav>
+</main>
+</body>
+</html>

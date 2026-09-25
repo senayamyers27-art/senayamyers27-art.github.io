@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Booting, rebooting and shutting down normally (systemctl… · RHCSA Lesson</title>
+<meta name="description" content="On a RHEL system, systemd is the first process the kernel starts (process ID 1). It brings up services in the right order during boot and stops them cleanl">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Booting, rebooting and shutting down normally (systemctl… · RHCSA Lesson">
+<meta property="og:description" content="On a RHEL system, systemd is the first process the kernel starts (process ID 1). It brings up services in the right order during boot and stops them cleanl">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/booting-rebooting-and-shutting-down-normally-systemctl-reboot-poweroff/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/booting-rebooting-and-shutting-down-normally-systemctl-reboot-poweroff/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 4: Operate running systems</p>
+<h1>Booting, rebooting and shutting down normally (systemctl reboot, poweroff)</h1>
+<article class="lbody">
+<p>On a RHEL system, systemd is the first process the kernel starts (process ID 1). It brings up services in the right order during boot and stops them cleanly at shutdown. Shutting down or rebooting through systemd, rather than pulling the power, gives services time to save data, unmount file systems and flush disk caches. On the exam you will reboot often, because every configuration must survive a reboot, so you should do it cleanly and know what happens.</p>
+<p>The main commands are <code>systemctl reboot</code> to restart the machine, <code>systemctl poweroff</code> to shut down and switch off the power, and <code>systemctl halt</code> to stop the system without powering it off. The traditional commands <code>reboot</code>, <code>poweroff</code> and <code>halt</code> still exist and call systemd for you. <code>shutdown</code> adds scheduling: <code>shutdown -r now</code> reboots immediately, <code>shutdown -h +10</code> powers off in ten minutes and warns logged-in users, and <code>shutdown -c</code> cancels a scheduled shutdown.</p>
+<pre class="code" tabindex="0"><code>systemctl reboot
+systemctl poweroff
+shutdown -r +5 &quot;Rebooting for kernel update&quot;
+shutdown -c
+systemctl get-default        # target used at boot
+systemctl set-default multi-user.target</code></pre>
+<p>Behind these commands are systemd targets, groups of units that describe a system state. <code>poweroff.target</code> and <code>reboot.target</code> are what the commands activate. At boot, systemd starts the default target, normally <code>multi-user.target</code> for servers (text mode with networking and services) or <code>graphical.target</code> for systems with a desktop. <code>systemctl get-default</code> shows it and <code>systemctl set-default</code> changes it persistently; <code>systemctl isolate multi-user.target</code> switches the running system to another target immediately without rebooting.</p>
+<p>The boot sequence is worth knowing in outline because later topics build on it. Firmware (BIOS or UEFI) runs first and starts the boot loader, GRUB 2. GRUB loads the kernel and the initramfs, a small initial file system containing the drivers needed to find the real root file system. Code in the initramfs mounts the root file system and hands control to systemd, which starts the default target.</p>
+<p>After a reboot, confirm the system came up as expected: log in, check <code>systemctl --failed</code> for units that did not start, and use <code>journalctl -b</code> to see messages from the current boot or <code>journalctl -b -1</code> for the previous boot, if the journal is persistent. On the exam, do a final reboot before you finish and check that your mounts, services and settings are all still in place, because that is how the grader will see the machine.</p>
+<p>Avoid forcing a reset unless the system is truly hung. An unclean shutdown can leave file systems needing repair and loses anything that was not yet written to disk.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>systemd</dt><dd>The init system and service manager, process 1 on RHEL, which starts and stops everything else.</dd><dt>systemctl reboot / poweroff</dt><dd>Cleanly restart the system or shut it down and power it off.</dd><dt>Target</dt><dd>A systemd unit that groups other units to describe a system state, e.g. multi-user.target.</dd><dt>Default target</dt><dd>The target systemd starts at boot; shown by systemctl get-default and changed by set-default.</dd><dt>initramfs</dt><dd>Initial RAM file system loaded with the kernel, containing what is needed to mount the real root file system.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>After finishing all tasks you run <code>systemctl reboot</code>, log back in, and check <code>findmnt /data</code>, <code>systemctl is-active httpd</code> and <code>systemctl --failed</code>. You discover a typo in /etc/fstab left a mount missing, fix it, and reboot again before time runs out.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> systemctl set-default changes what happens at the NEXT boot; systemctl isolate changes the target NOW. The exam grades the system after a reboot, so test by rebooting.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which command shows the target the system boots into by default?</summary><p>systemctl get-default.</p></details>
+<details class="sq"><summary>How do you schedule a reboot in 10 minutes and then cancel it?</summary><p>shutdown -r +10, then shutdown -c.</p></details>
+<details class="sq"><summary>What is the role of the initramfs in booting?</summary><p>It provides the drivers and tools needed to find and mount the real root file system before handing over to systemd.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../case-statements-for-simple-argument-handling/">← case statements for simple argument handling</a><a href="../booting-into-different-targets-manually-from-the-grub-menu-systemd-uni/">Booting into different targets manually from the GRUB menu ( →</a></nav>
+</main>
+</body>
+</html>

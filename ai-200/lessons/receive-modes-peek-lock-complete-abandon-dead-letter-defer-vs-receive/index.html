@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Receive modes: peek-lock (complete, abandon, dead-letter… · AI-200 Lesson</title>
+<meta name="description" content="When a receiver takes a message from a Service Bus queue or subscription, the broker has to decide when the message is really gone. Service Bus gives you t">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Receive modes: peek-lock (complete, abandon, dead-letter… · AI-200 Lesson">
+<meta property="og:description" content="When a receiver takes a message from a Service Bus queue or subscription, the broker has to decide when the message is really gone. Service Bus gives you t">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/receive-modes-peek-lock-complete-abandon-dead-letter-defer-vs-receive/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/receive-modes-peek-lock-complete-abandon-dead-letter-defer-vs-receive/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 3: Connect to and consume Azure services</p>
+<h1>Receive modes: peek-lock (complete, abandon, dead-letter, defer) vs receive-and-delete; lock duration and lock renewal</h1>
+<article class="lbody">
+<p>When a receiver takes a message from a Service Bus queue or subscription, the broker has to decide when the message is really gone. Service Bus gives you two receive modes, and choosing between them decides whether messages can be lost if your code crashes.</p>
+<p>In receive-and-delete mode, the broker marks the message as consumed the moment it hands it over. It is simple and fast, and it needs only one round trip. But if the receiver crashes after receiving and before finishing the work, the message is lost. It gives at-most-once processing, which suits only data where losing an occasional message is acceptable, such as frequent telemetry samples.</p>
+<p>Peek-lock mode (the default) is two-stage. Receiving locks the message so other receivers cannot see it, but it stays in the queue. Your code processes it and then settles it with one of four actions. Complete removes the message: the work succeeded. Abandon releases the lock so the message becomes available again immediately, and its delivery count increases. Dead-letter moves the message to the dead-letter subqueue with a reason, for messages that can never succeed, such as malformed data. Defer sets the message aside in the queue; it can only be retrieved later by its sequence number, which is useful when a message arrives before another it depends on.</p>
+<pre class="code" tabindex="0"><code>from azure.servicebus import ServiceBusClient, AutoLockRenewer
+
+renewer = AutoLockRenewer(max_lock_renewal_duration=600)
+with client.get_queue_receiver(&quot;orders&quot;, auto_lock_renewer=renewer) as receiver:
+    for msg in receiver.receive_messages(max_message_count=5, max_wait_time=5):
+        try:
+            order = parse(msg)
+        except ValueError as e:
+            receiver.dead_letter_message(msg, reason=&quot;BadFormat&quot;, error_description=str(e))
+            continue
+        try:
+            process(order)
+            receiver.complete_message(msg)
+        except TransientError:
+            receiver.abandon_message(msg)</code></pre>
+<p>If your code does not settle a message before the lock expires, the lock lapses, the message becomes visible again and another receiver may process it, and settling it afterwards fails with a lock lost error. This is why peek-lock gives at-least-once delivery, and why handlers should be idempotent. The lock duration is a property of the queue or subscription; the default is one minute and the maximum is five minutes.</p>
+<p>For work that takes longer than the lock duration, renew the lock. <code>receiver.renew_message_lock(msg)</code> extends it once; <code>AutoLockRenewer</code>, as above, keeps renewing in the background up to a maximum duration you choose. The Azure Functions Service Bus trigger renews locks automatically and completes messages when the function succeeds or abandons them when it throws (behavior you can change in host.json).</p>
+<p>Each time a message is delivered in peek-lock mode its delivery count increases. When it passes the queue's max delivery count, Service Bus dead-letters it automatically, which is covered in the next lesson.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Peek-lock</dt><dd>The default receive mode that locks a message until the receiver completes, abandons, defers or dead-letters it.</dd><dt>Receive-and-delete</dt><dd>A receive mode that removes the message on delivery, giving at-most-once processing.</dd><dt>Lock duration</dt><dd>How long a received message stays locked to one receiver before becoming visible again; default one minute, maximum five.</dd><dt>Defer</dt><dd>Settling a message so it stays in the queue but can only be received again by its sequence number.</dd><dt>AutoLockRenewer</dt><dd>A Python SDK helper that renews message locks in the background during long processing.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A PDF-embedding worker using peek-lock took about three minutes per document, and some documents were processed twice with lock lost errors on completion. The lock duration was one minute. The team added AutoLockRenewer with a ten-minute maximum and made the upsert idempotent; duplicates stopped and completions succeeded.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Messages must not be lost means peek-lock; lock lost errors on long jobs mean renew the lock (AutoLockRenewer) or raise the lock duration up to five minutes; abandon increments the delivery count.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which receive mode risks losing messages if the consumer crashes, and why?</summary><p>Receive-and-delete, because the message is removed as soon as it is delivered, before processing finishes.</p></details>
+<details class="sq"><summary>What is the difference between abandon and defer?</summary><p>Abandon makes the message available again for normal receiving; defer keeps it aside so it can only be fetched by sequence number.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../service-bus-queues-vs-topics-and-subscriptions-basic-tier-has-no-topic/">← Service Bus queues vs topics and subscriptions; Basic tier h</a><a href="../dead-letter-queues-max-delivery-count-ttl-expiry-reading-the-deadlette/">Dead-letter queues: max delivery count, TTL expiry, reading  →</a></nav>
+</main>
+</body>
+</html>

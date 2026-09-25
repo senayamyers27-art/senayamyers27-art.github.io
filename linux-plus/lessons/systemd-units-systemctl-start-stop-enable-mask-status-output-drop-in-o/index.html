@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>systemd units: systemctl start/stop/enable/mask, status… · Linux+ Lesson</title>
+<meta name="description" content="systemd manages almost everything that runs on a modern Linux system through units. A unit is a configuration object of a certain type, named by suffix: .s">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="systemd units: systemctl start/stop/enable/mask, status… · Linux+ Lesson">
+<meta property="og:description" content="systemd manages almost everything that runs on a modern Linux system through units. A unit is a configuration object of a certain type, named by suffix: .s">
+<link rel="canonical" href="https://senayamyers27-art.github.io/linux-plus/lessons/systemd-units-systemctl-start-stop-enable-mask-status-output-drop-in-o/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/linux-plus/lessons/systemd-units-systemctl-start-stop-enable-mask-status-output-drop-in-o/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Linux+</a> / <a href="../">Lessons</a></p>
+<p class="note">CompTIA Linux+ XK0-006 · Domain 2: Services and user management</p>
+<h1>systemd units: systemctl start/stop/enable/mask, status output, drop-in overrides with systemctl edit</h1>
+<article class="lbody">
+<p>systemd manages almost everything that runs on a modern Linux system through units. A unit is a configuration object of a certain type, named by suffix: <code>.service</code> for daemons, <code>.socket</code> for socket activation, <code>.timer</code> for scheduled jobs, <code>.mount</code> for mounts, <code>.target</code> for groups of units, and more. <code>systemctl</code> is the tool you use to control them.</p>
+<p>The basic lifecycle commands act on the running system: <code>systemctl start httpd</code>, <code>stop</code>, <code>restart</code> (stop then start), and <code>reload</code> (ask the service to reread its config without stopping, if it supports that). Boot-time behavior is separate: <code>systemctl enable httpd</code> creates symlinks so the unit starts at boot in its target, and <code>disable</code> removes them. The two are independent, which is why <code>systemctl enable --now httpd</code> exists to do both at once. <code>systemctl is-active</code> and <code>is-enabled</code> answer each question in scripts.</p>
+<p><code>mask</code> goes further than disable. <code>systemctl mask httpd</code> links the unit file to <code>/dev/null</code>, so it cannot be started at all, whether manually or as a dependency of another unit, until you <code>unmask</code> it. Use it when a service must never run, for example to stop a conflicting service being pulled in.</p>
+<p><code>systemctl status httpd</code> is your first diagnostic. It shows the Loaded line (unit file path, and whether it is enabled or disabled), the Active line (active (running), inactive (dead), failed, with a timestamp), the main PID, the cgroup (control group) of processes, and the last few journal lines. A failed unit also shows the exit code or signal, such as <code>status=203/EXEC</code> meaning the executable could not be run. <code>systemctl --failed</code> lists all failed units, and <code>systemctl list-units --type=service</code> lists active services.</p>
+<p>Unit files live in three places, in order of precedence: <code>/etc/systemd/system/</code> (administrator), <code>/run/systemd/system/</code> (runtime), and <code>/usr/lib/systemd/system/</code> or <code>/lib/systemd/system/</code> (installed by packages). Never edit package-supplied files directly, because updates overwrite them. Instead create a drop-in override with <code>systemctl edit httpd</code>, which opens an editor and saves your changes to <code>/etc/systemd/system/httpd.service.d/override.conf</code>. Only the settings you list are overridden. For example:</p>
+<pre class="code" tabindex="0"><code>[Service]
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536</code></pre>
+<p><code>systemctl edit --full httpd</code> copies the whole unit to /etc for complete replacement, and <code>systemctl cat httpd</code> shows the unit plus all drop-ins. One subtlety: list-type settings like <code>ExecStart=</code> must first be cleared with an empty <code>ExecStart=</code> line before a new value is set in a drop-in. After editing unit files by hand, run <code>systemctl daemon-reload</code> so systemd rereads them; <code>systemctl edit</code> does this for you. A typical service section contains <code>ExecStart=</code>, <code>User=</code>, <code>Restart=</code>, and an <code>[Install]</code> section with <code>WantedBy=multi-user.target</code>, which is what enable uses.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Unit</dt><dd>A systemd configuration object such as a .service, .socket, .timer, .mount or .target.</dd><dt>enable vs start</dt><dd>enable configures a unit to start at boot; start runs it now. Neither implies the other.</dd><dt>mask</dt><dd>Links a unit to /dev/null so it cannot be started manually or as a dependency.</dd><dt>Drop-in override</dt><dd>A .conf file in /etc/systemd/system/&lt;unit&gt;.d/ that overrides selected settings of a unit.</dd><dt>daemon-reload</dt><dd>Tells systemd to reread unit files after they change on disk.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An internal API service crashes occasionally and stays down. Instead of editing the vendor's unit in /usr/lib/systemd/system, you run systemctl edit api.service, add Restart=on-failure and RestartSec=5 under [Service], save, and restart the service. systemctl cat api.service now shows the override, and the next crash triggers an automatic restart.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Know the difference in strength: stop affects now, disable affects boot, and mask blocks the unit entirely until unmasked.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>A service runs now but is not running after reboot. Which command fixes that?</summary><p>systemctl enable &lt;service&gt; (or enable --now to also start it).</p></details>
+<details class="sq"><summary>Where does systemctl edit nginx save its changes?</summary><p>In /etc/systemd/system/nginx.service.d/override.conf.</p></details>
+<details class="sq"><summary>What must you run after manually editing a unit file in /etc/systemd/system?</summary><p>systemctl daemon-reload, then restart the unit if needed.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Linux+ for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../linux-plus/">Open the Linux+ study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../account-files-etc-passwd-etc-shadow-etc-group-etc-skel-etc-login-defs/">← Account files: /etc/passwd, /etc/shadow, /etc/group, /etc/sk</a><a href="../scheduling-cron-and-crontab-syntax-at-systemd-timers-oncalendar/">Scheduling: cron and crontab syntax, at, systemd timers (OnC →</a></nav>
+</main>
+</body>
+</html>

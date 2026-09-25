@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Managed identities: system-assigned vs user-assigned… · AI-200 Lesson</title>
+<meta name="description" content="Applications need credentials to call Azure services, and every stored secret is something that can leak, expire or be forgotten in a repository. A managed">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Managed identities: system-assigned vs user-assigned… · AI-200 Lesson">
+<meta property="og:description" content="Applications need credentials to call Azure services, and every stored secret is something that can leak, expire or be forgotten in a repository. A managed">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/managed-identities-system-assigned-vs-user-assigned-defaultazurecreden/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/managed-identities-system-assigned-vs-user-assigned-defaultazurecreden/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 4: Secure, monitor, and troubleshoot Azure solutions</p>
+<h1>Managed identities: system-assigned vs user-assigned; DefaultAzureCredential in azure-identity</h1>
+<article class="lbody">
+<p>Applications need credentials to call Azure services, and every stored secret is something that can leak, expire or be forgotten in a repository. A managed identity solves this: Azure creates an identity in Microsoft Entra ID for your resource and handles its credentials for you. Your code asks the local platform endpoint for a token and uses it to call any service that supports Microsoft Entra authentication, such as Key Vault, Storage, Service Bus, Cosmos DB, Azure SQL and PostgreSQL.</p>
+<p>A system-assigned identity is enabled on one resource, such as a web app, function app or container app, and shares its lifecycle. It is created with the resource and deleted when the resource is deleted, and it cannot be shared. It is the simplest choice when one resource needs its own permissions.</p>
+<p>A user-assigned identity is a standalone Azure resource that you create and then attach to one or more resources. It lives until you delete it. Choose it when several resources should share the same permissions (for example ten container apps that all need AcrPull), when you want to grant roles before the compute resource exists (to avoid the first-deployment chicken-and-egg problem), or when resources are frequently recreated and you do not want to redo role assignments. A resource can have both types and several user-assigned identities.</p>
+<p>Remember that an identity alone grants nothing. You must assign it roles, such as Key Vault Secrets User or Azure Service Bus Data Sender, on the right scope.</p>
+<p>In Python, the <code>azure-identity</code> package provides <code>DefaultAzureCredential</code>, a credential that tries a chain of methods in order until one works. It checks environment variables for a service principal, then workload identity (for Kubernetes), then managed identity, then developer tools such as the Azure CLI, Azure PowerShell and the Azure Developer CLI sign-ins. The same code therefore uses your <code>az login</code> account on your laptop and the managed identity in Azure, with no code changes.</p>
+<pre class="code" tabindex="0"><code>from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
+from azure.keyvault.secrets import SecretClient
+
+credential = DefaultAzureCredential()
+# for a user-assigned identity: set AZURE_CLIENT_ID in app settings, or
+# credential = ManagedIdentityCredential(client_id=&quot;&lt;client-id&gt;&quot;)
+secrets = SecretClient(vault_url=VAULT_URL, credential=credential)
+db_password = secrets.get_secret(&quot;db-password&quot;).value</code></pre>
+<p>When a resource has a user-assigned identity, the credential must know which identity to use. Set the <code>AZURE_CLIENT_ID</code> environment variable to the identity's client ID, or pass <code>managed_identity_client_id</code> to <code>DefaultAzureCredential</code>, or use <code>ManagedIdentityCredential(client_id=...)</code> directly. Forgetting this is a common reason for authentication failures when an app has more than one identity. In production, some teams use a specific credential such as <code>ManagedIdentityCredential</code> to avoid unexpected fallbacks and make failures clearer. Create the credential and SDK clients once and reuse them, since they cache tokens.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>System-assigned identity</dt><dd>A managed identity tied to one resource's lifecycle and deleted with it.</dd><dt>User-assigned identity</dt><dd>A standalone managed identity resource that can be attached to many resources and outlives them.</dd><dt>DefaultAzureCredential</dt><dd>An azure-identity credential that tries environment, workload identity, managed identity and developer sign-ins in order.</dd><dt>AZURE_CLIENT_ID</dt><dd>The environment variable that tells azure-identity which user-assigned managed identity to use.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A team runs twelve container apps that all read from the same Key Vault and pull from the same registry. Instead of enabling twelve system-assigned identities and making twenty-four role assignments, they create one user-assigned identity, grant it AcrPull and Key Vault Secrets User, attach it to each app and set AZURE_CLIENT_ID. Their Python code uses DefaultAzureCredential unchanged on laptops and in Azure.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Shared across resources or created before the resource means user-assigned; lifecycle tied to a single resource means system-assigned. With a user-assigned identity, set AZURE_CLIENT_ID so DefaultAzureCredential picks the right one.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What happens to a system-assigned identity when its web app is deleted?</summary><p>It is deleted too, because it shares the resource's lifecycle; its role assignments stop working and remain as orphaned entries until you remove them.</p></details>
+<details class="sq"><summary>Why does the same DefaultAzureCredential code work locally and in Azure?</summary><p>It tries several credential sources in order; locally it finds your developer sign-in, and in Azure it finds the managed identity.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../configuration-and-deployment-app-settings-local-settings-json-host-jso/">← Configuration and deployment: app settings, local.settings.j</a><a href="../azure-rbac-data-plane-roles-key-vault-secrets-user-service-bus-data-se/">Azure RBAC data-plane roles: Key Vault Secrets User, Service →</a></nav>
+</main>
+</body>
+</html>

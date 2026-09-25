@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ephemeral volumes: emptyDir (including medium: Memory)… · CKAD Lesson</title>
+<meta name="description" content="A container's own filesystem is thrown away whenever the container restarts. Volumes give containers storage that is declared at Pod level under spec.volum">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Ephemeral volumes: emptyDir (including medium: Memory)… · CKAD Lesson">
+<meta property="og:description" content="A container's own filesystem is thrown away whenever the container restarts. Volumes give containers storage that is declared at Pod level under spec.volum">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/ephemeral-volumes-emptydir-including-medium-memory-configmap-secret-pr/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/ephemeral-volumes-emptydir-including-medium-memory-configmap-secret-pr/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 1: Application Design and Build</p>
+<h1>Ephemeral volumes: emptyDir (including medium: Memory), configMap/secret/projected volumes</h1>
+<article class="lbody">
+<p>A container's own filesystem is thrown away whenever the container restarts. Volumes give containers storage that is declared at Pod level under <code>spec.volumes</code> and attached with <code>volumeMounts</code>. Ephemeral volumes live exactly as long as the Pod: they survive container restarts but are deleted when the Pod is removed.</p>
+<p><code>emptyDir</code> is the simplest. It starts empty when the Pod is assigned to a node and is shared by every container that mounts it, which is how init containers and sidecars pass files to the main container. By default it is stored on the node's disk. Setting <code>medium: Memory</code> backs it with tmpfs, a RAM-based filesystem: very fast and never written to disk, which suits scratch space or sensitive temporary files, but the data counts toward the container's memory usage and limit. Set <code>sizeLimit</code> to cap either kind; a Pod that exceeds it can be evicted.</p>
+<pre class="code" tabindex="0"><code>volumes:
+- name: cache
+  emptyDir:
+    medium: Memory
+    sizeLimit: 64Mi
+- name: settings
+  configMap:
+    name: app-config
+- name: creds
+  secret:
+    secretName: db-secret
+    defaultMode: 0400</code></pre>
+<p>A <code>configMap</code> volume presents each key of a ConfigMap as a file whose name is the key and whose content is the value. A <code>secret</code> volume does the same for a Secret, decoded from base64 and stored in tmpfs on the node. Note the field names differ: <code>configMap.name</code> but <code>secret.secretName</code>. You can choose particular keys and file names with <code>items</code>, and set file permissions with <code>defaultMode</code>. If you update the ConfigMap or Secret, the mounted files are refreshed after a short delay, unlike environment variables, which are read only at container start. Files mounted with <code>subPath</code> do not receive these updates.</p>
+<p>A <code>projected</code> volume merges several sources into one directory. Allowed sources include <code>configMap</code>, <code>secret</code>, <code>downwardAPI</code> (Pod metadata such as labels or the namespace) and <code>serviceAccountToken</code> (a short-lived token with a chosen audience and expiry). This is useful when an app expects all its configuration under one path.</p>
+<pre class="code" tabindex="0"><code>- name: all-in-one
+  projected:
+    sources:
+    - configMap:
+        name: app-config
+    - secret:
+        name: db-secret
+    - downwardAPI:
+        items:
+        - path: labels
+          fieldRef:
+            fieldPath: metadata.labels</code></pre>
+<p>In a lab, verify with <code>kubectl exec pod -- ls -l /etc/config</code> and <code>kubectl exec pod -- df -h /cache</code>; a Memory-backed emptyDir shows up as tmpfs. If a Pod stays in ContainerCreating, <code>kubectl describe pod</code> usually reports a missing ConfigMap or Secret that the volume references.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>emptyDir</dt><dd>A Pod-lifetime scratch volume, empty at start and shared by the Pod's containers.</dd><dt>medium: Memory</dt><dd>Makes an emptyDir a RAM-backed tmpfs that counts toward memory usage.</dd><dt>Projected volume</dt><dd>A volume that combines configMap, secret, downwardAPI and serviceAccountToken sources in one directory.</dd><dt>Ephemeral volume</dt><dd>Storage whose lifetime is tied to the Pod and is deleted with it.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An image-processing Pod uses a 256Mi Memory-backed emptyDir as scratch space for fast temporary files, mounts its settings from a ConfigMap at /etc/app, and mounts TLS keys from a Secret with mode 0400, all declared in the Pod spec.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Secret volumes use <code>secretName</code>, not <code>name</code>, and projected sources use <code>name</code> for both. Also remember env vars do not update when a ConfigMap changes, but mounted files (without subPath) do.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What happens to an emptyDir when its container restarts, and when the Pod is deleted?</summary><p>It survives a container restart but is deleted with the Pod.</p></details>
+<details class="sq"><summary>What trade-off comes with <code>medium: Memory</code>?</summary><p>It is fast and not written to disk, but its contents use RAM and count against the container's memory limit.</p></details>
+<details class="sq"><summary>Name the source types a projected volume can combine.</summary><p>configMap, secret, downwardAPI and serviceAccountToken.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../multi-container-patterns-init-containers-sidecars-including-native-sid/">← Multi-container patterns: init containers, sidecars (includi</a><a href="../persistent-storage-persistentvolume-persistentvolumeclaim-storageclass/">Persistent storage: PersistentVolume, PersistentVolumeClaim, →</a></nav>
+</main>
+</body>
+</html>

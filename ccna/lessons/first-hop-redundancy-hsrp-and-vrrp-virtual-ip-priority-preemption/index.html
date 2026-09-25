@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>First hop redundancy: HSRP and VRRP virtual IP, priority… · CCNA Lesson</title>
+<meta name="description" content="Hosts are normally configured with a single default gateway. If that router fails, hosts lose all off-subnet connectivity even when a second router is sitt">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="First hop redundancy: HSRP and VRRP virtual IP, priority… · CCNA Lesson">
+<meta property="og:description" content="Hosts are normally configured with a single default gateway. If that router fails, hosts lose all off-subnet connectivity even when a second router is sitt">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ccna/lessons/first-hop-redundancy-hsrp-and-vrrp-virtual-ip-priority-preemption/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ccna/lessons/first-hop-redundancy-hsrp-and-vrrp-virtual-ip-priority-preemption/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CCNA</a> / <a href="../">Lessons</a></p>
+<p class="note">Cisco CCNA 200-301 v2.0 · Domain 3: IP routing</p>
+<h1>First hop redundancy: HSRP and VRRP virtual IP, priority, preemption</h1>
+<article class="lbody">
+<p>Hosts are normally configured with a single default gateway. If that router fails, hosts lose all off-subnet connectivity even when a second router is sitting on the same subnet, because they have no way to switch gateways on their own. First hop redundancy protocols (FHRPs) solve this by letting two or more routers share a virtual IP address and virtual MAC address that hosts use as their gateway. One router actively forwards; another takes over if it fails, and hosts notice nothing.</p>
+<p>HSRP (Hot Standby Router Protocol) is Cisco proprietary. Routers in an HSRP group elect one active router, which answers ARP for the virtual IP with the virtual MAC and forwards traffic, and one standby router, which monitors the active router's hellos and takes over if they stop. Other routers in the group listen. The virtual MAC is derived from the group number: 0000.0c07.acXX for HSRPv1 and 0000.0c9f.fXXX for HSRPv2. HSRPv2 supports more group numbers, IPv6 and millisecond timers.</p>
+<p>Election uses priority, default 100, highest wins; if priorities tie, the highest interface IP address wins. Preemption is disabled by default in HSRP. That means if a higher-priority router boots after another has become active, it does not take over until the active router fails. To make your intended router always active when it is healthy, configure both a higher priority and <code>preempt</code>. Object tracking can lower priority automatically when an uplink fails so that the other router takes over.</p>
+<pre class="code" tabindex="0"><code>interface g0/1
+ ip address 192.168.10.2 255.255.255.0
+ standby version 2
+ standby 10 ip 192.168.10.1
+ standby 10 priority 110
+ standby 10 preempt</code></pre>
+<p>VRRP (Virtual Router Redundancy Protocol) is the open standard equivalent. Its roles are master and backup rather than active and standby. Priority also defaults to 100 with highest winning, but preemption is enabled by default. VRRP allows the virtual IP to be the real address of one router's interface; that router is the address owner and gets priority 255. The VRRP virtual MAC is 0000.5e00.01XX, where XX is the group number. GLBP (Gateway Load Balancing Protocol) is another Cisco FHRP that load-balances by giving different hosts different virtual MACs, but HSRP and VRRP are the CCNA focus.</p>
+<p>Hosts must use the virtual IP as their default gateway, not either router's real address, or they lose the benefit. Verify with <code>show standby brief</code> for HSRP, which lists the group, priority, preempt flag (P), state (Active, Standby, Listen), active and standby routers and virtual IP, and <code>show vrrp brief</code> for VRRP. Groups, virtual IPs and versions must match on all routers in a group. If two routers both claim to be active, check that they can hear each other's hellos, which usually means a VLAN or trunk problem between them.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>FHRP</dt><dd>First hop redundancy protocol: a protocol that gives hosts a resilient virtual default gateway.</dd><dt>Virtual IP / virtual MAC</dt><dd>The shared gateway address and MAC that the active or master router answers for.</dd><dt>HSRP active / standby</dt><dd>The router forwarding for the virtual IP, and the router ready to take over if it fails.</dd><dt>VRRP master / backup</dt><dd>VRRP's equivalents of active and standby.</dd><dt>Preemption</dt><dd>Allowing a higher-priority router to take the active or master role back; off by default in HSRP, on by default in VRRP.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Two distribution switches serve VLAN 10 with HSRP virtual IP 192.168.10.1. DSW1 has priority 110 with preempt; DSW2 has default 100. When DSW1 reloads for an upgrade, DSW2 becomes active within seconds and PCs keep working. When DSW1 comes back, preemption lets it reclaim the active role; without <code>preempt</code> it would stay standby.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> HSRP: active/standby, Cisco-only, preempt off by default. VRRP: master/backup, open standard, preempt on by default. Both default to priority 100 with higher winning.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What must hosts use as their default gateway when an FHRP is configured?</summary><p>The virtual IP address shared by the group, not a router's physical interface address.</p></details>
+<details class="sq"><summary>Router A (priority 120, no preempt) boots after Router B (priority 100) has become HSRP active. What happens?</summary><p>Router B stays active, because HSRP preemption is off by default; A becomes standby until B fails or preempt is configured on A.</p></details>
+<details class="sq"><summary>Name one difference between HSRP and VRRP besides the role names.</summary><p>HSRP is Cisco proprietary with preemption off by default; VRRP is an open standard with preemption on by default and can use a router's real interface address as the virtual IP.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CCNA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ccna/">Open the CCNA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../ospf-adjacency-requirements-area-subnet-hello-dead-timers-mtu-authenti/">← OSPF adjacency requirements: area, subnet, hello/dead timers</a><a href="../troubleshoot-ip-connectivity-with-ping-extended-ping-and-traceroute/">Troubleshoot IP connectivity with ping, extended ping and tr →</a></nav>
+</main>
+</body>
+</html>

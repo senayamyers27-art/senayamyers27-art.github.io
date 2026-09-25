@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Liveness, readiness and startup probes; httpGet… · CKAD Lesson</title>
+<meta name="description" content="A running process is not necessarily a healthy one. It might be deadlocked, still loading data, or unable to reach its database.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Liveness, readiness and startup probes; httpGet… · CKAD Lesson">
+<meta property="og:description" content="A running process is not necessarily a healthy one. It might be deadlocked, still loading data, or unable to reach its database.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/liveness-readiness-and-startup-probes-httpget-tcpsocket-exec-and-grpc/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/liveness-readiness-and-startup-probes-httpget-tcpsocket-exec-and-grpc/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 3: Application Observability and Maintenance</p>
+<h1>Liveness, readiness and startup probes; httpGet, tcpSocket, exec and grpc handlers; timing fields</h1>
+<article class="lbody">
+<p>A running process is not necessarily a healthy one. It might be deadlocked, still loading data, or unable to reach its database. Probes let the kubelet on each node check a container regularly and act on the result. Kubernetes has three kinds, each answering a different question.</p>
+<p>A liveness probe asks, 'Is this container still working, or should it be restarted?' A readiness probe asks, 'Should this container receive traffic right now?' A startup probe asks, 'Has this slow-starting container finished starting yet?' While a startup probe is configured and has not yet succeeded, liveness and readiness probes are held off, so a slow start is not mistaken for a hang. After it succeeds once, it stops running and the other probes take over.</p>
+<p>Each probe uses one handler. <code>httpGet</code> sends an HTTP GET to a <code>path</code> and <code>port</code>; any status from 200 to 399 is success. <code>tcpSocket</code> succeeds if a TCP connection to the port can be opened. <code>exec</code> runs a command inside the container; exit code 0 is success. <code>grpc</code> calls the standard gRPC health checking service on a port, for apps that implement it. Choose the lightest handler that really reflects health: an HTTP health endpoint is common for web apps, a TCP check for plain network services.</p>
+<pre class="code" tabindex="0"><code>containers:
+- name: api
+  image: api:1.0
+  ports:
+  - containerPort: 8080
+  startupProbe:
+    httpGet: {path: /healthz, port: 8080}
+    failureThreshold: 30
+    periodSeconds: 10
+  livenessProbe:
+    httpGet: {path: /healthz, port: 8080}
+    periodSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    tcpSocket: {port: 8080}
+    initialDelaySeconds: 5
+    periodSeconds: 5</code></pre>
+<p>Timing fields are shared by all probes. <code>initialDelaySeconds</code> (default 0) waits after the container starts before the first check. <code>periodSeconds</code> (default 10) is how often to probe. <code>timeoutSeconds</code> (default 1) is how long to wait for an answer. <code>failureThreshold</code> (default 3) is how many consecutive failures count as failure. <code>successThreshold</code> (default 1) is how many consecutive successes are needed after a failure; it must be 1 for liveness and startup probes.</p>
+<p>A startup probe's budget is <code>failureThreshold × periodSeconds</code>: the example allows up to 300 seconds to start before the container is restarted. This is better than a large <code>initialDelaySeconds</code> on the liveness probe, because checks begin as soon as the app is up rather than after a fixed wait.</p>
+<p>Probe results appear in <code>kubectl describe pod</code> under each container (the Liveness, Readiness and Startup lines show the configuration) and in the events, for example <code>Liveness probe failed: HTTP probe failed with statuscode: 500</code> or <code>Readiness probe failed: dial tcp ... connection refused</code>. The READY column of <code>kubectl get pods</code> reflects readiness.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Liveness probe</dt><dd>Checks whether a container should be restarted.</dd><dt>Readiness probe</dt><dd>Checks whether a container should receive Service traffic.</dd><dt>Startup probe</dt><dd>Checks whether a slow container has started, holding off the other probes until it has.</dd><dt>failureThreshold</dt><dd>Consecutive failures needed before the probe is considered failed (default 3).</dd><dt>Probe handler</dt><dd>The check method: httpGet, tcpSocket, exec or grpc.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A Java service takes up to two minutes to warm up, and its liveness probe kept killing it at 30 seconds. Adding a startup probe with periodSeconds 10 and failureThreshold 15 gives it 150 seconds to start, after which the normal liveness probe with a short timeout takes over.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Know the defaults: period 10s, timeout 1s, failureThreshold 3, successThreshold 1, initialDelay 0. For slow starters, the preferred answer is a startup probe, not a huge initialDelaySeconds.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which HTTP status codes count as success for an httpGet probe?</summary><p>Any code from 200 up to 399.</p></details>
+<details class="sq"><summary>How long does a startup probe with periodSeconds 5 and failureThreshold 12 allow?</summary><p>About 60 seconds (5 x 12) before the container is restarted.</p></details>
+<details class="sq"><summary>What happens to liveness and readiness probes while a startup probe has not yet succeeded?</summary><p>They are not run; they start only after the startup probe succeeds.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../updating-manifests-to-supported-api-groups-networking-k8s-io-v1-ingres/">← Updating manifests to supported API groups (networking.k8s.i</a><a href="../what-each-probe-failure-does-restart-the-container-vs-remove-the-pod-f/">What each probe failure does: restart the container vs remov →</a></nav>
+</main>
+</body>
+</html>

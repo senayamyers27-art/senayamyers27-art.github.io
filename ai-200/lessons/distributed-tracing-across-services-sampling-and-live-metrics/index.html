@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Distributed tracing across services, sampling and live… · AI-200 Lesson</title>
+<meta name="description" content="Modern apps are chains of services: a front end calls an API, which reads Cosmos DB, sends a Service Bus message and calls a model endpoint, and a worker p">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Distributed tracing across services, sampling and live… · AI-200 Lesson">
+<meta property="og:description" content="Modern apps are chains of services: a front end calls an API, which reads Cosmos DB, sends a Service Bus message and calls a model endpoint, and a worker p">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/distributed-tracing-across-services-sampling-and-live-metrics/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/distributed-tracing-across-services-sampling-and-live-metrics/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 4: Secure, monitor, and troubleshoot Azure solutions</p>
+<h1>Distributed tracing across services, sampling and live metrics</h1>
+<article class="lbody">
+<p>Modern apps are chains of services: a front end calls an API, which reads Cosmos DB, sends a Service Bus message and calls a model endpoint, and a worker picks up the message later. When a user reports a slow or failed request, you need to follow that one request across every hop. Distributed tracing does this by giving all the work for one operation a shared trace ID and linking each piece to its parent.</p>
+<p>The mechanism is context propagation. OpenTelemetry uses the W3C Trace Context standard: when your instrumented app makes an outgoing HTTP call, it adds a <code>traceparent</code> header containing the trace ID and the current span ID. The receiving service, also instrumented, reads the header and creates its own spans as children in the same trace. Messaging SDKs, including Service Bus and Event Hubs, carry the same context in message properties so a consumer's processing links back to the producer. If one service in the chain is not instrumented, or strips headers, the trace breaks into separate pieces.</p>
+<p>In Application Insights, the trace ID appears as <code>operation_Id</code> on every item (requests, dependencies, exceptions, traces), and <code>operation_ParentId</code> links an item to its parent span. The portal's end-to-end transaction details view draws the whole tree as a timeline, so you can see which hop took the time or threw the error. The application map aggregates many traces into a diagram of components and their calls, with failure rates and durations on each connection. Each service should set a distinct cloud role name (for example through the <code>OTEL_SERVICE_NAME</code> environment variable or resource attributes) so it appears as its own node on the map.</p>
+<p>High-traffic apps can produce more telemetry than you want to pay for or analyze. Sampling keeps a representative subset. With the Azure Monitor OpenTelemetry Distro, you configure a sampling ratio (for example <code>configure_azure_monitor(sampling_ratio=0.1)</code> to keep about 10 percent), and newer versions also offer a rate-limited sampler that caps traces per second. Sampling decisions are made per trace, not per item, so a kept trace keeps all of its related spans across services, and a request is never shown with half its dependencies missing. Application Insights records the sampling rate in the <code>itemCount</code> column, and portal charts use it to estimate true totals; in your own KQL, use <code>sum(itemCount)</code> rather than <code>count()</code> when you need accurate counts on sampled data.</p>
+<p>Live Metrics shows a near-real-time stream of request rate, failure rate, dependency calls, exceptions, CPU and memory from each running instance, with a latency of about a second. It is not based on stored data and is not affected by sampling, so it is ideal while deploying a new revision or during an incident, when waiting minutes for ingestion is too slow. With the distro you enable it through a configuration option, and it can be secured with Microsoft Entra authentication.</p>
+<p>In practice: instrument every service, propagate context through HTTP and messaging, sample thoughtfully, watch Live Metrics during rollouts and use the end-to-end view and application map for investigations.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Trace context</dt><dd>The W3C standard for propagating trace and span IDs between services, carried in the traceparent header.</dd><dt>operation_Id</dt><dd>The Application Insights field holding the trace ID shared by all telemetry for one operation.</dd><dt>Sampling</dt><dd>Keeping only a portion of telemetry, decided per trace, to reduce cost while staying representative.</dd><dt>Live Metrics</dt><dd>A near-real-time view of request, failure and resource metrics that is not affected by sampling.</dd><dt>Application map</dt><dd>An Application Insights view showing components and their dependencies with performance and failure data.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Users report that checkout sometimes takes eight seconds. In the end-to-end transaction view for a slow operation_Id, the front end's request contains an API call whose child dependency on the model endpoint takes seven seconds, while Cosmos DB calls take milliseconds. The team adds a timeout and a cached fallback, watches Live Metrics while the new revision rolls out and sees latency drop immediately.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> The shared trace ID shows up as operation_Id; sampling is per trace and recorded in itemCount, so count with sum(itemCount); Live Metrics is real time and unaffected by sampling.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How does a downstream service know it belongs to the same trace as its caller?</summary><p>The caller propagates the traceparent header (or message properties) carrying the trace ID and parent span ID.</p></details>
+<details class="sq"><summary>Why use sum(itemCount) instead of count() in KQL on sampled telemetry?</summary><p>Each stored item represents itemCount original items, so summing it estimates the true total.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../application-insights-with-the-azure-monitor-opentelemetry-distro-for-p/">← Application Insights with the Azure Monitor OpenTelemetry Di</a><a href="../kql-where-project-summarize-bin-join-and-render-against-requests-depen/">KQL: where, project, summarize, bin(), join and render again →</a></nav>
+</main>
+</body>
+</html>

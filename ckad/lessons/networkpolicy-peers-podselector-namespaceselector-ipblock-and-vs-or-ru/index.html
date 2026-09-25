@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NetworkPolicy peers: podSelector, namespaceSelector… · CKAD Lesson</title>
+<meta name="description" content="Inside a from (ingress) or to (egress) list, each entry is a peer describing who may connect. There are three kinds, and the way you combine them in YAML c">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="NetworkPolicy peers: podSelector, namespaceSelector… · CKAD Lesson">
+<meta property="og:description" content="Inside a from (ingress) or to (egress) list, each entry is a peer describing who may connect. There are three kinds, and the way you combine them in YAML c">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/networkpolicy-peers-podselector-namespaceselector-ipblock-and-vs-or-ru/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/networkpolicy-peers-podselector-namespaceselector-ipblock-and-vs-or-ru/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 5: Services and Networking</p>
+<h1>NetworkPolicy peers: podSelector, namespaceSelector, ipBlock; AND vs OR rule semantics; allowing DNS on egress</h1>
+<article class="lbody">
+<p>Inside a <code>from</code> (ingress) or <code>to</code> (egress) list, each entry is a peer describing who may connect. There are three kinds, and the way you combine them in YAML changes the meaning dramatically.</p>
+<p>A <code>podSelector</code> peer on its own matches Pods with those labels in the policy's own namespace. A <code>namespaceSelector</code> peer on its own matches all Pods in namespaces whose labels match. Every namespace carries an automatic label <code>kubernetes.io/metadata.name=&lt;name&gt;</code>, so you can select a namespace by name without adding labels. An <code>ipBlock</code> peer matches IP ranges in CIDR notation, with optional <code>except</code> ranges; it is meant for traffic from outside the cluster, since Pod IPs change.</p>
+<p>Now the critical rule. Peers written as separate list items (each starting with its own dash) are ORed: traffic from any of them is allowed. A <code>namespaceSelector</code> and <code>podSelector</code> written in the same list item (one dash, two keys) are ANDed: the traffic must come from Pods with those labels inside matching namespaces.</p>
+<pre class="code" tabindex="0"><code># AND: Pods labelled app=monitor in namespaces labelled team=ops
+ingress:
+- from:
+  - namespaceSelector:
+      matchLabels: {team: ops}
+    podSelector:
+      matchLabels: {app: monitor}
+---
+# OR: any Pod in team=ops namespaces, OR app=monitor Pods in this namespace
+ingress:
+- from:
+  - namespaceSelector:
+      matchLabels: {team: ops}
+  - podSelector:
+      matchLabels: {app: monitor}</code></pre>
+<p>The difference is a single dash, and the OR version is often far more permissive than intended. Similarly, within one rule, <code>from</code> and <code>ports</code> are ANDed (these sources, on these ports), while separate rules in the <code>ingress</code> list are ORed.</p>
+<p>Egress policies need special care for DNS. Once a Pod is isolated for egress, it cannot reach the cluster DNS Pods unless you allow it, so every lookup of a Service name fails, and applications report 'name resolution' errors that look unrelated to the policy. Allow UDP and TCP port 53 to the DNS Pods in <code>kube-system</code>:</p>
+<pre class="code" tabindex="0"><code>egress:
+- to:
+  - namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: kube-system
+    podSelector:
+      matchLabels:
+        k8s-app: kube-dns
+  ports:
+  - {protocol: UDP, port: 53}
+  - {protocol: TCP, port: 53}
+- to:
+  - podSelector:
+      matchLabels: {app: db}
+  ports:
+  - {protocol: TCP, port: 5432}</code></pre>
+<p>A simpler, broader variant allows port 53 to any destination by leaving out <code>to</code> in that rule. Check the actual DNS Pod labels with <code>kubectl get pods -n kube-system --show-labels</code>; <code>k8s-app=kube-dns</code> is common but not guaranteed. Test with <code>nslookup</code> and <code>wget</code> from a temporary Pod carrying the policy's labels.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>namespaceSelector</dt><dd>Peer that matches Pods in namespaces with the given labels.</dd><dt>ipBlock</dt><dd>Peer that matches a CIDR range, with optional except ranges, usually for external traffic.</dd><dt>AND semantics</dt><dd>namespaceSelector and podSelector in the same peer item must both match.</dd><dt>OR semantics</dt><dd>Separate peer items or separate rules each allow traffic independently.</dd><dt>kubernetes.io/metadata.name</dt><dd>Automatic namespace label holding the namespace's name.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A policy meant to let only the Prometheus Pods in <code>monitoring</code> scrape an app used two dashes, so every Pod in <code>monitoring</code> and every Pod labelled <code>app: prometheus</code> in the app's own namespace could connect. Merging the selectors into one item with a single dash restricted it to Prometheus Pods in <code>monitoring</code> only.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> One dash with both selectors means AND; two dashes means OR. After adding an egress policy, always allow port 53 UDP and TCP for DNS.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How do you select namespace <code>payments</code> by name in a namespaceSelector?</summary><p>matchLabels <code>kubernetes.io/metadata.name: payments</code>.</p></details>
+<details class="sq"><summary>An egress policy allows traffic to the db Pods, but the app cannot connect to <code>db</code> by name. Why?</summary><p>DNS lookups are blocked; add an egress rule allowing port 53 UDP and TCP to the cluster DNS Pods.</p></details>
+<details class="sq"><summary>Within one ingress rule, how do <code>from</code> and <code>ports</code> combine?</summary><p>They are ANDed: traffic must come from a listed source and target a listed port.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../networkpolicy-basics-podselector-policytypes-ingress-and-egress-rules/">← NetworkPolicy basics: podSelector, policyTypes, ingress and </a><a href="../networkpolicy-needs-a-cni-plugin-that-enforces-it-for-example-calico-o/">NetworkPolicy needs a CNI plugin that enforces it (for examp →</a></nav>
+</main>
+</body>
+</html>

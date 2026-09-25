@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Testing in development environments: unit tests in CI… · Developer Associate Lesson</title>
+<meta name="description" content="Good test strategy for cloud applications layers different kinds of tests, each catching different problems at different cost. The exam wants you to know w">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Testing in development environments: unit tests in CI… · Developer Associate Lesson">
+<meta property="og:description" content="Good test strategy for cloud applications layers different kinds of tests, each catching different problems at different cost. The exam wants you to know w">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/testing-in-development-environments-unit-tests-in-ci-integration-tests/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/testing-in-development-environments-unit-tests-in-ci-integration-tests/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 3: Deployment</p>
+<h1>Testing in development environments: unit tests in CI, integration tests against deployed stages, AppConfig feature flags and gradual configuration rollout</h1>
+<article class="lbody">
+<p>Good test strategy for cloud applications layers different kinds of tests, each catching different problems at different cost. The exam wants you to know where each fits and which AWS features support safe testing and release.</p>
+<p>Unit tests check individual functions and classes in isolation, quickly, with no AWS calls. For a Lambda function, structure the code so business logic lives in plain functions that the handler calls, then test that logic directly. AWS SDK calls are replaced with mocks or stubs (for example the moto library or botocore Stubber in Python, or a mocking client in JavaScript). Run unit tests on every commit in CI, typically in the CodeBuild <code>pre_build</code> or <code>build</code> phase, and fail the build on any failure so broken code never reaches an environment. CodeBuild test reports display the results.</p>
+<p>Local emulation sits between unit and integration tests: <code>sam local invoke</code> and <code>sam local start-api</code> run functions in Docker with sample events, useful for quick checks of event parsing and handler wiring. However, emulation cannot fully reproduce IAM permissions, service limits or real integrations.</p>
+<p>Integration tests exercise real deployed resources, which is the only way to catch wrong IAM permissions, misconfigured triggers, API Gateway mappings or timeouts. The common pattern is deploying the stack to a dedicated development or test stage (a separate stack, and often a separate account), then running tests that call its API endpoint, put messages on its queues or write to its tables, and assert results. Stack outputs, such as the API URL, feed the tests. In CodePipeline, a test stage after a deploy-to-test action runs these tests before promotion. API Gateway stages with stage variables and Lambda aliases let the same code be tested in dev and test before prod, and mock integrations can stand in for unfinished backends. Clean up temporary test stacks to avoid cost.</p>
+<p>AWS AppConfig, a capability of AWS Systems Manager, separates configuration changes from code deployments. You create an application, environments (such as beta and prod) and configuration profiles, either freeform configuration (JSON, YAML or text, stored in AppConfig, S3, Parameter Store and others) or feature flags. Feature flags let you ship code with a feature turned off, then turn it on for testing or users without redeploying, and turn it off instantly if problems appear. Validators (a JSON schema or a Lambda function) check a configuration before it is deployed.</p>
+<p>AppConfig deployments roll out configuration gradually using a deployment strategy, which sets the growth type (linear or exponential), growth factor, total deployment time and a bake time. During the rollout and bake time, AppConfig watches CloudWatch alarms you associate with the environment and automatically rolls back the configuration if one fires. Applications retrieve configuration with the AppConfig data API (<code>StartConfigurationSession</code> and <code>GetLatestConfiguration</code>), and Lambda functions usually use the AppConfig Lambda extension, which caches configuration and refreshes it in the background.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Unit test</dt><dd>A fast, isolated test of a single piece of logic with external dependencies mocked.</dd><dt>Integration test</dt><dd>A test against deployed resources to verify real permissions, triggers and service interactions.</dd><dt>Feature flag</dt><dd>A configuration switch that turns functionality on or off at runtime without redeploying code.</dd><dt>AppConfig deployment strategy</dt><dd>Settings controlling how quickly a configuration change rolls out and how long it bakes before completing.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A team ships a new recommendation engine behind an AppConfig feature flag that is off. After deployment, they enable it with a linear strategy over 30 minutes and an alarm on the API's 5xx rate. Error rates climb at 40% rollout, the alarm fires, and AppConfig rolls the flag back without any code change.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Changing application behaviour safely without redeploying code points to AppConfig feature flags with a deployment strategy and alarm-based rollback. Tests that must verify IAM permissions or real integrations need a deployed test stage, not mocks.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why can't unit tests with mocks catch a missing IAM permission?</summary><p>Mocks never call AWS, so authorization is never checked; only integration tests against deployed resources exercise real permissions.</p></details>
+<details class="sq"><summary>What triggers an automatic AppConfig rollback?</summary><p>A CloudWatch alarm associated with the environment going into ALARM during the deployment or bake time.</p></details>
+<details class="sq"><summary>How do Lambda functions typically read AppConfig configuration efficiently?</summary><p>Through the AppConfig Lambda extension, which caches configuration locally and refreshes it in the background.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../codedeploy-appspec-yml-lifecycle-hooks-for-ec2-lambda-and-ecs-the-code/">← CodeDeploy appspec.yml lifecycle hooks for EC2, Lambda and E</a><a href="../root-cause-analysis-with-cloudwatch-logs-logs-insights-queries-metrics/">Root cause analysis with CloudWatch Logs, Logs Insights quer →</a></nav>
+</main>
+</body>
+</html>

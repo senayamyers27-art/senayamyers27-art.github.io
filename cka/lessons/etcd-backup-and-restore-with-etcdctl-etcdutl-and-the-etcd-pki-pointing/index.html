@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>etcd backup and restore with etcdctl/etcdutl and the etcd… · CKA Lesson</title>
+<meta name="description" content="Because etcd holds all cluster state, a snapshot of etcd is a backup of the cluster's configuration. The CKA regularly asks you to take one to a given path">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="etcd backup and restore with etcdctl/etcdutl and the etcd… · CKA Lesson">
+<meta property="og:description" content="Because etcd holds all cluster state, a snapshot of etcd is a backup of the cluster's configuration. The CKA regularly asks you to take one to a given path">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/etcd-backup-and-restore-with-etcdctl-etcdutl-and-the-etcd-pki-pointing/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/etcd-backup-and-restore-with-etcdctl-etcdutl-and-the-etcd-pki-pointing/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 1: Cluster Architecture, Installation and Configuration</p>
+<h1>etcd backup and restore with etcdctl/etcdutl and the etcd PKI; pointing the etcd static Pod at a restored data directory</h1>
+<article class="lbody">
+<p>Because etcd holds all cluster state, a snapshot of etcd is a backup of the cluster's configuration. The CKA regularly asks you to take one to a given path and later restore one. You need to know the tools, the certificates and how to repoint the etcd static Pod.</p>
+<p><code>etcdctl</code> is the client that talks to a running etcd over the network. On a kubeadm cluster etcd requires mutual TLS, so you pass three files from <code>/etc/kubernetes/pki/etcd</code>: the CA, and a client certificate and key. The simplest way to find the right paths and endpoint is to read them from <code>/etc/kubernetes/manifests/etcd.yaml</code> (look at <code>--listen-client-urls</code>, <code>--trusted-ca-file</code>, <code>--cert-file</code> and <code>--key-file</code>). The server certificate works as a client certificate in most kubeadm setups, and a dedicated <code>healthcheck-client</code> certificate is also present.</p>
+<pre class="code" tabindex="0"><code># default endpoint is the local client port 2379; add --endpoints if etcd is elsewhere
+ETCDCTL_API=3 etcdctl \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  snapshot save /opt/backup/etcd.db
+etcdutl snapshot status /opt/backup/etcd.db -w table</code></pre>
+<p><code>etcdutl</code> is the offline utility that works on files directly. In current etcd releases, snapshot restore and status are done with etcdutl, and the older <code>etcdctl snapshot restore</code> is deprecated. A restore does not overwrite the running database; it builds a new data directory from the snapshot: <code>etcdutl snapshot restore /opt/backup/etcd.db --data-dir /var/lib/etcd-restored</code>. No TLS flags are needed because it does not contact a server.</p>
+<p>Now point etcd at the restored data. Edit <code>/etc/kubernetes/manifests/etcd.yaml</code>. The data directory appears in the <code>--data-dir</code> flag and in the <code>hostPath</code> volume named <code>etcd-data</code>. The simplest reliable change is to update the hostPath <code>path</code> to <code>/var/lib/etcd-restored</code> (and the flag too, if you also change the mount path). Save the file; the kubelet restarts etcd with the old state. The API server may take a minute to reconnect, so <code>kubectl</code> can fail briefly. If it stays stuck, check with <code>crictl ps</code> and <code>crictl logs</code> on the node.</p>
+<p>Treat snapshot files as highly sensitive: they contain every Secret in the cluster, unencrypted unless you enabled encryption at rest. Store them with restrictive permissions and off the node.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>etcdctl</dt><dd>The network client for a running etcd; used for snapshot save, member list and endpoint health.</dd><dt>etcdutl</dt><dd>The offline etcd utility for working with data files, including snapshot restore and status.</dd><dt>Data directory</dt><dd>The on-disk location of the etcd database, set by --data-dir and mounted via a hostPath volume.</dd><dt>etcd PKI</dt><dd>The separate CA and certificates under /etc/kubernetes/pki/etcd used for etcd mutual TLS.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>After taking a snapshot to /opt/snap.db, a teammate deletes the <code>payments</code> namespace. You run <code>etcdutl snapshot restore /opt/snap.db --data-dir /var/lib/etcd-from-backup</code>, change the etcd-data hostPath in etcd.yaml to that directory, wait for etcd and the API server to restart, and <code>kubectl get ns</code> shows payments again.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Snapshot save fails with a TLS or deadline error if you omit --cacert, --cert or --key; copy the paths straight from the etcd manifest instead of guessing. For restore, remember the hostPath volume is what actually decides which host directory etcd sees.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Does snapshot restore overwrite the running etcd database?</summary><p>No. It creates a new data directory; you then point etcd at it.</p></details>
+<details class="sq"><summary>Where can you look up the endpoint and certificate paths etcdctl needs?</summary><p>In the etcd static Pod manifest, /etc/kubernetes/manifests/etcd.yaml.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../cluster-upgrades-with-kubeadm-one-minor-version-at-a-time-upgrade-plan/">← Cluster upgrades with kubeadm: one minor version at a time, </a><a href="../highly-available-control-planes-stacked-vs-external-etcd-quorum-load-b/">Highly available control planes: stacked vs external etcd, q →</a></nav>
+</main>
+</body>
+</html>

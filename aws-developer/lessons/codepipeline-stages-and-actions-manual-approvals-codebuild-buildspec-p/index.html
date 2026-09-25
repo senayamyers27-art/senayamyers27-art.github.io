@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CodePipeline stages and actions, manual approvals… · Developer Associate Lesson</title>
+<meta name="description" content="Continuous integration and continuous delivery (CI/CD) automate the path from a code change to a running release. On AWS, AWS CodePipeline orchestrates the">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="CodePipeline stages and actions, manual approvals… · Developer Associate Lesson">
+<meta property="og:description" content="Continuous integration and continuous delivery (CI/CD) automate the path from a code change to a running release. On AWS, AWS CodePipeline orchestrates the">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/codepipeline-stages-and-actions-manual-approvals-codebuild-buildspec-p/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/codepipeline-stages-and-actions-manual-approvals-codebuild-buildspec-p/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 3: Deployment</p>
+<h1>CodePipeline stages and actions, manual approvals; CodeBuild buildspec phases and artifacts</h1>
+<article class="lbody">
+<p>Continuous integration and continuous delivery (CI/CD) automate the path from a code change to a running release. On AWS, AWS CodePipeline orchestrates the flow and AWS CodeBuild does the building and testing.</p>
+<p>A CodePipeline pipeline is made of stages, run in order, such as Source, Build, Test, Approve and Deploy. Each stage contains one or more actions, which can run sequentially or in parallel (using run order). Action categories are source, build, test, deploy, approval and invoke. Source actions include AWS CodeCommit, Amazon S3, Amazon ECR and third-party repositories such as GitHub or Bitbucket through a connection. Build and test actions typically use CodeBuild. Deploy actions include CodeDeploy, CloudFormation, Elastic Beanstalk, Amazon ECS and S3. Invoke actions can call a Lambda function or run a Step Functions state machine for custom steps. Actions pass files to one another as artifacts, stored in the pipeline's S3 artifact bucket: an action declares output artifacts, and a later action names them as input artifacts. A pipeline starts on source changes (through events or webhooks) and each run is an execution; if an action fails, the stage fails and the execution stops.</p>
+<p>A manual approval action pauses the pipeline until someone with the right IAM permissions approves or rejects it, for example before deploying to production. It can notify reviewers through an SNS topic and include a URL for them to review, such as a staging site. If nobody responds within seven days the action fails.</p>
+<p>CodeBuild is a fully managed build service: each build runs in a fresh container from a build image, installs tools, runs your commands, and uploads outputs. You describe the build in <code>buildspec.yml</code> at the root of the source (or specify an alternate file or inline buildspec in the project).</p>
+<pre class="code" tabindex="0"><code>version: 0.2
+env:
+  variables:
+    STAGE: test
+  parameter-store:
+    DB_URL: /myapp/test/db-url
+phases:
+  install:
+    runtime-versions:
+      python: 3.12
+    commands:
+      - pip install -r requirements.txt
+  pre_build:
+    commands:
+      - pytest tests/unit
+  build:
+    commands:
+      - sam build
+  post_build:
+    commands:
+      - sam package --s3-bucket my-artifacts --output-template-file packaged.yaml
+artifacts:
+  files:
+    - packaged.yaml
+cache:
+  paths:
+    - /root/.cache/pip/**/*</code></pre>
+<p>The phases run in order: <code>install</code> (install runtimes and tools), <code>pre_build</code> (log in to ECR, run unit tests, fetch dependencies), <code>build</code> (compile or package) and <code>post_build</code> (push images, package, notify). The <code>env</code> section supplies plain variables and values from Parameter Store or Secrets Manager, so secrets are not written in the file. <code>artifacts</code> lists files to upload as the build output, which CodePipeline passes to the next stage. <code>reports</code> publishes test results, and <code>cache</code> saves dependencies to S3 or locally to speed later builds. Build logs go to CloudWatch Logs or S3. The CodeBuild service role needs permissions for everything the build does, such as pushing to ECR or reading parameters. CodeBuild can also run inside your VPC to reach private resources, and you can run builds locally with the CodeBuild local agent for debugging.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Stage</dt><dd>A sequential step in a CodePipeline pipeline containing one or more actions.</dd><dt>Action</dt><dd>A task within a stage, such as a source fetch, CodeBuild build, deployment or manual approval.</dd><dt>Artifact</dt><dd>Files produced by one pipeline action and consumed by another, stored in the pipeline's S3 bucket.</dd><dt>buildspec.yml</dt><dd>The YAML file defining CodeBuild's environment, phases, artifacts, reports and cache.</dd><dt>Manual approval</dt><dd>A pipeline action that pauses execution until an authorized person approves or rejects it.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A pipeline has Source (GitHub connection), Build (CodeBuild runs unit tests and sam package), DeployStaging (CloudFormation), an Approval action that emails the QA lead through SNS with the staging URL, and DeployProd. The QA lead approves after checking staging, and the same packaged artifact is deployed to production.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Buildspec phase order is install, pre_build, build, post_build. Files needed by the next pipeline stage must be listed under artifacts. Keep secrets in env parameter-store or secrets-manager, never in the buildspec.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How does a deploy stage get the files produced by the build stage?</summary><p>The build action declares an output artifact and the deploy action uses it as an input artifact, stored in the pipeline's S3 artifact bucket.</p></details>
+<details class="sq"><summary>In which buildspec phase would you typically run unit tests or log in to ECR?</summary><p>pre_build (though tests can also be run in build).</p></details>
+<details class="sq"><summary>What happens if a manual approval is not acted on?</summary><p>It waits, and fails if not approved or rejected within seven days, stopping the execution.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../elastic-beanstalk-deployment-policies-all-at-once-rolling-rolling-with/">← Elastic Beanstalk deployment policies: all at once, rolling,</a><a href="../codedeploy-appspec-yml-lifecycle-hooks-for-ec2-lambda-and-ecs-the-code/">CodeDeploy appspec.yml lifecycle hooks for EC2, Lambda and E →</a></nav>
+</main>
+</body>
+</html>

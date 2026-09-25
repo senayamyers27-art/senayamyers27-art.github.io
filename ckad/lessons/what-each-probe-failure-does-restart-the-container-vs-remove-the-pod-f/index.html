@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>What each probe failure does: restart the container vs… · CKAD Lesson</title>
+<meta name="description" content="The three probe types differ most in what happens when they fail. Mixing them up leads to either needless restarts or traffic sent to Pods that cannot hand">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="What each probe failure does: restart the container vs… · CKAD Lesson">
+<meta property="og:description" content="The three probe types differ most in what happens when they fail. Mixing them up leads to either needless restarts or traffic sent to Pods that cannot hand">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/what-each-probe-failure-does-restart-the-container-vs-remove-the-pod-f/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/what-each-probe-failure-does-restart-the-container-vs-remove-the-pod-f/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 3: Application Observability and Maintenance</p>
+<h1>What each probe failure does: restart the container vs remove the Pod from Service endpoints</h1>
+<article class="lbody">
+<p>The three probe types differ most in what happens when they fail. Mixing them up leads to either needless restarts or traffic sent to Pods that cannot handle it, so the exam tests these consequences directly.</p>
+<p>When a liveness probe fails <code>failureThreshold</code> times in a row, the kubelet kills the container and restarts it according to the Pod's <code>restartPolicy</code>. The Pod stays on the same node with the same name and IP; only the container is replaced, and the RESTARTS count in <code>kubectl get pods</code> goes up. Repeated liveness failures lead to growing back-off delays and the CrashLoopBackOff status. Events show <code>Liveness probe failed</code> followed by <code>Container api failed liveness probe, will be restarted</code>.</p>
+<p>When a readiness probe fails, nothing is restarted. The kubelet marks the container not ready, the Pod's Ready condition becomes False (the READY column shows <code>0/1</code>), and the Pod's address is marked not ready in the Service's EndpointSlices, so Services and Ingresses stop sending it new traffic. When the probe passes again, the Pod is automatically added back. Readiness keeps running for the whole life of the container, so it can take a Pod out of rotation temporarily, for example while it is overloaded or a dependency is down.</p>
+<p>When a startup probe fails <code>failureThreshold</code> times, the container is killed and restarted, just like a liveness failure. Until it succeeds, the container is also not ready, so it gets no traffic.</p>
+<pre class="code" tabindex="0"><code>Probe      On failure                      Pod leaves Service?  Container restarted?
+startup    kill + restart after threshold  yes (not ready yet)  yes
+liveness   kill + restart after threshold  (while restarting)   yes
+readiness  mark not ready                  yes                  no</code></pre>
+<p>Readiness also drives rollouts: a Deployment counts a new Pod as available only when it is ready, so a failing readiness probe halts a rolling update and protects users from a broken version. A Pod with no readiness probe is considered ready as soon as its containers start.</p>
+<p>Design guidance follows from this. Make liveness checks simple and local, testing only whether this process is alive; if liveness depends on a database, a database outage restarts every Pod at once and makes things worse. Put dependency checks in readiness instead, so Pods step out of rotation without restarting. When troubleshooting, a rising restart count points to liveness or startup failures, while Pods that are Running but <code>0/1</code> ready, and a Service with no ready endpoints, point to readiness.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Restart</dt><dd>The liveness/startup failure action: the kubelet kills the container and starts it again in the same Pod.</dd><dt>Not ready</dt><dd>The readiness failure state: the Pod stays running but is removed from Service endpoints.</dd><dt>Ready condition</dt><dd>Pod status condition shown in the READY column that decides whether the Pod receives Service traffic.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>During a cache rebuild an API Pod's readiness endpoint returns 503 for a minute. <code>kubectl get pods</code> shows it as Running 0/1, the Service routes around it, and when the rebuild finishes it returns to 1/1 with zero restarts. Had the same check been used for liveness, the Pod would have been restarted mid-rebuild.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Liveness fails: container restarts. Readiness fails: Pod leaves the Service but keeps running. If a question mentions restarts climbing, think liveness; if it mentions no traffic but no restarts, think readiness.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>A Pod shows Running, READY 0/1 and 0 restarts. Which probe is failing?</summary><p>The readiness probe; readiness failures do not restart the container.</p></details>
+<details class="sq"><summary>Why should a liveness probe not check a shared database?</summary><p>A database outage would make every Pod fail liveness and restart at once, causing more disruption without fixing anything.</p></details>
+<details class="sq"><summary>What does a failed startup probe do after its threshold?</summary><p>It kills and restarts the container, like a liveness failure.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../liveness-readiness-and-startup-probes-httpget-tcpsocket-exec-and-grpc/">← Liveness, readiness and startup probes; httpGet, tcpSocket, </a><a href="../kubectl-get-describe-get-events-top-pod-node-metrics-server-for-monito/">kubectl get, describe, get events, top pod/node (metrics-ser →</a></nav>
+</main>
+</body>
+</html>

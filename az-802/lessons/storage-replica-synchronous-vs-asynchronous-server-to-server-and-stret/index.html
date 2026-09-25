@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Storage Replica: synchronous vs asynchronous… · AZ-802 Lesson</title>
+<meta name="description" content="Storage Replica is a Windows Server feature that replicates volumes at the block level to another server or cluster, mainly for disaster recovery. Because ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Storage Replica: synchronous vs asynchronous… · AZ-802 Lesson">
+<meta property="og:description" content="Storage Replica is a Windows Server feature that replicates volumes at the block level to another server or cluster, mainly for disaster recovery. Because ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/storage-replica-synchronous-vs-asynchronous-server-to-server-and-stret/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/storage-replica-synchronous-vs-asynchronous-server-to-server-and-stret/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 5: Manage storage and file services</p>
+<h1>Storage Replica: synchronous vs asynchronous, server-to-server and stretch cluster; guest clustering with shared VHDX</h1>
+<article class="lbody">
+<p>Storage Replica is a Windows Server feature that replicates volumes at the block level to another server or cluster, mainly for disaster recovery. Because it works below the file system, it replicates everything on the volume, including open files, and it is unaware of which application wrote the blocks. It uses SMB 3 as its transport.</p>
+<p>Each replicated volume needs a matching log volume on both sides; writes go to the log first, then to the data volume. The source and destination data partitions must be the same size, and the destination volume is dismounted and not accessible while it is a replication target. Before configuring, run <code>Test-SRTopology</code> to measure the network and disk performance and get a report on whether your link can keep up. You create a partnership with <code>New-SRPartnership</code>, naming the source and destination computers, replication groups, and data and log volumes.</p>
+<p>Storage Replica runs in two modes. In synchronous mode, a write is only acknowledged to the application after it has been written to the log on both source and destination. This gives a recovery point objective (RPO) of zero: no committed data is lost if the source fails. The price is that every write waits for the round trip, so synchronous replication needs a fast, low-latency link, typically a metropolitan distance with a round trip of a few milliseconds. In asynchronous mode, the write is acknowledged once it hits the source log, and data is sent to the destination afterwards. It tolerates higher latency and longer distances but the RPO is not zero; a failure can lose the most recent writes.</p>
+<p>There are three scenarios. Server-to-server replicates between two standalone servers. Cluster-to-cluster replicates between two separate failover clusters. A stretch cluster is one failover cluster whose nodes are split across two sites, each site with its own storage, and Storage Replica keeps the storage in sync so the cluster can fail over automatically between sites. Stretch clusters are the only scenario with automatic failover; the others require you to switch direction manually, for example with <code>Set-SRPartnership</code>. Windows Server Standard edition includes Storage Replica with limits on the number and size of volumes, while Datacenter has no such limits.</p>
+<p>Guest clustering is a different high availability idea: you build a failover cluster from virtual machines, so an application is protected even if a VM's guest OS fails or needs patching. The guests need shared storage, and on Hyper-V the preferred way is a shared virtual hard disk using the VHD Set format (a <code>.vhds</code> file). You add it to each guest VM on a SCSI controller with sharing enabled. The VHD Set must live on a Cluster Shared Volume or a Scale-Out File Server share. Compared with the older shared <code>.vhdx</code>, VHD Sets support online resizing, host-level backup and Hyper-V Replica. Alternatives for guest shared storage are in-guest iSCSI and virtual Fibre Channel.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Storage Replica</dt><dd>Block-level volume replication over SMB 3 between servers or clusters, requiring data and log volumes on both sides.</dd><dt>Synchronous replication</dt><dd>Writes are acknowledged only after reaching both sites, giving zero RPO but requiring low latency.</dd><dt>Asynchronous replication</dt><dd>Writes are acknowledged at the source and sent later, allowing long distances with a non-zero RPO.</dd><dt>Stretch cluster</dt><dd>One failover cluster split across two sites with replicated storage, supporting automatic failover between sites.</dd><dt>VHD Set</dt><dd>The .vhds shared virtual disk format for guest clusters, stored on CSV or SOFS and supporting online resize and host backup.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A hospital with two datacenters 10 km apart builds a stretch cluster with Storage Replica in synchronous mode so no patient record write is lost. It also replicates to a third site 800 km away using a separate cluster-to-cluster partnership in asynchronous mode, accepting a few seconds of possible data loss for regional disasters.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Zero data loss equals synchronous and short distance; long distance equals asynchronous. Automatic failover only in a stretch cluster. Shared VHDX for guest clusters goes on CSV or SOFS, attached via SCSI.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What is the RPO of synchronous Storage Replica and why?</summary><p>Zero, because the application gets an acknowledgment only after the write is logged on both source and destination.</p></details>
+<details class="sq"><summary>Can users read the destination volume while Storage Replica is replicating to it?</summary><p>No, the destination volume is dismounted and inaccessible while it is a replication target.</p></details>
+<details class="sq"><summary>Where must a VHD Set used for a Hyper-V guest cluster be stored?</summary><p>On a Cluster Shared Volume or on a Scale-Out File Server SMB share.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../storage-spaces-direct-minimum-nodes-cache-resiliency-scale-out-file-se/">← Storage Spaces Direct: minimum nodes, cache, resiliency; Sca</a><a href="../security-baselines-osconfig-on-windows-server-2025-microsoft-security/">Security baselines: OSConfig on Windows Server 2025, Microso →</a></nav>
+</main>
+</body>
+</html>

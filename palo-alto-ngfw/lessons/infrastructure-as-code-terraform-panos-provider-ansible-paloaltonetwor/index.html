@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Infrastructure as code: Terraform panos provider, Ansible… · NGFW Engineer Lesson</title>
+<meta name="description" content="Infrastructure as code (IaC) means describing firewall configuration in text files kept in version control, then letting a tool apply it. The benefits are ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Infrastructure as code: Terraform panos provider, Ansible… · NGFW Engineer Lesson">
+<meta property="og:description" content="Infrastructure as code (IaC) means describing firewall configuration in text files kept in version control, then letting a tool apply it. The benefits are ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/palo-alto-ngfw/lessons/infrastructure-as-code-terraform-panos-provider-ansible-paloaltonetwor/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/palo-alto-ngfw/lessons/infrastructure-as-code-terraform-panos-provider-ansible-paloaltonetwor/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">NGFW Engineer</a> / <a href="../">Lessons</a></p>
+<p class="note">Palo Alto Networks Certified Next-Generation Firewall Engineer NGFW-Engineer · Domain 3: Integration and automation</p>
+<h1>Infrastructure as code: Terraform panos provider, Ansible paloaltonetworks.panos collection, pan-os-python SDK</h1>
+<article class="lbody">
+<p>Infrastructure as code (IaC) means describing firewall configuration in text files kept in version control, then letting a tool apply it. The benefits are repeatability, peer review of changes, easy rollback to a known version, and consistency across many firewalls. All three tools in this topic talk to the PAN-OS XML API underneath, so everything from the API lesson (keys, API-only roles, candidate versus running configuration) still applies.</p>
+<p>Terraform, from HashiCorp, is declarative: you write the desired end state in HCL files and Terraform works out what to create, change or delete. The Palo Alto Networks panos provider supplies resources for objects, policies, network settings and more, for firewalls and Panorama. Terraform records what it manages in a state file, and <code>terraform plan</code> shows the changes before <code>terraform apply</code> makes them. Terraform is excellent at building configuration, for example spinning up a set of address objects and rules alongside cloud VM-Series deployments. Committing is handled separately from the resource changes, and how depends on the provider version, so check its documentation; a pushed configuration is not live until committed. Protect the state file, because it can contain sensitive values.</p>
+<p>Ansible, from Red Hat, uses YAML playbooks of tasks run in order. The paloaltonetworks.panos collection, installed from Ansible Galaxy, provides modules for address objects, security rules, NAT, interfaces, commits and operational commands. Each module takes a provider dictionary with the firewall address and credentials or API key. Modules are designed to be idempotent: running a playbook twice should change nothing the second time. Ansible is well suited to procedural workflows such as onboarding a firewall, running an upgrade sequence or collecting information.</p>
+<pre class="code" tabindex="0"><code>- name: Ensure web server object exists
+  paloaltonetworks.panos.panos_address_object:
+    provider: '{{ provider }}'
+    name: web-srv
+    value: 10.1.1.10
+    description: DMZ web server
+
+- name: Commit
+  paloaltonetworks.panos.panos_commit_firewall:
+    provider: '{{ provider }}'</code></pre>
+<p>pan-os-python is Palo Alto's Python SDK (imported as <code>panos</code>). It models the configuration as an object tree: a Firewall or Panorama object at the top, with children such as address objects, rulebases and rules. You build or refresh objects in Python, then call methods like <code>create()</code>, <code>apply()</code>, <code>delete()</code> and <code>commit()</code>. It is the most flexible choice when you need custom logic, and it is what the Ansible collection uses internally.</p>
+<pre class="code" tabindex="0"><code>from panos.firewall import Firewall
+from panos.objects import AddressObject
+
+fw = Firewall('192.0.2.10', api_key=API_KEY)
+obj = AddressObject('web-srv', '10.1.1.10')
+fw.add(obj)
+obj.create()   # goes into the candidate config
+fw.commit()    # makes it running</code></pre>
+<p>Choosing between them: Terraform for declarative state-driven builds, especially alongside cloud infrastructure; Ansible for ordered workflows and teams already using it; pan-os-python for custom scripts and integrations. Whatever you choose, use a dedicated API-only account and keep secrets out of code.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Declarative</dt><dd>Describing the desired end state and letting the tool compute the changes, as Terraform does.</dd><dt>Idempotent</dt><dd>Producing the same result no matter how many times an operation runs, a design goal of Ansible modules.</dd><dt>Terraform state</dt><dd>The file where Terraform records the resources it manages and their current values.</dd><dt>pan-os-python</dt><dd>Palo Alto's Python SDK that models firewall and Panorama configuration as an object tree.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A cloud team deploys VM-Series firewalls with Terraform. They add the panos provider to the same repository so each new application's address objects and security rules are defined next to its infrastructure, reviewed in a pull request, planned, applied and then committed through their pipeline.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Terraform is declarative and state-based, Ansible runs ordered idempotent tasks, pan-os-python is the Python SDK the Ansible collection builds on. All of them change the candidate configuration, so a commit is still required.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which tool records managed resources in a state file?</summary><p>Terraform.</p></details>
+<details class="sq"><summary>What is the Ansible collection for PAN-OS called?</summary><p>paloaltonetworks.panos.</p></details>
+<details class="sq"><summary>After obj.create() in pan-os-python, is the object live?</summary><p>No, it is in the candidate configuration until you commit.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study NGFW Engineer for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../palo-alto-ngfw/">Open the NGFW Engineer study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../pan-os-xml-api-keygen-config-op-commit-and-rest-api-api-only-admin-rol/">← PAN-OS XML API (keygen, config, op, commit) and REST API; AP</a><a href="../external-dynamic-lists-ip-domain-url-and-dynamic-address-groups-with-t/">External dynamic lists (IP, domain, URL) and dynamic address →</a></nav>
+</main>
+</body>
+</html>

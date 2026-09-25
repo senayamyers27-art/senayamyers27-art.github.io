@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pod affinity and anti-affinity with topologyKey… · CKA Lesson</title>
+<meta name="description" content="Node affinity relates Pods to node labels. Pod affinity and anti-affinity relate Pods to other Pods: put this web Pod near a cache Pod, or never put two re">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Pod affinity and anti-affinity with topologyKey… · CKA Lesson">
+<meta property="og:description" content="Node affinity relates Pods to node labels. Pod affinity and anti-affinity relate Pods to other Pods: put this web Pod near a cache Pod, or never put two re">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/pod-affinity-and-anti-affinity-with-topologykey-topologyspreadconstrai/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/pod-affinity-and-anti-affinity-with-topologykey-topologyspreadconstrai/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 2: Workloads and Scheduling</p>
+<h1>Pod affinity and anti-affinity with topologyKey; topologySpreadConstraints</h1>
+<article class="lbody">
+<p>Node affinity relates Pods to node labels. Pod affinity and anti-affinity relate Pods to other Pods: put this web Pod near a cache Pod, or never put two replicas of the same database in the same zone.</p>
+<p>The key concept is <code>topologyKey</code>, a node label that defines what 'the same place' means. With <code>kubernetes.io/hostname</code>, the same place is the same node. With <code>topology.kubernetes.io/zone</code>, it is the same zone. The scheduler looks for Pods matching a <code>labelSelector</code> (in the Pod's own namespace by default, or in <code>namespaces</code> or a <code>namespaceSelector</code> you specify), groups nodes by the topology key's value, and applies the rule per group.</p>
+<p>Pod affinity says schedule into a topology domain that already has a matching Pod. Pod anti-affinity says avoid domains that have one. Both come in required and preferred forms, like node affinity. A classic pattern spreads replicas one per node with required anti-affinity on the Pod's own labels.</p>
+<pre class="code" tabindex="0"><code>affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+    - labelSelector:
+        matchLabels: {app: web}
+      topologyKey: kubernetes.io/hostname
+  podAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 80
+      podAffinityTerm:
+        labelSelector:
+          matchLabels: {app: cache}
+        topologyKey: kubernetes.io/hostname</code></pre>
+<p>Required anti-affinity has a sharp edge: with one-per-node, a 4-replica Deployment on a 3-node cluster leaves the fourth Pod Pending. Preferred anti-affinity avoids that but gives no guarantee. Inter-Pod affinity is also relatively expensive for the scheduler in large clusters.</p>
+<p><code>topologySpreadConstraints</code> is the more flexible tool for spreading. You name a <code>topologyKey</code>, a <code>labelSelector</code> for the Pods to count, and a <code>maxSkew</code>, the maximum allowed difference in matching Pod count between the most and least loaded domains. <code>whenUnsatisfiable: DoNotSchedule</code> makes it a hard rule; <code>ScheduleAnyway</code> makes it a scoring preference.</p>
+<pre class="code" tabindex="0"><code>topologySpreadConstraints:
+- maxSkew: 1
+  topologyKey: topology.kubernetes.io/zone
+  whenUnsatisfiable: DoNotSchedule
+  labelSelector:
+    matchLabels: {app: web}</code></pre>
+<p>With maxSkew 1 across three zones, six replicas land two per zone, and seven land 3-2-2, which anti-affinity could not express. Constraints are evaluated only at scheduling time, so later node failures can leave Pods unevenly spread until they are rescheduled.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>topologyKey</dt><dd>A node label whose value defines a topology domain such as a node or zone.</dd><dt>Pod anti-affinity</dt><dd>A rule keeping a Pod away from domains that already run Pods matching a selector.</dd><dt>topologySpreadConstraints</dt><dd>Rules limiting how unevenly matching Pods are distributed across domains.</dd><dt>maxSkew</dt><dd>The maximum allowed difference in matching Pod counts between any two domains.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A 3-replica Deployment with required anti-affinity on <code>app: web</code> and topologyKey kubernetes.io/hostname places one Pod on each of three workers. When a colleague scales it to 4, the new Pod is Pending with a message that node(s) didn't match pod anti-affinity rules, which is the rule working as designed.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Read the topologyKey carefully: hostname means per node, zone means per zone. The same selector with a different key gives completely different placement.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What does maxSkew: 1 guarantee?</summary><p>No topology domain has more than one more matching Pod than the least-loaded domain.</p></details>
+<details class="sq"><summary>Why might required Pod anti-affinity leave Pods Pending?</summary><p>If there are more replicas than topology domains, extra replicas have no allowed place to go.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../taints-and-tolerations-noschedule-prefernoschedule-noexecute-and-toler/">← Taints and tolerations: NoSchedule, PreferNoSchedule, NoExec</a><a href="../priorityclasses-and-preemption/">PriorityClasses and preemption →</a></nav>
+</main>
+</body>
+</html>

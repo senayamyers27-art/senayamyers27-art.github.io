@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Resource requests and limits for CPU and memory; units… · CKAD Lesson</title>
+<meta name="description" content="Each container can declare how much CPU and memory it needs and the most it may use. These numbers drive two different mechanisms: scheduling and enforceme">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Resource requests and limits for CPU and memory; units… · CKAD Lesson">
+<meta property="og:description" content="Each container can declare how much CPU and memory it needs and the most it may use. These numbers drive two different mechanisms: scheduling and enforceme">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/resource-requests-and-limits-for-cpu-and-memory-units-m-mi-gi-qos-clas/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/resource-requests-and-limits-for-cpu-and-memory-units-m-mi-gi-qos-clas/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 4: Application Environment, Configuration and Security</p>
+<h1>Resource requests and limits for CPU and memory; units (m, Mi, Gi); QoS classes</h1>
+<article class="lbody">
+<p>Each container can declare how much CPU and memory it needs and the most it may use. These numbers drive two different mechanisms: scheduling and enforcement. Getting them right keeps your app from being starved, killed or crowding out its neighbours.</p>
+<p>A request is the amount reserved for the container. The scheduler places a Pod only on a node whose unreserved capacity covers the sum of its containers' requests; if no node fits, the Pod stays Pending with an 'Insufficient cpu' or 'Insufficient memory' event. Requests do not cap usage. A limit is the maximum. The two resources react differently when a container reaches its limit: CPU is compressible, so a container at its CPU limit is throttled (slowed down) but keeps running; memory is not, so a container that exceeds its memory limit is killed and shows OOMKilled.</p>
+<p>Units matter. CPU is measured in cores: <code>1</code> is one core, <code>500m</code> (500 millicores) is half a core, and <code>0.1</code> equals <code>100m</code>. Memory is measured in bytes with suffixes: <code>Mi</code> and <code>Gi</code> are binary units (mebibytes and gibibytes, powers of 1024), while <code>M</code> and <code>G</code> are decimal (powers of 1000). <code>128Mi</code> is slightly more than <code>128M</code>. A common mistake is writing <code>128m</code> for memory, which means 0.128 bytes; lowercase <code>m</code> means milli.</p>
+<pre class="code" tabindex="0"><code>containers:
+- name: api
+  image: api:1.0
+  resources:
+    requests:
+      cpu: 250m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi</code></pre>
+<p>If you set a limit but no request, Kubernetes sets the request equal to the limit. You can also set resources imperatively: <code>kubectl set resources deploy/api -c api --requests=cpu=250m,memory=128Mi --limits=cpu=500m,memory=256Mi</code>. (<code>kubectl run</code> no longer has <code>--requests</code> or <code>--limits</code> flags, so add a <code>resources</code> block to the YAML it generates.)</p>
+<p>From these settings Kubernetes assigns each Pod a Quality of Service (QoS) class, shown in <code>kubectl describe pod</code> and at <code>.status.qosClass</code>. Guaranteed: every container has CPU and memory requests and limits, and requests equal limits. Burstable: at least one container has a CPU or memory request or limit, but the Pod does not meet the Guaranteed rule. BestEffort: no container has any requests or limits. When a node runs short of memory, the kubelet evicts BestEffort Pods first, then Burstable Pods using more than their requests, and Guaranteed Pods last.</p>
+<p>Check actual usage against your settings with <code>kubectl top pod --containers</code>. Requests far above real usage waste capacity; limits close to real usage risk OOM kills and throttling.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Request</dt><dd>Resources reserved for a container and used by the scheduler for placement.</dd><dt>Limit</dt><dd>Maximum resources a container may use; CPU is throttled and memory overuse is killed.</dd><dt>Millicore (m)</dt><dd>One thousandth of a CPU core; 500m is half a core.</dd><dt>Mi / Gi</dt><dd>Binary memory units based on powers of 1024.</dd><dt>QoS class</dt><dd>Guaranteed, Burstable or BestEffort, derived from requests and limits and used for eviction order.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A worker Pod keeps restarting with OOMKilled. <code>kubectl top pod --containers</code> shows it settling at about 300Mi while its limit is 256Mi. Raising the memory limit to 512Mi and the request to 320Mi stops the kills, and the Pod stays Burstable.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Guaranteed needs requests equal to limits for both CPU and memory in every container. CPU over limit means throttling; memory over limit means OOMKilled.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What happens when a container exceeds its CPU limit, and its memory limit?</summary><p>CPU: it is throttled. Memory: it is killed (OOMKilled).</p></details>
+<details class="sq"><summary>A Pod's only container has requests cpu 100m and memory 64Mi with no limits. What QoS class is it?</summary><p>Burstable.</p></details>
+<details class="sq"><summary>How much CPU is 1500m?</summary><p>One and a half cores.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../rbac-objects-role-clusterrole-rolebinding-clusterrolebinding-kubectl-a/">← RBAC objects: Role, ClusterRole, RoleBinding, ClusterRoleBin</a><a href="../namespace-resourcequota-and-limitrange-defaults/">Namespace ResourceQuota and LimitRange defaults →</a></nav>
+</main>
+</body>
+</html>

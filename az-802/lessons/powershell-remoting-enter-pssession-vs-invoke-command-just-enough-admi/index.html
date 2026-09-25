@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PowerShell remoting: Enter-PSSession vs Invoke-Command… · AZ-802 Lesson</title>
+<meta name="description" content="PowerShell remoting lets you run commands on other computers over Windows Remote Management (WinRM), which listens on TCP 5985 for HTTP and 5986 for HTTPS.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="PowerShell remoting: Enter-PSSession vs Invoke-Command… · AZ-802 Lesson">
+<meta property="og:description" content="PowerShell remoting lets you run commands on other computers over Windows Remote Management (WinRM), which listens on TCP 5985 for HTTP and 5986 for HTTPS.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/powershell-remoting-enter-pssession-vs-invoke-command-just-enough-admi/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/powershell-remoting-enter-pssession-vs-invoke-command-just-enough-admi/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 2: Manage Windows Server instances and workloads in a hybrid environment</p>
+<h1>PowerShell remoting: Enter-PSSession vs Invoke-Command, Just Enough Administration (JEA) role capability and session configuration files</h1>
+<article class="lbody">
+<p>PowerShell remoting lets you run commands on other computers over Windows Remote Management (WinRM), which listens on TCP 5985 for HTTP and 5986 for HTTPS. On Windows Server it is enabled by default; on clients you run <code>Enable-PSRemoting</code>. In a domain, Kerberos authenticates the connection and the WinRM traffic is encrypted even over HTTP. Outside a domain you typically use HTTPS or add hosts to the TrustedHosts list.</p>
+<p>There are two main ways to use it. <code>Enter-PSSession -ComputerName SRV01</code> opens an interactive one-to-one session: your prompt changes to <code>[SRV01]: PS&gt;</code> and everything you type runs remotely until <code>Exit-PSSession</code>. It is ideal for hands-on troubleshooting of one server. <code>Invoke-Command -ComputerName SRV01,SRV02,SRV03 -ScriptBlock { Get-Service Spooler }</code> is one-to-many: it runs a script block on many machines in parallel (32 at a time by default, adjustable with <code>-ThrottleLimit</code>) and returns deserialized objects tagged with a PSComputerName property. It suits automation and fan-out tasks. <code>New-PSSession</code> creates persistent sessions you can reuse with either cmdlet, keeping variables alive between commands.</p>
+<p>Returned objects are deserialized snapshots: you get property values but not live methods. And remoting has the second-hop problem: from inside a remote session you cannot use your Kerberos credentials to reach a third machine, such as a file share, unless you configure resource-based Kerberos constrained delegation or CredSSP. CredSSP works but sends reusable credentials to the remote host, so prefer delegation.</p>
+<p>Just Enough Administration (JEA) uses remoting to enforce least privilege. Instead of making helpdesk staff local administrators, you publish a constrained endpoint where they can run only the commands you allow, and those commands execute under a privileged temporary virtual account or a group managed service account. JEA has two files.</p>
+<p>The role capability file (<code>.psrc</code>, created with <code>New-PSRoleCapabilityFile</code>) defines what a role can do: <code>VisibleCmdlets</code> (optionally with allowed parameters and values), <code>VisibleFunctions</code>, <code>VisibleExternalCommands</code> and <code>VisibleProviders</code>. It must sit in a <code>RoleCapabilities</code> folder inside a PowerShell module on the target server, and its file name becomes the role name. The session configuration file (<code>.pssc</code>, created with <code>New-PSSessionConfigurationFile</code>) defines the endpoint: <code>SessionType = 'RestrictedRemoteServer'</code>, <code>RunAsVirtualAccount = $true</code> or <code>GroupManagedServiceAccount</code>, <code>TranscriptDirectory</code> for auditing, and <code>RoleDefinitions</code>, which map AD groups to role capabilities.</p>
+<pre class="code" tabindex="0"><code>New-PSSessionConfigurationFile -Path .\Helpdesk.pssc -SessionType RestrictedRemoteServer `
+  -RunAsVirtualAccount -TranscriptDirectory C:\JEA\Transcripts `
+  -RoleDefinitions @{ 'CORP\Helpdesk' = @{ RoleCapabilities = 'ServiceOperator' } }
+Register-PSSessionConfiguration -Name Helpdesk -Path .\Helpdesk.pssc
+# User connects with:
+Enter-PSSession -ComputerName SRV01 -ConfigurationName Helpdesk</code></pre>
+<p>Connected users run in NoLanguage mode and see only the allowed commands; <code>Get-PSSessionCapability -ConfigurationName Helpdesk -Username CORP\alice</code> shows what a given user will get. Test with <code>Test-PSSessionConfigurationFile</code> before registering.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>WinRM</dt><dd>Windows Remote Management: the service and protocol that carries PowerShell remoting on ports 5985 and 5986.</dd><dt>Invoke-Command</dt><dd>Runs a script block on one or many remote computers in parallel and returns the results.</dd><dt>Role capability file</dt><dd>A .psrc file defining the cmdlets, functions and commands a JEA role may use.</dd><dt>Session configuration file</dt><dd>A .pssc file defining a JEA endpoint: session type, run-as identity, transcripts and group-to-role mappings.</dd><dt>Virtual account</dt><dd>A temporary local administrator identity created for a JEA session and discarded when it ends.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Helpdesk staff need to restart the print spooler on file servers but must not be admins. The admin creates a ServiceOperator.psrc allowing Restart-Service only with -Name Spooler, maps CORP\Helpdesk to it in a .pssc, and registers the endpoint on each server with Invoke-Command.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Interactive with one server means Enter-PSSession; many servers at once means Invoke-Command. For JEA, the .psrc says what (commands) and the .pssc says who and how (groups, run-as account, transcripts).</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which JEA file maps an AD group to a role?</summary><p>The session configuration file (.pssc), in its RoleDefinitions entry.</p></details>
+<details class="sq"><summary>Where must a role capability file be placed for JEA to find it?</summary><p>In a RoleCapabilities subfolder of a PowerShell module in a module path on the target server.</p></details>
+<details class="sq"><summary>You need to run the same command on 200 servers. Which cmdlet fits?</summary><p>Invoke-Command, which fans out in parallel with a throttle limit.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../windows-admin-center-desktop-vs-gateway-mode-extensions-kerberos-const/">← Windows Admin Center: desktop vs gateway mode, extensions, K</a><a href="../azure-arc-enabled-servers-connected-machine-agent-azcmagent-at-scale-o/">Azure Arc-enabled servers: Connected Machine agent (azcmagen →</a></nav>
+</main>
+</body>
+</html>

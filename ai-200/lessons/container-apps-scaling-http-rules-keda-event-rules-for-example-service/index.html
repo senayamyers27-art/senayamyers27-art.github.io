@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Container Apps scaling: HTTP rules, KEDA event rules (for… · AI-200 Lesson</title>
+<meta name="description" content="Container Apps scales horizontally: it adds or removes replicas (running copies of a revision) based on scale rules you define. Scaling is driven by KEDA (">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Container Apps scaling: HTTP rules, KEDA event rules (for… · AI-200 Lesson">
+<meta property="og:description" content="Container Apps scales horizontally: it adds or removes replicas (running copies of a revision) based on scale rules you define. Scaling is driven by KEDA (">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/container-apps-scaling-http-rules-keda-event-rules-for-example-service/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/container-apps-scaling-http-rules-keda-event-rules-for-example-service/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 1: Develop containerized solutions on Azure</p>
+<h1>Container Apps scaling: HTTP rules, KEDA event rules (for example Service Bus queue length), min/max replicas and scale to zero</h1>
+<article class="lbody">
+<p>Container Apps scales horizontally: it adds or removes replicas (running copies of a revision) based on scale rules you define. Scaling is driven by KEDA (Kubernetes Event-driven Autoscaling), which can watch HTTP load, TCP connections, CPU or memory, and dozens of event sources such as queues and streams. Each revision has its own scale settings, because scale settings are part of the revision template.</p>
+<p>Two numbers bound everything: minimum replicas and maximum replicas. With a minimum of 0, the app can scale to zero when there is no traffic or no pending events, and you pay nothing for running replicas while idle (on the consumption profile). The cost is a cold start: the first request or message after idle waits for a replica to start. With a minimum of 1 or more, the app is always warm. The maximum caps cost and protects downstream systems such as a database from being overwhelmed.</p>
+<p>An HTTP scale rule adds replicas based on concurrent HTTP requests per replica. If you set concurrent requests to 50 and 400 requests are in flight, KEDA aims for about eight replicas, within your min and max. If you define no rule at all on an app with ingress, a default HTTP rule applies. TCP rules work similarly on concurrent connections.</p>
+<p>Event-driven (custom) rules use a KEDA scaler. For a Service Bus queue, the <code>azure-servicebus</code> scaler reads the queue's message count and scales so each replica handles roughly the target number of messages. The rule needs metadata (namespace, queue name, target message count) and authentication, either a secret holding a connection string or, preferably, a managed identity with permission to read the queue metrics.</p>
+<pre class="code" tabindex="0"><code>az containerapp update -n order-worker -g rg \
+  --min-replicas 0 --max-replicas 20 \
+  --scale-rule-name sb-queue --scale-rule-type azure-servicebus \
+  --scale-rule-metadata queueName=orders namespace=shop-sb messageCount=20 \
+  --scale-rule-auth connection=sb-connection-secret</code></pre>
+<p>CPU and memory rules scale on resource utilization, but they cannot scale to zero, because a replica must be running to report CPU. If scale to zero matters, use HTTP or event rules. When several rules exist, the app scales to satisfy whichever needs the most replicas. Scale-in happens after a cooldown period so short dips do not cause thrashing.</p>
+<p>Design your worker for scaling: messages should be processed idempotently, since a replica might be removed mid-work and another will pick up the message after its lock expires. In a lab, send a burst of messages to the queue and watch <code>az containerapp replica list</code> climb, then fall back to zero after the queue empties.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Replica</dt><dd>One running instance of a container app revision; scaling changes the replica count.</dd><dt>KEDA</dt><dd>Kubernetes Event-driven Autoscaling, the open-source engine behind Container Apps scale rules.</dd><dt>Scale to zero</dt><dd>Running zero replicas when idle, possible with a minimum of 0 and HTTP or event-driven rules.</dd><dt>Scaler</dt><dd>A KEDA component that reads a metric from an event source, such as Service Bus message count, to drive scaling.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An order worker has no ingress and processes a Service Bus queue. It is configured with min 0, max 20 and an azure-servicebus rule targeting 20 messages per replica. Overnight it runs no replicas and costs almost nothing; during a flash sale, 400 queued messages bring it to 20 replicas, and it returns to zero once the queue drains.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> If a scenario demands scale to zero, rule out CPU and memory scale rules; use an HTTP rule for web traffic or a KEDA event rule such as azure-servicebus for queue workers, with min replicas set to 0.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why can't a CPU scale rule scale an app to zero?</summary><p>CPU usage must be measured from a running replica, so at zero replicas there is no metric to trigger a scale-out.</p></details>
+<details class="sq"><summary>What does the messageCount metadata in an azure-servicebus scale rule mean?</summary><p>The target number of queued messages per replica; KEDA adds replicas as the queue length grows beyond that ratio.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../container-apps-revisions-single-vs-multiple-revision-mode-traffic-spli/">← Container Apps revisions: single vs multiple revision mode, </a><a href="../container-apps-jobs-manual-scheduled-and-event-driven/">Container Apps jobs: manual, scheduled and event-driven →</a></nav>
+</main>
+</body>
+</html>

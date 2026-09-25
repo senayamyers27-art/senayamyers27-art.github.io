@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Resource monitoring: metrics-server, kubectl top… · CKA Lesson</title>
+<meta name="description" content="Two kinds of numbers describe a cluster's resources, and the CKA tests whether you know which is which. Actual usage, how much CPU and memory containers ar">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Resource monitoring: metrics-server, kubectl top… · CKA Lesson">
+<meta property="og:description" content="Two kinds of numbers describe a cluster's resources, and the CKA tests whether you know which is which. Actual usage, how much CPU and memory containers ar">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/resource-monitoring-metrics-server-kubectl-top-nodes-pods-sort-by-desc/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/resource-monitoring-metrics-server-kubectl-top-nodes-pods-sort-by-desc/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 5: Troubleshooting</p>
+<h1>Resource monitoring: metrics-server, kubectl top nodes/pods --sort-by, describe node allocated resources</h1>
+<article class="lbody">
+<p>Two kinds of numbers describe a cluster's resources, and the CKA tests whether you know which is which. Actual usage, how much CPU and memory containers are consuming right now, comes from metrics-server and is shown by <code>kubectl top</code>. Reservations, how much has been requested and limited, come from Pod specs and are shown by <code>kubectl describe node</code>.</p>
+<p>metrics-server collects usage from each kubelet's resource metrics endpoint every few seconds and serves it through the <code>metrics.k8s.io</code> API. It keeps only recent values in memory; it is not a monitoring system with history, which is what Prometheus-style tools are for. If it is not installed or not healthy, <code>kubectl top</code> fails with an error that metrics are not available. Check with <code>kubectl get deploy metrics-server -n kube-system</code> and <code>kubectl get apiservice v1beta1.metrics.k8s.io</code>.</p>
+<pre class="code" tabindex="0"><code>kubectl top nodes
+kubectl top nodes --sort-by=memory
+kubectl top pods -A --sort-by=cpu
+kubectl top pods -n app --containers
+kubectl top pods -l app=web --sort-by=memory --no-headers | head -1</code></pre>
+<p><code>kubectl top nodes</code> shows CPU in millicores and memory, with percentages of allocatable. <code>kubectl top pods</code> shows per-Pod usage; <code>--containers</code> breaks it down by container, <code>-A</code> covers all namespaces, <code>-l</code> filters by label and <code>--sort-by=cpu</code> or <code>--sort-by=memory</code> puts the largest consumer first. A common task: find the Pod using the most CPU with a given label and write its name to a file. Sort, take the first line and extract the name, for example with <code>awk '{print $1}'</code>, then check the file contents.</p>
+<p><code>kubectl describe node &lt;name&gt;</code> shows <code>Capacity</code> (total resources on the machine) and <code>Allocatable</code> (what is left for Pods after system and kubelet reservations), then a table of non-terminated Pods with their requests and limits, and an <code>Allocated resources</code> summary with totals and percentages of allocatable. This is what the scheduler cares about. Limits can total more than 100 percent, which is called overcommitment; requests cannot exceed allocatable for scheduled Pods.</p>
+<p>Comparing the two views explains many puzzles. A node can show 30 percent CPU in top yet refuse new Pods, because its requests are already at 95 percent. Conversely, a node whose requests are low can be under real memory pressure if Pods use far more than they request, leading to evictions. A Pod whose usage in top keeps approaching its memory limit is a candidate for OOMKilled restarts.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>kubectl top</dt><dd>Shows current CPU and memory usage of nodes or Pods using metrics-server.</dd><dt>Allocatable</dt><dd>Node resources available for Pods after system reservations, used by the scheduler.</dd><dt>Allocated resources</dt><dd>The describe node summary of total requests and limits of Pods on the node.</dd><dt>Overcommitment</dt><dd>When the sum of limits on a node exceeds its allocatable capacity.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A task asks: 'Write the name of the Pod with label app=batch that uses the most memory to /opt/answers/top.txt.' You run <code>kubectl top pods -A -l app=batch --sort-by=memory --no-headers | head -1</code>, note the name column (column 2 when -A adds a namespace column), and write it to the file with echo, then cat it to confirm.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> kubectl top shows real usage; describe node shows requests and limits. Scheduling decisions are based on requests, so 'low usage but Pods won't schedule' is a requests problem.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Where would you look to see why the scheduler thinks a node is full?</summary><p>The Allocated resources section of <code>kubectl describe node</code>, which shows the sum of requests against allocatable.</p></details>
+<details class="sq"><summary>What does kubectl top depend on?</summary><p>A working metrics-server serving the metrics.k8s.io API.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../pending-pods-failedscheduling-messages-for-resources-taints-affinity-a/">← Pending Pods: FailedScheduling messages for resources, taint</a><a href="../container-output-streams-kubectl-logs-options-stdout-stderr-vs-log-fil/">Container output streams: kubectl logs options, stdout/stder →</a></nav>
+</main>
+</body>
+</html>

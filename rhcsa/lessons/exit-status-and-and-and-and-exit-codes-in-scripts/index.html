@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Exit status ($?), &amp;&amp; and ||, and exit codes in scripts · RHCSA Lesson</title>
+<meta name="description" content="Every command that finishes returns an exit status, a number from 0 to 255. By convention 0 means success and any non-zero value means some kind of failure">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Exit status ($?), &amp;&amp; and ||, and exit codes in scripts · RHCSA Lesson">
+<meta property="og:description" content="Every command that finishes returns an exit status, a number from 0 to 255. By convention 0 means success and any non-zero value means some kind of failure">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/exit-status-and-and-and-and-exit-codes-in-scripts/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/exit-status-and-and-and-and-exit-codes-in-scripts/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 3: Create simple shell scripts</p>
+<h1>Exit status ($?), &amp;&amp; and ||, and exit codes in scripts</h1>
+<article class="lbody">
+<p>Every command that finishes returns an exit status, a number from 0 to 255. By convention 0 means success and any non-zero value means some kind of failure; the specific value can identify the error, and a command's man page often documents its codes. The shell uses exit statuses to drive <code>if</code>, <code>while</code>, <code>&amp;&amp;</code> and <code>||</code>, so understanding them is the key to scripts that react correctly to failure.</p>
+<p>The special variable <code>$?</code> holds the exit status of the most recently completed command. Check it immediately, because the next command, even <code>echo</code>, replaces it. For example, <code>grep -q harry /etc/passwd; echo $?</code> prints 0 if harry exists and 1 if not; grep uses 2 for errors such as a missing file.</p>
+<pre class="code" tabindex="0"><code>ls /nonexistent
+echo $?                    # 2 for ls: serious trouble
+mkdir -p /backup &amp;&amp; cp -a /etc /backup/   # copy only if mkdir worked
+ping -c1 -W1 serverb || echo &quot;serverb unreachable&quot;
+systemctl is-active sshd &amp;&amp; echo up || echo down</code></pre>
+<p><code>&amp;&amp;</code> and <code>||</code> chain commands based on status. <code>cmd1 &amp;&amp; cmd2</code> runs cmd2 only if cmd1 succeeded; <code>cmd1 || cmd2</code> runs cmd2 only if cmd1 failed. They let you write short guard lines such as <code>cd /data || exit 1</code>, which stops a script rather than continuing in the wrong directory. The combination <code>a &amp;&amp; b || c</code> is often used as a compact if/else, but beware: c also runs if a succeeded and b failed, so use a real <code>if</code> when that matters.</p>
+<p>Scripts return exit codes too. The <code>exit</code> built-in ends the script immediately with the number you give, <code>exit 0</code> for success or <code>exit 1</code> (or another non-zero value) for failure. Without an explicit exit, a script returns the status of the last command it ran. Setting a clear code matters because other tools rely on it: a scheduled job, a systemd service or another script can only know your script failed if it returns non-zero. A task might say 'if no argument is given, print a usage message and exit with status 2'.</p>
+<pre class="code" tabindex="0"><code>#!/bin/bash
+if [ $# -ne 1 ]; then
+    echo &quot;Usage: $0 username&quot; &gt;&amp;2
+    exit 2
+fi
+id &quot;$1&quot; &amp;&gt; /dev/null || { echo &quot;no such user&quot; &gt;&amp;2; exit 1; }
+echo &quot;$1 exists&quot;
+exit 0</code></pre>
+<p>In that script, <code>&gt;&amp;2</code> sends error messages to stderr, which is good practice, and the braces group several commands to run after <code>||</code>. You can verify a script's code the same way as any command: run it, then <code>echo $?</code>. Some administrators also add <code>set -e</code> to stop on any failing command, but it has surprising exceptions, so explicit checks are clearer for exam scripts.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Exit status</dt><dd>A number 0 to 255 returned by every command; 0 means success, non-zero means failure.</dd><dt>$?</dt><dd>Special variable holding the exit status of the last command that finished.</dd><dt>&amp;&amp;</dt><dd>Runs the next command only if the previous one succeeded (exit status 0).</dd><dt>||</dt><dd>Runs the next command only if the previous one failed (non-zero exit status).</dd><dt>exit</dt><dd>Built-in that ends a script immediately with a given status code.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A backup script starts with <code>mountpoint -q /backup || { echo 'backup disk not mounted' &gt;&amp;2; exit 1; }</code>. When the disk is missing, the script stops with status 1 instead of filling the root file system, and the cron job's failure is visible in the logs.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> $? is overwritten by every command, including echo and [ ]; save it to a variable (rc=$?) right away if you need it later.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What exit status indicates success?</summary><p>0; any non-zero value indicates failure.</p></details>
+<details class="sq"><summary>In <code>mkdir /data &amp;&amp; touch /data/ok</code>, when does touch run?</summary><p>Only if mkdir succeeded.</p></details>
+<details class="sq"><summary>What status does a script return if it has no exit command?</summary><p>The exit status of the last command it executed.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../conditionally-running-code-with-if-elif-else-and-test-f-d-z-eq-gt-stri/">← Conditionally running code with if, elif, else and test / [ </a><a href="../looping-with-for-over-lists-globs-seq-and-while-read/">Looping with for (over lists, globs, $(seq)) and while read →</a></nav>
+</main>
+</body>
+</html>

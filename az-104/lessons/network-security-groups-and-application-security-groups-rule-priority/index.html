@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Network security groups and application security groups… · Azure Administrator Lesson</title>
+<meta name="description" content="A network security group (NSG) filters traffic to and from Azure resources in a virtual network with a list of allow and deny rules. Each rule matches on s">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Network security groups and application security groups… · Azure Administrator Lesson">
+<meta property="og:description" content="A network security group (NSG) filters traffic to and from Azure resources in a virtual network with a list of allow and deny rules. Each rule matches on s">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-104/lessons/network-security-groups-and-application-security-groups-rule-priority/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-104/lessons/network-security-groups-and-application-security-groups-rule-priority/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Azure Administrator</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure Administrator Associate AZ-104 · Domain 4: Implement and manage virtual networking</p>
+<h1>Network security groups and application security groups: rule priority, default rules, subnet vs NIC association, effective security rules</h1>
+<article class="lbody">
+<p>A network security group (NSG) filters traffic to and from Azure resources in a virtual network with a list of allow and deny rules. Each rule matches on source, source port, destination, destination port and protocol (TCP, UDP, ICMP or any) and has a direction (inbound or outbound), an action and a priority. NSGs are stateful: if an inbound connection is allowed, the return traffic is allowed automatically without an outbound rule.</p>
+<p>Priority is a number from 100 to 4096. Rules are processed in order from the lowest number to the highest, and processing stops at the first rule that matches. So a Deny at priority 100 beats an Allow at 200 for the same traffic, and an Allow at 100 beats a Deny at 200. Leave gaps between priorities, such as 100, 200, 300, so you can insert rules later.</p>
+<p>Every NSG includes default rules with priorities 65000 and above, which you cannot delete but can override with lower-numbered rules. Inbound: AllowVnetInBound (65000) allows traffic from within the VNet and connected networks, AllowAzureLoadBalancerInBound (65001) allows Azure load balancer health probes, and DenyAllInBound (65500) blocks everything else, including the internet. Outbound: AllowVnetOutBound (65000), AllowInternetOutBound (65001) and DenyAllOutBound (65500). Source and destination can use service tags such as <code>VirtualNetwork</code>, <code>Internet</code>, <code>AzureLoadBalancer</code> or <code>Storage</code> instead of IP ranges, and Azure keeps their address lists up to date.</p>
+<p>You can associate an NSG with a subnet, with a network interface (NIC), or with both, and one NSG can be reused on many. When both exist, traffic must be allowed by both. For inbound traffic the subnet NSG is evaluated first, then the NIC NSG. For outbound traffic the NIC NSG is evaluated first, then the subnet NSG. If either denies, the traffic is dropped. Many teams apply NSGs to subnets only, for simplicity.</p>
+<p>Application security groups (ASGs) let you group NICs by role and use the group name in rules instead of IP addresses. You create ASGs such as <code>asg-web</code> and <code>asg-db</code>, assign each VM's NIC to the right ASG, then write a rule like 'allow TCP 1433 from asg-web to asg-db'. When you add a new web server, you only add its NIC to <code>asg-web</code>; no rule changes are needed. The NICs in an ASG must be in the same VNet.</p>
+<p>When traffic is blocked unexpectedly, look at effective security rules: on the VM's NIC, open Effective security rules (or use Network Watcher) to see the combined rules from both the subnet and NIC NSGs, including default rules and expanded service tags. Network Watcher's IP flow verify tells you exactly which rule allows or denies a specific packet.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Network security group (NSG)</dt><dd>A stateful set of prioritized allow and deny rules that filters traffic for subnets and NICs.</dd><dt>Priority</dt><dd>A number from 100 to 4096; lower numbers are evaluated first and processing stops at the first match.</dd><dt>Service tag</dt><dd>A named group of IP prefixes for an Azure service or scope, such as Internet or Storage, maintained by Microsoft.</dd><dt>Application security group (ASG)</dt><dd>A named group of NICs that can be used as the source or destination in NSG rules.</dd><dt>Effective security rules</dt><dd>The combined rules from all NSGs applied to a NIC, as actually enforced.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A three-tier app has web, app and database VMs in one subnet. The administrator creates ASGs asg-web, asg-app and asg-db, then an NSG with rules allowing 443 from Internet to asg-web (priority 100), 8080 from asg-web to asg-app (110), 1433 from asg-app to asg-db (120) and a Deny from VirtualNetwork to asg-db (200). Web servers cannot reach the database directly, and new VMs only need the right ASG.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Lowest priority number wins and processing stops at the first match. Inbound: subnet NSG then NIC NSG; outbound: NIC then subnet; both must allow. The default DenyAllInBound blocks internet traffic unless you add an Allow.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Rule 100 denies TCP 3389 from Internet; rule 200 allows TCP 3389 from Internet. Is RDP allowed?</summary><p>No. Rule 100 matches first and processing stops.</p></details>
+<details class="sq"><summary>The subnet NSG allows port 80 inbound, but the NIC NSG has no rule for it. Is port 80 from the internet allowed?</summary><p>No. The NIC NSG's default DenyAllInBound blocks it; both NSGs must allow the traffic.</p></details>
+<details class="sq"><summary>How do you allow SQL traffic only from web servers without listing their IP addresses?</summary><p>Put the web server NICs in an application security group and use it as the source in the NSG rule.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Azure Administrator for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-104/">Open the Azure Administrator study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../user-defined-routes-route-tables-next-hop-types-virtual-appliance-virt/">← User-defined routes: route tables, next hop types (virtual a</a><a href="../azure-bastion-azurebastionsubnet-skus-browser-and-native-client-access/">Azure Bastion: AzureBastionSubnet, SKUs, browser and native  →</a></nav>
+</main>
+</body>
+</html>

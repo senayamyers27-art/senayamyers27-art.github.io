@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Querying logs with basic KQL (where, summarize, project… · Azure Administrator Lesson</title>
+<meta name="description" content="Kusto Query Language (KQL) is the read-only query language used by Log Analytics, Azure Monitor log alerts, Microsoft Sentinel and Azure Resource Graph. Yo">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Querying logs with basic KQL (where, summarize, project… · Azure Administrator Lesson">
+<meta property="og:description" content="Kusto Query Language (KQL) is the read-only query language used by Log Analytics, Azure Monitor log alerts, Microsoft Sentinel and Azure Resource Graph. Yo">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-104/lessons/querying-logs-with-basic-kql-where-summarize-project-render/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-104/lessons/querying-logs-with-basic-kql-where-summarize-project-render/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Azure Administrator</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure Administrator Associate AZ-104 · Domain 5: Monitor and maintain Azure resources</p>
+<h1>Querying logs with basic KQL (where, summarize, project, render)</h1>
+<article class="lbody">
+<p>Kusto Query Language (KQL) is the read-only query language used by Log Analytics, Azure Monitor log alerts, Microsoft Sentinel and Azure Resource Graph. You open it in a workspace's Logs blade or a resource's Logs blade. A query starts with a table name and passes the data through a pipeline of operators separated by the pipe character <code>|</code>, each one transforming the result of the previous step. If you know a handful of operators, you can answer most exam questions and real troubleshooting needs.</p>
+<p><code>where</code> filters rows. <code>project</code> chooses and renames columns. <code>extend</code> adds calculated columns. <code>sort by</code> (or <code>order by</code>) orders results, and <code>take</code> or <code>limit</code> returns a sample of rows. Time is always important: most tables have a <code>TimeGenerated</code> column, and <code>ago()</code> expresses relative time, so <code>where TimeGenerated &gt; ago(1h)</code> keeps the last hour. Comparison operators include <code>==</code>, <code>!=</code>, <code>&gt;</code>, <code>contains</code>, <code>has</code> and <code>in</code>. String comparisons with <code>==</code> are case sensitive; <code>=~</code> is case insensitive.</p>
+<p><code>summarize</code> aggregates rows into groups, much like GROUP BY in SQL. Aggregation functions include <code>count()</code>, <code>avg()</code>, <code>max()</code>, <code>min()</code>, <code>sum()</code> and <code>dcount()</code> (distinct count), followed by <code>by</code> and the grouping columns. To build time series, group by <code>bin(TimeGenerated, 5m)</code>, which rounds timestamps into five-minute buckets. <code>render</code> turns the result into a chart, such as <code>timechart</code>, <code>barchart</code>, <code>piechart</code> or <code>columnchart</code>.</p>
+<pre class="code" tabindex="0"><code>// Computers that have not sent a heartbeat in 15 minutes
+Heartbeat
+| summarize LastSeen = max(TimeGenerated) by Computer
+| where LastSeen &lt; ago(15m)
+
+// Average CPU per computer in 5-minute bins over the last day, as a chart
+Perf
+| where TimeGenerated &gt; ago(1d)
+| where ObjectName == &quot;Processor&quot; and CounterName == &quot;% Processor Time&quot;
+| summarize AvgCPU = avg(CounterValue) by bin(TimeGenerated, 5m), Computer
+| render timechart
+
+// Who deleted resources in the last week
+AzureActivity
+| where TimeGenerated &gt; ago(7d) and OperationNameValue endswith &quot;DELETE&quot;
+| project TimeGenerated, Caller, ResourceGroup, OperationNameValue
+| sort by TimeGenerated desc</code></pre>
+<p>Read each query from top to bottom. In the first, all heartbeat records are reduced to one row per computer with its latest time, then filtered to those older than 15 minutes: a classic 'which agents stopped reporting' query that can back a log alert. Note that the order of operators matters: filtering with <code>where</code> early makes queries faster, and a <code>project</code> that removes a column prevents later operators from using it.</p>
+<p>Common tables you will meet: <code>Heartbeat</code> (agent check-ins), <code>Perf</code> (performance counters), <code>Event</code> (Windows event logs), <code>Syslog</code> (Linux), <code>AzureActivity</code> (activity log), <code>AzureDiagnostics</code> and resource-specific tables such as <code>StorageBlobLogs</code> (resource logs), and <code>InsightsMetrics</code> (VM insights). In exam questions, look for which operator produces the requested shape: filtering is <code>where</code>, counting per group is <code>summarize count() by</code>, choosing columns is <code>project</code>, and a chart is <code>render</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>KQL</dt><dd>Kusto Query Language, the read-only pipeline query language used in Log Analytics and Azure Monitor.</dd><dt>where</dt><dd>An operator that filters rows by a condition.</dd><dt>summarize</dt><dd>An operator that aggregates rows with functions such as count() or avg(), grouped by columns.</dd><dt>project</dt><dd>An operator that selects, renames or reorders the output columns.</dd><dt>bin()</dt><dd>A function that rounds values, typically timestamps, into fixed-size buckets for time series.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>After a weekend outage, an administrator needs to know which VMs stopped reporting and when. They run Heartbeat | where TimeGenerated &gt; ago(3d) | summarize count() by bin(TimeGenerated, 1h), Computer | render timechart, and the chart shows two VMs whose heartbeats dropped to zero at 02:00 on Saturday, matching a failed host update.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Map the question to the operator: filter = where, aggregate per group = summarize ... by, pick columns = project, chart = render. Time filters use ago(), and time series use bin().</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which operator would you use to count failed sign-ins per user?</summary><p>summarize count() by the user column, after a where that filters to failures.</p></details>
+<details class="sq"><summary>What does | project Computer, CounterValue do?</summary><p>Keeps only the Computer and CounterValue columns in the output.</p></details>
+<details class="sq"><summary>How do you turn a summarized time series into a line chart?</summary><p>Add | render timechart at the end of the query.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Azure Administrator for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-104/">Open the Azure Administrator study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../azure-monitor-metrics-vs-logs-and-diagnostic-settings-that-send-resour/">← Azure Monitor metrics vs logs, and diagnostic settings that </a><a href="../alert-rules-metric-log-search-activity-log-action-groups-and-alert-pro/">Alert rules (metric, log search, activity log), action group →</a></nav>
+</main>
+</body>
+</html>

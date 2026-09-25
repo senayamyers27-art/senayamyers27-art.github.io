@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Site-to-site IPsec: IKE gateway, IKE and IPsec crypto… · NGFW Engineer Lesson</title>
+<meta name="description" content="Palo Alto firewalls build route-based site-to-site VPNs. Instead of a policy saying 'encrypt traffic from A to B', you create a tunnel interface and route ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Site-to-site IPsec: IKE gateway, IKE and IPsec crypto… · NGFW Engineer Lesson">
+<meta property="og:description" content="Palo Alto firewalls build route-based site-to-site VPNs. Instead of a policy saying 'encrypt traffic from A to B', you create a tunnel interface and route ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/palo-alto-ngfw/lessons/site-to-site-ipsec-ike-gateway-ike-and-ipsec-crypto-profiles-tunnel-in/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/palo-alto-ngfw/lessons/site-to-site-ipsec-ike-gateway-ike-and-ipsec-crypto-profiles-tunnel-in/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">NGFW Engineer</a> / <a href="../">Lessons</a></p>
+<p class="note">Palo Alto Networks Certified Next-Generation Firewall Engineer NGFW-Engineer · Domain 1: PAN-OS networking configuration</p>
+<h1>Site-to-site IPsec: IKE gateway, IKE and IPsec crypto profiles, tunnel interfaces, proxy IDs, tunnel monitoring</h1>
+<article class="lbody">
+<p>Palo Alto firewalls build route-based site-to-site VPNs. Instead of a policy saying 'encrypt traffic from A to B', you create a tunnel interface and route the remote networks to it. Anything routed into the tunnel is encrypted with IPsec. This keeps VPN logic in routing, where static routes or dynamic protocols can steer traffic.</p>
+<p>The building blocks are configured in order. First, a tunnel interface (Network &gt; Interfaces &gt; Tunnel, for example <code>tunnel.10</code>) assigned to a virtual or logical router and a security zone; an IP address on it is optional but required for tunnel monitoring or dynamic routing over the tunnel. Second, an IKE crypto profile for phase 1: Diffie-Hellman (DH) group, encryption algorithm, authentication (hash) algorithm and key lifetime. Third, an IPsec crypto profile for phase 2: ESP (or AH), encryption, authentication, DH group for perfect forward secrecy (PFS) and lifetime. Both peers must agree on these values.</p>
+<p>Next is the IKE gateway (Network &gt; Network Profiles &gt; IKE Gateways). It defines the IKE version (IKEv1, IKEv2 or IKEv2 preferred), the local interface and IP, the peer address (static IP, FQDN or dynamic), authentication by pre-shared key or certificate, local and peer identification, the IKE crypto profile and options like NAT traversal and dead peer detection. Finally, the IPsec tunnel object (Network &gt; IPsec Tunnels) ties together the tunnel interface, the IKE gateway and the IPsec crypto profile.</p>
+<p>Proxy IDs define which local and remote subnets the phase 2 security association covers. A PAN-OS-to-PAN-OS tunnel does not need them, because both sides use 0.0.0.0/0 by default. But when the peer is a policy-based device, you must enter proxy IDs that exactly mirror the peer's configured local and remote networks, one per subnet pair. A mismatch is the classic cause of phase 1 coming up while phase 2 fails.</p>
+<p>Tunnel monitoring sends pings through the tunnel to a destination IP on the far side, sourced from the tunnel interface IP. A monitor profile chooses what happens on failure: Wait Recover keeps the tunnel and waits, while Fail Over lets routing or PBF move traffic to a backup path. Dead peer detection works at the IKE level; tunnel monitoring proves traffic actually passes.</p>
+<p>Do not forget policy and routing. You need a route for the remote subnets pointing to the tunnel interface and security rules between the internal zone and the VPN zone. Troubleshoot with the IPsec Tunnels page status lights, the System log (IKE messages), and CLI commands such as <code>show vpn ike-sa</code>, <code>show vpn ipsec-sa</code> and <code>test vpn ike-sa gateway &lt;name&gt;</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>IKE gateway</dt><dd>The object defining the VPN peer, local interface, IKE version, authentication and IKE crypto profile for phase 1.</dd><dt>IPsec crypto profile</dt><dd>Phase 2 settings: ESP or AH, encryption, authentication, PFS DH group and lifetime.</dd><dt>Proxy ID</dt><dd>A local/remote subnet pair that defines a phase 2 SA, required when the peer uses policy-based VPN.</dd><dt>Tunnel monitoring</dt><dd>Pings through the tunnel to a remote IP that detect a broken data path and trigger wait-recover or fail-over.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>You connect a PAN-OS firewall to a partner's policy-based VPN device protecting 172.16.5.0/24 and 172.16.6.0/24. Phase 1 establishes, but only one subnet works. The System log shows a phase 2 proposal mismatch. Adding two proxy IDs, one for each remote subnet paired with your local 10.1.0.0/16, brings both SAs up.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Phase 1 up but phase 2 down with a policy-based peer almost always means proxy IDs. Remember the tunnel interface needs a zone and router, and traffic still needs security rules and a route.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which object ties the tunnel interface, IKE gateway and IPsec crypto profile together?</summary><p>The IPsec tunnel configuration under Network &gt; IPsec Tunnels.</p></details>
+<details class="sq"><summary>When are proxy IDs required?</summary><p>When the peer is a policy-based VPN device; they must mirror the peer's local and remote subnet pairs.</p></details>
+<details class="sq"><summary>What does tunnel monitoring require on the tunnel interface?</summary><p>An IP address, used as the source of the monitoring pings.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study NGFW Engineer for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../palo-alto-ngfw/">Open the NGFW Engineer study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../high-availability-active-passive-vs-active-active-ha1-ha2-ha3-and-back/">← High availability: active/passive vs active/active, HA1/HA2/</a><a href="../quantum-resistant-ikev2-vpns-post-quantum-preshared-keys-and-gre-tunne/">Quantum-resistant IKEv2 VPNs (post-quantum preshared keys) a →</a></nav>
+</main>
+</body>
+</html>

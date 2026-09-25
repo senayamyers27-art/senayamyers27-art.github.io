@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ingress controllers, IngressClass and the default class… · CKA Lesson</title>
+<meta name="description" content="An Ingress is an API object describing HTTP and HTTPS routing from outside the cluster to Services, by hostname and path. On its own it does nothing.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Ingress controllers, IngressClass and the default class… · CKA Lesson">
+<meta property="og:description" content="An Ingress is an API object describing HTTP and HTTPS routing from outside the cluster to Services, by hostname and path. On its own it does nothing.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/ingress-controllers-ingressclass-and-the-default-class-ingress-rules-p/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/ingress-controllers-ingressclass-and-the-default-class-ingress-rules-p/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 3: Services and Networking</p>
+<h1>Ingress controllers, IngressClass and the default class; Ingress rules, path types and TLS</h1>
+<article class="lbody">
+<p>An Ingress is an API object describing HTTP and HTTPS routing from outside the cluster to Services, by hostname and path. On its own it does nothing. An Ingress controller, a reverse proxy such as an NGINX-, HAProxy- or Traefik-based controller running as Pods, watches Ingress objects and configures itself to match. Kubernetes does not ship one, so installing a controller (usually with Helm) is step one. The controller itself is exposed with a NodePort or LoadBalancer Service.</p>
+<p>Because a cluster can run several controllers, each Ingress names the one it wants through <code>spec.ingressClassName</code>, which refers to an IngressClass object. The IngressClass's <code>spec.controller</code> field identifies the controller implementation. An IngressClass annotated with <code>ingressclass.kubernetes.io/is-default-class: &quot;true&quot;</code> becomes the default, and Ingresses created without a class name are assigned to it. If there is no default and no class name, the Ingress may be ignored by every controller. The older <code>kubernetes.io/ingress.class</code> annotation is deprecated.</p>
+<p>Each rule has an optional <code>host</code> and a list of <code>paths</code>, each with a <code>path</code>, a <code>pathType</code> and a <code>backend</code> Service name and port. There are three path types. <code>Exact</code> matches the URL path exactly and is case sensitive. <code>Prefix</code> matches by path elements split on <code>/</code>, so <code>/api</code> matches <code>/api</code> and <code>/api/v1</code> but not <code>/apiv1</code>. <code>ImplementationSpecific</code> leaves matching to the controller. When several paths match, the longest match wins, and Exact beats Prefix for the same length. A <code>defaultBackend</code> catches requests that match no rule.</p>
+<pre class="code" tabindex="0"><code>apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata: {name: shop, namespace: shop}
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts: [shop.example.com]
+    secretName: shop-tls
+  rules:
+  - host: shop.example.com
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service: {name: api, port: {number: 8080}}
+      - path: /
+        pathType: Prefix
+        backend:
+          service: {name: frontend, port: {number: 80}}</code></pre>
+<p>TLS is configured with a <code>tls</code> section listing hosts and a <code>secretName</code> that points to a Secret of type <code>kubernetes.io/tls</code> in the same namespace as the Ingress, created with <code>kubectl create secret tls shop-tls --cert=tls.crt --key=tls.key</code>. The controller then terminates TLS for those hosts. You can create simple Ingresses imperatively, for example <code>kubectl create ingress shop --class=nginx --rule=&quot;shop.example.com/api*=api:8080,tls=shop-tls&quot;</code>, where a trailing <code>*</code> means Prefix.</p>
+<p>Controller-specific behaviour, such as URL rewriting, is configured with annotations whose names depend on the controller. The Ingress API is stable but feature-frozen; new capabilities are going into Gateway API. For troubleshooting, <code>kubectl describe ingress</code> shows the resolved backends and events, the ADDRESS column shows whether a controller picked it up, and the controller Pod's logs show configuration errors.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Ingress controller</dt><dd>A proxy running in the cluster that implements Ingress objects.</dd><dt>IngressClass</dt><dd>A cluster-scoped object linking an Ingress to a specific controller.</dd><dt>Default IngressClass</dt><dd>The class annotated is-default-class true, used when an Ingress sets no ingressClassName.</dd><dt>pathType</dt><dd>Exact, Prefix (element-wise) or ImplementationSpecific path matching.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An Ingress created without ingressClassName has an empty ADDRESS and does not route. <code>kubectl get ingressclass</code> shows one class, nginx, with no default annotation. Either setting <code>ingressClassName: nginx</code> on the Ingress or annotating the class as default makes the controller adopt it.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Prefix matching is by path segment, not string prefix: /app matches /app/x but not /application. And the TLS Secret must live in the same namespace as the Ingress.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Does the path /shop with pathType Prefix match /shopping?</summary><p>No; Prefix matches whole path elements, so it matches /shop and /shop/... only.</p></details>
+<details class="sq"><summary>What makes an IngressClass the default?</summary><p>The annotation ingressclass.kubernetes.io/is-default-class set to &quot;true&quot;.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../gateway-api-gatewayclass-gateway-listeners-and-allowedroutes-httproute/">← Gateway API: GatewayClass, Gateway listeners and allowedRout</a><a href="../coredns-the-coredns-configmap-and-corefile-forwarding-and-stub-zones-s/">CoreDNS: the coredns ConfigMap and Corefile, forwarding and  →</a></nav>
+</main>
+</body>
+</html>

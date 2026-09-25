@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Connecting the CLI: `terraform login` and the `cloud`… · Terraform Associate Lesson</title>
+<meta name="description" content="To use HCP Terraform from your terminal, two things must be in place: the CLI must be able to authenticate to HCP Terraform, and the configuration must say">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Connecting the CLI: `terraform login` and the `cloud`… · Terraform Associate Lesson">
+<meta property="og:description" content="To use HCP Terraform from your terminal, two things must be in place: the CLI must be able to authenticate to HCP Terraform, and the configuration must say">
+<link rel="canonical" href="https://senayamyers27-art.github.io/terraform/lessons/connecting-the-cli-terraform-login-and-the-cloud-block-organization-wo/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/terraform/lessons/connecting-the-cli-terraform-login-and-the-cloud-block-organization-wo/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Terraform Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004) · Domain 8: HCP Terraform</p>
+<h1>Connecting the CLI: `terraform login` and the `cloud` block (organization, workspaces by name or tags)</h1>
+<article class="lbody">
+<p>To use HCP Terraform from your terminal, two things must be in place: the CLI must be able to authenticate to HCP Terraform, and the configuration must say which organization and workspaces it belongs to. <code>terraform login</code> handles the first; the <code>cloud</code> block handles the second.</p>
+<p><code>terraform login</code> opens a browser page where you generate an API token for your user account, then asks you to paste it into the terminal. The CLI saves the token in a credentials file in your user profile, named <code>credentials.tfrc.json</code> in the <code>.terraform.d</code> directory on Linux and macOS (the application data directory on Windows). The token is stored in plain text, so protect that file. By default the command targets HCP Terraform's standard hostname; for Terraform Enterprise, pass the hostname: <code>terraform login tfe.example.com</code>. <code>terraform logout</code> removes the stored token.</p>
+<p>In automation there is no browser, so pipelines provide the token differently: through an environment variable named <code>TF_TOKEN_</code> followed by the hostname with dots replaced by underscores (for example <code>TF_TOKEN_app_terraform_io</code>), or through a CLI configuration file. For CI, a team or organization token or a dedicated service account is usually better than a personal token.</p>
+<pre class="code" tabindex="0"><code>terraform {
+  cloud {
+    organization = &quot;example-org&quot;
+    workspaces {
+      tags = [&quot;app&quot;, &quot;aws&quot;]
+    }
+  }
+}</code></pre>
+<p>The <code>cloud</code> block's <code>organization</code> argument names the organization. Inside <code>workspaces</code>, choose one of two strategies. With <code>name = &quot;app-prod&quot;</code>, the configuration maps to exactly one HCP Terraform workspace, which is created on init if it does not exist. With <code>tags</code>, the configuration maps to every workspace that has all the listed tags. Tag mode lets one configuration serve several workspaces, such as app-dev and app-prod; you switch between them with <code>terraform workspace list</code> and <code>terraform workspace select</code>, and <code>terraform workspace new</code> creates a new workspace with those tags. You cannot set both <code>name</code> and <code>tags</code>.</p>
+<p>After writing the block, run <code>terraform init</code>. Terraform authenticates with your token, connects to the organization and sets up the workspace. If you previously used local or another backend's state, init offers to migrate it. From then on, <code>terraform plan</code> and <code>apply</code> either run remotely or locally depending on the workspace's execution mode, and state is stored in the workspace.</p>
+<p>Environment variables can fill in or override the block's settings, which is useful for pipelines: <code>TF_CLOUD_ORGANIZATION</code>, <code>TF_CLOUD_HOSTNAME</code>, <code>TF_CLOUD_PROJECT</code> and <code>TF_WORKSPACE</code>. That allows even an empty <code>cloud {}</code> block with all details supplied by the environment.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>terraform login</dt><dd>A command that obtains an HCP Terraform API token through the browser and stores it locally for the CLI.</dd><dt>credentials.tfrc.json</dt><dd>The local file where terraform login stores API tokens in plain text.</dd><dt>TF_TOKEN_hostname</dt><dd>An environment variable that supplies an API token for a given host, such as TF_TOKEN_app_terraform_io.</dd><dt>Workspace tags mapping</dt><dd>Using tags in the cloud block so one configuration maps to multiple HCP Terraform workspaces.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A developer clones a repository with a cloud block using tags = [&quot;billing&quot;]. They run terraform login, paste a token, run terraform init, then terraform workspace select billing-dev to work on the dev workspace before a colleague applies to billing-prod from a reviewed pull request.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> terraform login stores a token in credentials.tfrc.json; in CI use TF_TOKEN_&lt;host&gt; instead. In the cloud block, workspaces use name (one) or tags (many), never both.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How does a CI job authenticate to HCP Terraform without terraform login?</summary><p>By setting an environment variable such as TF_TOKEN_app_terraform_io with an API token.</p></details>
+<details class="sq"><summary>What does tags in the cloud block's workspaces block do?</summary><p>Maps the configuration to all workspaces with those tags, so you can switch among them with terraform workspace select.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Terraform Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../terraform/">Open the Terraform Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../hcp-terraform-formerly-terraform-cloud-remote-state-remote-runs-a-free/">← HCP Terraform (formerly Terraform Cloud): remote state, remo</a><a href="../workflows-vcs-driven-cli-driven-and-api-driven-runs/">Workflows: VCS-driven, CLI-driven and API-driven runs →</a></nav>
+</main>
+</body>
+</html>

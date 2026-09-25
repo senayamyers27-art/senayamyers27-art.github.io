@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DHCP scopes, reservations, options and relay… · AZ-802 Lesson</title>
+<meta name="description" content="The Dynamic Host Configuration Protocol (DHCP) hands out IP addresses and settings so you don't configure each client by hand. A client gets a lease throug">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="DHCP scopes, reservations, options and relay… · AZ-802 Lesson">
+<meta property="og:description" content="The Dynamic Host Configuration Protocol (DHCP) hands out IP addresses and settings so you don't configure each client by hand. A client gets a lease throug">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/dhcp-scopes-reservations-options-and-relay-authorization-in-ad/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/dhcp-scopes-reservations-options-and-relay-authorization-in-ad/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 4: Implement and manage an on-premises and hybrid networking infrastructure</p>
+<h1>DHCP scopes, reservations, options and relay; authorization in AD</h1>
+<article class="lbody">
+<p>The Dynamic Host Configuration Protocol (DHCP) hands out IP addresses and settings so you don't configure each client by hand. A client gets a lease through four messages, often remembered as DORA: Discover (a broadcast asking for any DHCP server), Offer, Request and Acknowledge. Because Discover is a broadcast, it normally stays on the local subnet, which matters when you design where servers live.</p>
+<p>A scope is a range of addresses for one subnet, such as 10.1.20.10 to 10.1.20.250 with mask 255.255.255.0, plus a lease duration. Inside a scope you add exclusion ranges for addresses you assign statically (printers, servers) and reservations. A reservation ties a specific address to a client's MAC address (for IPv4) so the device always gets the same IP while still receiving options from DHCP. In PowerShell you use <code>Add-DhcpServerv4Scope</code>, <code>Add-DhcpServerv4ExclusionRange</code> and <code>Add-DhcpServerv4Reservation</code>.</p>
+<p>Options carry settings beyond the address. The ones you will see most are 003 Router (default gateway), 006 DNS Servers and 015 DNS Domain Name. Options can be set at the server level (apply to all scopes), the scope level, and the reservation level, and the more specific level wins, so a reservation option overrides a scope option, which overrides a server option. DHCP policies can also assign options or address ranges based on criteria such as vendor class or MAC prefix. Set options with <code>Set-DhcpServerv4OptionValue</code>.</p>
+<p>Because clients broadcast, a DHCP server can only hear clients on its own subnet unless something forwards the request. A DHCP relay agent does that: usually the router interface (often called an IP helper address) or the Routing and Remote Access relay agent on a Windows server. The relay converts the broadcast into a unicast to the DHCP server and fills in the gateway address field (giaddr) with the address of the interface that received it. The server uses giaddr to pick the scope for that subnet. If clients in a remote subnet get no address, check the relay first and then whether a matching scope exists and is active.</p>
+<p>In an Active Directory domain, a Windows DHCP server that is a domain member must be authorized in AD before it will lease addresses. Authorization stops a rogue or test server from handing out wrong settings. Authorizing requires Enterprise Admins membership by default (or delegated rights), because the list lives in the forest configuration partition. You authorize with the DHCP console or <code>Add-DhcpServerInDC -DnsName dhcp1.contoso.com -IPAddress 10.1.0.5</code>, and list authorized servers with <code>Get-DhcpServerInDC</code>. A standalone, non-domain server checks whether an authorized server exists on the subnet and stops leasing if it finds one.</p>
+<p>In your lab, after installing the role with <code>Install-WindowsFeature DHCP -IncludeManagementTools</code>, the console still shows a red down arrow on the server until you authorize it. Also run the post-install step that creates the DHCP Administrators and DHCP Users security groups.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Scope</dt><dd>A range of IP addresses for one subnet, with a subnet mask, lease duration and options, from which DHCP leases addresses.</dd><dt>Reservation</dt><dd>A scope entry that always gives the same IP address to a client identified by its MAC address.</dd><dt>Exclusion range</dt><dd>Addresses inside a scope that DHCP will never lease, used for statically configured devices.</dd><dt>DHCP relay agent</dt><dd>A router feature or service that forwards broadcast DHCP requests from a remote subnet to a DHCP server as unicast.</dd><dt>Authorization</dt><dd>Registering a domain-member DHCP server in AD so it is allowed to lease addresses; requires Enterprise Admins rights by default.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A branch VLAN 10.3.40.0/24 gets no addresses after a new scope is created on the central DHCP server. The admin finds the scope is fine but the branch router has no IP helper configured. After adding the relay pointing to the DHCP server, clients receive leases from the right scope because the router stamps giaddr 10.3.40.1.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Know the option precedence (reservation over scope over server) and that authorization needs Enterprise Admins by default. If a server is installed but hands out nothing, suspect authorization.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>A scope sets DNS option 006 to 10.0.0.10, but one reservation sets 006 to 10.0.0.20. Which does the reserved client get?</summary><p>10.0.0.20, because reservation-level options override scope-level and server-level options.</p></details>
+<details class="sq"><summary>How does a DHCP server know which scope to use for a request that came through a relay agent?</summary><p>It reads the giaddr field the relay filled in with its receiving interface address and picks the scope whose subnet contains that address.</p></details>
+<details class="sq"><summary>A new domain-member DHCP server is installed and has an active scope but leases no addresses. What is the likely cause?</summary><p>It hasn't been authorized in Active Directory; authorize it with the console or Add-DhcpServerInDC using an account with Enterprise Admins rights.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../azure-dns-private-zones-virtual-network-links-and-auto-registration-az/">← Azure DNS private zones, virtual network links and auto-regi</a><a href="../dhcp-high-availability-failover-in-load-balance-and-hot-standby-modes/">DHCP high availability: failover in load balance and hot sta →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Object lifecycle and garbage collection eligibility · OCP Java Lesson</title>
+<meta name="description" content="Objects in Java are created on the heap, usually with new, and they live as long as they are needed. You never free memory yourself.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Object lifecycle and garbage collection eligibility · OCP Java Lesson">
+<meta property="og:description" content="Objects in Java are created on the heap, usually with new, and they live as long as they are needed. You never free memory yourself.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/java-se/lessons/object-lifecycle-and-garbage-collection-eligibility/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/java-se/lessons/object-lifecycle-and-garbage-collection-eligibility/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">OCP Java</a> / <a href="../">Lessons</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25) · Domain 3: Using object-oriented concepts in Java</p>
+<h1>Object lifecycle and garbage collection eligibility</h1>
+<article class="lbody">
+<p>Objects in Java are created on the heap, usually with <code>new</code>, and they live as long as they are needed. You never free memory yourself. Instead, the garbage collector (GC), part of the Java Virtual Machine (JVM), finds objects that the program can no longer reach and reclaims their memory. Variables, by contrast, hold either primitive values or references to objects; local variables live on the stack while their method runs.</p>
+<p>An object becomes eligible for garbage collection when no live thread can reach it through any chain of references starting from a GC root. Roots include local variables of running methods, static fields and active threads. Common ways an object loses its last reference are: the variable is set to <code>null</code>, the variable is reassigned to another object, or the variable goes out of scope when its method or block ends.</p>
+<p>Eligible does not mean collected. The JVM decides when, and whether, to run the collector. <code>System.gc()</code> is only a request that the JVM may ignore, so no exam answer can rely on it. That is why questions ask &quot;how many objects are eligible&quot; at a given line, not how many have been collected. Objects that only reference each other, with no path from a root, are eligible too; this is sometimes called an island of isolation. Java's GC handles cycles, unlike simple reference counting.</p>
+<pre class="code" tabindex="0"><code>public class Demo {
+    public static void main(String[] args) {
+        String a = new String(&quot;A&quot;);   // object 1
+        String b = new String(&quot;B&quot;);   // object 2
+        a = b;                        // object 1 now unreachable
+        String c = new String(&quot;C&quot;);   // object 3
+        b = null;                     // object 2 still referenced by a
+        c = a;                        // object 3 now unreachable
+        // Line X: objects 1 and 3 are eligible; object 2 is reachable via a and c
+    }
+}</code></pre>
+<p>Trace such questions by drawing boxes for objects and arrows for references, and updating the arrows line by line. At the requested line, count the boxes with no incoming arrow from a live variable or from another reachable object. Be careful with string literals: literals live in the string pool and are not the kind of objects these questions count, which is why exam code uses <code>new String(...)</code> or custom classes.</p>
+<p>The <code>Object.finalize()</code> method was meant to run before collection, but it is deprecated for removal and you should never depend on it; there is no guarantee it runs. For releasing resources such as files and sockets, use try-with-resources and <code>close()</code>, which run at a predictable time.</p>
+<p>In practice, memory leaks in Java come from references that are kept by accident, such as objects added to a static collection and never removed. The GC cannot collect what is still reachable.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Garbage collector</dt><dd>The JVM component that automatically reclaims memory used by unreachable objects.</dd><dt>Eligible for garbage collection</dt><dd>An object that no live thread can reach from any GC root; it may be collected at any later time or never.</dd><dt>GC root</dt><dd>A starting point for reachability, such as a local variable in an active method or a static field.</dd><dt>Island of isolation</dt><dd>A group of objects that reference each other but cannot be reached from any root, so all are eligible.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A web application caches every user session in a static HashMap and never removes entries. Even after users log out, the sessions stay reachable through the static field, so they are never eligible for collection and the server slowly runs out of memory. Evicting entries on logout fixes it.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Count reachable objects, not variables. Draw references on paper line by line, and remember that System.gc() guarantees nothing.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Does calling <code>System.gc()</code> guarantee that eligible objects are collected?</summary><p>No. It is only a suggestion; the JVM decides when collection happens.</p></details>
+<details class="sq"><summary>If objects A and B reference each other but nothing else references them, are they eligible?</summary><p>Yes. Neither can be reached from a GC root, so both are eligible despite the cycle.</p></details>
+<details class="sq"><summary>When does a local object created in a method become eligible if no reference escapes?</summary><p>When the method returns and its local variable goes out of scope, or earlier if the variable is reassigned or set to null.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study OCP Java for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../java-se/">Open the OCP Java study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../encapsulation-immutable-objects-and-var-local-type-inference/">← Encapsulation, immutable objects and var local type inferenc</a><a href="../checked-vs-unchecked-exceptions-and-the-throwable-hierarchy/">Checked vs unchecked exceptions and the Throwable hierarchy →</a></nav>
+</main>
+</body>
+</html>

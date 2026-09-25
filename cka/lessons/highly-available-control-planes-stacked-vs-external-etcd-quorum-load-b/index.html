@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Highly available control planes: stacked vs external… · CKA Lesson</title>
+<meta name="description" content="A single control plane node is a single point of failure: if it dies, running Pods keep going but nothing can be changed, scheduled or healed. A highly ava">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Highly available control planes: stacked vs external… · CKA Lesson">
+<meta property="og:description" content="A single control plane node is a single point of failure: if it dies, running Pods keep going but nothing can be changed, scheduled or healed. A highly ava">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/highly-available-control-planes-stacked-vs-external-etcd-quorum-load-b/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/highly-available-control-planes-stacked-vs-external-etcd-quorum-load-b/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 1: Cluster Architecture, Installation and Configuration</p>
+<h1>Highly available control planes: stacked vs external etcd, quorum, load balancer in front of API servers, --upload-certs and --certificate-key</h1>
+<article class="lbody">
+<p>A single control plane node is a single point of failure: if it dies, running Pods keep going but nothing can be changed, scheduled or healed. A highly available (HA) control plane runs several control plane nodes so the cluster survives the loss of one.</p>
+<p>kubeadm supports two topologies. In a stacked topology, each control plane node runs its own etcd member next to the API server, scheduler and controller-manager. It needs fewer machines and is what kubeadm sets up by default, but losing a node removes both a control plane instance and an etcd member. In an external etcd topology, etcd runs on its own dedicated hosts and the control plane nodes connect to it. It decouples the two failure domains and lets you size etcd separately, at the cost of more machines and more setup (you give kubeadm the etcd endpoints and certificates in a configuration file).</p>
+<p>etcd uses the Raft consensus algorithm, which needs a quorum, a majority of members, to accept writes. Quorum for n members is floor(n/2) + 1. Three members tolerate one failure; five tolerate two. Four members still tolerate only one, which is why etcd clusters use odd sizes. If quorum is lost, etcd stops accepting writes and the API server cannot change anything, even if some members are healthy.</p>
+<p>The API servers are stateless and all active at once, so clients reach them through a load balancer (for example HAProxy with keepalived, or a cloud load balancer) listening on port 6443 and forwarding to every control plane node. That load balancer's address is what you pass as <code>--control-plane-endpoint</code>. The scheduler and controller-manager are different: they run on every control plane node but use leader election, so only one instance of each is active at a time and the others wait to take over.</p>
+<p>Joining extra control plane nodes requires sharing the cluster's CA and service-account keys. kubeadm can do this for you. <code>kubeadm init --control-plane-endpoint=LB:6443 --upload-certs</code> encrypts those certificates, stores them in the <code>kubeadm-certs</code> Secret in kube-system, and prints a certificate key. Other control plane nodes join with <code>kubeadm join LB:6443 --token ... --discovery-token-ca-cert-hash ... --control-plane --certificate-key &lt;key&gt;</code>.</p>
+<p>The uploaded certificates are deleted automatically after a short time (two hours by default), so if you add a control plane node later, re-upload them with <code>kubeadm init phase upload-certs --upload-certs</code>, which prints a new certificate key. Without the key, the alternative is copying the certificate files to the new node manually.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Stacked etcd</dt><dd>Topology where each control plane node also runs an etcd member.</dd><dt>External etcd</dt><dd>Topology where etcd runs on separate hosts from the control plane.</dd><dt>Quorum</dt><dd>A majority of etcd members, floor(n/2)+1, needed to commit writes.</dd><dt>--certificate-key</dt><dd>The key used to decrypt control plane certificates uploaded by --upload-certs when joining as a control plane node.</dd><dt>Leader election</dt><dd>Mechanism that keeps only one scheduler and one controller-manager active across control plane nodes.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A three-node stacked control plane loses cp2 to a disk failure. etcd still has two of three members, so quorum holds, the load balancer stops sending traffic to cp2's dead API server, and the scheduler leader on cp1 keeps placing Pods. The team rebuilds cp2 by generating a fresh certificate key and running join with --control-plane.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Know the quorum math cold: 3 members survive 1 failure, 5 survive 2, and adding a fourth member to three does not improve fault tolerance. Also remember that the scheduler and controller-manager are active/passive while API servers are active/active.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How many etcd member failures can a five-member cluster tolerate?</summary><p>Two, because quorum is three.</p></details>
+<details class="sq"><summary>What flag on kubeadm init shares certificates so other control plane nodes can join without copying files?</summary><p>--upload-certs, which prints the certificate key used with join --certificate-key.</p></details>
+<details class="sq"><summary>What is the main trade-off of external etcd versus stacked?</summary><p>Better failure isolation for more hosts and more setup complexity.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../etcd-backup-and-restore-with-etcdctl-etcdutl-and-the-etcd-pki-pointing/">← etcd backup and restore with etcdctl/etcdutl and the etcd PK</a><a href="../rbac-roles-clusterroles-rolebindings-clusterrolebindings-aggregated-an/">RBAC: Roles, ClusterRoles, RoleBindings, ClusterRoleBindings →</a></nav>
+</main>
+</body>
+</html>

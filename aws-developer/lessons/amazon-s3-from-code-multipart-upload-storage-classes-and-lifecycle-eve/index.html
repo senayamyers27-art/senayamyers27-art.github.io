@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Amazon S3 from code: multipart upload, storage classes… · Developer Associate Lesson</title>
+<meta name="description" content="Amazon S3 stores objects (files plus metadata) in buckets, addressed by key. As a developer you mostly call PutObject, GetObject, ListObjectsV2 and DeleteO">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Amazon S3 from code: multipart upload, storage classes… · Developer Associate Lesson">
+<meta property="og:description" content="Amazon S3 stores objects (files plus metadata) in buckets, addressed by key. As a developer you mostly call PutObject, GetObject, ListObjectsV2 and DeleteO">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/amazon-s3-from-code-multipart-upload-storage-classes-and-lifecycle-eve/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/amazon-s3-from-code-multipart-upload-storage-classes-and-lifecycle-eve/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 1: Development with AWS Services</p>
+<h1>Amazon S3 from code: multipart upload, storage classes and lifecycle, event notifications</h1>
+<article class="lbody">
+<p>Amazon S3 stores objects (files plus metadata) in buckets, addressed by key. As a developer you mostly call <code>PutObject</code>, <code>GetObject</code>, <code>ListObjectsV2</code> and <code>DeleteObject</code>, but the exam focuses on large uploads, choosing storage classes and reacting to changes.</p>
+<p>A single <code>PutObject</code> can upload up to 5 GB. Multipart upload splits a large object into parts that are uploaded independently and in parallel, then assembled. It is required above 5 GB and recommended for objects over about 100 MB. The flow is <code>CreateMultipartUpload</code> (returns an upload ID), <code>UploadPart</code> for each part (each gets an ETag; parts are 5 MB to 5 GB except the last, with up to 10,000 parts), then <code>CompleteMultipartUpload</code> with the list of part numbers and ETags. Benefits: higher throughput, and a failed part can be retried alone instead of restarting the whole upload. The SDKs' high-level transfer utilities, and <code>aws s3 cp</code>, do this automatically. Incomplete multipart uploads keep their parts stored (and billed) until aborted, so add a lifecycle rule to abort incomplete uploads after some days.</p>
+<p>For fast uploads from distant clients, S3 Transfer Acceleration routes data through CloudFront edge locations. For downloads, byte-range fetches (the <code>Range</code> header) retrieve parts of an object in parallel or resume a failed download.</p>
+<p>Storage classes trade cost against access speed and pattern. S3 Standard is for frequently accessed data. S3 Intelligent-Tiering moves objects between access tiers automatically based on usage, good when patterns are unknown. S3 Standard-IA (Infrequent Access) and S3 One Zone-IA cost less to store but charge per retrieval; One Zone-IA keeps data in a single Availability Zone, so use it only for re-creatable data. S3 Glacier Instant Retrieval, Glacier Flexible Retrieval and Glacier Deep Archive are for archives, with the latter two requiring a restore request that takes minutes to hours before data can be read. You set the class per object with the <code>StorageClass</code> parameter.</p>
+<p>Lifecycle configuration automates this with rules scoped by prefix or tag: transition actions move objects to cheaper classes after a number of days (for example Standard-IA at 30 days, Glacier Flexible Retrieval at 90), and expiration actions delete objects, old noncurrent versions in versioned buckets, or incomplete multipart uploads.</p>
+<p>S3 event notifications fire when objects are created, removed, restored or replicated, and can be filtered by key prefix and suffix (for example <code>uploads/</code> and <code>.jpg</code>). Destinations are Lambda, SQS and SNS; the destination's resource policy must allow S3 to invoke or send to it. Alternatively, enable delivery of S3 events to EventBridge to get richer filtering and many more targets. Notifications are typically delivered in seconds and can occasionally be delivered more than once, so handlers should be idempotent. Avoid writing output back into the prefix that triggers the function, which creates an invocation loop.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Multipart upload</dt><dd>Uploading an object as separately uploaded parts that S3 assembles; required above 5 GB and recommended for large files.</dd><dt>Lifecycle rule</dt><dd>A bucket configuration that transitions objects to other storage classes or expires them after set periods.</dd><dt>S3 Intelligent-Tiering</dt><dd>A storage class that automatically moves objects between access tiers based on how often they are accessed.</dd><dt>Event notification</dt><dd>An S3 feature that sends object-level events to Lambda, SQS, SNS or EventBridge, optionally filtered by prefix and suffix.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A video platform uploads 20 GB files from a mobile app. It uses multipart upload with 100 MB parts in parallel, so a dropped connection only retries one part. An ObjectCreated notification filtered to the suffix .mp4 sends a message to an SQS queue that transcoding workers consume, and a lifecycle rule moves originals to Glacier Flexible Retrieval after 90 days.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Uploads over 5 GB must use multipart upload. Remember the lifecycle rule to abort incomplete multipart uploads when a question asks why storage costs keep growing with no visible objects.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What three API calls make up a multipart upload?</summary><p>CreateMultipartUpload, UploadPart for each part, then CompleteMultipartUpload (or AbortMultipartUpload to cancel).</p></details>
+<details class="sq"><summary>Which storage class suits data with unpredictable access patterns?</summary><p>S3 Intelligent-Tiering, which moves objects between tiers automatically based on access.</p></details>
+<details class="sq"><summary>What must be in place for S3 to invoke a Lambda function on upload?</summary><p>An event notification configuration on the bucket and a resource-based policy on the function allowing s3.amazonaws.com to invoke it.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../dynamodb-partition-and-sort-keys-query-vs-scan-lsi-vs-gsi-rcu-wcu-math/">← DynamoDB: partition and sort keys, Query vs Scan, LSI vs GSI</a><a href="../caching-strategies-with-elasticache-lazy-loading-write-through-ttls-ch/">Caching strategies with ElastiCache: lazy loading, write-thr →</a></nav>
+</main>
+</body>
+</html>

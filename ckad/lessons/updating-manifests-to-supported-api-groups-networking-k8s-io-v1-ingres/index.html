@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Updating manifests to supported API groups… · CKAD Lesson</title>
+<meta name="description" content="Changing apiVersion is sometimes all you need, but often the field structure changed too. The exam likes three examples, each with a stable version you sho">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Updating manifests to supported API groups… · CKAD Lesson">
+<meta property="og:description" content="Changing apiVersion is sometimes all you need, but often the field structure changed too. The exam likes three examples, each with a stable version you sho">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/updating-manifests-to-supported-api-groups-networking-k8s-io-v1-ingres/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/updating-manifests-to-supported-api-groups-networking-k8s-io-v1-ingres/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 3: Application Observability and Maintenance</p>
+<h1>Updating manifests to supported API groups (networking.k8s.io/v1 Ingress, batch/v1 CronJob, autoscaling/v2 HPA)</h1>
+<article class="lbody">
+<p>Changing <code>apiVersion</code> is sometimes all you need, but often the field structure changed too. The exam likes three examples, each with a stable version you should use today: Ingress in <code>networking.k8s.io/v1</code>, CronJob in <code>batch/v1</code> and HorizontalPodAutoscaler in <code>autoscaling/v2</code>.</p>
+<p>Ingress moved from <code>extensions/v1beta1</code> and <code>networking.k8s.io/v1beta1</code> to <code>networking.k8s.io/v1</code>, and the backend format changed. The old <code>serviceName</code> and <code>servicePort</code> fields became a nested <code>service</code> object with <code>name</code> and <code>port.number</code> (or <code>port.name</code>). Each path now requires a <code>pathType</code> of <code>Prefix</code>, <code>Exact</code> or <code>ImplementationSpecific</code>. The old <code>kubernetes.io/ingress.class</code> annotation is replaced by the <code>ingressClassName</code> field.</p>
+<pre class="code" tabindex="0"><code># old (removed)
+#   backend:
+#     serviceName: web
+#     servicePort: 80
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: shop.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: web
+            port:
+              number: 80</code></pre>
+<p>CronJob moved from <code>batch/v1beta1</code> to <code>batch/v1</code>. Here the structure is essentially unchanged: <code>schedule</code>, <code>concurrencyPolicy</code>, <code>jobTemplate</code> and the history limits keep the same names. Usually you only change the apiVersion line, and optionally gain newer fields such as <code>timeZone</code>.</p>
+<p>HorizontalPodAutoscaler moved from <code>autoscaling/v2beta1</code> and <code>v2beta2</code> to <code>autoscaling/v2</code>. The <code>autoscaling/v1</code> version still exists but only supports a CPU target through <code>targetCPUUtilizationPercentage</code>. In v2, metrics are a list, and a resource metric is nested: <code>type: Resource</code>, then <code>resource.name: cpu</code> and <code>resource.target</code> with <code>type: Utilization</code> and <code>averageUtilization</code>. The v2beta1 style <code>targetAverageUtilization</code> field no longer exists.</p>
+<pre class="code" tabindex="0"><code>apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: web
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70</code></pre>
+<p>A fast, reliable method is to generate fresh YAML with the current version rather than hand-editing: <code>kubectl create ingress web --rule=&quot;shop.example.com/*=web:80&quot; --dry-run=client -o yaml</code> produces a v1 Ingress (the <code>*</code> makes the path a Prefix), <code>kubectl create cronjob</code> a batch/v1 CronJob, and <code>kubectl autoscale deploy web --min=2 --max=10 --cpu-percent=70 --dry-run=client -o yaml</code> an HPA you can compare with. Then copy over the settings from the old file and validate with <code>kubectl apply --dry-run=server -f</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>networking.k8s.io/v1</dt><dd>Stable API group/version for Ingress and NetworkPolicy.</dd><dt>pathType</dt><dd>Required Ingress path field in v1: Prefix, Exact or ImplementationSpecific.</dd><dt>autoscaling/v2</dt><dd>Stable HPA version with a metrics list supporting resource, pods, object and external metrics.</dd><dt>batch/v1</dt><dd>Stable group/version for Job and CronJob.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An old Ingress with <code>serviceName: api</code> and <code>servicePort: 8080</code> fails to apply. The developer changes the apiVersion to networking.k8s.io/v1, rewrites the backend as <code>service: {name: api, port: {number: 8080}}</code>, adds <code>pathType: Prefix</code>, and the server-side dry run passes.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> For Ingress, changing only the apiVersion is not enough: fix the backend format and add pathType. For CronJob, the apiVersion change is usually all that is needed.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What replaced <code>serviceName</code> and <code>servicePort</code> in a v1 Ingress backend?</summary><p>A nested <code>service</code> object with <code>name</code> and <code>port.number</code> or <code>port.name</code>.</p></details>
+<details class="sq"><summary>How is a 70% CPU target expressed in autoscaling/v2?</summary><p>In metrics: type Resource, resource name cpu, target type Utilization with averageUtilization 70.</p></details>
+<details class="sq"><summary>What is the stable apiVersion for CronJob?</summary><p>batch/v1.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../api-deprecations-and-removals-finding-current-apiversions-with-kubectl/">← API deprecations and removals: finding current apiVersions w</a><a href="../liveness-readiness-and-startup-probes-httpget-tcpsocket-exec-and-grpc/">Liveness, readiness and startup probes; httpGet, tcpSocket,  →</a></nav>
+</main>
+</body>
+</html>

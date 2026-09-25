@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Using SELinux booleans (getsebool -a, setsebool -P… · RHCSA Lesson</title>
+<meta name="description" content="SELinux policy covers many ways a service might reasonably be used, but not all of them are safe to allow on every system. Booleans are on/off switches bui">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Using SELinux booleans (getsebool -a, setsebool -P… · RHCSA Lesson">
+<meta property="og:description" content="SELinux policy covers many ways a service might reasonably be used, but not all of them are safe to allow on every system. Booleans are on/off switches bui">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/using-selinux-booleans-getsebool-a-setsebool-p-semanage-boolean-l/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/using-selinux-booleans-getsebool-a-setsebool-p-semanage-boolean-l/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 10: Manage security</p>
+<h1>Using SELinux booleans (getsebool -a, setsebool -P, semanage boolean -l)</h1>
+<article class="lbody">
+<p>SELinux policy covers many ways a service might reasonably be used, but not all of them are safe to allow on every system. Booleans are on/off switches built into the policy for optional behavior, such as letting the web server serve users' home directories, letting it make outbound network connections, or letting FTP write to certain directories. You flip a boolean instead of writing new policy.</p>
+<p><code>getsebool -a</code> lists every boolean and its current value; filter it with grep, as in <code>getsebool -a | grep httpd</code>. <code>getsebool httpd_enable_homedirs</code> shows one. <code>semanage boolean -l</code> gives more: the current value, the default value and a short description, which is how you find the right boolean when you do not know its name. Adding <code>-C</code> to that shows only booleans changed locally.</p>
+<pre class="code" tabindex="0"><code>getsebool -a | grep httpd
+semanage boolean -l | grep -i home
+# httpd_enable_homedirs  (off , off)  Allow httpd to read home directories
+setsebool -P httpd_enable_homedirs on
+getsebool httpd_enable_homedirs</code></pre>
+<p><code>setsebool name on</code> changes a boolean immediately, but only until the next reboot. <code>setsebool -P name on</code> changes it and also writes it to the policy so it persists. Without <code>-P</code>, the change looks successful and the task fails after the reboot, so use <code>-P</code> whenever a change must last. With <code>-P</code> the command can take a few seconds while the policy is rebuilt.</p>
+<p>In <code>semanage boolean -l</code> output the pair in parentheses is (current, default). If it reads (on, off), someone switched it on and it may or may not be persistent; <code>semanage boolean -l -C</code> lists persistent local changes.</p>
+<p>Common examples: <code>httpd_enable_homedirs</code> for user web pages, <code>httpd_can_network_connect</code> and <code>httpd_can_network_connect_db</code> for web applications that talk to other servers or databases, <code>httpd_use_nfs</code> for web content on NFS, and <code>use_nfs_home_dirs</code> for NFS-mounted home directories. Denials that a boolean would fix are reported by sealert with a suggestion naming the boolean.</p>
+<p>Before turning a boolean on, read its description and turn on only what the task needs. Each boolean widens what a service can do, so it is a small, deliberate reduction in protection, still far better than disabling SELinux.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>SELinux boolean</dt><dd>A policy switch that turns an optional set of permissions on or off without writing new policy.</dd><dt>getsebool -a</dt><dd>Lists all booleans and their current values.</dd><dt>setsebool -P</dt><dd>Sets a boolean and makes the change persistent across reboots.</dd><dt>semanage boolean -l</dt><dd>Lists booleans with current value, default value and description.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Users' personal web pages under ~/public_html return 403 errors. semanage boolean -l | grep homedirs shows httpd_enable_homedirs is off. You run setsebool -P httpd_enable_homedirs on, fix the directory permissions and labels, and the pages load, including after a reboot.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> setsebool without -P is lost at reboot. When a task asks for a persistent change, check afterwards with semanage boolean -l -C, which lists only locally changed booleans.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What does -P add to setsebool?</summary><p>It makes the change persistent across reboots by writing it into the policy.</p></details>
+<details class="sq"><summary>How can you find a boolean when you do not know its name?</summary><p>semanage boolean -l | grep a keyword, which searches names and descriptions.</p></details>
+<details class="sq"><summary>In semanage boolean -l output, what does (on , off) mean?</summary><p>The boolean is currently on and its default is off.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../managing-selinux-port-labels-semanage-port-a-t-http-port-t-p-tcp/">← Managing SELinux port labels (semanage port -a -t http_port_</a><a href="../diagnosing-routine-selinux-denials-var-log-audit-audit-log-ausearch-m/">Diagnosing routine SELinux denials: /var/log/audit/audit.log →</a></nav>
+</main>
+</body>
+</html>

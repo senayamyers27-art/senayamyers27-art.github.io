@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cluster access problems: kubeconfig contexts, expired… · CKA Lesson</title>
+<meta name="description" content="Before you can fix anything you need to reach the right cluster. The CKA uses several clusters, and each task tells you which context to use.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Cluster access problems: kubeconfig contexts, expired… · CKA Lesson">
+<meta property="og:description" content="Before you can fix anything you need to reach the right cluster. The CKA uses several clusters, and each task tells you which context to use.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/cluster-access-problems-kubeconfig-contexts-expired-certificates-conne/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/cluster-access-problems-kubeconfig-contexts-expired-certificates-conne/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 5: Troubleshooting</p>
+<h1>Cluster access problems: kubeconfig contexts, expired certificates, connection refused on 6443</h1>
+<article class="lbody">
+<p>Before you can fix anything you need to reach the right cluster. The CKA uses several clusters, and each task tells you which context to use. Access problems are also a troubleshooting topic in their own right.</p>
+<p>kubectl reads its configuration from <code>~/.kube/config</code> by default, from the files listed in the <code>KUBECONFIG</code> environment variable, or from <code>--kubeconfig</code>. A kubeconfig has clusters, users and contexts, and a current-context. Know these commands well.</p>
+<pre class="code" tabindex="0"><code>kubectl config get-contexts
+kubectl config current-context
+kubectl config use-context prod-admin@prod
+kubectl config set-context --current --namespace=app
+kubectl config view --minify          # only the active context
+kubectl --kubeconfig /etc/kubernetes/admin.conf get nodes</code></pre>
+<p>In the exam, run the <code>use-context</code> command given at the top of each task before anything else. Working on the wrong cluster is one of the easiest ways to lose points, because your correct answer ends up somewhere the grader does not look.</p>
+<p>Error messages point to the layer that failed. 'connection refused' on port 6443 means nothing is listening at the address: the API server is down, the kubeconfig has the wrong host or port, or you are on a machine that cannot reach it. Check the <code>server:</code> line of the active cluster with <code>kubectl config view --minify</code>, then on the control plane use <code>crictl ps -a | grep kube-apiserver</code> and its logs, or <code>ss -tlnp | grep 6443</code> to see whether anything listens. A timeout rather than a refusal suggests a firewall or wrong IP.</p>
+<p>'x509: certificate has expired or is not yet valid' means a certificate in the chain is outside its validity period. If the client certificate in your kubeconfig expired, you need a new one; if the API server's certificates expired, all clients fail. On kubeadm clusters run <code>kubeadm certs check-expiration</code>, then <code>kubeadm certs renew all</code>, restart the control plane static Pods and copy the refreshed <code>/etc/kubernetes/admin.conf</code> to <code>~/.kube/config</code>. 'not yet valid' can also mean the node's clock is wrong. 'x509: certificate signed by unknown authority' means the CA data in the kubeconfig does not match the cluster, often from copying a kubeconfig from another cluster.</p>
+<p>Finally, distinguish the two auth failures. 'Unauthorized' (HTTP 401) is authentication: the server does not accept your credentials, such as a revoked token or a certificate from the wrong CA. 'Forbidden' (HTTP 403) is authorization: the server knows who you are, but RBAC does not permit the action. For Forbidden, check bindings with <code>kubectl auth can-i</code>; for Unauthorized, check the credentials in the kubeconfig.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Context</dt><dd>A kubeconfig entry combining a cluster, a user and an optional namespace.</dd><dt>KUBECONFIG</dt><dd>Environment variable listing kubeconfig files for kubectl to merge.</dd><dt>Unauthorized vs Forbidden</dt><dd>401 means authentication failed; 403 means authenticated but not permitted by RBAC.</dd><dt>kubeadm certs renew</dt><dd>Command that renews kubeadm-managed certificates, including those embedded in kubeconfigs.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>One morning every kubectl command fails with an x509 expired error on a lab cluster built a year ago and never upgraded. <code>kubeadm certs check-expiration</code> shows everything expired yesterday. You run <code>kubeadm certs renew all</code>, restart the control plane Pods by moving the manifests out and back, copy admin.conf to ~/.kube/config and access returns.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Refused means nothing is listening (API server down or wrong address); x509 means certificates; Unauthorized means credentials; Forbidden means RBAC. The error tells you which layer to fix.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How do you see only the details of the currently active context?</summary><p><code>kubectl config view --minify</code>.</p></details>
+<details class="sq"><summary>What is the difference between an Unauthorized and a Forbidden response?</summary><p>Unauthorized is failed authentication; Forbidden means the identity is known but RBAC denies the action.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../dns-problems-coredns-pods-and-logs-loop-detection-with-systemd-resolve/">← DNS problems: CoreDNS Pods and logs, loop detection with sys</a><a href="../output-handling-for-tasks-o-jsonpath-custom-columns-sort-by-writing-an/">Output handling for tasks: -o jsonpath, custom-columns, --so →</a></nav>
+</main>
+</body>
+</html>

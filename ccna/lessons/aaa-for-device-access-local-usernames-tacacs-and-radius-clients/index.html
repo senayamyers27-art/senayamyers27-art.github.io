@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AAA for device access: local usernames, TACACS+ and… · CCNA Lesson</title>
+<meta name="description" content="AAA stands for authentication, authorization and accounting. Authentication asks who you are, usually with a username and password.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="AAA for device access: local usernames, TACACS+ and… · CCNA Lesson">
+<meta property="og:description" content="AAA stands for authentication, authorization and accounting. Authentication asks who you are, usually with a username and password.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ccna/lessons/aaa-for-device-access-local-usernames-tacacs-and-radius-clients/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ccna/lessons/aaa-for-device-access-local-usernames-tacacs-and-radius-clients/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CCNA</a> / <a href="../">Lessons</a></p>
+<p class="note">Cisco CCNA 200-301 v2.0 · Domain 4: Network services &amp; security</p>
+<h1>AAA for device access: local usernames, TACACS+ and RADIUS clients</h1>
+<article class="lbody">
+<p>AAA stands for authentication, authorization and accounting. Authentication asks who you are, usually with a username and password. Authorization decides what you are allowed to do, such as which commands or privilege level. Accounting records what you did and when, for audit and troubleshooting. Applying AAA to routers and switches means administrators log in with individual accounts, not a shared password, and their actions can be controlled and logged.</p>
+<p>The simplest method uses local usernames stored on each device. <code>username admin privilege 15 secret S3cureP@ss</code> creates an account whose password is stored as a strong hash. On the VTY lines, <code>login local</code> makes the device check that local database. Local accounts are fine for a few devices, but on dozens of devices, adding or removing a user means touching every one, and there is no central log.</p>
+<p>Central AAA servers solve that. The network device acts as an AAA client and sends each login to a server, such as Cisco ISE, that holds the accounts or checks them against a directory. There are two protocols. TACACS+ (Terminal Access Controller Access-Control System Plus) was developed by Cisco and uses TCP port 49. It encrypts the entire body of the packet and separates authentication, authorization and accounting, which allows per-command authorization. That makes it the usual choice for administering network devices. RADIUS (Remote Authentication Dial-In User Service) is an open standard that uses UDP, with ports 1812 for authentication and 1813 for accounting (older implementations use 1645 and 1646). It encrypts only the password and combines authentication and authorization in one exchange. RADIUS is the usual choice for network access, such as 802.1X for users and Wi-Fi.</p>
+<p>Configuration starts with <code>aaa new-model</code>, which turns on the AAA framework and changes how login works, so configure a local fallback account first. Then define the server and a method list that says which sources to try, in order.</p>
+<pre class="code" tabindex="0"><code>aaa new-model
+username admin privilege 15 secret S3cureP@ss
+tacacs server ISE1
+ address ipv4 10.1.1.50
+ key MySharedKey
+aaa authentication login default group tacacs+ local
+aaa authorization exec default group tacacs+ local
+aaa accounting commands 15 default start-stop group tacacs+</code></pre>
+<p>The method list <code>group tacacs+ local</code> means: ask the TACACS+ servers; if none respond, fall back to the local database. The fallback happens only when the servers are unreachable, not when they reject a password; a rejection is final. The <code>default</code> list applies to all lines unless a named list is applied to a line with <code>login authentication &lt;name&gt;</code>. RADIUS is configured similarly with <code>radius server</code> and <code>group radius</code>. Always keep a local account as fallback so you can still log in if the AAA servers go down, and verify with <code>show aaa servers</code> and test logins before closing your session.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>AAA</dt><dd>Authentication (who you are), authorization (what you may do) and accounting (what you did).</dd><dt>TACACS+</dt><dd>Cisco-developed AAA protocol on TCP port 49 that encrypts the whole payload and separates the three A functions.</dd><dt>RADIUS</dt><dd>Open-standard AAA protocol on UDP 1812/1813 that encrypts only the password and combines authentication and authorization.</dd><dt>Method list</dt><dd>An ordered list of authentication or authorization sources, such as group tacacs+ then local.</dd><dt>aaa new-model</dt><dd>Global command that enables the AAA framework on an IOS device.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A company with 150 switches uses TACACS+ so engineers log in with their directory accounts. When an engineer leaves, disabling one directory account removes access to every device, and accounting logs show which commands were entered on each switch. During a server outage, the local fallback account still works because the method list ends with <code>local</code>.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> TACACS+: TCP, full-payload encryption, separate AAA functions, device administration. RADIUS: UDP, password-only encryption, combined authentication and authorization, network access. Questions usually ask you to pick based on these.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which AAA protocol encrypts the entire packet body and supports per-command authorization?</summary><p>TACACS+.</p></details>
+<details class="sq"><summary>With aaa authentication login default group radius local, when is the local database used?</summary><p>Only when no RADIUS server responds; if a server rejects the credentials, access is denied.</p></details>
+<details class="sq"><summary>Why configure a local username before enabling aaa new-model and a server method list?</summary><p>So there is a working fallback login if the AAA servers are unreachable or misconfigured, avoiding lockout.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CCNA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ccna/">Open the CCNA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../troubleshoot-ospf-neighbor-and-route-problems-from-show-ip-ospf-output/">← Troubleshoot OSPF neighbor and route problems from show ip o</a><a href="../secure-management-access-ssh-version-2-enable-secret-vty-access-class/">Secure management access: SSH version 2, enable secret, VTY  →</a></nav>
+</main>
+</body>
+</html>

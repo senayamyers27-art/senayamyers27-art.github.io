@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Protecting the RE with a filter on the lo0 interface · JNCIA-Junos Lesson</title>
+<meta name="description" content="The Routing Engine is the one part of a Junos device that attackers and misconfigured systems can overload with relatively little traffic, because it is a ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Protecting the RE with a filter on the lo0 interface · JNCIA-Junos Lesson">
+<meta property="og:description" content="The Routing Engine is the one part of a Junos device that attackers and misconfigured systems can overload with relatively little traffic, because it is a ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/jncia-junos/lessons/protecting-the-re-with-a-filter-on-the-lo0-interface/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/jncia-junos/lessons/protecting-the-re-with-a-filter-on-the-lo0-interface/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">JNCIA-Junos</a> / <a href="../">Lessons</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106 · Domain 2: Junos OS fundamentals</p>
+<h1>Protecting the RE with a filter on the lo0 interface</h1>
+<article class="lbody">
+<p>The Routing Engine is the one part of a Junos device that attackers and misconfigured systems can overload with relatively little traffic, because it is a general-purpose CPU. Juniper's standard defense is a firewall filter applied to the loopback interface, lo0. Because of how Junos works, a filter on lo0 inspects all host-bound traffic, the traffic headed to the RE, no matter which physical interface it arrived on.</p>
+<p>Why lo0? The loopback interface represents the router itself. When you apply an input filter to <code>lo0.0</code>, the PFE evaluates it against every packet destined for the RE, whether it came in on ge-0/0/0, xe-1/0/3 or any other interface. You write one filter in one place instead of repeating it on every interface. Transit traffic is not affected, because it never goes to the RE.</p>
+<p>A firewall filter is made of ordered terms. Each term has <code>from</code> conditions (match criteria like source address, protocol and port) and <code>then</code> actions (such as <code>accept</code>, <code>discard</code>, <code>reject</code>, <code>count</code> or <code>log</code>). Junos checks terms from top to bottom and stops at the first match. If no term matches, there is an implicit final action of discard. That implicit deny is the most important thing to remember: anything you forget to allow will be dropped.</p>
+<p>A good RE protection filter therefore lists everything the router legitimately needs. Typical terms accept SSH only from management subnets, BGP only from configured peers, OSPF from neighbors, NTP and SNMP from known servers, DNS replies, and ICMP (often rate-limited with a policer). A final term discards everything else, usually with <code>count</code> so you can see what is being dropped. It is common to define prefix lists (named address lists) for management hosts and BGP neighbors so the filter is easier to maintain.</p>
+<pre class="code" tabindex="0"><code>set policy-options prefix-list MGMT 10.99.0.0/24
+set firewall family inet filter PROTECT-RE term ssh from source-prefix-list MGMT
+set firewall family inet filter PROTECT-RE term ssh from protocol tcp
+set firewall family inet filter PROTECT-RE term ssh from destination-port ssh
+set firewall family inet filter PROTECT-RE term ssh then accept
+set firewall family inet filter PROTECT-RE term ospf from protocol ospf
+set firewall family inet filter PROTECT-RE term ospf then accept
+set firewall family inet filter PROTECT-RE term icmp from protocol icmp
+set firewall family inet filter PROTECT-RE term icmp then accept
+set firewall family inet filter PROTECT-RE term deny-rest then count DROPPED
+set firewall family inet filter PROTECT-RE term deny-rest then discard
+set interfaces lo0 unit 0 family inet filter input PROTECT-RE</code></pre>
+<p>Applying this kind of filter is the classic way to lock yourself out of a remote router. Always commit it with <code>commit confirmed</code> so Junos automatically rolls back if you lose access, and test from your management host before confirming. Afterwards, check <code>show firewall filter PROTECT-RE</code> to see counter values and confirm which traffic is being dropped. Remember that IPv6 needs its own filter under <code>family inet6</code> if the router has IPv6 addresses.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>lo0</dt><dd>The loopback interface, representing the device itself; a filter on it applies to all host-bound traffic.</dd><dt>Firewall filter term</dt><dd>One rule in a filter, with <code>from</code> match conditions and <code>then</code> actions, evaluated in order.</dd><dt>Implicit discard</dt><dd>The hidden final action of every Junos firewall filter that drops packets matching no term.</dd><dt>Prefix list</dt><dd>A named list of prefixes under <code>policy-options</code> that filters and policies can reference.</dd><dt>commit confirmed</dt><dd>A commit that rolls back automatically unless confirmed with another commit within a set time.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An engineer applies an RE filter allowing SSH and ICMP but forgets OSPF. She uses <code>commit confirmed 5</code>. Within a minute OSPF neighbors drop because hellos match no term and hit the implicit discard. She simply waits; after five minutes Junos rolls back, the adjacencies return, and she adds the missing OSPF term before trying again.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> The filter goes on lo0 as an input filter under the family you want to protect (inet, inet6). Forgetting routing protocols, or forgetting that there is an implicit discard, is the usual trap.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why apply the RE protection filter to lo0 instead of each physical interface?</summary><p>Because a lo0 input filter is applied to all traffic destined for the RE regardless of ingress interface, so one filter protects the RE everywhere.</p></details>
+<details class="sq"><summary>What happens to host-bound traffic that matches no term?</summary><p>It is discarded by the implicit final discard action of the filter.</p></details>
+<details class="sq"><summary>Does the lo0 filter affect transit traffic?</summary><p>No. It only applies to traffic destined for the Routing Engine; transit traffic is filtered only by filters on the interfaces it crosses.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study JNCIA-Junos for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../jncia-junos/">Open the JNCIA-Junos study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../junos-os-vs-junos-os-evolved-freebsd-based-vs-linux-based/">← Junos OS vs Junos OS Evolved (FreeBSD-based vs Linux-based)</a><a href="../boot-sequence-and-storage-primary-backup-media-snapshots/">Boot sequence and storage: primary/backup media, snapshots →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Configuring network services to start automatically at boot · RHCSA Lesson</title>
+<meta name="description" content="A network service is only useful if it is listening when clients arrive, including after a reboot. On RHEL, making a network service start at boot involves">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Configuring network services to start automatically at boot · RHCSA Lesson">
+<meta property="og:description" content="A network service is only useful if it is listening when clients arrive, including after a reboot. On RHEL, making a network service start at boot involves">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/configuring-network-services-to-start-automatically-at-boot/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/configuring-network-services-to-start-automatically-at-boot/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 8: Manage basic networking</p>
+<h1>Configuring network services to start automatically at boot</h1>
+<article class="lbody">
+<p>A network service is only useful if it is listening when clients arrive, including after a reboot. On RHEL, making a network service start at boot involves the same systemd commands as any service, plus two network-specific checks: the network connection itself must come up automatically, and clients must be allowed through the firewall.</p>
+<p>Step one is the service unit. After installing a package such as httpd, vsftpd or nfs-utils, the service is usually installed but disabled. Run <code>systemctl enable --now httpd</code> so it starts now and at every boot, then confirm with <code>systemctl is-enabled httpd</code> and <code>systemctl is-active httpd</code>. <code>ss -tlnp</code> confirms that the process is listening on the expected port.</p>
+<p>Step two is the network itself. NetworkManager must be enabled (it is by default) and the connection profile must have <code>connection.autoconnect yes</code>. Check with <code>systemctl is-enabled NetworkManager</code> and <code>nmcli -f NAME,AUTOCONNECT con show</code>. A service can be enabled perfectly and still be unreachable after reboot because the interface did not come up with the right address.</p>
+<p>Step three is access. Open the service in firewalld permanently, for example <code>firewall-cmd --permanent --add-service=http</code> followed by <code>firewall-cmd --reload</code>. If the service uses a non-standard port, SELinux may also need a port label, which is covered in the SELinux lessons.</p>
+<pre class="code" tabindex="0"><code>dnf install -y httpd
+systemctl enable --now httpd
+firewall-cmd --permanent --add-service=http
+firewall-cmd --reload
+systemctl is-enabled httpd NetworkManager
+ss -tlnp | grep ':80'</code></pre>
+<p>Some services need to wait until the network is fully configured, not just until NetworkManager has started. Units that need this order themselves after <code>network-online.target</code>; NetworkManager provides that target through its wait-online service. Most packaged services already handle this, but it explains why <code>_netdev</code> exists for network mounts and why a custom unit that binds to a specific address might start too early.</p>
+<p>The final and most reliable test is a reboot. After it, check the service status, the listening port, the interface address and a connection from another host.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>enable --now</dt><dd>Enables a unit to start at boot and starts it immediately.</dd><dt>network-online.target</dt><dd>A systemd target reached when the network is fully configured, used to order services that need working networking.</dd><dt>ss -tlnp</dt><dd>Lists listening TCP sockets with numeric ports and the owning processes.</dd><dt>Permanent firewall rule</dt><dd>A firewalld change saved with --permanent so it survives reloads and reboots.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>You set up vsftpd and it works, but after the grader's reboot clients cannot connect. systemctl is-enabled vsftpd prints disabled. Running systemctl enable --now vsftpd and adding the ftp service to the firewall with --permanent and --reload makes it survive the next reboot.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> For network services, check three things before calling a task done: the service is enabled, the connection autoconnects, and the firewall rule is permanent. Then reboot and test.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which two systemctl checks confirm a service will run after reboot and is running now?</summary><p>systemctl is-enabled for boot and systemctl is-active for current state.</p></details>
+<details class="sq"><summary>The service is enabled but unreachable after reboot. Name two network causes.</summary><p>The connection profile did not autoconnect or came up with the wrong address, or the firewall rule was runtime-only.</p></details>
+<details class="sq"><summary>What is network-online.target for?</summary><p>It marks when networking is fully configured, so services that need a working network can be ordered after it.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../checking-addresses-routes-and-name-resolution-ip-addr-ip-route-ping-ge/">← Checking addresses, routes and name resolution: ip addr, ip </a><a href="../restricting-network-access-with-firewalld-and-firewall-cmd-services-po/">Restricting network access with firewalld and firewall-cmd ( →</a></nav>
+</main>
+</body>
+</html>

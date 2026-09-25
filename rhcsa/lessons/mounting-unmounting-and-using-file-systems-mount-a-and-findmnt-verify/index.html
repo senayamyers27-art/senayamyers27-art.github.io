@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mounting, unmounting and using file systems; mount -a and… · RHCSA Lesson</title>
+<meta name="description" content="Linux has one directory tree starting at /. Mounting attaches a file system to a directory in that tree, called the mount point, so its contents appear the">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Mounting, unmounting and using file systems; mount -a and… · RHCSA Lesson">
+<meta property="og:description" content="Linux has one directory tree starting at /. Mounting attaches a file system to a directory in that tree, called the mount point, so its contents appear the">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/mounting-unmounting-and-using-file-systems-mount-a-and-findmnt-verify/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/mounting-unmounting-and-using-file-systems-mount-a-and-findmnt-verify/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 6: Create and configure file systems</p>
+<h1>Mounting, unmounting and using file systems; mount -a and findmnt --verify</h1>
+<article class="lbody">
+<p>Linux has one directory tree starting at <code>/</code>. Mounting attaches a file system to a directory in that tree, called the mount point, so its contents appear there. Whatever was inside the mount point directory before is hidden until you unmount. On RHEL you mount manually to test and use <code>/etc/fstab</code> to make mounts persistent across reboots.</p>
+<p>A manual mount takes a device and a directory. The device can be a path, <code>UUID=...</code> or <code>LABEL=...</code>. The kernel usually detects the file system type, but you can state it with <code>-t</code>. Options go after <code>-o</code>, for example <code>ro</code> for read-only or <code>noexec</code> to block running programs from that file system.</p>
+<pre class="code" tabindex="0"><code>mkdir -p /data
+mount UUID=5b2e...c7 /data        # or: mount /dev/vg1/data /data
+mount -o remount,ro /data          # change options in place
+findmnt /data                      # show source, type, options
+df -h /data                        # size and free space
+umount /data                       # detach it</code></pre>
+<p>Unmounting fails with target is busy if any process has a file open there or a shell has it as its current directory, which is often your own shell. Run <code>cd /</code> and try again. To find the culprit, <code>lsof /data</code> or <code>fuser -vm /data</code> lists the processes using it. Avoid lazy unmounts as a habit; fix the cause.</p>
+<p>For persistent mounts, add a line to <code>/etc/fstab</code>, then test it. <code>mount -a</code> mounts every fstab entry that is not already mounted, so an error there points at your new line. <code>findmnt --verify</code> goes further: it parses the whole file and reports problems such as a missing mount point directory, an unknown file system type or a UUID that does not exist, without mounting anything. Run both before you reboot.</p>
+<p>On RHEL, systemd turns each fstab line into a mount unit at boot. After editing the file, run <code>systemctl daemon-reload</code> so systemd picks up the change; otherwise <code>mount</code> may warn that fstab was modified and systemd still uses the old version. A bad fstab line that is not marked <code>nofail</code> can drop the system into emergency mode at boot, where you must log in as root, fix the file and reboot.</p>
+<p>To use the mounted file system, just work in the mount point. Remember that ownership and permissions of the mount point are those of the root directory of the mounted file system, not of the empty directory you created, so set <code>chown</code> and <code>chmod</code> after mounting.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Mount point</dt><dd>An existing directory where a file system is attached to the directory tree.</dd><dt>mount -a</dt><dd>Mounts every file system listed in /etc/fstab that is not already mounted, used to test new entries.</dd><dt>findmnt --verify</dt><dd>Checks /etc/fstab for errors such as missing mount points, bad types or unknown devices without mounting.</dd><dt>target is busy</dt><dd>The umount error shown when a process has open files or a working directory inside the file system.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>After adding an fstab line for /backup, you run systemctl daemon-reload, then findmnt --verify, which warns that /backup does not exist. You create the directory, run mount -a with no errors, and findmnt /backup shows the right device and options, so the reboot is safe.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Never reboot after editing /etc/fstab without running mount -a and findmnt --verify. A typo can leave the exam system in emergency mode and cost you time on every other task.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>umount /data reports target is busy. What are the usual cause and fix?</summary><p>A process or your own shell is using a file or directory there; cd out of it, or find the process with lsof or fuser -vm and stop it, then unmount.</p></details>
+<details class="sq"><summary>What does findmnt --verify check that mount -a does not?</summary><p>It parses every fstab line and reports problems such as missing mount point directories, unknown types or unresolvable UUIDs without mounting anything, including entries already mounted.</p></details>
+<details class="sq"><summary>Why run systemctl daemon-reload after editing /etc/fstab?</summary><p>systemd generates mount units from fstab; the reload makes it regenerate them so it uses your new entries.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../creating-vfat-ext4-and-xfs-file-systems-mkfs-vfat-mkfs-ext4-mkfs-xfs/">← Creating vfat, ext4 and xfs file systems (mkfs.vfat, mkfs.ex</a><a href="../etc-fstab-fields-device-mount-point-type-options-dump-fsck-order/">/etc/fstab fields: device, mount point, type, options, dump, →</a></nav>
+</main>
+</body>
+</html>

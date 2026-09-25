@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scheduling tasks with at, cron (crontab -e, /etc/cron.d)… · RHCSA Lesson</title>
+<meta name="description" content="RHEL gives you three ways to run commands later. at runs a job once at a set time.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Scheduling tasks with at, cron (crontab -e, /etc/cron.d)… · RHCSA Lesson">
+<meta property="og:description" content="RHEL gives you three ways to run commands later. at runs a job once at a set time.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/scheduling-tasks-with-at-cron-crontab-e-etc-cron-d-and-systemd-timer-u/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/scheduling-tasks-with-at-cron-crontab-e-etc-cron-d-and-systemd-timer-u/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 7: Deploy, configure and maintain systems</p>
+<h1>Scheduling tasks with at, cron (crontab -e, /etc/cron.d) and systemd timer units (OnCalendar=, OnBootSec=)</h1>
+<article class="lbody">
+<p>RHEL gives you three ways to run commands later. <code>at</code> runs a job once at a set time. cron runs jobs repeatedly on a schedule. systemd timer units also run jobs on a schedule or relative to events like boot, and they integrate with logging and service management. The exam may ask for any of them, so know the syntax of each.</p>
+<p><code>at</code> needs the atd service running (<code>systemctl enable --now atd</code>). You give it a time and type the commands, ending with Ctrl+D, or pipe them in. <code>atq</code> lists pending jobs and <code>atrm N</code> removes job N.</p>
+<pre class="code" tabindex="0"><code>echo 'tar czf /tmp/etc.tgz /etc' | at now + 30 minutes
+at 17:00 tomorrow
+atq
+atrm 3</code></pre>
+<p>cron is run by crond. Each user edits their own table with <code>crontab -e</code>; root can manage another user's with <code>crontab -e -u alice</code> and list with <code>crontab -l -u alice</code>. A line has five time fields, then the command: minute (0-59), hour (0-23), day of month (1-31), month (1-12) and day of week (0-7, where 0 and 7 are Sunday). <code>*</code> means every value, <code>*/15</code> means every 15, commas list values and dashes give ranges. So <code>30 2 * * 1-5 /usr/local/bin/backup.sh</code> runs at 02:30 Monday to Friday.</p>
+<p>System-wide jobs go in files under <code>/etc/cron.d/</code>. These use the same five fields plus a sixth field naming the user to run as, for example <code>0 * * * * root /usr/local/bin/cleanup.sh</code>. Forgetting that user field is a common mistake. Scripts dropped into <code>/etc/cron.daily/</code>, <code>/etc/cron.weekly/</code> and <code>/etc/cron.monthly/</code> are run by anacron, which catches up on jobs missed while the machine was off.</p>
+<p>A systemd timer is a <code>.timer</code> unit that activates a matching <code>.service</code> unit. <code>OnCalendar=</code> sets wall-clock schedules such as <code>daily</code>, <code>Mon..Fri 02:30</code> or <code>*-*-* 02:30:00</code>. <code>OnBootSec=15min</code> runs a set time after boot, and <code>OnUnitActiveSec=</code> repeats relative to the last run. <code>Persistent=true</code> runs a missed calendar job at the next boot.</p>
+<pre class="code" tabindex="0"><code># /etc/systemd/system/backup.timer
+[Unit]
+Description=Nightly backup
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target</code></pre>
+<p>Create <code>backup.service</code> with <code>Type=oneshot</code> and <code>ExecStart=/usr/local/bin/backup.sh</code>, then run <code>systemctl daemon-reload</code> and <code>systemctl enable --now backup.timer</code>; you enable the timer, not the service. <code>systemctl list-timers</code> shows the next run, <code>systemd-analyze calendar 'Mon..Fri 02:30'</code> checks an expression, and <code>journalctl -u backup.service</code> shows output.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>at</dt><dd>Schedules a one-time job, run by the atd service; atq lists and atrm removes jobs.</dd><dt>crontab</dt><dd>A per-user table of recurring jobs with five time fields and a command, edited with crontab -e.</dd><dt>/etc/cron.d</dt><dd>A directory of system cron files whose lines include a user field between the schedule and the command.</dd><dt>Timer unit</dt><dd>A systemd .timer file that starts a matching service on a calendar schedule (OnCalendar=) or after an event (OnBootSec=).</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>The task: user natasha must run /bin/echo hello every day at 14:23. As root you run crontab -e -u natasha and add 23 14 * * * /bin/echo hello, then confirm with crontab -l -u natasha. Because it is her crontab, no user field is needed.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Know which cron format needs a user field: personal crontabs never do, /etc/crontab and /etc/cron.d files always do. And remember to enable the .timer unit, not the .service, for systemd timers.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What does the cron schedule */10 8-17 * * 1-5 mean?</summary><p>Every 10 minutes from 08:00 through 17:50, Monday to Friday.</p></details>
+<details class="sq"><summary>How do you make a systemd timer start at boot and run on schedule?</summary><p>Create the .timer and matching .service, run systemctl daemon-reload, then systemctl enable --now name.timer.</p></details>
+<details class="sq"><summary>What does OnBootSec=10min do?</summary><p>It triggers the service ten minutes after the system boots.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../diagnosing-and-correcting-file-permission-problems-ls-l-namei-l-chmod/">← Diagnosing and correcting file permission problems (ls -l, n</a><a href="../starting-and-stopping-services-and-configuring-them-to-start-at-boot-s/">Starting and stopping services and configuring them to start →</a></nav>
+</main>
+</body>
+</html>

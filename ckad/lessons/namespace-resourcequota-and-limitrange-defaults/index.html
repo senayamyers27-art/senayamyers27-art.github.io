@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Namespace ResourceQuota and LimitRange defaults · CKAD Lesson</title>
+<meta name="description" content="Namespaces are often shared by teams or environments, so administrators need ways to stop one namespace from consuming the whole cluster and to make sure e">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Namespace ResourceQuota and LimitRange defaults · CKAD Lesson">
+<meta property="og:description" content="Namespaces are often shared by teams or environments, so administrators need ways to stop one namespace from consuming the whole cluster and to make sure e">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/namespace-resourcequota-and-limitrange-defaults/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/namespace-resourcequota-and-limitrange-defaults/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 4: Application Environment, Configuration and Security</p>
+<h1>Namespace ResourceQuota and LimitRange defaults</h1>
+<article class="lbody">
+<p>Namespaces are often shared by teams or environments, so administrators need ways to stop one namespace from consuming the whole cluster and to make sure every Pod has sensible resource settings. ResourceQuota and LimitRange are the two tools, and both are enforced by admission control when objects are created.</p>
+<p>A ResourceQuota caps the total consumption of a namespace. Compute quotas include <code>requests.cpu</code>, <code>requests.memory</code>, <code>limits.cpu</code> and <code>limits.memory</code>, summed over all non-terminal Pods. Object count quotas include <code>pods</code>, <code>services</code>, <code>configmaps</code>, <code>secrets</code>, <code>persistentvolumeclaims</code>, and the general form <code>count/&lt;resource&gt;.&lt;group&gt;</code>, such as <code>count/deployments.apps</code>. Storage quotas cover <code>requests.storage</code>. When a new object would push the total over the quota, the API server rejects it with an 'exceeded quota' error.</p>
+<pre class="code" tabindex="0"><code>apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute
+  namespace: team-a
+spec:
+  hard:
+    requests.cpu: &quot;2&quot;
+    requests.memory: 4Gi
+    limits.cpu: &quot;4&quot;
+    limits.memory: 8Gi
+    pods: &quot;10&quot;</code></pre>
+<p>There is an important side effect: once a quota limits <code>requests.cpu</code> or <code>limits.memory</code> (or the other compute values), every new Pod in that namespace must specify that value, or it is rejected with a message like 'must specify limits.memory'. With a Deployment, you will not see this error on the Deployment itself; the ReplicaSet fails to create Pods, and <code>kubectl describe rs</code> or <code>kubectl get events</code> shows why. <code>kubectl describe quota -n team-a</code> shows each limit with its current Used and Hard values.</p>
+<p>A LimitRange sets per-object defaults and bounds within a namespace. For <code>type: Container</code>, <code>defaultRequest</code> is the request applied when a container specifies none, <code>default</code> is the limit applied when it specifies none, and <code>min</code> and <code>max</code> bound what a container may set. <code>maxLimitRequestRatio</code> caps how far a limit may exceed its request. Other types apply to whole Pods or to PersistentVolumeClaims (bounding storage size).</p>
+<pre class="code" tabindex="0"><code>apiVersion: v1
+kind: LimitRange
+metadata:
+  name: defaults
+  namespace: team-a
+spec:
+  limits:
+  - type: Container
+    defaultRequest:
+      cpu: 100m
+      memory: 128Mi
+    default:
+      cpu: 500m
+      memory: 256Mi
+    max:
+      cpu: &quot;1&quot;
+      memory: 1Gi</code></pre>
+<p>The two work well together: the LimitRange fills in missing values by mutating admission, so Pods that forget resources still satisfy the quota's requirement. LimitRange and quota changes apply only to objects created afterwards; existing Pods keep their values until they are recreated. Create them imperatively with <code>kubectl create quota compute -n team-a --hard=requests.cpu=2,pods=10</code>; LimitRanges have no create generator, so write YAML. Inspect with <code>kubectl describe limitrange -n team-a</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>ResourceQuota</dt><dd>Namespace-wide cap on total resource usage and object counts.</dd><dt>LimitRange</dt><dd>Namespace policy that sets default and minimum/maximum resources per container, Pod or PVC.</dd><dt>defaultRequest / default</dt><dd>LimitRange fields giving the request and the limit applied when a container omits them.</dd><dt>count/&lt;resource&gt;</dt><dd>Quota key that limits how many objects of a type may exist in the namespace.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>After a ResourceQuota on limits.memory is added to <code>team-a</code>, a Deployment stops creating Pods. <code>kubectl describe rs</code> shows 'must specify limits.memory'. Adding a LimitRange with <code>default: memory: 256Mi</code> supplies the missing limit, and new Pods are admitted and counted against the quota.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> A compute quota forces every new Pod to declare that resource; a LimitRange default is the usual fix. Quota errors for Deployments show up on the ReplicaSet, not the Deployment.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Where do you see why a Deployment's Pods are not being created under a quota?</summary><p>In the ReplicaSet's events (<code>kubectl describe rs</code>) or <code>kubectl get events</code>.</p></details>
+<details class="sq"><summary>Which LimitRange field sets the limit for containers that do not specify one?</summary><p><code>default</code>; <code>defaultRequest</code> sets the request.</p></details>
+<details class="sq"><summary>Does changing a LimitRange update existing Pods?</summary><p>No; it applies only to Pods created after the change.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../resource-requests-and-limits-for-cpu-and-memory-units-m-mi-gi-qos-clas/">← Resource requests and limits for CPU and memory; units (m, M</a><a href="../configmaps-create-from-literals-files-and-env-files-consume-as-env-env/">ConfigMaps: create from literals, files and env files; consu →</a></nav>
+</main>
+</body>
+</html>

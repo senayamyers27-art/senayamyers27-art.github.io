@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>try-with-resources, AutoCloseable and reverse close order · OCP Java Lesson</title>
+<meta name="description" content="Many objects hold resources outside the JVM, such as open files, network sockets and database connections, and they must be closed when you are done. Closi">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="try-with-resources, AutoCloseable and reverse close order · OCP Java Lesson">
+<meta property="og:description" content="Many objects hold resources outside the JVM, such as open files, network sockets and database connections, and they must be closed when you are done. Closi">
+<link rel="canonical" href="https://senayamyers27-art.github.io/java-se/lessons/try-with-resources-autocloseable-and-reverse-close-order/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/java-se/lessons/try-with-resources-autocloseable-and-reverse-close-order/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">OCP Java</a> / <a href="../">Lessons</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25) · Domain 4: Handling exceptions</p>
+<h1>try-with-resources, AutoCloseable and reverse close order</h1>
+<article class="lbody">
+<p>Many objects hold resources outside the JVM, such as open files, network sockets and database connections, and they must be closed when you are done. Closing them reliably in a <code>finally</code> block is verbose and easy to get wrong. The try-with-resources statement automates it: resources declared in parentheses after <code>try</code> are closed automatically when the block finishes, whether it completes normally or throws.</p>
+<p>A resource must implement <code>java.lang.AutoCloseable</code>, whose single method is <code>void close() throws Exception</code>. <code>java.io.Closeable</code> extends it with <code>close() throws IOException</code> and is implemented by streams, readers and writers. Declaring a variable of a class that implements neither interface in the resource list is a compile error. Your own classes can implement <code>AutoCloseable</code> and be used the same way.</p>
+<p>Resources are declared in the parentheses and separated by semicolons (a trailing semicolon is allowed). Each resource variable is implicitly <code>final</code> and is in scope only inside the <code>try</code> block, not in <code>catch</code> or <code>finally</code>. Since Java 9 you can also list an existing variable declared before the statement, as long as it is final or effectively final: <code>try (reader) { ... }</code>. A try-with-resources statement may have no <code>catch</code> or <code>finally</code> at all, but any checked exception thrown by <code>close()</code> must still be handled or declared.</p>
+<p>Order is the most tested detail. Resources are opened in the order they are declared and closed in the reverse order, so the last one opened is closed first. Closing happens right after the <code>try</code> block ends, before any <code>catch</code> or <code>finally</code> block runs. If a resource's initialization throws, only the resources already opened are closed.</p>
+<pre class="code" tabindex="0"><code>class Res implements AutoCloseable {
+    private final String name;
+    Res(String name) { this.name = name; System.out.print(&quot;open-&quot; + name + &quot; &quot;); }
+    public void close() { System.out.print(&quot;close-&quot; + name + &quot; &quot;); }
+}
+
+try (var a = new Res(&quot;A&quot;); var b = new Res(&quot;B&quot;)) {
+    System.out.print(&quot;body &quot;);
+    throw new RuntimeException();
+} catch (RuntimeException e) {
+    System.out.print(&quot;catch &quot;);
+} finally {
+    System.out.print(&quot;finally&quot;);
+}
+// open-A open-B body close-B close-A catch finally</code></pre>
+<p>Note that the <code>close()</code> implementation in <code>Res</code> declares no exception. An overriding method may throw fewer exceptions than <code>AutoCloseable.close()</code>, and when it does, the compiler no longer requires you to handle <code>Exception</code>. If you keep the <code>throws Exception</code> in your class, every try-with-resources using it must handle or declare <code>Exception</code>.</p>
+<p>In real code, use try-with-resources for every file or connection you open, such as <code>try (var in = Files.newBufferedReader(path))</code>, instead of calling <code>close()</code> yourself.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>try-with-resources</dt><dd>A try statement that declares resources in parentheses and closes them automatically at the end of the block.</dd><dt>AutoCloseable</dt><dd>The interface with a single close() method that a resource must implement to be used in try-with-resources.</dd><dt>Closeable</dt><dd>A subinterface of AutoCloseable used by I/O classes whose close() throws IOException.</dd><dt>Reverse close order</dt><dd>Resources are closed in the opposite order of declaration, last opened first closed.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A CSV export opens a database connection, a statement and a file writer in one try-with-resources. If writing a row fails, the writer is closed first, then the statement, then the connection, and only then does the catch block log the error, so no handles are leaked.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Trace the order: open in declaration order, body, close in reverse order, then catch, then finally. Resource variables are final and not visible in catch or finally.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>In <code>try (var x = new R(&quot;1&quot;); var y = new R(&quot;2&quot;))</code>, which resource is closed first?</summary><p>y (&quot;2&quot;), because resources are closed in reverse order of declaration.</p></details>
+<details class="sq"><summary>Do resources close before or after the catch block runs?</summary><p>Before. They are closed as soon as the try block ends, then catch and finally run.</p></details>
+<details class="sq"><summary>Can you use an existing variable in try-with-resources?</summary><p>Yes, since Java 9, if it is final or effectively final: try (existingResource) { }.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study OCP Java for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../java-se/">Open the OCP Java study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../catch-block-ordering-and-unreachable-catch-compile-errors/">← Catch block ordering and unreachable catch compile errors</a><a href="../suppressed-exceptions-and-throwable-getsuppressed/">Suppressed exceptions and Throwable.getSuppressed() →</a></nav>
+</main>
+</body>
+</html>

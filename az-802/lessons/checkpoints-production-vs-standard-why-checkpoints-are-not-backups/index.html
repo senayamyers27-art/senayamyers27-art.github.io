@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Checkpoints: production vs standard; why checkpoints are… · AZ-802 Lesson</title>
+<meta name="description" content="A Hyper-V checkpoint (called a snapshot in older versions) captures a VM's state at a point in time so you can return to it later. It is perfect for short-">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Checkpoints: production vs standard; why checkpoints are… · AZ-802 Lesson">
+<meta property="og:description" content="A Hyper-V checkpoint (called a snapshot in older versions) captures a VM's state at a point in time so you can return to it later. It is perfect for short-">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/checkpoints-production-vs-standard-why-checkpoints-are-not-backups/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/checkpoints-production-vs-standard-why-checkpoints-are-not-backups/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 3: Manage virtual machines</p>
+<h1>Checkpoints: production vs standard; why checkpoints are not backups</h1>
+<article class="lbody">
+<p>A Hyper-V checkpoint (called a snapshot in older versions) captures a VM's state at a point in time so you can return to it later. It is perfect for short-term safety nets: before installing an update, testing a configuration change, or during a lab exercise. When you take a checkpoint, Hyper-V stops writing to the current virtual disk and creates a differencing disk (an <code>.avhdx</code> file) for all new writes; the original disk becomes a read-only parent.</p>
+<p>There are two types. A standard checkpoint captures the disk and the full memory and device state of a running VM, like pausing and saving it. Applying it returns the VM exactly where it was, even with applications open. The downside is that applications inside, such as databases or domain controllers, did not know a checkpoint happened, so returning to one can confuse replication or transactions. A production checkpoint uses the Volume Shadow Copy Service (VSS) inside Windows guests, or a file system freeze in Linux guests, to create an application-consistent point in time. It does not include memory, so applying it starts the VM from a clean boot, as if restored from backup. Production checkpoints need the backup integration service.</p>
+<p>Production is the default for new VMs, with fallback to standard if a production checkpoint cannot be taken. You change the behavior per VM in its settings or with <code>Set-VM -CheckpointType Production</code>, <code>ProductionOnly</code> (fail rather than fall back), <code>Standard</code> or <code>Disabled</code>. You manage checkpoints with <code>Checkpoint-VM -Name APP01 -SnapshotName BeforePatch</code>, <code>Restore-VMCheckpoint</code> and <code>Remove-VMCheckpoint</code>. When you delete a checkpoint, Hyper-V merges its AVHDX changes back into the parent in the background. Never delete AVHDX files manually in File Explorer; that breaks the chain and can lose data.</p>
+<p>Checkpoints are not backups, and exam questions frequently test why. They live on the same storage as the VM, so a failed volume or ransomware on the host destroys both. They depend on the parent disk chain; if the base VHDX is lost or corrupted, every checkpoint is useless. They cannot be moved off-host or kept on a retention schedule. And they hurt performance and consume space as the chain grows, so they are meant to be temporary, measured in hours or days, not months.</p>
+<p>Real backups copy data to separate storage, ideally off-site, with retention and verified restores: Windows Server Backup, Azure Backup, the Microsoft Azure Recovery Services (MARS) agent, Azure Backup Server or third-party products. Those products often use production checkpoints internally to get a consistent point in time, then copy the data elsewhere and remove the checkpoint.</p>
+<p>Domain controllers deserve a note. Since Windows Server 2012, virtualization-aware DCs use the VM-GenerationID to detect that they have been reverted and protect themselves against update sequence number rollback. Even so, reverting DCs with checkpoints is discouraged; use proper AD backups.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Standard checkpoint</dt><dd>Captures disk plus memory and device state; restores the VM exactly as it was, but not application-consistent.</dd><dt>Production checkpoint</dt><dd>Uses VSS or a file system freeze for an application-consistent point in time without memory; restores to a cold boot.</dd><dt>AVHDX</dt><dd>The differencing disk file created for each checkpoint to hold new writes.</dd><dt>Checkpoint merge</dt><dd>Background process that folds AVHDX changes into the parent when a checkpoint is deleted.</dd><dt>VM-GenerationID</dt><dd>A value that lets a virtualized DC detect it has been rolled back and protect AD replication.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Before a risky application update, an admin takes a production checkpoint of APP01. The update fails, so she applies the checkpoint and the VM boots cleanly with a consistent database. After a week of stability she deletes the checkpoint so the AVHDX merges back, relying on nightly Azure Backup for real protection.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> If the question needs an application-consistent restore point, choose a production checkpoint. If it asks how to protect against host storage failure or keep 30 days of history, the answer is a backup, never a checkpoint.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which checkpoint type includes the VM's memory state?</summary><p>Standard checkpoint.</p></details>
+<details class="sq"><summary>Why should you not delete AVHDX files manually?</summary><p>They are part of a differencing chain; removing one without a merge breaks the chain and can lose data.</p></details>
+<details class="sq"><summary>Give two reasons checkpoints are not backups.</summary><p>They live on the same storage as the VM and depend on the parent disk chain, so a storage failure destroys both; they also lack retention and off-host copies and degrade performance over time.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../virtual-disks-vhd-vs-vhdx-fixed-dynamic-and-differencing-disks-shared/">← Virtual disks: VHD vs VHDX, fixed, dynamic and differencing </a><a href="../hyper-v-virtual-switches-external-internal-private-and-switch-embedded/">Hyper-V virtual switches (external, internal, private) and S →</a></nav>
+</main>
+</body>
+</html>

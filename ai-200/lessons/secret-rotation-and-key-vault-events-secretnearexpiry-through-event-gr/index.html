@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Secret rotation and Key Vault events (SecretNearExpiry)… · AI-200 Lesson</title>
+<meta name="description" content="Long-lived secrets are risky: the longer a password or key stays valid, the more chances it has to leak and be misused. Rotation replaces a secret with a n">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Secret rotation and Key Vault events (SecretNearExpiry)… · AI-200 Lesson">
+<meta property="og:description" content="Long-lived secrets are risky: the longer a password or key stays valid, the more chances it has to leak and be misused. Rotation replaces a secret with a n">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/secret-rotation-and-key-vault-events-secretnearexpiry-through-event-gr/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/secret-rotation-and-key-vault-events-secretnearexpiry-through-event-gr/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 4: Secure, monitor, and troubleshoot Azure solutions</p>
+<h1>Secret rotation and Key Vault events (SecretNearExpiry) through Event Grid</h1>
+<article class="lbody">
+<p>Long-lived secrets are risky: the longer a password or key stays valid, the more chances it has to leak and be misused. Rotation replaces a secret with a new value on a schedule and retires the old one. Done manually it is often forgotten; done by automation it becomes routine. Key Vault provides the building blocks: expiration dates, versions and events.</p>
+<p>Start by setting an expiration date on each secret, which records when it should be replaced. Key Vault publishes events about its objects to Event Grid through a system topic for the vault. The important secret events are <code>Microsoft.KeyVault.SecretNewVersionCreated</code> (a new version was added), <code>Microsoft.KeyVault.SecretNearExpiry</code> (the current version will expire soon; Key Vault raises it 30 days before the expiration date) and <code>Microsoft.KeyVault.SecretExpired</code>. Keys and certificates have matching events, such as CertificateNearExpiry.</p>
+<p>The standard rotation pattern: create an Event Grid subscription on the vault's system topic filtered to <code>SecretNearExpiry</code>, with an Azure Function as the handler. When the event arrives, the function reads the secret name from the event subject and data, generates or requests a new credential from the service that owns it (for example, regenerating a storage account key or resetting a database user's password), writes the new value to Key Vault as a new version with a new expiration date, and lets consumers pick it up. The cycle then repeats automatically.</p>
+<pre class="code" tabindex="0"><code>@app.event_grid_trigger(arg_name=&quot;event&quot;)
+def rotate(event: func.EventGridEvent):
+    if event.event_type != &quot;Microsoft.KeyVault.SecretNearExpiry&quot;:
+        return
+    name = event.get_json()[&quot;ObjectName&quot;]
+    new_value = regenerate_credential(name)          # call the owning service
+    secrets.set_secret(name, new_value,
+                       expires_on=datetime.now(timezone.utc) + timedelta(days=60))</code></pre>
+<p>The function's managed identity needs Key Vault Secrets Officer (to write new versions) plus whatever permission the owning service requires to reset the credential. Consumers only need Key Vault Secrets User.</p>
+<p>For services with two keys (storage accounts, Cosmos DB keys, Service Bus shared access keys), the dual-credential approach avoids downtime: apps use key 1 while you regenerate key 2, store key 2 in Key Vault, let apps switch, then regenerate key 1 on the next cycle. At no point is the key in use invalidated. For single-credential systems, create the new credential before revoking the old one when the service allows it.</p>
+<p>Rotation only helps if apps load the new value. Reference secrets without a version (so the latest is used), cache them for a limited time and reload on authentication failure, or rely on platform features: Key Vault references in App Service refresh periodically, and App Configuration can refresh on a sentinel key. Key Vault keys also have a built-in automatic rotation policy, and certificates can auto-renew, but secrets rely on this event-driven pattern. Better still, where a service supports managed identities, remove the secret entirely.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Secret rotation</dt><dd>Periodically replacing a secret with a new value and retiring the old one to limit exposure.</dd><dt>SecretNearExpiry</dt><dd>A Key Vault event published through Event Grid 30 days before a secret's expiration date.</dd><dt>SecretNewVersionCreated</dt><dd>A Key Vault event raised when a new version of a secret is created.</dd><dt>Dual-credential rotation</dt><dd>Alternating between two valid keys so one can be regenerated while apps use the other.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A storage account key used by a legacy app must rotate every 60 days. The team sets a 60-day expiry on the Key Vault secret and subscribes a function to SecretNearExpiry. Thirty days before expiry, the function regenerates the storage key the app is not using, saves it as a new secret version with a new expiry, and the app, which reads the latest version every hour, switches over without downtime.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> SecretNearExpiry fires 30 days before expiration and reaches handlers through Event Grid; the rotator needs Secrets Officer, readers need Secrets User, and consumers should reference the unversioned secret to get new values.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which service delivers Key Vault near-expiry notifications to your rotation function?</summary><p>Azure Event Grid, through a system topic for the vault and an event subscription filtered on SecretNearExpiry.</p></details>
+<details class="sq"><summary>Why use two keys when rotating storage account keys?</summary><p>Apps keep using one valid key while the other is regenerated, so rotation never invalidates the key in use.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../key-vault-secrets-keys-and-certificates-versions-soft-delete-and-purge/">← Key Vault: secrets, keys and certificates, versions, soft de</a><a href="../key-vault-references-in-app-service-functions-and-container-apps-setti/">Key Vault references in App Service, Functions and Container →</a></nav>
+</main>
+</body>
+</html>

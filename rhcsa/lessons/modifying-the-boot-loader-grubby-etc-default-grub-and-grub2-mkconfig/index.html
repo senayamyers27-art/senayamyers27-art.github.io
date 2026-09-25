@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Modifying the boot loader: grubby, /etc/default/grub and… · RHCSA Lesson</title>
+<meta name="description" content="GRUB 2 (GRand Unified Bootloader) is the boot loader on RHEL. It shows the boot menu, loads the chosen kernel and initial RAM disk, and passes the kernel c">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Modifying the boot loader: grubby, /etc/default/grub and… · RHCSA Lesson">
+<meta property="og:description" content="GRUB 2 (GRand Unified Bootloader) is the boot loader on RHEL. It shows the boot menu, loads the chosen kernel and initial RAM disk, and passes the kernel c">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/modifying-the-boot-loader-grubby-etc-default-grub-and-grub2-mkconfig/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/modifying-the-boot-loader-grubby-etc-default-grub-and-grub2-mkconfig/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 7: Deploy, configure and maintain systems</p>
+<h1>Modifying the boot loader: grubby, /etc/default/grub and grub2-mkconfig</h1>
+<article class="lbody">
+<p>GRUB 2 (GRand Unified Bootloader) is the boot loader on RHEL. It shows the boot menu, loads the chosen kernel and initial RAM disk, and passes the kernel command line. RHEL stores each kernel's menu entry as its own small file in <code>/boot/loader/entries/</code>, following the BLS (Boot Loader Specification). Knowing where settings live tells you which tool changes them.</p>
+<p>There are two layers of configuration. <code>/etc/default/grub</code> holds global settings such as <code>GRUB_TIMEOUT</code> (seconds the menu waits) and <code>GRUB_CMDLINE_LINUX</code> (default kernel arguments). The generated file <code>/boot/grub2/grub.cfg</code> is what GRUB actually reads, and you never edit it by hand; <code>grub2-mkconfig</code> rebuilds it from <code>/etc/default/grub</code> and scripts in <code>/etc/grub.d/</code>. On current RHEL releases the same path is used on both BIOS and UEFI (Unified Extensible Firmware Interface) systems, because the file on the EFI partition just points to it.</p>
+<pre class="code" tabindex="0"><code>vim /etc/default/grub            # e.g. GRUB_TIMEOUT=10
+grub2-mkconfig -o /boot/grub2/grub.cfg</code></pre>
+<p>Because kernel arguments are stored in each BLS entry, editing <code>GRUB_CMDLINE_LINUX</code> and regenerating does not by default rewrite the arguments of kernels already installed; it affects kernels installed later. To change existing entries too, pass <code>--update-bls-cmdline</code> to <code>grub2-mkconfig</code>, or, more simply, use <code>grubby</code>.</p>
+<p><code>grubby</code> edits boot entries directly and is Red Hat's recommended tool for kernel arguments and the default kernel. <code>grubby --info=ALL</code> lists every entry with its index, kernel path and arguments. <code>grubby --default-kernel</code> shows the default. <code>grubby --update-kernel=ALL --args='quiet'</code> adds an argument to every entry and <code>--remove-args='rhgb'</code> removes one. Changes take effect at the next boot; confirm afterwards with <code>cat /proc/cmdline</code>.</p>
+<pre class="code" tabindex="0"><code>grubby --info=ALL | grep -E '^(index|kernel|args)'
+grubby --update-kernel=ALL --args='console=ttyS0'
+grubby --update-kernel=ALL --remove-args='rhgb quiet'</code></pre>
+<p>Be careful: a boot loader mistake can make a system unbootable, which on the exam may take other tasks down with it. Make one change at a time, read the output, and keep a working older kernel entry available in the menu as a fallback.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>GRUB 2</dt><dd>The RHEL boot loader that presents the boot menu and loads the kernel with its command line.</dd><dt>/etc/default/grub</dt><dd>The file of global GRUB settings such as GRUB_TIMEOUT and GRUB_CMDLINE_LINUX, applied by grub2-mkconfig.</dd><dt>grub2-mkconfig</dt><dd>Regenerates /boot/grub2/grub.cfg from /etc/default/grub and /etc/grub.d scripts.</dd><dt>grubby</dt><dd>A tool that reads and edits boot entries directly, including default kernel and kernel arguments.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>You must make the boot menu wait 10 seconds. You set GRUB_TIMEOUT=10 in /etc/default/grub and run grub2-mkconfig -o /boot/grub2/grub.cfg. On reboot the menu counts down from 10 before starting the default kernel.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Menu settings like the timeout need /etc/default/grub plus grub2-mkconfig. Per-kernel arguments are easiest with grubby, which updates existing entries immediately.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why should you not edit /boot/grub2/grub.cfg directly?</summary><p>It is generated by grub2-mkconfig, so manual edits are overwritten the next time it is rebuilt.</p></details>
+<details class="sq"><summary>Which command adds a kernel argument to every installed kernel?</summary><p>grubby --update-kernel=ALL --args='argument'.</p></details>
+<details class="sq"><summary>How can you confirm the arguments the running kernel booted with?</summary><p>cat /proc/cmdline.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../registering-systems-with-subscription-manager-developer-subscription/">← Registering systems with subscription-manager (Developer sub</a><a href="../choosing-the-default-kernel-and-adding-or-removing-kernel-arguments/">Choosing the default kernel and adding or removing kernel ar →</a></nav>
+</main>
+</body>
+</html>

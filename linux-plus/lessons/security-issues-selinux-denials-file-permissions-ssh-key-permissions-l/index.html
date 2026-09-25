@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Security issues: SELinux denials, file permissions, SSH… · Linux+ Lesson</title>
+<meta name="description" content="Many 'it just stopped working' tickets are really security controls doing their job: SELinux blocking an unexpected access, permissions that are too tight ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Security issues: SELinux denials, file permissions, SSH… · Linux+ Lesson">
+<meta property="og:description" content="Many 'it just stopped working' tickets are really security controls doing their job: SELinux blocking an unexpected access, permissions that are too tight ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/linux-plus/lessons/security-issues-selinux-denials-file-permissions-ssh-key-permissions-l/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/linux-plus/lessons/security-issues-selinux-denials-file-permissions-ssh-key-permissions-l/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Linux+</a> / <a href="../">Lessons</a></p>
+<p class="note">CompTIA Linux+ XK0-006 · Domain 5: Troubleshooting</p>
+<h1>Security issues: SELinux denials, file permissions, SSH key permissions, locked accounts</h1>
+<article class="lbody">
+<p>Many 'it just stopped working' tickets are really security controls doing their job: SELinux blocking an unexpected access, permissions that are too tight or too loose, SSH refusing a key, or an account locked after failed logins. The skill is to identify which control is responsible and fix the configuration without weakening security.</p>
+<p>SELinux denials often surface as 'Permission denied' or HTTP 403 errors even though normal permissions look correct. First confirm SELinux is involved: <code>getenforce</code> shows the mode, and <code>ausearch -m avc -ts recent</code> (or <code>journalctl -t setroubleshoot</code>, or <code>sealert -a /var/log/audit/audit.log</code>) shows AVC denials naming the source process type, the target file type and the operation. The usual causes and fixes are: wrong file labels after <code>mv</code> or restoring files (fix with <code>restorecon -Rv path</code>), content in a non-standard location (add a rule with <code>semanage fcontext -a -t type 'path(/.*)?'</code>, then restorecon), a service on a non-standard port (<code>semanage port -a -t http_port_t -p tcp 8081</code>), or an optional behavior that needs a boolean (<code>setsebool -P httpd_can_network_connect on</code>). Setting permissive mode briefly with <code>setenforce 0</code> can confirm SELinux is the cause, but switch back to enforcing and fix the policy issue rather than leaving it off.</p>
+<p>File permission problems follow the rules from earlier lessons. The process's user needs read on files, and execute on every directory in the path; check with <code>namei -l /full/path</code> and <code>ls -l</code>, and see which user a service runs as with <code>ps -o user= -p PID</code> or the unit's <code>User=</code> setting. Check group membership with <code>id user</code>, ACLs with <code>getfacl</code>, and mount options like <code>noexec</code> with <code>findmnt</code>. The fix is the minimal change needed, such as adjusting group ownership or adding an ACL, never <code>chmod 777</code>, which creates a new security problem. Also watch for the reverse: files that are too permissive, such as world-writable scripts run by root, private keys readable by others, or configuration files containing passwords.</p>
+<p>SSH key authentication fails silently when permissions are loose, because sshd's StrictModes check refuses keys that other users could have tampered with. On the server, the user's home directory must not be group- or world-writable, <code>~/.ssh</code> should be 700, and <code>~/.ssh/authorized_keys</code> 600, all owned by the user. On the client, the private key must be 600, or ssh refuses to use it with 'UNPROTECTED PRIVATE KEY FILE'. On SELinux systems, an authorized_keys file created in an unusual way may need <code>restorecon -Rv ~/.ssh</code>. For diagnosis, run <code>ssh -v user@host</code> on the client and read <code>journalctl -u sshd</code> (or <code>/var/log/secure</code> or <code>auth.log</code>) on the server, where messages such as 'Authentication refused: bad ownership or modes' point straight to the cause. Also confirm the key is in the right account's file and that <code>AllowUsers</code> or <code>AllowGroups</code> permit the user.</p>
+<p>Locked or expired accounts produce login failures that look like wrong passwords. Check each possible cause: <code>faillock --user name</code> shows lockouts from failed attempts (reset with <code>--reset</code> after confirming the attempts were not an attack); <code>passwd -S name</code> shows whether the password is locked (<code>LK</code> or <code>L</code>); <code>chage -l name</code> shows password and account expiry dates; the shell in <code>/etc/passwd</code> might be <code>nologin</code>; and for directory accounts, check SSSD and <code>id name</code>. Investigate why an account was locked before unlocking it, because a burst of failures from an unknown IP address may be a brute-force attempt that needs a firewall block or incident report.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>AVC denial</dt><dd>An SELinux access vector cache message recording an operation blocked by policy, logged in the audit log.</dd><dt>StrictModes</dt><dd>An sshd setting (on by default) that rejects keys when home, .ssh or authorized_keys permissions are too open.</dd><dt>namei -l</dt><dd>Shows ownership and permissions of every component in a path, revealing where access is blocked.</dd><dt>faillock</dt><dd>Command that shows and resets failed-login lockouts recorded by pam_faillock.</dd><dt>passwd -S</dt><dd>Displays a user's password status, including whether it is locked.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>After a home directory restore, a developer's SSH key login fails and falls back to a password prompt. journalctl -u sshd shows 'Authentication refused: bad ownership or modes for directory /home/dev'. The restore left the home directory group-writable. chmod 755 /home/dev, chmod 700 ~/.ssh, chmod 600 ~/.ssh/authorized_keys and restorecon -Rv /home/dev/.ssh restore key login.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> When access fails but permissions look fine on an SELinux system, check ausearch -m avc before touching chmod; the fix is usually restorecon, semanage or a boolean, never disabling SELinux.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What permissions should ~/.ssh and ~/.ssh/authorized_keys have for key login to work reliably?</summary><p>~/.ssh 700 and authorized_keys 600, owned by the user, with a home directory not writable by group or others.</p></details>
+<details class="sq"><summary>A user says their password suddenly stopped working. Name three commands to check account status.</summary><p>faillock --user &lt;name&gt;, passwd -S &lt;name&gt; and chage -l &lt;name&gt; (also check the shell in /etc/passwd).</p></details>
+<details class="sq"><summary>Why is chmod 777 a poor fix for a permission denied error?</summary><p>It grants everyone full access, creating a security hole instead of granting only the minimum access the process needs.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Linux+ for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../linux-plus/">Open the Linux+ study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../service-failures-systemctl-status-exit-codes-journalctl-dependencies-p/">← Service failures: systemctl status exit codes, journalctl, d</a><a href="../hardware-dmesg-lspci-lsusb-smartctl-failing-disks-and-raid-degradation/">Hardware: dmesg, lspci, lsusb, smartctl, failing disks and R →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Removing resources from state without destroying them… · Terraform Associate Lesson</title>
+<meta name="description" content="Sometimes you want Terraform to stop managing an object without deleting it. Perhaps another team is taking over a database, the resource is moving to a di">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Removing resources from state without destroying them… · Terraform Associate Lesson">
+<meta property="og:description" content="Sometimes you want Terraform to stop managing an object without deleting it. Perhaps another team is taking over a database, the resource is moving to a di">
+<link rel="canonical" href="https://senayamyers27-art.github.io/terraform/lessons/removing-resources-from-state-without-destroying-them-removed-blocks-a/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/terraform/lessons/removing-resources-from-state-without-destroying-them-removed-blocks-a/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Terraform Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004) · Domain 7: Maintain infrastructure with Terraform</p>
+<h1>Removing resources from state without destroying them: `removed` blocks and `terraform state rm`</h1>
+<article class="lbody">
+<p>Sometimes you want Terraform to stop managing an object without deleting it. Perhaps another team is taking over a database, the resource is moving to a different Terraform configuration, or it was imported by mistake. If you simply delete the resource block, Terraform will plan to destroy the real object, because state still contains it and configuration no longer does. You need a way to forget it instead.</p>
+<p>The declarative way, added in Terraform 1.7, is the <code>removed</code> block. It has a <code>from</code> argument naming the resource (or module) address, and a <code>lifecycle</code> block whose <code>destroy</code> argument decides what happens. With <code>destroy = false</code>, Terraform removes the object from state and leaves the real infrastructure untouched. You delete the original resource block at the same time.</p>
+<pre class="code" tabindex="0"><code>removed {
+  from = aws_instance.legacy
+
+  lifecycle {
+    destroy = false
+  }
+}</code></pre>
+<p>Because it goes through plan and apply, the removal is previewed (the plan says the object will no longer be managed by Terraform but will not be destroyed), reviewed in a pull request and applied consistently in every environment. A <code>removed</code> block can also target a whole module, such as <code>from = module.old_app</code>. Setting <code>destroy = true</code> instead is the same as deleting the resource block normally: Terraform destroys the object. Removed blocks can also carry destroy-time provisioners if you need a cleanup action.</p>
+<p>The older, imperative way is <code>terraform state rm ADDRESS</code>. It deletes the entry from state immediately, with no plan. For example, <code>terraform state rm aws_instance.legacy</code> or <code>terraform state rm module.old_app</code> for a whole module. The real object keeps running, and Terraform simply no longer knows about it. You must also remove the resource block from configuration; otherwise the next plan will try to create a new object for that address. Like other state commands it supports <code>-dry-run</code>, and with a local backend it writes a backup file.</p>
+<p>A common scenario combines this with import: to move a resource from configuration A to configuration B, remove it from A's state (with a <code>removed</code> block or <code>state rm</code>) and import it into B with an <code>import</code> block. Keep in mind that forgetting an object does not delete it, so costs continue; make sure somebody or something else owns it afterwards.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>removed block</dt><dd>A configuration block that tells Terraform to stop managing an address, destroying it or not according to lifecycle destroy.</dd><dt>destroy = false</dt><dd>The removed block lifecycle setting that removes the object from state while leaving the real infrastructure in place.</dd><dt>terraform state rm</dt><dd>A CLI command that immediately deletes a resource entry from state without affecting the real object.</dd><dt>Unmanaged resource</dt><dd>A real object that exists but is not tracked in any Terraform state.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>The data team is taking over an analytics bucket that the platform team created. The platform team deletes the bucket's resource block, adds a removed block with destroy = false and applies. The data team then adds an import block for the same bucket in their own configuration.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Deleting a resource block alone means destroy. To stop managing without deleting, use a removed block with destroy = false or terraform state rm.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What happens if you delete a resource block and run terraform apply?</summary><p>Terraform destroys the real object, because it is still in state but no longer in configuration.</p></details>
+<details class="sq"><summary>Which lifecycle setting in a removed block keeps the real object?</summary><p>destroy = false.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Terraform Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../terraform/">Open the Terraform Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../refactoring-moved-blocks-and-terraform-state-mv/">← Refactoring: `moved` blocks and `terraform state mv`</a><a href="../verbose-logging-with-tf-log-trace-debug-info-warn-error-json-tf-log-pa/">Verbose logging with `TF_LOG` (TRACE, DEBUG, INFO, WARN, ERR →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Creating and deleting logical volumes by size (-L) or… · RHCSA Lesson</title>
+<meta name="description" content="Logical volumes (LVs) are the top layer of LVM and the part you actually use: you put a file system or swap on an LV and mount it, just as you would a part">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Creating and deleting logical volumes by size (-L) or… · RHCSA Lesson">
+<meta property="og:description" content="Logical volumes (LVs) are the top layer of LVM and the part you actually use: you put a file system or swap on an LV and mount it, just as you would a part">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/creating-and-deleting-logical-volumes-by-size-l-or-extent-count-l-lvcr/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/creating-and-deleting-logical-volumes-by-size-l-or-extent-count-l-lvcr/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 5: Configure local storage</p>
+<h1>Creating and deleting logical volumes by size (-L) or extent count (-l) (lvcreate, lvremove, lvs)</h1>
+<article class="lbody">
+<p>Logical volumes (LVs) are the top layer of LVM and the part you actually use: you put a file system or swap on an LV and mount it, just as you would a partition. The difference is flexibility. An LV is allocated from a volume group's pool, can span several disks, and can be extended later without repartitioning.</p>
+<p><code>lvcreate</code> makes a logical volume. <code>-n</code> gives it a name and the last argument is the volume group. You specify the size in one of two ways, and exam tasks test both. <code>-L</code> (capital) takes a size with units: <code>-L 500M</code>, <code>-L 2G</code>. <code>-l</code> (lowercase) takes a number of extents: <code>-l 50</code> allocates 50 physical extents, so its real size depends on the VG's extent size. <code>-l</code> also accepts percentages, such as <code>-l 100%FREE</code> for all remaining space or <code>-l 50%VG</code> for half the group.</p>
+<pre class="code" tabindex="0"><code>lvcreate -n weblv -L 1G datavg
+lvcreate -n dblv -l 60 datavg        # 60 extents
+lvcreate -n archive -l 100%FREE datavg
+lvs
+lvdisplay /dev/datavg/weblv
+mkfs.xfs /dev/datavg/weblv
+mkdir -p /web &amp;&amp; mount /dev/datavg/weblv /web</code></pre>
+<p>The extent arithmetic is simple multiplication. In a VG with 16 MiB extents, <code>-l 60</code> gives 960 MiB; in the default 4 MiB, the same command gives 240 MiB. With <code>-L</code>, if the size is not an exact multiple of the extent size, LVM rounds up to the next whole extent and tells you so. Check <code>vgdisplay</code> for the extent size and free extents before calculating. A task that says 'a logical volume of 20 extents' wants <code>-l 20</code>, and one that says '800 MiB' wants <code>-L 800M</code>; the grader usually accepts a small tolerance for sizes but not a wrong unit.</p>
+<p>After creation, the LV appears as <code>/dev/VG/LV</code> (a symbolic link) and <code>/dev/mapper/VG-LV</code>; both refer to the same device. Create a file system on it with <code>mkfs.xfs</code> or <code>mkfs.ext4</code>, or make it swap with <code>mkswap</code>, then mount it and, for persistence, add it to <code>/etc/fstab</code>.</p>
+<p><code>lvs</code> lists logical volumes with their VG, attributes and size. <code>lvdisplay</code> gives details including the number of current extents (Current LE), the path and the status. <code>lvs -o +devices</code> shows which PVs an LV uses.</p>
+<p><code>lvremove /dev/VG/LV</code> deletes a logical volume and everything on it. Before running it, unmount the file system (or <code>swapoff</code> for swap) and remove its <code>/etc/fstab</code> entry; otherwise lvremove refuses because the volume is in use, or the next boot fails trying to mount a device that no longer exists. lvremove asks for confirmation; read the name it shows before answering y.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Logical volume (LV)</dt><dd>A volume allocated from a volume group that holds a file system or swap, like a flexible partition.</dd><dt>lvcreate -L</dt><dd>Creates an LV with a size given in units such as M or G.</dd><dt>lvcreate -l</dt><dd>Creates an LV with a size given in extents, or percentages such as 100%FREE.</dd><dt>lvs / lvdisplay</dt><dd>List LVs briefly, or show details such as Current LE and path.</dd><dt>lvremove</dt><dd>Deletes a logical volume; unmount it and remove it from fstab first.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A task asks for an LV named database with exactly 50 extents in VG datavg, whose extent size is 16 MiB. You run <code>lvcreate -n database -l 50 datavg</code>, then <code>lvdisplay /dev/datavg/database</code> shows Current LE 50 and LV Size 800.00 MiB, format it with mkfs.ext4 and mount it.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Capital -L is a size with units; lowercase -l is a count of extents (or a percentage). Multiply extents by the VG's PE size to know the real size.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How big is an LV created with -l 25 in a VG with 8 MiB extents?</summary><p>200 MiB (25 x 8 MiB).</p></details>
+<details class="sq"><summary>How do you create an LV using all remaining space in vg01?</summary><p>lvcreate -n name -l 100%FREE vg01.</p></details>
+<details class="sq"><summary>What should you do before lvremove on a mounted LV?</summary><p>Unmount it (or swapoff if swap) and remove its /etc/fstab entry.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../creating-volume-groups-and-assigning-physical-volumes-vgcreate-s-vgext/">← Creating volume groups and assigning physical volumes (vgcre</a><a href="../mounting-file-systems-at-boot-by-uuid-or-label-in-etc-fstab/">Mounting file systems at boot by UUID or label in /etc/fstab →</a></nav>
+</main>
+</body>
+</html>

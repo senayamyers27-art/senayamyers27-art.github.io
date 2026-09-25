@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Extension interfaces: CRI (containerd, CRI-O, crictl)… · CKA Lesson</title>
+<meta name="description" content="Kubernetes does not run containers, wire networks or attach disks itself. It defines standard interfaces and lets plugins do the work.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Extension interfaces: CRI (containerd, CRI-O, crictl)… · CKA Lesson">
+<meta property="og:description" content="Kubernetes does not run containers, wire networks or attach disks itself. It defines standard interfaces and lets plugins do the work.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/extension-interfaces-cri-containerd-cri-o-crictl-cni-calico-cilium-fla/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/extension-interfaces-cri-containerd-cri-o-crictl-cni-calico-cilium-fla/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 1: Cluster Architecture, Installation and Configuration</p>
+<h1>Extension interfaces: CRI (containerd, CRI-O, crictl), CNI (Calico, Cilium, Flannel), CSI drivers</h1>
+<article class="lbody">
+<p>Kubernetes does not run containers, wire networks or attach disks itself. It defines standard interfaces and lets plugins do the work. Knowing the three interfaces tells you where to look when something below the API breaks.</p>
+<p>The Container Runtime Interface (CRI) is a gRPC API between the kubelet and a container runtime. containerd and CRI-O are the common CRI runtimes. Docker Engine is no longer supported directly by the kubelet since dockershim was removed. The kubelet is pointed at the runtime's socket, such as <code>unix:///run/containerd/containerd.sock</code> for containerd or <code>unix:///var/run/crio/crio.sock</code> for CRI-O.</p>
+<p><code>crictl</code> is the CRI debugging tool, and it works even when the API server is down because it talks to the local runtime. Configure its endpoint in <code>/etc/crictl.yaml</code> (<code>runtime-endpoint:</code>). Key commands: <code>crictl ps -a</code> (containers, including exited), <code>crictl pods</code>, <code>crictl images</code>, <code>crictl logs &lt;container-id&gt;</code>, <code>crictl inspect &lt;id&gt;</code> and <code>crictl rmi --prune</code>. It is not meant for building images or creating long-lived workloads.</p>
+<p>The Container Network Interface (CNI) specifies how a runtime asks a plugin to give a Pod's network namespace an interface and an IP. The kubelet and runtime read network configuration from <code>/etc/cni/net.d/</code> and plugin binaries from <code>/opt/cni/bin/</code>. If that config is missing, Pods fail with sandbox network errors and nodes report NotReady. Calico offers routed networking (optionally using BGP) or overlays, and full NetworkPolicy support. Cilium uses eBPF in the kernel for networking, policy and observability, and can even replace kube-proxy. Flannel is a simple overlay (commonly VXLAN) that is easy to install but does not enforce NetworkPolicies on its own.</p>
+<p>The Container Storage Interface (CSI) lets storage vendors ship drivers outside the Kubernetes codebase. A CSI driver usually has a controller component (a Deployment or StatefulSet that creates, deletes, attaches and snapshots volumes, with sidecars such as the external provisioner) and a node component (a DaemonSet that mounts volumes on each node). You can list installed drivers with <code>kubectl get csidrivers</code> and see the node side with <code>kubectl get csinodes</code>. A StorageClass names its CSI driver in the <code>provisioner</code> field.</p>
+<p>The practical lesson: CRI problems show up as containers that will not start (check the runtime service and crictl), CNI problems as Pods stuck ContainerCreating or unable to reach each other, and CSI problems as PVCs stuck Pending or volumes that fail to attach or mount.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>CRI</dt><dd>The gRPC interface the kubelet uses to control container runtimes such as containerd and CRI-O.</dd><dt>crictl</dt><dd>A command-line client for CRI runtimes, used for node-level debugging.</dd><dt>CNI</dt><dd>The specification and plugins that configure Pod network interfaces and IP addresses.</dd><dt>CSI</dt><dd>The standard interface for out-of-tree storage drivers that provision, attach and mount volumes.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>New Pods on node02 stay in ContainerCreating with an event saying the network plugin is not ready. On node02 you find <code>/etc/cni/net.d/</code> empty because the CNI DaemonSet Pod there is crashing. Fixing the DaemonSet's toleration lets it run, it writes the config, and the Pods start.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> If kubectl is unavailable, crictl is your eyes on the node. Remember Flannel alone does not enforce NetworkPolicy; a policy that seems ignored may simply have no enforcing CNI.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which directories hold CNI configuration and plugin binaries on a node?</summary><p>/etc/cni/net.d for configuration and /opt/cni/bin for binaries.</p></details>
+<details class="sq"><summary>Why does crictl still work when the API server is down?</summary><p>It talks directly to the local container runtime over the CRI socket, not to the API server.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../helm-repo-add-update-upgrade-install-version-values-and-kustomize-kube/">← Helm (repo add/update, upgrade --install, --version, values)</a><a href="../customresourcedefinitions-custom-resources-and-operators-crd-plus-cont/">CustomResourceDefinitions, custom resources and operators (C →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DNSSEC signing, trust anchors and the Name Resolution… · AZ-802 Lesson</title>
+<meta name="description" content="Classic DNS has no way to prove that an answer is genuine, so attackers who can inject forged responses (cache poisoning or spoofing) can redirect users to">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="DNSSEC signing, trust anchors and the Name Resolution… · AZ-802 Lesson">
+<meta property="og:description" content="Classic DNS has no way to prove that an answer is genuine, so attackers who can inject forged responses (cache poisoning or spoofing) can redirect users to">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/dnssec-signing-trust-anchors-and-the-name-resolution-policy-table-nrpt/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/dnssec-signing-trust-anchors-and-the-name-resolution-policy-table-nrpt/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 4: Implement and manage an on-premises and hybrid networking infrastructure</p>
+<h1>DNSSEC signing, trust anchors and the Name Resolution Policy Table (NRPT)</h1>
+<article class="lbody">
+<p>Classic DNS has no way to prove that an answer is genuine, so attackers who can inject forged responses (cache poisoning or spoofing) can redirect users to malicious servers. DNS Security Extensions (DNSSEC) fix this by adding digital signatures to zone data. A resolver that validates DNSSEC can confirm that an answer really came from the zone's owner and was not altered, and can prove that a name does not exist. DNSSEC does not encrypt queries; it provides authenticity and integrity.</p>
+<p>Signing a zone adds new record types. RRSIG records hold the signature for each set of records. DNSKEY records publish the zone's public keys. NSEC or NSEC3 records provide authenticated denial of existence, with NSEC3 hashing names so attackers cannot simply walk the zone to list every name. DS (delegation signer) records live in the parent zone and hold a hash of the child's key, linking the chain of trust from parent to child. Two kinds of keys are normally used: the key signing key (KSK) signs only the DNSKEY record set, and the zone signing key (ZSK) signs the rest of the zone. Keeping them separate lets you roll the frequently changed ZSK without updating the parent.</p>
+<p>In Windows Server DNS you sign a zone with DNS Manager (right-click the zone, DNSSEC, Sign the Zone) or <code>Invoke-DnsServerZoneSign</code>. One DNS server is the Key Master for the zone; it generates and manages keys and handles automatic key rollover. For AD-integrated zones, signed data replicates through AD, and dynamic updates continue to work because the servers sign records online as they change. Check the result with <code>Resolve-DnsName www.corp.contoso.com -DnssecOk</code>, which returns the RRSIG records.</p>
+<p>Validation needs a starting point you trust, called a trust anchor. It is typically a DNSKEY or DS record for a zone, configured on the validating DNS server; the server then follows the chain of signatures downward. On the internet the root zone's key serves as the anchor. For internal zones, you add trust anchors for your own signed zones to your resolvers. Windows can distribute trust anchors for a signed AD-integrated zone to all DNS servers in the forest automatically, an option in the signing wizard, and they appear in the Trust Points folder of DNS Manager.</p>
+<p>Windows clients are non-validating stub resolvers: they rely on their DNS server to validate and report the result. The Name Resolution Policy Table (NRPT) tells clients how to treat specific namespaces. Configured through Group Policy (Computer Configuration, Policies, Windows Settings, Name Resolution Policy), an NRPT rule for a suffix such as <code>.corp.contoso.com</code> can require DNSSEC validation: the client asks the server and accepts the answer only if the server indicates it validated successfully. Otherwise the client treats the name as unresolved. NRPT rules can also direct queries for a namespace to specific DNS servers, which DirectAccess and some VPN designs use. View applied rules with <code>Get-DnsClientNrptPolicy</code>.</p>
+<p>Roll out in stages: sign the zone, distribute trust anchors, confirm validation on servers, and only then enforce validation with NRPT on clients, or failed validation will break name resolution for users.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>DNSSEC</dt><dd>Extensions that add digital signatures to DNS data so resolvers can verify authenticity and integrity.</dd><dt>RRSIG</dt><dd>A record containing the signature over a set of DNS records.</dd><dt>Trust anchor</dt><dd>A preconfigured public key or DS record a resolver trusts as the start of a DNSSEC validation chain.</dd><dt>Key Master</dt><dd>The DNS server responsible for generating and rolling over keys for a signed zone.</dd><dt>NRPT</dt><dd>Name Resolution Policy Table: client rules, delivered by Group Policy, that require DNSSEC validation or direct queries for specific namespaces.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>After a phishing incident, Contoso signs corp.contoso.com, distributes trust anchors to all forest DNS servers, and verifies with Resolve-DnsName -DnssecOk. Once validation is confirmed on the servers, a GPO adds an NRPT rule requiring DNSSEC for .corp.contoso.com on all clients.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Signing is done on the authoritative zone; validation is done by resolvers using trust anchors; the NRPT is what makes Windows clients require validation. DNSSEC gives integrity, not confidentiality.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What does the KSK sign, and what does the ZSK sign?</summary><p>The KSK signs the DNSKEY record set; the ZSK signs the other records in the zone.</p></details>
+<details class="sq"><summary>How do Windows clients enforce DNSSEC validation for a namespace?</summary><p>Through an NRPT rule, usually deployed by Group Policy, requiring DNSSEC validation for that suffix.</p></details>
+<details class="sq"><summary>Which record type provides authenticated denial of existence while hindering zone walking?</summary><p>NSEC3.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../forwarders-conditional-forwarders-and-root-hints-dns-policies-and-zone/">← Forwarders, conditional forwarders and root hints; DNS polic</a><a href="../azure-dns-private-zones-virtual-network-links-and-auto-registration-az/">Azure DNS private zones, virtual network links and auto-regi →</a></nav>
+</main>
+</body>
+</html>

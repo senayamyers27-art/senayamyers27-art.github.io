@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ARM templates and Bicep files: interpret and modify… · Azure Administrator Lesson</title>
+<meta name="description" content="Infrastructure as code means describing Azure resources in files and letting Azure Resource Manager (ARM) create them, instead of clicking through the port">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="ARM templates and Bicep files: interpret and modify… · Azure Administrator Lesson">
+<meta property="og:description" content="Infrastructure as code means describing Azure resources in files and letting Azure Resource Manager (ARM) create them, instead of clicking through the port">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-104/lessons/arm-templates-and-bicep-files-interpret-and-modify-deploy-export-a-dep/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-104/lessons/arm-templates-and-bicep-files-interpret-and-modify-deploy-export-a-dep/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Azure Administrator</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure Administrator Associate AZ-104 · Domain 3: Deploy and manage Azure compute resources</p>
+<h1>ARM templates and Bicep files: interpret and modify, deploy, export a deployment as a template, convert ARM JSON to Bicep</h1>
+<article class="lbody">
+<p>Infrastructure as code means describing Azure resources in files and letting Azure Resource Manager (ARM) create them, instead of clicking through the portal. The files are repeatable, reviewable and version-controlled. Azure's native formats are ARM templates, written in JSON, and Bicep, a simpler language that compiles to ARM JSON. The exam expects you to read both, change a value and deploy.</p>
+<p>An ARM template has a fixed structure: <code>$schema</code> and <code>contentVersion</code>, then <code>parameters</code> (values supplied at deployment time, such as a VM name), <code>variables</code> (values computed inside the template), <code>resources</code> (what to deploy, each with a <code>type</code>, <code>apiVersion</code>, <code>name</code>, <code>location</code> and <code>properties</code>), and <code>outputs</code> (values returned after deployment). Expressions in square brackets call template functions, for example <code>[resourceGroup().location]</code> or <code>[parameters('storageName')]</code>. <code>dependsOn</code> states ordering between resources.</p>
+<p>Bicep expresses the same things with less syntax. Here is a storage account with a parameter and an output:</p>
+<pre class="code" tabindex="0"><code>param storageName string
+param location string = resourceGroup().location
+
+resource sa 'Microsoft.Storage/storageAccounts@2023-01-01' = {
+  name: storageName
+  location: location
+  sku: { name: 'Standard_LRS' }
+  kind: 'StorageV2'
+}
+
+output blobEndpoint string = sa.properties.primaryEndpoints.blob</code></pre>
+<p>Read it top down: <code>param</code> declares inputs (with an optional default), <code>resource</code> declares a resource with a symbolic name (<code>sa</code>), a type and API version, and <code>output</code> returns a value. Bicep works out dependencies automatically when one resource references another's symbolic name. To change the redundancy, you would edit <code>Standard_LRS</code> to <code>Standard_GRS</code>. Reusable pieces go in modules (<code>module net './network.bicep' = { ... }</code>). Parameter values can come from a parameters file (<code>.json</code> or <code>.bicepparam</code>) so the same template deploys dev and production with different values.</p>
+<p>You can get a template from existing resources. In the portal, a resource group or a resource has Export template under Automation, which generates a template of the current resources; a past deployment in the resource group's Deployments list also offers its original template. Exported templates are a starting point: they often hard-code values, include read-only properties and may not support every resource type, so you parameterize and clean them up before reusing them.</p>
+<p>Converting between formats is done with the Bicep CLI, included with the Azure CLI. <code>az bicep decompile --file main.json</code> converts an ARM JSON template to a Bicep file as a best effort, which you then review and fix any warnings. <code>az bicep build --file main.bicep</code> compiles Bicep to ARM JSON. You rarely need to build manually, because <code>az deployment group create</code> and <code>New-AzResourceGroupDeployment</code> accept <code>.bicep</code> files directly. The portal's Deploy a custom template page accepts ARM JSON and lets you edit it before deploying.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>ARM template</dt><dd>A JSON file that declares Azure resources, parameters, variables and outputs for Azure Resource Manager to deploy.</dd><dt>Bicep</dt><dd>A domain-specific language for Azure that compiles to ARM JSON with simpler syntax and automatic dependencies.</dd><dt>Parameter</dt><dd>A value supplied at deployment time so one template can be reused with different inputs.</dd><dt>Decompile</dt><dd>Converting an ARM JSON template to Bicep with az bicep decompile.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An administrator built a working web app environment by hand in the portal and wants to recreate it for a test team. They use Export template on the resource group, decompile the JSON to Bicep, replace hard-coded names with parameters, and deploy it to a new resource group with a test parameters file.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Know where values come from: parameters are supplied at deployment, variables are computed in the template, outputs are returned afterwards. az bicep decompile converts JSON to Bicep; az bicep build goes the other way.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which template section would you edit so that the VM size can be chosen at deployment time?</summary><p>Add a parameter for the size in the parameters section (param in Bicep) and reference it in the VM resource.</p></details>
+<details class="sq"><summary>How do you convert an existing ARM JSON template to Bicep?</summary><p>Run az bicep decompile --file template.json and review the result.</p></details>
+<details class="sq"><summary>Where can you get a template of resources that were created manually in the portal?</summary><p>Export template on the resource group or resource (under Automation), then clean up and parameterize it.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Azure Administrator for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-104/">Open the Azure Administrator study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../azure-files-create-and-configure-file-shares-snapshots-soft-delete-and/">← Azure Files: create and configure file shares, snapshots, so</a><a href="../deployment-modes-incremental-vs-complete-and-deploying-with-az-deploym/">Deployment modes (incremental vs complete) and deploying wit →</a></nav>
+</main>
+</body>
+</html>

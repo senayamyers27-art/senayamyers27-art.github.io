@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Choosing a workload: Deployment, StatefulSet, DaemonSet… · CKAD Lesson</title>
+<meta name="description" content="A Pod is the smallest deployable unit in Kubernetes: one or more containers that share a network namespace and can share volumes. You rarely create Pods di">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Choosing a workload: Deployment, StatefulSet, DaemonSet… · CKAD Lesson">
+<meta property="og:description" content="A Pod is the smallest deployable unit in Kubernetes: one or more containers that share a network namespace and can share volumes. You rarely create Pods di">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/choosing-a-workload-deployment-statefulset-daemonset-job-cronjob-bare/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/choosing-a-workload-deployment-statefulset-daemonset-job-cronjob-bare/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 1: Application Design and Build</p>
+<h1>Choosing a workload: Deployment, StatefulSet, DaemonSet, Job, CronJob, bare Pod</h1>
+<article class="lbody">
+<p>A Pod is the smallest deployable unit in Kubernetes: one or more containers that share a network namespace and can share volumes. You rarely create Pods directly in production, because a bare Pod is not replaced if it is deleted or its node fails. Instead you create a workload controller, which holds a Pod template and continually works to make reality match what you asked for. Choosing the right controller is a core CKAD skill.</p>
+<p>A Deployment runs a set of interchangeable, stateless replicas, such as a web front end or an API server. It manages ReplicaSets for you and supports rolling updates and rollbacks. Any Pod can be killed and replaced by another identical one. This is the default choice for most applications.</p>
+<p>A StatefulSet is for replicas that need a stable identity. Its Pods get predictable names such as <code>db-0</code>, <code>db-1</code>, start and stop in order, and each can get its own PersistentVolumeClaim through <code>volumeClaimTemplates</code> that follows it across restarts. It normally works with a headless Service so each Pod has a stable DNS name. Use it for databases, message queues and clustered systems where members must be told apart.</p>
+<p>A DaemonSet runs one copy of a Pod on every node (or every node that matches a selector). As nodes join, they automatically get the Pod. Typical uses are node-level agents: log collectors, monitoring exporters and network plugins. You do not set a replica count; the number of nodes decides it.</p>
+<p>A Job runs Pods until a task completes successfully, then stops. It is for batch work such as a database migration, a report or a data import. A CronJob creates Jobs on a repeating schedule, like the Unix cron utility, for nightly backups or hourly cleanups. Jobs and CronJobs use <code>restartPolicy: Never</code> or <code>OnFailure</code>, never <code>Always</code>.</p>
+<p>A bare Pod is fine for quick, disposable things: a temporary busybox Pod to test DNS, or a one-off debugging session. For anything that should keep running, wrap it in a controller.</p>
+<pre class="code" tabindex="0"><code>kubectl create deployment web --image=nginx --replicas=3
+kubectl create job migrate --image=busybox -- echo done
+kubectl create cronjob tidy --image=busybox --schedule=&quot;0 * * * *&quot; -- echo tidy
+kubectl run tmp --image=busybox --rm -it --restart=Never -- sh</code></pre>
+<p>Notice that kubectl has <code>create</code> generators for Deployments, Jobs and CronJobs, but not for StatefulSets or DaemonSets. For those, a common exam trick is to generate a Deployment with <code>--dry-run=client -o yaml</code>, change the <code>kind</code>, and remove fields that do not apply (a DaemonSet has no <code>replicas</code> or <code>strategy</code>; a StatefulSet normally sets <code>serviceName</code> for its headless Service).</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Deployment</dt><dd>Controller for stateless, interchangeable replicas with rolling updates and rollback.</dd><dt>StatefulSet</dt><dd>Controller giving each replica a stable name, ordered start-up and its own persistent storage.</dd><dt>DaemonSet</dt><dd>Controller that runs one Pod per eligible node.</dd><dt>Job / CronJob</dt><dd>Controllers for run-to-completion work, once or on a schedule.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A shop runs its storefront as a Deployment with five replicas, its PostgreSQL cluster as a StatefulSet with per-replica volumes, a log shipper as a DaemonSet on every node, and a nightly sales report as a CronJob. Each choice matches whether the work is stateless, stateful, per-node or run-to-completion.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Look for the clue words: 'one per node' means DaemonSet, 'stable identity or ordered' means StatefulSet, 'runs to completion' means Job, 'on a schedule' means CronJob, and 'scalable stateless app' means Deployment.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which workload should run a node monitoring agent on every node, including new ones?</summary><p>A DaemonSet, because it schedules one Pod per eligible node automatically.</p></details>
+<details class="sq"><summary>Why is a bare Pod a poor choice for a long-running service?</summary><p>Nothing recreates it if it is deleted or its node fails; a controller such as a Deployment would replace it.</p></details>
+<details class="sq"><summary>What restartPolicy values are valid for a Job's Pods?</summary><p>Never or OnFailure; Always is not allowed for Jobs.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../how-pod-command-and-args-override-the-image-entrypoint-and-cmd/">← How Pod `command` and `args` override the image ENTRYPOINT a</a><a href="../jobs-completions-parallelism-backofflimit-activedeadlineseconds-restar/">Jobs: completions, parallelism, backoffLimit, activeDeadline →</a></nav>
+</main>
+</body>
+</html>

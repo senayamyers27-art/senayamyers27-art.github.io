@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Blue/green deployments by switching a Service selector… · CKAD Lesson</title>
+<meta name="description" content="A blue/green deployment runs two complete versions of an application side by side. Blue is the live version receiving traffic; green is the new version, fu">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Blue/green deployments by switching a Service selector… · CKAD Lesson">
+<meta property="og:description" content="A blue/green deployment runs two complete versions of an application side by side. Blue is the live version receiving traffic; green is the new version, fu">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/blue-green-deployments-by-switching-a-service-selector-between-two-dep/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/blue-green-deployments-by-switching-a-service-selector-between-two-dep/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 2: Application Deployment</p>
+<h1>Blue/green deployments by switching a Service selector between two Deployments</h1>
+<article class="lbody">
+<p>A blue/green deployment runs two complete versions of an application side by side. Blue is the live version receiving traffic; green is the new version, fully started and tested but not yet serving users. When you are satisfied with green, you switch all traffic to it at once. If something goes wrong, you switch back just as quickly. Kubernetes has no special object for this; you build it from two Deployments and one Service.</p>
+<p>The trick is labels. Both Deployments share an application label such as <code>app: shop</code> and differ in a version label, for example <code>version: blue</code> and <code>version: green</code>. The Service's selector includes both labels, so it matches only one colour at a time.</p>
+<pre class="code" tabindex="0"><code>apiVersion: v1
+kind: Service
+metadata:
+  name: shop
+spec:
+  selector:
+    app: shop
+    version: blue
+  ports:
+  - port: 80
+    targetPort: 8080</code></pre>
+<p>The process looks like this. First, deploy <code>shop-green</code> with the new image and <code>version: green</code> labels, at full size. Second, test it directly, for example through a temporary second Service such as <code>shop-preview</code> or with <code>kubectl port-forward deploy/shop-green 8080</code>. Third, switch the live Service by changing its selector: <code>kubectl patch service shop -p '{&quot;spec&quot;:{&quot;selector&quot;:{&quot;app&quot;:&quot;shop&quot;,&quot;version&quot;:&quot;green&quot;}}}'</code> or <code>kubectl edit service shop</code>. Traffic moves as soon as the endpoints update. Finally, keep blue running for a while as your rollback path, then scale it to zero or delete it.</p>
+<p>Verify the switch with <code>kubectl get endpointslices -l kubernetes.io/service-name=shop</code> or <code>kubectl describe service shop</code>: the listed Pod IPs should now belong to the green Pods, which you can compare with <code>kubectl get pods -l version=green -o wide</code>.</p>
+<p>Compared with a rolling update, blue/green gives an instant, all-at-once cut-over, so users never see a mix of versions, and an instant rollback. The costs are double the resources during the switch and the need for both versions to work with the same database and other shared state. Existing long-lived connections may continue to the old Pods until they close, so keep blue alive briefly after switching.</p>
+<p>Common exam mistakes are forgetting to add the distinguishing label to the Pod template (the Deployment's own metadata labels do not count), and making the Service selector so broad, just <code>app: shop</code>, that it matches both colours at once.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Blue/green deployment</dt><dd>Running old and new versions in full side by side and switching all traffic at once.</dd><dt>Service selector</dt><dd>Label query that decides which Pods receive a Service's traffic.</dd><dt>Cut-over</dt><dd>The moment traffic moves from the old version to the new one.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A ticketing site deploys <code>tickets-green</code> alongside <code>tickets-blue</code>, tests it through a port-forward, then patches the <code>tickets</code> Service selector to <code>version: green</code>. When a bug appears ten minutes later, they patch the selector back to blue, restoring the old version within seconds.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> The switch happens in the Service, not the Deployments. Make sure the version label is on the Pod template and that the Service selector includes it.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What single change moves traffic from blue to green?</summary><p>Updating the Service's selector to match the green Pods' version label.</p></details>
+<details class="sq"><summary>How do you roll back a blue/green release?</summary><p>Switch the Service selector back to the blue label, provided the blue Deployment is still running.</p></details>
+<details class="sq"><summary>What is the main resource cost of blue/green?</summary><p>Both versions run at full size at the same time during the switch.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../kubectl-rollout-status-history-undo-to-revision-pause-and-resume-kubec/">← kubectl rollout status, history, undo (--to-revision), pause</a><a href="../canary-releases-with-two-deployments-behind-one-service-weighted-by-re/">Canary releases with two Deployments behind one Service, wei →</a></nav>
+</main>
+</body>
+</html>

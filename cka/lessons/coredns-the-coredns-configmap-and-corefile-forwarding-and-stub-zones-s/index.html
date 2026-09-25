@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CoreDNS: the coredns ConfigMap and Corefile, forwarding… · CKA Lesson</title>
+<meta name="description" content="CoreDNS is the cluster DNS server. On kubeadm clusters it runs as the coredns Deployment in kube-system, exposed by a Service still named kube-dns for comp">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="CoreDNS: the coredns ConfigMap and Corefile, forwarding… · CKA Lesson">
+<meta property="og:description" content="CoreDNS is the cluster DNS server. On kubeadm clusters it runs as the coredns Deployment in kube-system, exposed by a Service still named kube-dns for comp">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/coredns-the-coredns-configmap-and-corefile-forwarding-and-stub-zones-s/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/coredns-the-coredns-configmap-and-corefile-forwarding-and-stub-zones-s/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 3: Services and Networking</p>
+<h1>CoreDNS: the coredns ConfigMap and Corefile, forwarding and stub zones, Service and Pod DNS records, dnsPolicy</h1>
+<article class="lbody">
+<p>CoreDNS is the cluster DNS server. On kubeadm clusters it runs as the <code>coredns</code> Deployment in kube-system, exposed by a Service still named <code>kube-dns</code> for compatibility, usually at the tenth address of the Service CIDR (10.96.0.10 with kubeadm's default). The kubelet writes that address into every Pod's <code>/etc/resolv.conf</code>.</p>
+<p>Its configuration is the Corefile, stored in the <code>coredns</code> ConfigMap. Each server block names the zones it serves and a chain of plugins. A typical default block for the root zone includes <code>errors</code>, <code>health</code>, <code>ready</code>, the <code>kubernetes</code> plugin that answers for <code>cluster.local</code> and reverse zones, <code>prometheus</code> metrics, <code>forward . /etc/resolv.conf</code> to send everything else to the node's upstream resolvers, <code>cache</code>, <code>loop</code>, <code>reload</code> and <code>loadbalance</code>.</p>
+<pre class="code" tabindex="0"><code>.:53 {
+    errors
+    health
+    ready
+    kubernetes cluster.local in-addr.arpa ip6.arpa {
+       pods insecure
+       fallthrough in-addr.arpa ip6.arpa
+    }
+    forward . /etc/resolv.conf
+    cache 30
+    loop
+    reload
+    loadbalance
+}
+corp.internal:53 {
+    forward . 10.0.0.53
+}</code></pre>
+<p>To send a private domain to a specific DNS server, a so-called stub zone, add a separate server block for that zone with its own <code>forward</code>, as the <code>corp.internal</code> block above does. To change upstream resolvers for everything else, change the target of <code>forward .</code>. Edit with <code>kubectl -n kube-system edit cm coredns</code>; the <code>reload</code> plugin picks up the change after a short delay, or you can <code>kubectl -n kube-system rollout restart deploy coredns</code>.</p>
+<p>Know the record formats. A normal Service gets an A (or AAAA) record <code>&lt;svc&gt;.&lt;ns&gt;.svc.cluster.local</code> pointing to its ClusterIP, and SRV records for named ports, <code>_&lt;port&gt;._&lt;proto&gt;.&lt;svc&gt;.&lt;ns&gt;.svc.cluster.local</code>. A headless Service's name resolves to its Pods' IPs, and StatefulSet Pods get <code>&lt;pod&gt;.&lt;svc&gt;.&lt;ns&gt;.svc.cluster.local</code>. Pods have records of the form <code>10-244-1-5.&lt;ns&gt;.pod.cluster.local</code>, their IP with dashes. Pod resolv.conf includes search domains <code>&lt;ns&gt;.svc.cluster.local svc.cluster.local cluster.local</code> and <code>ndots:5</code>, which is why a bare <code>web</code> works inside the same namespace and <code>web.other</code> works across namespaces.</p>
+<p>A Pod's <code>dnsPolicy</code> controls this. <code>ClusterFirst</code> (the default) uses cluster DNS and forwards other names upstream. <code>Default</code> inherits the node's resolv.conf, so cluster names do not resolve. <code>ClusterFirstWithHostNet</code> is what Pods with <code>hostNetwork: true</code> need to still use cluster DNS. <code>None</code> ignores all of it and uses only the <code>dnsConfig</code> you supply (nameservers, searches, options).</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Corefile</dt><dd>CoreDNS's configuration, held in the coredns ConfigMap, made of server blocks and plugins.</dd><dt>forward plugin</dt><dd>Sends queries CoreDNS is not authoritative for to upstream resolvers.</dd><dt>Stub zone</dt><dd>A server block that forwards a specific domain to designated DNS servers.</dd><dt>dnsPolicy</dt><dd>Pod setting choosing ClusterFirst, Default, ClusterFirstWithHostNet or None DNS behaviour.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Developers need <code>*.corp.internal</code> names to resolve from Pods, but the node resolvers do not know them. You add a <code>corp.internal:53 { forward . 10.0.0.53 }</code> block to the coredns ConfigMap, wait for reload, and <code>nslookup db.corp.internal</code> from a test Pod now returns the internal address.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> The Service is called kube-dns but the Pods and ConfigMap are called coredns. dnsPolicy Default is not the default; ClusterFirst is.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What is the fully qualified DNS name of Service api in namespace shop?</summary><p>api.shop.svc.cluster.local.</p></details>
+<details class="sq"><summary>Which dnsPolicy should a hostNetwork Pod use to resolve cluster Services?</summary><p>ClusterFirstWithHostNet.</p></details>
+<details class="sq"><summary>How do you forward a single private domain to a specific DNS server?</summary><p>Add a server block for that zone in the Corefile with its own forward directive.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../ingress-controllers-ingressclass-and-the-default-class-ingress-rules-p/">← Ingress controllers, IngressClass and the default class; Ing</a><a href="../testing-connectivity-with-temporary-pods-busybox-nicolaka-netshoot-nsl/">Testing connectivity with temporary Pods (busybox, nicolaka/ →</a></nav>
+</main>
+</body>
+</html>

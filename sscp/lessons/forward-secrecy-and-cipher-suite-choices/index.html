@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Forward secrecy and cipher suite choices · SSCP Lesson</title>
+<meta name="description" content="Imagine an attacker records all of your organization's encrypted traffic for a year, then later steals the web server's private key. If the session keys we">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Forward secrecy and cipher suite choices · SSCP Lesson">
+<meta property="og:description" content="Imagine an attacker records all of your organization's encrypted traffic for a year, then later steals the web server's private key. If the session keys we">
+<link rel="canonical" href="https://senayamyers27-art.github.io/sscp/lessons/forward-secrecy-and-cipher-suite-choices/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/sscp/lessons/forward-secrecy-and-cipher-suite-choices/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">SSCP</a> / <a href="../">Lessons</a></p>
+<p class="note">ISC2 SSCP Oct 2025 outline · Domain 5: Cryptography</p>
+<h1>Forward secrecy and cipher suite choices</h1>
+<article class="lbody">
+<p>Imagine an attacker records all of your organization's encrypted traffic for a year, then later steals the web server's private key. If the session keys were derived in a way that depends only on that long-term key, the attacker could go back and decrypt the whole archive. Forward secrecy, often called perfect forward secrecy (PFS), prevents this. With forward secrecy, each session uses a fresh, temporary key pair that is discarded afterward, so compromising the long-term key later does not reveal past session keys.</p>
+<p>Forward secrecy is achieved with ephemeral Diffie-Hellman key exchange: DHE (finite-field) or, more commonly, ECDHE (elliptic curve). The word ephemeral is the clue; the key agreement values exist only for one session. The server's long-term private key is used only to sign the exchange and prove identity, not to encrypt the session key. By contrast, older TLS configurations used RSA key transport, where the client encrypted the session secret with the server's RSA public key. That does not provide forward secrecy, which is why TLS 1.3 removed RSA key transport entirely and uses ephemeral (EC)DHE key exchange for its certificate-based handshakes.</p>
+<p>A cipher suite is the named combination of algorithms a TLS connection uses. In TLS 1.2 a suite name such as <code>TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384</code> lists four parts: the key exchange (ECDHE), the authentication or signature algorithm (RSA, from the server certificate), the bulk encryption cipher and mode (AES-256 in GCM), and the hash used for integrity or key derivation (SHA-384). TLS 1.3 simplified suites to just the symmetric cipher and hash, because key exchange is always ephemeral and negotiated separately.</p>
+<p>Good cipher choices favor authenticated encryption modes such as AES-GCM or ChaCha20-Poly1305, which provide confidentiality and integrity together, and ephemeral key exchange. Weak choices to disable include NULL ciphers (no encryption), export-grade ciphers, RC4, DES and 3DES, MD5-based integrity, anonymous key exchange (no authentication, which enables on-path attacks), and the SSL protocols and early TLS versions. Removing weak options also prevents downgrade attacks, in which an attacker tampers with negotiation to force both sides onto the weakest option they share.</p>
+<p>In practice, administrators configure an ordered list of allowed protocols and suites on servers and load balancers, test with a scanner such as <code>nmap --script ssl-enum-ciphers</code> or an online TLS checker, and revisit the configuration periodically as algorithms age. Compatibility with old clients is the usual reason weak suites linger; the security team should document and time-limit any such exception. Keep an eye on future changes too, since organizations are beginning to plan for post-quantum key exchange.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Forward secrecy</dt><dd>A property ensuring that compromise of a long-term private key does not expose past session keys.</dd><dt>Ephemeral key exchange</dt><dd>Key agreement (DHE or ECDHE) using temporary keys generated fresh for each session and then discarded.</dd><dt>Cipher suite</dt><dd>The named set of algorithms for key exchange, authentication, bulk encryption and hashing in a TLS session.</dd><dt>Downgrade attack</dt><dd>An attack that manipulates negotiation so parties use a weaker protocol version or cipher.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A scan of a company's web server shows it still accepts TLS 1.0 and RSA key exchange suites. The team disables old protocol versions and non-ephemeral suites, leaving TLS 1.2 with ECDHE and AES-GCM plus TLS 1.3. A rescan confirms all remaining suites support forward secrecy.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> If a question mentions ephemeral, DHE or ECDHE, think forward secrecy. Static RSA key exchange does not provide it. In a suite name, the first part after TLS_ is the key exchange.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why doesn't RSA key transport provide forward secrecy?</summary><p>The session secret is encrypted with the server's long-term RSA key, so anyone who later steals that key can decrypt recorded sessions.</p></details>
+<details class="sq"><summary>In TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256, what does RSA refer to?</summary><p>The authentication or signature algorithm used with the server's certificate.</p></details>
+<details class="sq"><summary>Name two cipher suite components that should be disabled.</summary><p>Examples include NULL or export ciphers, RC4, DES/3DES, MD5, and anonymous key exchange.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study SSCP for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../sscp/">Open the SSCP study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../secure-protocols-tls-ssh-ipsec-s-mime-sftp/">← Secure protocols: TLS, SSH, IPsec, S/MIME, SFTP</a><a href="../pki-cas-certificates-csrs-chain-of-trust-crl-and-ocsp/">PKI: CAs, certificates, CSRs, chain of trust, CRL and OCSP →</a></nav>
+</main>
+</body>
+</html>

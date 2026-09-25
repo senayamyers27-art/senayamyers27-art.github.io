@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Atomic classes (AtomicInteger, AtomicLong) and locks… · OCP Java Lesson</title>
+<meta name="description" content="The java.util.concurrent.atomic package offers classes such as AtomicInteger, AtomicLong, AtomicBoolean and AtomicReference that perform single-variable up">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Atomic classes (AtomicInteger, AtomicLong) and locks… · OCP Java Lesson">
+<meta property="og:description" content="The java.util.concurrent.atomic package offers classes such as AtomicInteger, AtomicLong, AtomicBoolean and AtomicReference that perform single-variable up">
+<link rel="canonical" href="https://senayamyers27-art.github.io/java-se/lessons/atomic-classes-atomicinteger-atomiclong-and-locks-reentrantlock-tryloc/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/java-se/lessons/atomic-classes-atomicinteger-atomiclong-and-locks-reentrantlock-tryloc/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">OCP Java</a> / <a href="../">Lessons</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25) · Domain 8: Managing concurrent code execution</p>
+<h1>Atomic classes (AtomicInteger, AtomicLong) and locks (ReentrantLock, tryLock)</h1>
+<article class="lbody">
+<p>The <code>java.util.concurrent.atomic</code> package offers classes such as <code>AtomicInteger</code>, <code>AtomicLong</code>, <code>AtomicBoolean</code> and <code>AtomicReference</code> that perform single-variable updates atomically without explicit locking. They rely on hardware compare-and-swap (CAS) instructions: an update succeeds only if the value has not changed since it was read, and retries otherwise. They also have volatile-like visibility, so every thread sees the latest value.</p>
+<p>Know the method names and what they return. <code>incrementAndGet()</code> adds one and returns the new value (like <code>++x</code>), while <code>getAndIncrement()</code> returns the old value (like <code>x++</code>). The decrement and add versions follow the same pattern: <code>decrementAndGet</code>, <code>getAndDecrement</code>, <code>addAndGet(n)</code>, <code>getAndAdd(n)</code>. <code>get()</code> and <code>set()</code> read and write. <code>compareAndSet(expected, newValue)</code> sets the value only if it currently equals expected and returns a boolean. <code>updateAndGet(x -&gt; x * 2)</code> and <code>accumulateAndGet(5, Integer::sum)</code> apply a function atomically, retrying if needed, so the function should be free of side effects.</p>
+<pre class="code" tabindex="0"><code>AtomicInteger hits = new AtomicInteger();
+hits.incrementAndGet();          // 1
+int old = hits.getAndAdd(10);    // old = 1, now 11
+hits.compareAndSet(11, 0);       // true, now 0
+hits.updateAndGet(x -&gt; x + 5);   // 5</code></pre>
+<p>Atomics protect a single variable. When an invariant spans several variables, such as moving money between two balances, you need a lock. <code>ReentrantLock</code> in <code>java.util.concurrent.locks</code> implements the <code>Lock</code> interface and provides the same mutual exclusion as synchronized, with more control. The rule is to call <code>lock()</code> before the try block and <code>unlock()</code> in finally, because unlike synchronized nothing releases the lock automatically.</p>
+<pre class="code" tabindex="0"><code>private final Lock lock = new ReentrantLock();
+void transfer(Account a, Account b, int amt) {
+    lock.lock();
+    try { a.withdraw(amt); b.deposit(amt); }
+    finally { lock.unlock(); }
+}</code></pre>
+<p>The extra control is mostly about not waiting forever. <code>tryLock()</code> attempts to acquire the lock immediately and returns true or false without blocking. <code>tryLock(1, TimeUnit.SECONDS)</code> waits up to that long and throws <code>InterruptedException</code>. When tryLock returns false you must not call unlock, and you should do something else, such as retry later. <code>lockInterruptibly()</code> waits but can be interrupted. <code>new ReentrantLock(true)</code> creates a fair lock that grants access roughly in arrival order, at some cost in throughput.</p>
+<p>Reentrant means the thread that holds the lock can acquire it again; each <code>lock()</code> increments a hold count, and the lock is released only after an equal number of <code>unlock()</code> calls. Calling <code>unlock()</code> on a lock the current thread does not hold throws <code>IllegalMonitorStateException</code>. For read-heavy data, <code>ReentrantReadWriteLock</code> lets many readers share access while writers get exclusive access.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>AtomicInteger</dt><dd>An int wrapper with atomic, lock-free operations such as incrementAndGet and compareAndSet.</dd><dt>Compare-and-swap (CAS)</dt><dd>An atomic hardware operation that updates a value only if it still equals an expected value.</dd><dt>ReentrantLock</dt><dd>An explicit Lock implementation that the holding thread can re-acquire, released by matching unlock calls.</dd><dt>tryLock</dt><dd>A Lock method that tries to acquire the lock without blocking, or within a timeout, and returns whether it succeeded.</dd><dt>IllegalMonitorStateException</dt><dd>Thrown when a thread unlocks a lock it does not hold.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A rate limiter tracks requests with an AtomicLong counter, while a booking system that must update both a seat map and a payment ledger together guards both with one ReentrantLock and uses tryLock with a timeout so a stuck request fails fast instead of hanging.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> incrementAndGet returns the new value and getAndIncrement returns the old one. Always unlock in finally, and only after a successful lock or tryLock; unlocking a lock you do not hold throws IllegalMonitorStateException.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>If an AtomicInteger holds 5, what does getAndIncrement() return and what is the new value?</summary><p>It returns 5 and the value becomes 6.</p></details>
+<details class="sq"><summary>What does tryLock() return if another thread holds the lock?</summary><p>false, immediately, without waiting.</p></details>
+<details class="sq"><summary>A thread calls lock() twice on a ReentrantLock. How many unlock() calls release it?</summary><p>Two; the hold count must return to zero.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study OCP Java for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../java-se/">Open the OCP Java study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../race-conditions-synchronized-blocks-and-methods-and-visibility/">← Race conditions, synchronized blocks and methods, and visibi</a><a href="../concurrent-collections-concurrenthashmap-copyonwritearraylist-blocking/">Concurrent collections: ConcurrentHashMap, CopyOnWriteArrayL →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Default Domain Policy vs fine-grained password policies… · AZ-802 Lesson</title>
+<meta name="description" content="Every domain needs a password and account lockout policy for its user accounts. For domain accounts, that policy comes from Group Policy settings under Com">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Default Domain Policy vs fine-grained password policies… · AZ-802 Lesson">
+<meta property="og:description" content="Every domain needs a password and account lockout policy for its user accounts. For domain accounts, that policy comes from Group Policy settings under Com">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/default-domain-policy-vs-fine-grained-password-policies-psos-ad-recycl/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/default-domain-policy-vs-fine-grained-password-policies-psos-ad-recycl/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 1: Deploy and manage AD DS</p>
+<h1>Default Domain Policy vs fine-grained password policies (PSOs); AD Recycle Bin</h1>
+<article class="lbody">
+<p>Every domain needs a password and account lockout policy for its user accounts. For domain accounts, that policy comes from Group Policy settings under Computer Configuration, Policies, Windows Settings, Security Settings, Account Policies, and it only takes effect when the GPO is linked at the domain level. By convention it lives in the Default Domain Policy. If you link a GPO with password settings to an OU, it affects only the local accounts on computers in that OU, not domain users. That is the classic limitation: one password policy per domain.</p>
+<p>Fine-grained password policies remove that limitation. A Password Settings Object (PSO) holds the same settings (minimum length, complexity, history, maximum and minimum age, reversible encryption, lockout threshold, duration and observation window) and is applied directly to users or to global security groups. PSOs live in the Password Settings Container under System and require a domain functional level of Windows Server 2008 or higher. You create them most easily in Active Directory Administrative Center (ADAC) or with <code>New-ADFineGrainedPasswordPolicy</code>, and you link them with <code>Add-ADFineGrainedPasswordPolicySubject</code>.</p>
+<p>When more than one PSO could apply, precedence decides. Each PSO has a precedence number, and the lowest number wins. A PSO linked directly to a user always beats PSOs that reach the user through group membership. If no PSO applies, the domain policy from Group Policy applies. To see what a user actually gets, run <code>Get-ADUserResultantPasswordPolicy -Identity alice</code>. A PSO linked to an OU does nothing, because PSOs apply to users and groups only; the workaround is a shadow group that contains the OU's users.</p>
+<p>Deleted objects are the other half of this topic. Without the AD Recycle Bin, deleting an object strips most of its attributes (group memberships, for example) and turns it into a tombstone; getting it back fully means an authoritative restore from backup with the DC booted into Directory Services Restore Mode. The AD Recycle Bin, available at the Windows Server 2008 R2 forest functional level and higher, keeps deleted objects with all their attributes for the deleted object lifetime (by default the same as the tombstone lifetime, 180 days in modern forests), so you can restore them online.</p>
+<p>Enabling the Recycle Bin is a one-way change: once on, it cannot be turned off. You enable it in ADAC or with PowerShell, and it must replicate to all DCs before objects deleted afterwards are protected; objects deleted before you enabled it are not recoverable this way.</p>
+<pre class="code" tabindex="0"><code>Enable-ADOptionalFeature 'Recycle Bin Feature' -Scope ForestOrConfigurationSet -Target corp.contoso.com
+Get-ADObject -Filter 'samaccountname -eq &quot;jdoe&quot;' -IncludeDeletedObjects | Restore-ADObject</code></pre>
+<p>If a whole OU was deleted, restore the OU first and then its children, because a child cannot be restored into a parent that is still deleted. ADAC shows a Deleted Objects container where you can choose Restore or Restore To, which is often easier than PowerShell in a lab.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>PSO</dt><dd>Password Settings Object: a fine-grained password and lockout policy applied to users or global security groups.</dd><dt>Precedence</dt><dd>The PSO attribute that resolves conflicts; the lowest value wins, and a directly linked PSO beats group-linked ones.</dd><dt>Resultant password policy</dt><dd>The single policy that actually applies to a user, shown by Get-ADUserResultantPasswordPolicy.</dd><dt>AD Recycle Bin</dt><dd>An optional forest feature that preserves all attributes of deleted objects so they can be restored online.</dd><dt>Tombstone</dt><dd>A deleted object stripped of most attributes, kept only so the deletion can replicate before garbage collection.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Security requires 16-character passwords for administrators while everyone else keeps 12. The admin creates a PSO with precedence 10 and minimum length 16, links it to the Tier0-Admins global group, and confirms with Get-ADUserResultantPasswordPolicy that admins get the PSO and regular users still get the Default Domain Policy.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Password policy linked to an OU does not affect domain users, and PSOs cannot be linked to OUs. Also remember the Recycle Bin needs the 2008 R2 forest functional level and cannot be disabled once enabled.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Two PSOs with precedence 5 and 20 apply to a user through groups. Which wins?</summary><p>The PSO with precedence 5, because the lowest number wins (unless another PSO is linked directly to the user).</p></details>
+<details class="sq"><summary>A PSO is linked to the Sales OU but has no effect. Why?</summary><p>PSOs apply only to users and global security groups, not OUs; use a shadow group containing the OU's users.</p></details>
+<details class="sq"><summary>What must you restore first when an entire OU and its users were deleted?</summary><p>The OU itself, then the child objects inside it.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../users-groups-domain-local-global-universal-ous-and-delegation-of-contr/">← Users, groups (domain local, global, universal), OUs and del</a><a href="../hybrid-identity-entra-connect-sync-including-staging-mode-vs-entra-clo/">Hybrid identity: Entra Connect Sync (including staging mode) →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Taints and tolerations: NoSchedule, PreferNoSchedule… · CKA Lesson</title>
+<meta name="description" content="Affinity lets a Pod choose nodes. Taints work the other way round: they let a node refuse Pods.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Taints and tolerations: NoSchedule, PreferNoSchedule… · CKA Lesson">
+<meta property="og:description" content="Affinity lets a Pod choose nodes. Taints work the other way round: they let a node refuse Pods.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/taints-and-tolerations-noschedule-prefernoschedule-noexecute-and-toler/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/taints-and-tolerations-noschedule-prefernoschedule-noexecute-and-toler/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 2: Workloads and Scheduling</p>
+<h1>Taints and tolerations: NoSchedule, PreferNoSchedule, NoExecute and tolerationSeconds</h1>
+<article class="lbody">
+<p>Affinity lets a Pod choose nodes. Taints work the other way round: they let a node refuse Pods. A taint is a key, an optional value and an effect set on a node. Only Pods with a matching toleration can ignore it. A toleration does not attract a Pod to a node; it merely permits scheduling there.</p>
+<pre class="code" tabindex="0"><code>kubectl taint node node02 dedicated=gpu:NoSchedule
+kubectl describe node node02 | grep -i taints
+kubectl taint node node02 dedicated=gpu:NoSchedule-   # trailing dash removes it</code></pre>
+<p>There are three effects. <code>NoSchedule</code> stops new Pods without a matching toleration from being scheduled there; Pods already running stay. <code>PreferNoSchedule</code> is a soft version: the scheduler tries to avoid the node but will use it if nothing else fits. <code>NoExecute</code> affects running Pods as well: Pods without a matching toleration are evicted immediately, and new ones are not scheduled.</p>
+<p>A toleration matches a taint when keys and effects match and either <code>operator: Equal</code> with the same value, or <code>operator: Exists</code> (no value needed). A toleration with an empty key and operator Exists tolerates everything. For NoExecute taints, a toleration can include <code>tolerationSeconds</code>, which lets a Pod stay bound for that long after the taint appears and then be evicted.</p>
+<pre class="code" tabindex="0"><code>tolerations:
+- key: dedicated
+  operator: Equal
+  value: gpu
+  effect: NoSchedule
+- key: node.kubernetes.io/unreachable
+  operator: Exists
+  effect: NoExecute
+  tolerationSeconds: 60</code></pre>
+<p>Kubernetes uses taints itself. The node lifecycle controller adds <code>node.kubernetes.io/not-ready</code> and <code>node.kubernetes.io/unreachable</code> NoExecute taints when a node stops reporting, and admission adds default tolerations of 300 seconds for these to most Pods. That is why Pods on a failed node are evicted about five minutes later rather than instantly. Pressure conditions add taints such as <code>node.kubernetes.io/disk-pressure</code>, <code>memory-pressure</code> and <code>unschedulable</code> (the last one from cordon). Control plane nodes carry <code>node-role.kubernetes.io/control-plane:NoSchedule</code>.</p>
+<p>The usual pattern for dedicated nodes is to combine both mechanisms: taint the nodes so general workloads stay off, and give the special workload a toleration plus a nodeSelector or node affinity so it actually goes there.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Taint</dt><dd>A key, value and effect on a node that repels Pods lacking a matching toleration.</dd><dt>Toleration</dt><dd>A Pod setting that allows, but does not force, scheduling on nodes with matching taints.</dd><dt>NoExecute</dt><dd>A taint effect that evicts running non-tolerating Pods as well as blocking new ones.</dd><dt>tolerationSeconds</dt><dd>How long a Pod tolerating a NoExecute taint may stay before eviction.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>You taint node03 with <code>maintenance=true:NoExecute</code>. Every ordinary Pod on it is evicted within seconds and rescheduled elsewhere, while a monitoring DaemonSet Pod with a toleration for key maintenance and operator Exists keeps running there.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> A toleration alone will not put a Pod on the tainted node; pair it with nodeSelector or affinity. Removing a taint uses the same command with a trailing minus sign.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which taint effect evicts Pods already running on the node?</summary><p>NoExecute.</p></details>
+<details class="sq"><summary>Why are Pods on a node that suddenly goes offline typically evicted after about five minutes?</summary><p>They receive default tolerations of 300 seconds for the not-ready and unreachable NoExecute taints.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../scheduling-nodeselector-nodename-node-affinity-required-vs-preferred/">← Scheduling: nodeSelector, nodeName, node affinity (required </a><a href="../pod-affinity-and-anti-affinity-with-topologykey-topologyspreadconstrai/">Pod affinity and anti-affinity with topologyKey; topologySpr →</a></nav>
+</main>
+</body>
+</html>

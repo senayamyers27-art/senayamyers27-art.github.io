@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Applying filters to interfaces (input/output) and to lo0… · JNCIA-Junos Lesson</title>
+<meta name="description" content="A firewall filter does nothing until you apply it. You apply filters to a logical interface (unit) under the protocol family, choosing a direction.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Applying filters to interfaces (input/output) and to lo0… · JNCIA-Junos Lesson">
+<meta property="og:description" content="A firewall filter does nothing until you apply it. You apply filters to a logical interface (unit) under the protocol family, choosing a direction.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/jncia-junos/lessons/applying-filters-to-interfaces-input-output-and-to-lo0-to-protect-the/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/jncia-junos/lessons/applying-filters-to-interfaces-input-output-and-to-lo0-to-protect-the/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">JNCIA-Junos</a> / <a href="../">Lessons</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106 · Domain 7: Routing policy and firewall filters</p>
+<h1>Applying filters to interfaces (input/output) and to lo0 to protect the RE</h1>
+<article class="lbody">
+<p>A firewall filter does nothing until you apply it. You apply filters to a logical interface (unit) under the protocol family, choosing a direction. <code>input</code> filters packets arriving on the interface; <code>output</code> filters packets leaving it. You can apply one input and one output filter per family on an interface, or use <code>input-list</code> and <code>output-list</code> to apply several filters in sequence.</p>
+<pre class="code" tabindex="0"><code>set interfaces ge-0/0/0 unit 0 family inet filter input FROM-INTERNET
+set interfaces ge-0/0/1 unit 0 family inet filter output TO-SERVERS
+set interfaces lo0 unit 0 family inet filter input PROTECT-RE</code></pre>
+<p>Choose the direction by thinking about where traffic comes from. To stop unwanted traffic entering your network from the internet, apply an input filter on the internet-facing interface, which drops it as early as possible. To control what reaches a particular server segment regardless of which interface it came in on, an output filter on the interface toward that segment is often simpler. Remember that a filter is stateless, so a filter in one direction may need terms for the replies of traffic you initiated.</p>
+<p>The loopback interface, lo0, has a special role. Traffic destined to the device itself, the Routing Engine (RE), such as SSH, SNMP, NTP, BGP, OSPF, ping and DNS replies, is handled by the RE no matter which physical interface it arrived on. An input filter on lo0 is applied to all of that host-bound traffic from every interface, so one filter protects the control plane. It does not affect transit traffic that the device merely forwards. This makes an lo0 input filter the standard way to protect the RE from unauthorized access and floods.</p>
+<p>A good lo0 filter permits only what the device needs, from only the sources that need it. Typical terms allow SSH from management networks, SNMP from monitoring servers, NTP from time servers, BGP from configured neighbors (a prefix list built with <code>apply-path</code> can list them automatically), OSPF and BFD from the internal network, rate-limited ICMP, DNS and other replies you rely on, and then count and discard everything else. Because of the implicit discard, forgetting a term breaks that function: forget OSPF and your adjacencies drop; forget NTP replies and the clock stops synchronizing.</p>
+<p>Applying an lo0 filter is a classic way to lock yourself out, so use <code>commit confirmed 5</code>. If your SSH session dies, the device automatically rolls back after five minutes. If everything still works, run <code>commit</code> again to make it permanent. Afterwards, verify with <code>show firewall filter PROTECT-RE</code> to see the counters for each term and with <code>show interfaces lo0 detail</code> or <code>show configuration interfaces lo0</code> to confirm the filter is applied.</p>
+<p>Filters can also be applied to IPv6 with <code>family inet6</code>, and an IPv4 filter never inspects IPv6 packets. If the device is reachable over IPv6, protect lo0 for both families.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Input filter</dt><dd>A filter applied to packets arriving on an interface.</dd><dt>Output filter</dt><dd>A filter applied to packets leaving an interface.</dd><dt>lo0 filter</dt><dd>An input filter on the loopback interface that inspects all traffic destined to the Routing Engine from any interface.</dd><dt>Host-bound traffic</dt><dd>Packets addressed to the device itself, such as management and routing protocol traffic, processed by the RE.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A security team wants to stop SSH brute-force attempts reaching a router from the internet. The engineer creates PROTECT-RE allowing SSH only from the management prefix list, BGP from peers, OSPF, NTP and limited ICMP, with a final count-and-discard term. She applies it to lo0 input with <code>commit confirmed 5</code>, verifies her session and the BGP sessions remain up, then commits again.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> A filter on lo0 input protects the Routing Engine from traffic arriving on any interface but does not filter transit traffic. Always include routing protocols and management services, and use <code>commit confirmed</code>.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Does an input filter on lo0 block transit traffic passing through the router?</summary><p>No. It only applies to traffic destined to the Routing Engine.</p></details>
+<details class="sq"><summary>You apply a new lo0 filter and all OSPF neighbors go down. What is the likely cause?</summary><p>The filter lacks a term permitting OSPF, so OSPF packets hit the implicit discard.</p></details>
+<details class="sq"><summary>Why use <code>commit confirmed</code> when applying an lo0 filter?</summary><p>If the filter blocks your management access, the configuration rolls back automatically after the timer.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study JNCIA-Junos for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../jncia-junos/">Open the JNCIA-Junos study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../filter-actions-terminating-accept-discard-reject-and-non-terminating-c/">← Filter actions: terminating (accept, discard, reject) and no</a><a href="../unicast-reverse-path-forwarding-urpf-checks-strict-and-loose/">Unicast reverse path forwarding (uRPF) checks: strict and lo →</a></nav>
+</main>
+</body>
+</html>

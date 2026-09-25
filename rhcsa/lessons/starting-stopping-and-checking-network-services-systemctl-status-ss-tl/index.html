@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Starting, stopping and checking network services… · RHCSA Lesson</title>
+<meta name="description" content="A network service is a daemon, a background program, that listens on a network port for clients: sshd on port 22, a web server on 80 and 443, chronyd for t">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Starting, stopping and checking network services… · RHCSA Lesson">
+<meta property="og:description" content="A network service is a daemon, a background program, that listens on a network port for clients: sshd on port 22, a web server on 80 and 443, chronyd for t">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/starting-stopping-and-checking-network-services-systemctl-status-ss-tl/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/starting-stopping-and-checking-network-services-systemctl-status-ss-tl/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 4: Operate running systems</p>
+<h1>Starting, stopping and checking network services (systemctl status, ss -tlnp)</h1>
+<article class="lbody">
+<p>A network service is a daemon, a background program, that listens on a network port for clients: sshd on port 22, a web server on 80 and 443, chronyd for time. On RHEL, systemd manages daemons as service units, such as <code>sshd.service</code> or <code>httpd.service</code>, and <code>systemctl</code> is how you control them. A service task is only finished when the service is running now, will start at boot, and is actually listening where clients expect.</p>
+<p>Two separate ideas are easy to mix up. Starting or stopping changes the current state: <code>systemctl start httpd</code>, <code>systemctl stop httpd</code>, <code>systemctl restart httpd</code> (stop then start) and <code>systemctl reload httpd</code> (re-read configuration without dropping connections, if the service supports it). Enabling or disabling changes what happens at boot: <code>systemctl enable httpd</code> makes it start automatically, <code>disable</code> stops that. <code>systemctl enable --now httpd</code> does both at once, and is the usual command on the exam.</p>
+<pre class="code" tabindex="0"><code>systemctl enable --now httpd
+systemctl status httpd          # state, PID, recent log lines
+systemctl is-active httpd       # active / inactive / failed
+systemctl is-enabled httpd      # enabled / disabled / masked
+systemctl list-units --type=service --state=running
+systemctl mask telnet.socket    # prevent any start</code></pre>
+<p><code>systemctl status UNIT</code> is the main diagnostic. It shows whether the unit is loaded and enabled, its active state (active (running), inactive (dead) or failed), the main PID, memory and CPU use, and the most recent journal lines, which usually explain a failure. <code>is-active</code> and <code>is-enabled</code> return just the state and a matching exit status, which is handy in scripts. <code>systemctl --failed</code> lists units that failed. Masking a unit with <code>systemctl mask</code> links it to nothing so it cannot be started at all, even as a dependency, until you <code>unmask</code> it.</p>
+<p><code>ss</code> (socket statistics) shows what the system is actually listening on, which proves the service is reachable at the network level. <code>ss -tlnp</code> means TCP (<code>-t</code>), listening sockets only (<code>-l</code>), numeric addresses and ports instead of names (<code>-n</code>), and the process owning each socket (<code>-p</code>, which needs root to show other users' processes). Add <code>-u</code> for UDP. The Local Address column tells you where it listens: <code>0.0.0.0:22</code> or <code>[::]:22</code> means all IPv4 or IPv6 addresses, while <code>127.0.0.1:631</code> means localhost only, reachable from nowhere else.</p>
+<p>If a service is running but clients still cannot connect, check the next layers. The firewall must allow the port (<code>firewall-cmd --list-all</code>), and SELinux must allow the service to use a non-standard port. If a service will not start at all, read <code>systemctl status</code> and <code>journalctl -u UNIT</code>, fix the configuration, and use the service's own syntax check if it has one, such as <code>sshd -t</code> or <code>apachectl configtest</code>.</p>
+<p>After changing a unit file itself, run <code>systemctl daemon-reload</code> so systemd rereads its definitions before you restart the service.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Service unit</dt><dd>A systemd unit (name.service) that describes how to run and manage a daemon.</dd><dt>start vs enable</dt><dd>start runs the service now; enable makes it start at boot. enable --now does both.</dd><dt>systemctl status</dt><dd>Shows a unit's load, enable and active state, main PID and recent log lines.</dd><dt>ss -tlnp</dt><dd>Lists listening TCP sockets numerically with the owning process.</dd><dt>mask</dt><dd>Links a unit to /dev/null so it cannot be started until unmasked.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>You install httpd and run <code>systemctl enable --now httpd</code>. <code>systemctl status httpd</code> shows active (running), and <code>ss -tlnp | grep ':80'</code> shows httpd listening on *:80. A test from another host fails, so you add the http service in firewalld and the page loads.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> A task that says the service must be running and persistent needs both start and enable: systemctl enable --now. Then prove it with systemctl is-enabled, is-active and ss -tlnp.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What is the difference between <code>systemctl start</code> and <code>systemctl enable</code>?</summary><p>start runs the service now; enable configures it to start automatically at boot.</p></details>
+<details class="sq"><summary>What do the letters in ss -tlnp mean?</summary><p>TCP, listening sockets, numeric output, and show the owning process.</p></details>
+<details class="sq"><summary>What does 127.0.0.1:25 in ss output tell you?</summary><p>The service listens only on the loopback interface, so remote hosts cannot connect.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../preserving-the-systemd-journal-across-reboots-storage-persistent-var-l/">← Preserving the systemd journal across reboots (Storage=persi</a><a href="../securely-transferring-files-between-systems-with-scp-sftp-and-rsync-ov/">Securely transferring files between systems with scp, sftp a →</a></nav>
+</main>
+</body>
+</html>

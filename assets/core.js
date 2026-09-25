@@ -41,13 +41,31 @@
         const s = document.createElement("script");
         s.src = `${BASE}data/lessons/${id}.js`;
         s.async = true;
-        s.onload = () => resolve(lessons[id] || null);
+        s.onload = () => loadDiagrams().then(() => resolve(lessons[id] || null));
         s.onerror = () => { delete lWaiting[id]; s.remove(); resolve(null); };
         document.head.appendChild(s);
       });
     }
     return lWaiting[id];
   }
+  // Diagrams (data/diagrams.js) are shared by all certifications and attached to lessons by topic text.
+  const diagrams = {}; let dWaiting = null;
+  function loadDiagrams() {
+    if (!dWaiting) dWaiting = new Promise(resolve => {
+      const s = document.createElement("script");
+      s.src = `${BASE}data/diagrams.js`; s.async = true;
+      s.onload = () => resolve(diagrams); s.onerror = () => { s.remove(); resolve(diagrams); };
+      document.head.appendChild(s);
+    });
+    return dWaiting;
+  }
+  function addDiagrams(list) {
+    (Array.isArray(list) ? list : []).forEach(d => {
+      if (!d || !/^[a-z0-9-]+$/.test(d.id || "") || typeof d.svg !== "string") return;
+      for (const [cid, ts] of Object.entries(d.topics || {})) (ts || []).forEach(t => { const k = cid + "|" + t; (diagrams[k] = diagrams[k] || []).push(d); });
+    });
+  }
+  const diagramsFor = (cid, t) => diagrams[cid + "|" + t] || [];
   // Lessons are matched to plan topics by their exact topic text.
   function addLessons(id, list) {
     if (!Array.isArray(list)) return;
@@ -327,11 +345,77 @@
     return { state: n ? "doing" : "new", pct: Math.round(100 * n / lab.steps.length) };
   }
 
+  /* ---------- study streak (this browser only) ---------- */
+  const ACT = "certhub:activity";
+  const activity = {
+    days() { try { const d = JSON.parse(store.get(ACT) || "[]"); return Array.isArray(d) ? d.filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x)) : []; } catch (e) { return []; } },
+    // Call on real study: an answered question, a lesson read, a study day checked.
+    mark() { const t = U.iso(new Date()), d = activity.days(); if (!d.includes(t)) { d.push(t); store.set(ACT, JSON.stringify(d.sort().slice(-400))); } },
+    // Consecutive days ending today (or yesterday, so the streak survives until tonight), and the best run.
+    streak() {
+      const set = new Set(activity.days());
+      const day = n => U.iso(U.addDays(U.today(), -n));
+      let start = set.has(day(0)) ? 0 : set.has(day(1)) ? 1 : -1, cur = 0;
+      if (start >= 0) while (set.has(day(start + cur))) cur++;
+      let best = 0, run = 0, prev = null;
+      [...set].sort().forEach(x => { const d = U.parseD(x); run = prev && Math.round((d - prev) / DAY) === 1 ? run + 1 : 1; best = Math.max(best, run); prev = d; });
+      return { current: cur, best: Math.max(best, cur), today: set.has(day(0)) };
+    }
+  };
+
+  /* ---------- calendar reminder (.ics with a daily repeating event) ---------- */
+  function reminderIcs({ time = "19:00", title = "Study session", url = "", minutes = 30 }) {
+    const [h, m] = time.split(":").map(Number), d = U.today();
+    const pad = n => String(n).padStart(2, "0");
+    const dt = x => `${x.getFullYear()}${pad(x.getMonth() + 1)}${pad(x.getDate())}T${pad(x.getHours())}${pad(x.getMinutes())}00`;
+    const start = new Date(d); start.setHours(h, m, 0, 0);
+    const end = new Date(start.getTime() + minutes * 60000);
+    const now = new Date(), stamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}00Z`;
+    const txt = x => String(x).replace(/[\\;,]/g, c => "\\" + c).replace(/\n/g, "\\n");
+    return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Cyber Cert Study//Reminder//EN", "BEGIN:VEVENT",
+      `UID:${stamp}-${Math.random().toString(36).slice(2)}@certstudy`, `DTSTAMP:${stamp}`, `DTSTART:${dt(start)}`, `DTEND:${dt(end)}`,
+      "RRULE:FREQ=DAILY", `SUMMARY:${txt(title)}`, `DESCRIPTION:${txt("Read a lesson, clear your review queue and take a quiz." + (url ? " " + url : ""))}`, url ? `URL:${url}` : "",
+      "BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${txt(title)}`, "TRIGGER:-PT0M", "END:VALARM", "END:VEVENT", "END:VCALENDAR"].filter(Boolean).join("\r\n") + "\r\n";
+  }
+  function downloadFile(name, text, type) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([text], { type }));
+    a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  // Asks the person for a time, then saves a daily calendar event they open in their calendar app.
+  function addReminder(title, url) {
+    const wrap = document.createElement("div");
+    wrap.className = "modal-wrap";
+    wrap.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="rm-h"><p id="rm-h"><strong>Daily study reminder</strong><br><span class="note">Saves a repeating event. Open the file to add it to your phone or computer calendar, which will remind you every day.</span></p>
+      <label for="rm-time">Time</label> <input type="time" id="rm-time" value="19:00">
+      <div class="btns"><button type="button" class="btn" data-rm="ok">Save to calendar</button><button type="button" class="btn ghost" data-rm="cancel">Cancel</button></div></div>`;
+    const close = () => { wrap.remove(); document.removeEventListener("keydown", onKey); };
+    const onKey = e => { if (e.key === "Escape") close(); };
+    wrap.addEventListener("click", e => {
+      const b = e.target.closest("[data-rm]"); if (!b && e.target !== wrap) return;
+      if (b && b.dataset.rm === "ok") downloadFile("study-reminder.ics", reminderIcs({ time: wrap.querySelector("#rm-time").value || "19:00", title, url }), "text/calendar");
+      close();
+    });
+    document.addEventListener("keydown", onKey);
+    document.body.appendChild(wrap);
+    wrap.querySelector("#rm-time").focus();
+  }
+
+  // Link to open a prefilled issue for a mistake, or "" when the site has no feedback address.
+  function reportUrl(title, body) {
+    const f = (window.CertHub && CertHub.site && CertHub.site.feedbackUrl) || "";
+    if (!f) return "";
+    if (/github\.com\/[^/]+\/[^/]+\/issues\/?$/.test(f)) return `${f.replace(/\/$/, "")}/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body + "\n\nWhat's wrong, and what should it say?\n")}`;
+    return f;
+  }
+
   window.CertHub = {
     U, store, certs, buildPlan, loadProgress, saveProgress, freshProgress, applyTheme, themeButton, exportAll, importAll, activeNotices,
     backupText, restoreText, ui, install, labs, labOrder, loadLabProgress, saveLabProgress, labStatus,
     register(c) { certs[c.id] = c; if (Array.isArray(c.questions)) c.qCount = c.questions.length; },
-    loadQuestions, addQuestions, loadLessons, addLessons,
+    loadQuestions, addQuestions, loadLessons, addLessons, addDiagrams, diagramsFor, activity, reminderIcs, addReminder, reportUrl, downloadFile,
     registerLabs(list) { list.forEach(l => { if (!labs[l.id]) labOrder.push(l.id); labs[l.id] = l; }); }
   };
 })();

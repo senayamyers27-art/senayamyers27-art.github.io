@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VXLAN: VNI, VTEP, UDP encapsulation, overlay vs underlay · ENCOR Lesson</title>
+<meta name="description" content="VXLAN (Virtual Extensible LAN) is an encapsulation that carries Layer 2 Ethernet frames across a Layer 3 IP network. It solves two problems of traditional ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="VXLAN: VNI, VTEP, UDP encapsulation, overlay vs underlay · ENCOR Lesson">
+<meta property="og:description" content="VXLAN (Virtual Extensible LAN) is an encapsulation that carries Layer 2 Ethernet frames across a Layer 3 IP network. It solves two problems of traditional ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ccnp-encor/lessons/vxlan-vni-vtep-udp-encapsulation-overlay-vs-underlay/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ccnp-encor/lessons/vxlan-vni-vtep-udp-encapsulation-overlay-vs-underlay/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">ENCOR</a> / <a href="../">Lessons</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2 · Domain 2: Virtualization</p>
+<h1>VXLAN: VNI, VTEP, UDP encapsulation, overlay vs underlay</h1>
+<article class="lbody">
+<p>VXLAN (Virtual Extensible LAN) is an encapsulation that carries Layer 2 Ethernet frames across a Layer 3 IP network. It solves two problems of traditional VLANs. First, the 12-bit VLAN ID allows only about 4,000 segments, which is not enough for large data centers and multitenant clouds. Second, stretching VLANs across a network requires Layer 2 trunks and spanning tree, which limit scale and create large failure domains. VXLAN lets you build Layer 2 segments on top of a routed network. It is the data plane of SD-Access and of most modern data center fabrics.</p>
+<p>Each VXLAN segment is identified by a VNI (VXLAN network identifier), a 24-bit value, giving about 16 million possible segments. A VNI plays the role a VLAN ID plays in a traditional network. A Layer 2 VNI represents a bridged segment; a Layer 3 VNI is used for routed traffic between segments of the same VRF.</p>
+<p>The device that encapsulates and decapsulates is the VTEP (VXLAN tunnel endpoint). A VTEP can be a physical switch, such as a leaf switch or an SD-Access edge node, or a software switch in a hypervisor. It has an IP address in the underlay, usually a loopback. When a host sends a frame, the VTEP adds an 8-byte VXLAN header containing the VNI, then a UDP header, then an outer IP header from its own address to the destination VTEP's address, and finally an outer Ethernet header for the next hop. The standard destination UDP port is 4789. The source UDP port is usually derived from a hash of the inner frame's headers, which gives the underlay's equal-cost multipath (ECMP) load balancing some entropy to spread different flows across paths. The total overhead is about 50 bytes, so the underlay MTU must be raised (for example to 9000 or at least about 1550) to avoid fragmenting full-size frames.</p>
+<p>This creates a clean split between underlay and overlay. The underlay is the physical routed IP network, often a spine-leaf fabric running OSPF, IS-IS or BGP, whose only job is to deliver packets between VTEP addresses, ideally with ECMP. The overlay is the set of VXLAN segments that hosts see, with their own MAC and IP addresses, independent of the underlay topology.</p>
+<p>VTEPs must also learn which remote VTEP a destination MAC lives behind, and handle broadcast, unknown unicast and multicast (BUM) traffic. The original VXLAN approach used flood-and-learn with underlay multicast groups per VNI. Modern fabrics use a control plane instead: BGP EVPN (Ethernet VPN) in most data centers, which advertises MAC and IP reachability between VTEPs, or LISP in SD-Access, where VTEPs query the control plane node. A control plane reduces flooding and enables features such as distributed anycast gateways.</p>
+<p>Remember that VXLAN itself provides no encryption; it is purely an encapsulation.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>VXLAN</dt><dd>An encapsulation that carries Ethernet frames inside UDP over an IP network.</dd><dt>VNI</dt><dd>VXLAN network identifier: a 24-bit segment ID, allowing about 16 million segments.</dd><dt>VTEP</dt><dd>VXLAN tunnel endpoint: the device that encapsulates and decapsulates VXLAN traffic, identified by an underlay IP address.</dd><dt>UDP 4789</dt><dd>The IANA-assigned destination port for VXLAN.</dd><dt>BGP EVPN</dt><dd>A control plane that advertises MAC and IP reachability between VTEPs, reducing flood-and-learn behavior.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Two servers in the same application tier sit on leaves in different racks. Server A sends a frame to server B's MAC in VNI 10100. Leaf 1, acting as VTEP, encapsulates it in UDP port 4789 toward leaf 4's loopback, the spines route it using ECMP, and leaf 4 decapsulates it and delivers the original frame, so both servers believe they share a LAN.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Know the numbers: VNI is 24 bits (about 16 million segments) versus 12-bit VLAN IDs, VXLAN uses UDP destination port 4789, and it adds about 50 bytes, so raise the underlay MTU.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What does a VTEP add to an Ethernet frame?</summary><p>A VXLAN header with the VNI, a UDP header (destination 4789), an outer IP header between VTEP addresses and an outer Ethernet header.</p></details>
+<details class="sq"><summary>Why is the VXLAN UDP source port usually variable?</summary><p>It is derived from a hash of the inner frame's headers so the underlay's ECMP can spread different flows across multiple paths.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study ENCOR for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ccnp-encor/">Open the ENCOR study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../lisp-eid-rloc-map-server-and-map-resolver-itr-and-etr/">← LISP: EID, RLOC, map server and map resolver, ITR and ETR</a><a href="../layer-2-static-and-dynamic-802-1q-trunking-dtp-allowed-vlans-and-nativ/">Layer 2: static and dynamic 802.1Q trunking (DTP), allowed V →</a></nav>
+</main>
+</body>
+</html>

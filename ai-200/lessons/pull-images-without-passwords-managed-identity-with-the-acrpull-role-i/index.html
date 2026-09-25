@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pull images without passwords: managed identity with the… · AI-200 Lesson</title>
+<meta name="description" content="Every service that runs your container has to authenticate to your private registry before it can pull the image. There are several ways, and the exam expe">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Pull images without passwords: managed identity with the… · AI-200 Lesson">
+<meta property="og:description" content="Every service that runs your container has to authenticate to your private registry before it can pull the image. There are several ways, and the exam expe">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/pull-images-without-passwords-managed-identity-with-the-acrpull-role-i/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/pull-images-without-passwords-managed-identity-with-the-acrpull-role-i/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 1: Develop containerized solutions on Azure</p>
+<h1>Pull images without passwords: managed identity with the AcrPull role instead of the admin user</h1>
+<article class="lbody">
+<p>Every service that runs your container has to authenticate to your private registry before it can pull the image. There are several ways, and the exam expects you to pick the one without stored secrets.</p>
+<p>The admin user is a single account per registry with a username (the registry name) and two passwords. It is disabled by default. When enabled, it has full push and pull rights, it is shared by everyone who knows the password, and it cannot be scoped to one repository or tracked back to one app. Microsoft positions it for quick tests only. If you see a solution that enables the admin user and stores its password in an app setting, it is the wrong answer when a more secure option exists.</p>
+<p>The recommended approach uses a managed identity, an identity in Microsoft Entra ID that Azure creates and manages for a resource, with credentials you never see. You enable a system-assigned or user-assigned identity on the pulling resource, then assign that identity the AcrPull role on the registry. AcrPull is an Azure RBAC (role-based access control) role that allows reading images and nothing else. AcrPush adds pushing, for build agents.</p>
+<pre class="code" tabindex="0"><code># 1. identity and role
+az identity create -g rg -n app-pull-id
+ACR_ID=$(az acr show -n myregistry --query id -o tsv)
+PRINCIPAL=$(az identity show -g rg -n app-pull-id --query principalId -o tsv)
+az role assignment create --assignee $PRINCIPAL --role AcrPull --scope $ACR_ID
+
+# 2. tell Container Apps to use it for this registry
+az containerapp registry set -n orders -g rg \
+  --server myregistry.azurecr.io --identity &lt;identity-resource-id&gt;</code></pre>
+<p>Each compute service wires this up slightly differently. In Container Apps you set the registry with <code>--identity</code> (a user-assigned identity resource ID, or <code>system</code>). In App Service you set the site property <code>acrUseManagedIdentityCreds</code> to true (and <code>acrUserManagedIdentityID</code> for a user-assigned identity). In AKS, <code>az aks update --attach-acr myregistry</code> grants AcrPull to the cluster's kubelet identity for you.</p>
+<p>Why user-assigned is often preferred for image pulls: a system-assigned identity does not exist until the app is created, so on a brand-new app there is a chicken-and-egg problem where the first revision tries to pull before the role assignment exists. A user-assigned identity can be created and granted AcrPull first, then attached to the app at creation. Also note that role assignments can take a few minutes to propagate, so an immediate pull failure right after assignment may resolve itself.</p>
+<p>Other options exist, such as service principals with a client secret or repository-scoped tokens, but they involve secrets you must store and rotate. With a managed identity plus AcrPull, there is nothing to leak and access is least-privilege.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Admin user</dt><dd>A registry-wide account with shared passwords and full push/pull rights; disabled by default and meant only for testing.</dd><dt>AcrPull</dt><dd>A built-in Azure RBAC role that grants permission to pull images from a registry and nothing more.</dd><dt>AcrPush</dt><dd>A built-in role that allows both pushing and pulling images, suited to build pipelines.</dd><dt>Managed identity</dt><dd>A Microsoft Entra identity for an Azure resource whose credentials Azure manages and rotates automatically.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A Container App failed to start with an image pull error after an engineer disabled the registry's admin user. The fix was to create a user-assigned managed identity, grant it AcrPull on the registry, attach it to the app and run az containerapp registry set with that identity. The app pulled successfully, and no registry password remained anywhere in its configuration.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> When asked for the most secure or least-privilege way for an app to pull images, answer managed identity plus AcrPull; eliminate choices that enable the admin user or store a password.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which role should a Container App's identity receive to pull images, and on which scope?</summary><p>AcrPull on the container registry (or a narrower scope), because it grants read-only image access.</p></details>
+<details class="sq"><summary>Why can a user-assigned identity be easier than system-assigned for a new app's first image pull?</summary><p>It exists before the app, so AcrPull can be granted in advance; a system-assigned identity only exists after the app is created.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../tags-vs-digests-stable-vs-unique-tags-and-cleaning-up-old-images-with/">← Tags vs digests, stable vs unique tags, and cleaning up old </a><a href="../app-service-custom-containers-on-linux-websites-port-continuous-deploy/">App Service custom containers on Linux: WEBSITES_PORT, conti →</a></nav>
+</main>
+</body>
+</html>

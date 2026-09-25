@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AWS SAM: template structure, sam build, sam deploy… · Developer Associate Lesson</title>
+<meta name="description" content="The AWS Serverless Application Model (SAM) is an open-source framework for building serverless applications. It has two parts: a template format that exten">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="AWS SAM: template structure, sam build, sam deploy… · Developer Associate Lesson">
+<meta property="og:description" content="The AWS Serverless Application Model (SAM) is an open-source framework for building serverless applications. It has two parts: a template format that exten">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/aws-sam-template-structure-sam-build-sam-deploy-guided-sam-local-invok/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/aws-sam-template-structure-sam-build-sam-deploy-guided-sam-local-invok/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 3: Deployment</p>
+<h1>AWS SAM: template structure, sam build, sam deploy --guided, sam local invoke / start-api, samconfig.toml</h1>
+<article class="lbody">
+<p>The AWS Serverless Application Model (SAM) is an open-source framework for building serverless applications. It has two parts: a template format that extends CloudFormation with concise serverless resource types, and the SAM CLI, which builds, tests locally and deploys them.</p>
+<p>A SAM template is a CloudFormation template with one essential line: <code>Transform: AWS::Serverless-2016-10-31</code>. That tells CloudFormation to expand SAM resources into full CloudFormation resources during deployment. The main SAM resource types are <code>AWS::Serverless::Function</code>, <code>AWS::Serverless::Api</code> and <code>AWS::Serverless::HttpApi</code>, <code>AWS::Serverless::SimpleTable</code> (a basic DynamoDB table), <code>AWS::Serverless::LayerVersion</code>, <code>AWS::Serverless::StateMachine</code> and <code>AWS::Serverless::Application</code> (nested apps). A <code>Globals</code> section sets properties shared by all functions, such as runtime, timeout and environment variables. You can still include any normal CloudFormation resources, <code>Parameters</code> and <code>Outputs</code>.</p>
+<pre class="code" tabindex="0"><code>Transform: AWS::Serverless-2016-10-31
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 10
+Resources:
+  GetOrder:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.handler
+      CodeUri: src/
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref Orders
+      Events:
+        Api:
+          Type: Api
+          Properties: { Path: /orders/{id}, Method: get }
+  Orders:
+    Type: AWS::Serverless::SimpleTable</code></pre>
+<p>Notice how much a function definition includes: the <code>Events</code> property creates the trigger (here an API Gateway route, and the permission for it), and <code>Policies</code> accepts SAM policy templates such as <code>DynamoDBReadPolicy</code> or <code>S3ReadPolicy</code> that expand into least-privilege IAM statements. Functions can also define <code>AutoPublishAlias</code> and <code>DeploymentPreference</code> to deploy through CodeDeploy with canary or linear traffic shifting.</p>
+<p>The typical workflow: <code>sam init</code> creates a project from a template. <code>sam build</code> resolves dependencies and prepares the artifacts in <code>.aws-sam/build</code> (add <code>--use-container</code> to build native dependencies in a Lambda-like container). <code>sam deploy --guided</code> asks for the stack name, Region, parameter values and whether to confirm changes, then saves your answers to <code>samconfig.toml</code>, so later deployments need only <code>sam deploy</code>. Under the hood, deploy packages the artifacts to an S3 bucket (SAM can create a managed bucket for you) and creates or updates a CloudFormation stack through a change set. <code>samconfig.toml</code> can hold separate environments, for example <code>[default]</code> and <code>[prod]</code> sections selected with <code>--config-env prod</code>.</p>
+<p>Local testing uses Docker to emulate the Lambda environment. <code>sam local invoke GetOrder -e events/get.json</code> runs one function once with a test event; <code>sam local generate-event</code> creates sample events for sources like S3 or SQS. <code>sam local start-api</code> runs a local HTTP server that emulates API Gateway routes, so you can test with a browser or curl. <code>sam local start-lambda</code> emulates the Lambda invoke endpoint for SDK-based tests. For faster cloud iteration, <code>sam sync --watch</code> pushes code changes to a development stack directly, and <code>sam logs</code> tails a function's CloudWatch logs.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Transform: AWS::Serverless-2016-10-31</dt><dd>The template declaration that makes CloudFormation process SAM resource types.</dd><dt>sam build</dt><dd>The SAM CLI command that installs dependencies and prepares deployment artifacts.</dd><dt>sam deploy --guided</dt><dd>An interactive deployment that prompts for settings and saves them to samconfig.toml.</dd><dt>sam local start-api</dt><dd>Runs a local emulation of API Gateway routes backed by functions running in Docker.</dd><dt>SAM policy template</dt><dd>A named, parameterized IAM policy, such as DynamoDBReadPolicy, used in a function's Policies property.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A developer changes a handler, runs sam build, then sam local start-api and calls the endpoint with curl to confirm the new response. Satisfied, they run sam deploy, which reads the stack name and Region saved in samconfig.toml from the first guided deployment.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> The Transform line is what identifies a SAM template. For testing an API locally, the command is sam local start-api; for a single event, sam local invoke. sam deploy --guided writes samconfig.toml.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which line must a SAM template include?</summary><p>Transform: AWS::Serverless-2016-10-31.</p></details>
+<details class="sq"><summary>Where are the answers from sam deploy --guided stored?</summary><p>In samconfig.toml in the project directory.</p></details>
+<details class="sq"><summary>What does sam local invoke require on your machine?</summary><p>Docker, because it runs the function in a container that emulates Lambda.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../preparing-artifacts-zip-packages-vs-container-images-in-ecr-lambda-lay/">← Preparing artifacts: .zip packages vs container images in EC</a><a href="../cloudformation-templates-parameters-outputs-and-exports-fn-importvalue/">CloudFormation: templates, parameters, outputs and exports,  →</a></nav>
+</main>
+</body>
+</html>

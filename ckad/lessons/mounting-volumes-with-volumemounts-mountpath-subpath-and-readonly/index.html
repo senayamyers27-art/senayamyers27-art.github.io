@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mounting volumes with volumeMounts, mountPath, subPath… · CKAD Lesson</title>
+<meta name="description" content="Declaring a volume under spec.volumes only makes it available to the Pod. Each container that needs it must also list it under its own volumeMounts, linkin">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Mounting volumes with volumeMounts, mountPath, subPath… · CKAD Lesson">
+<meta property="og:description" content="Declaring a volume under spec.volumes only makes it available to the Pod. Each container that needs it must also list it under its own volumeMounts, linkin">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/mounting-volumes-with-volumemounts-mountpath-subpath-and-readonly/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/mounting-volumes-with-volumemounts-mountpath-subpath-and-readonly/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 1: Application Design and Build</p>
+<h1>Mounting volumes with volumeMounts, mountPath, subPath and readOnly</h1>
+<article class="lbody">
+<p>Declaring a volume under <code>spec.volumes</code> only makes it available to the Pod. Each container that needs it must also list it under its own <code>volumeMounts</code>, linking the volume's <code>name</code> to a <code>mountPath</code> inside the container. Two containers can mount the same volume at different paths, which is how they share files.</p>
+<p>The <code>name</code> in <code>volumeMounts</code> must match a name under <code>volumes</code> exactly; a typo leaves the Pod rejected with a validation error or stuck in ContainerCreating. The <code>mountPath</code> is an absolute path. If the directory already exists in the image, the volume hides its original contents for as long as it is mounted. Mounting a ConfigMap at <code>/etc</code> would hide everything else in <code>/etc</code>, a classic mistake.</p>
+<p><code>subPath</code> mounts a single file or subdirectory from within the volume instead of the whole volume. This solves the hiding problem: you can place one config file into an existing directory without covering its neighbours. It also lets several containers, or several mounts, use different subdirectories of one volume. <code>subPathExpr</code> does the same but can include environment variables, for example to create a per-Pod directory using the Pod name from the downward API.</p>
+<pre class="code" tabindex="0"><code>containers:
+- name: web
+  image: nginx
+  volumeMounts:
+  - name: site-config
+    mountPath: /etc/nginx/conf.d/default.conf
+    subPath: default.conf
+    readOnly: true
+  - name: content
+    mountPath: /usr/share/nginx/html
+volumes:
+- name: site-config
+  configMap:
+    name: nginx-conf
+- name: content
+  persistentVolumeClaim:
+    claimName: web-content</code></pre>
+<p>Be aware of a trade-off: files mounted through <code>subPath</code> from a ConfigMap or Secret do not receive updates when the source object changes. To pick up changes, the Pod must be restarted. Whole-volume mounts are refreshed automatically after a short delay.</p>
+<p><code>readOnly: true</code> on a mount prevents the container from writing to that volume, even if the underlying storage is writable. It is a simple way to apply least privilege: a web server that only serves content, or an app that only reads credentials, should not be able to change them. It also pairs well with <code>readOnlyRootFilesystem</code> in the security context, where you mount writable emptyDirs only at the paths that genuinely need writes, such as <code>/tmp</code>.</p>
+<p>To check what is mounted, use <code>kubectl describe pod</code> (the Mounts section of each container) or <code>kubectl exec pod -c web -- ls -la /etc/nginx/conf.d</code>. <code>kubectl explain pod.spec.containers.volumeMounts</code> lists all available fields if you forget one during the exam.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>volumeMounts</dt><dd>Per-container list linking a Pod volume to a path inside that container.</dd><dt>mountPath</dt><dd>The absolute path in the container where the volume appears, hiding anything already there.</dd><dt>subPath</dt><dd>Mounts a single file or subdirectory of a volume instead of its whole root.</dd><dt>readOnly</dt><dd>Mount option that blocks writes from that container to the volume.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A team needs a custom nginx config but mounting the ConfigMap at /etc/nginx/conf.d wiped out other included files. Using <code>mountPath: /etc/nginx/conf.d/default.conf</code> with <code>subPath: default.conf</code> and <code>readOnly: true</code> replaced just the one file and made it tamper-proof.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> A volume needs both halves: an entry in spec.volumes and a matching volumeMounts entry in each container. subPath mounts do not auto-update from ConfigMaps or Secrets.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why might mounting a ConfigMap at /etc/app break an application?</summary><p>The mount hides everything already in /etc/app in the image; use subPath to mount a single file instead.</p></details>
+<details class="sq"><summary>What does readOnly: true on a volumeMount do?</summary><p>It prevents that container from writing to the volume at that path.</p></details>
+<details class="sq"><summary>Can two containers in one Pod mount the same volume at different paths?</summary><p>Yes; each lists it under its own volumeMounts with its own mountPath.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../persistent-storage-persistentvolume-persistentvolumeclaim-storageclass/">← Persistent storage: PersistentVolume, PersistentVolumeClaim,</a><a href="../deployments-and-replicasets-how-the-pod-template-labels-and-selectors/">Deployments and ReplicaSets: how the Pod template, labels an →</a></nav>
+</main>
+</body>
+</html>

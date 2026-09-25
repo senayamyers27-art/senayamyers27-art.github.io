@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NTP role in keeping logs and certificates consistent · CCNA Lesson</title>
+<meta name="description" content="Every device has a clock, and on its own each one drifts. Network Time Protocol (NTP) keeps device clocks synchronized to accurate sources so that every ro">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="NTP role in keeping logs and certificates consistent · CCNA Lesson">
+<meta property="og:description" content="Every device has a clock, and on its own each one drifts. Network Time Protocol (NTP) keeps device clocks synchronized to accurate sources so that every ro">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ccna/lessons/ntp-role-in-keeping-logs-and-certificates-consistent/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ccna/lessons/ntp-role-in-keeping-logs-and-certificates-consistent/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CCNA</a> / <a href="../">Lessons</a></p>
+<p class="note">Cisco CCNA 200-301 v2.0 · Domain 4: Network services &amp; security</p>
+<h1>NTP role in keeping logs and certificates consistent</h1>
+<article class="lbody">
+<p>Every device has a clock, and on its own each one drifts. Network Time Protocol (NTP) keeps device clocks synchronized to accurate sources so that every router, switch, server and firewall agrees on the time. That sounds minor, but many security and operational tasks depend on it.</p>
+<p>Logs are the first reason. When an incident spans several devices, you piece together what happened by lining up syslog messages by timestamp. If one router's clock is five minutes fast and another's is three minutes slow, the sequence of events becomes impossible to reconstruct and correlation tools in a SIEM or monitoring system give wrong results. Configure timestamps with <code>service timestamps log datetime msec</code> so messages carry the date and time, not just uptime.</p>
+<p>Certificates are the second reason. Digital certificates used for HTTPS, VPNs, 802.1X and secure device management have validity dates. A device whose clock is far wrong may think a valid certificate has not yet become valid or has already expired, and reject it. Authentication protocols such as Kerberos also reject requests if clocks differ by more than a small allowed skew. Time-based one-time passwords rely on synchronized time too.</p>
+<p>NTP organizes sources in strata. Stratum 0 are reference clocks such as GPS receivers or atomic clocks, which are not on the network directly. Stratum 1 servers connect directly to a stratum 0 source. A device synchronized to a stratum 1 server becomes stratum 2, and so on. Lower stratum means closer to the reference, and devices prefer it. Stratum 16 means unsynchronized. NTP uses UDP port 123 and continually adjusts for network delay.</p>
+<p>On IOS, <code>ntp server 10.1.1.123</code> makes the device a client of that server; configure two or more servers for redundancy. A device synchronized to a server can in turn serve time to others. <code>ntp master</code> makes a router an authoritative source using its own clock, useful in labs or isolated networks; it defaults to stratum 8. Set the local time zone with <code>clock timezone</code>, while NTP itself carries UTC. To stop devices accepting time from rogue sources, enable NTP authentication: <code>ntp authenticate</code>, <code>ntp authentication-key 1 md5 &lt;key&gt;</code> and <code>ntp trusted-key 1</code>, and add <code>key 1</code> to the <code>ntp server</code> command.</p>
+<pre class="code" tabindex="0"><code>clock timezone EST -5
+ntp server 10.1.1.123 prefer
+ntp server 10.1.2.123
+service timestamps log datetime msec localtime</code></pre>
+<p>Verify with <code>show ntp status</code>, which shows whether the clock is synchronized, the stratum and the reference, and <code>show ntp associations</code>, where an asterisk marks the server the device is synchronized to. <code>show clock</code> displays the current time; a leading asterisk there means the time is not authoritative or not synchronized.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>NTP</dt><dd>Network Time Protocol, which synchronizes device clocks over UDP port 123.</dd><dt>Stratum</dt><dd>An NTP source's distance from a reference clock; lower is better and 16 means unsynchronized.</dd><dt>ntp master</dt><dd>IOS command that makes a router an authoritative NTP source from its own clock, stratum 8 by default.</dd><dt>NTP authentication</dt><dd>Using shared keys so a device only accepts time from trusted NTP servers.</dd><dt>service timestamps</dt><dd>IOS command that adds date and time stamps to log and debug messages.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An engineer investigating a suspicious login compares logs from the firewall, the core switch and an AAA server, but events appear out of order by several minutes. The switch shows <code>show ntp status</code> as unsynchronized because its NTP server was retired. After pointing all devices to two internal NTP servers, the timestamps align and the sequence of events is clear.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Lower stratum is more accurate, and stratum 16 means not synchronized. An exam question about failed certificate validation or out-of-order logs is usually pointing at NTP.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why can a wrong device clock cause certificate validation to fail?</summary><p>Certificates have validity start and end dates; if the clock is outside that window the device believes the certificate is not yet valid or has expired.</p></details>
+<details class="sq"><summary>A router syncs to a stratum 2 server. What is the router's stratum?</summary><p>Stratum 3.</p></details>
+<details class="sq"><summary>Which command shows whether a Cisco device's clock is synchronized?</summary><p>show ntp status (show ntp associations shows the selected server).</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CCNA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ccna/">Open the CCNA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../dhcp-and-dns-roles-in-the-network-troubleshoot-name-resolution-and-dhc/">← DHCP and DNS roles in the network; troubleshoot name resolut</a><a href="../wireless-security-wpa2-and-wpa3-personal-psk-sae-vs-enterprise-802-1x/">Wireless security: WPA2 and WPA3, Personal (PSK/SAE) vs Ente →</a></nav>
+</main>
+</body>
+</html>

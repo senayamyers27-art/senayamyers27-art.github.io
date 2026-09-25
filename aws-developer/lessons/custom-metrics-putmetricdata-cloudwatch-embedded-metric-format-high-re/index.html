@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Custom metrics: PutMetricData, CloudWatch embedded metric… · Developer Associate Lesson</title>
+<meta name="description" content="AWS services publish many metrics automatically, but not your business events: orders placed, payments declined, items in a cart, time spent calling a part">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Custom metrics: PutMetricData, CloudWatch embedded metric… · Developer Associate Lesson">
+<meta property="og:description" content="AWS services publish many metrics automatically, but not your business events: orders placed, payments declined, items in a cart, time spent calling a part">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/custom-metrics-putmetricdata-cloudwatch-embedded-metric-format-high-re/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/custom-metrics-putmetricdata-cloudwatch-embedded-metric-format-high-re/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 4: Troubleshooting and Optimization</p>
+<h1>Custom metrics: PutMetricData, CloudWatch embedded metric format, high-resolution metrics</h1>
+<article class="lbody">
+<p>AWS services publish many metrics automatically, but not your business events: orders placed, payments declined, items in a cart, time spent calling a partner API. Custom metrics let you publish those numbers to Amazon CloudWatch so you can graph them, put them on dashboards and alarm on them just like built-in metrics.</p>
+<p>A metric is identified by a namespace (a container you name, such as <code>MyShop/Checkout</code>; the <code>AWS/</code> prefix is reserved for AWS services), a metric name, and up to 30 dimensions, the name-value pairs that identify a particular series, such as <code>Environment=prod</code> or <code>PaymentProvider=acme</code>. Each unique combination of dimensions is a separate metric, so avoid dimensions with unbounded values like user IDs or request IDs; they create huge numbers of metrics and cost. Each data point has a value, an optional unit (<code>Count</code>, <code>Milliseconds</code>, <code>Bytes</code> and so on) and a timestamp.</p>
+<p>The direct way to publish is the <code>PutMetricData</code> API. You can send single values, arrays of values with counts, or statistic sets (Sum, Minimum, Maximum and SampleCount) that summarize many observations in one data point. Batch multiple values in each call, because calling the API for every single event adds latency to your code and can be throttled. The calling identity needs the <code>cloudwatch:PutMetricData</code> permission, and you can restrict it to a namespace with the <code>cloudwatch:namespace</code> condition key.</p>
+<pre class="code" tabindex="0"><code>aws cloudwatch put-metric-data --namespace MyShop/Checkout \
+  --metric-name OrdersPlaced --dimensions Environment=prod \
+  --unit Count --value 1 --storage-resolution 1</code></pre>
+<p>Resolution matters. Standard-resolution metrics have one-minute granularity. High-resolution metrics, published with <code>StorageResolution</code> set to 1, keep data at one-second granularity so you can see short spikes, and alarms on them can use periods of 10 or 30 seconds (as well as multiples of 60). High-resolution data is kept at one-second detail only for a short time before being aggregated, and it costs more when alarmed on, so use it only when seconds matter, such as for real-time trading or autoscaling signals.</p>
+<p>The CloudWatch embedded metric format (EMF) is often the best choice from Lambda and containers. Instead of calling an API, you write a structured JSON log line that includes an <code>_aws</code> object describing which fields are metrics and which are dimensions. CloudWatch Logs extracts the metrics automatically and asynchronously, so there is no API call in the request path, no added latency and no throttling risk, and the full log line, including high-cardinality details like the order ID, stays searchable in Logs Insights. Libraries such as the EMF client libraries and Powertools for AWS Lambda metrics utilities generate this format for you.</p>
+<pre class="code" tabindex="0"><code>{&quot;_aws&quot;: {&quot;Timestamp&quot;: 1735689600000, &quot;CloudWatchMetrics&quot;: [{&quot;Namespace&quot;: &quot;MyShop/Checkout&quot;, &quot;Dimensions&quot;: [[&quot;Environment&quot;]], &quot;Metrics&quot;: [{&quot;Name&quot;: &quot;OrderValue&quot;, &quot;Unit&quot;: &quot;None&quot;}]}]}, &quot;Environment&quot;: &quot;prod&quot;, &quot;OrderValue&quot;: 42.5, &quot;orderId&quot;: &quot;o-981&quot;}</code></pre>
+<p>On EC2 instances, memory and disk usage are not built-in metrics; the CloudWatch agent collects them and publishes them as custom metrics, which is another common exam scenario.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Namespace</dt><dd>A container for CloudWatch metrics, such as MyShop/Checkout; the AWS/ prefix is reserved for AWS services.</dd><dt>PutMetricData</dt><dd>The CloudWatch API for publishing custom metric data points or statistic sets.</dd><dt>Embedded metric format (EMF)</dt><dd>A structured JSON log format from which CloudWatch Logs automatically extracts metrics.</dd><dt>High-resolution metric</dt><dd>A custom metric stored at one-second granularity by setting StorageResolution to 1.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A checkout Lambda function called PutMetricData on every order, adding latency and occasionally hitting throttling. The team switches to printing EMF log lines with OrderValue and PaymentLatency metrics and an Environment dimension. The metrics still appear in CloudWatch, the function is faster, and each log line still carries the order ID for investigation.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Publishing metrics from Lambda without API calls or added latency points to the embedded metric format. Need sub-minute granularity or 10-second alarms: high-resolution metrics with StorageResolution 1. Memory usage on EC2: the CloudWatch agent.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why avoid using a user ID as a metric dimension?</summary><p>Every distinct dimension combination is a separate metric, so unbounded values create huge numbers of metrics and cost.</p></details>
+<details class="sq"><summary>What is the benefit of EMF over PutMetricData in Lambda?</summary><p>Metrics are extracted asynchronously from logs, so there is no synchronous API call, latency or throttling, and detailed context stays in the log line.</p></details>
+<details class="sq"><summary>How do you publish a high-resolution metric?</summary><p>Set StorageResolution to 1 in PutMetricData (or the equivalent in EMF), giving one-second granularity.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../aws-x-ray-segments-subsegments-annotations-vs-metadata-sampling-active/">← AWS X-Ray: segments, subsegments, annotations vs metadata, s</a><a href="../cloudwatch-alarms-with-sns-notifications-structured-logging-and-correl/">CloudWatch alarms with SNS notifications; structured logging →</a></nav>
+</main>
+</body>
+</html>

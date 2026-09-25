@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Configuring key-based SSH authentication (ssh-keygen… · RHCSA Lesson</title>
+<meta name="description" content="SSH (Secure Shell) key authentication replaces a typed password with a key pair. The private key stays on your client; the public key is copied to the serv">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Configuring key-based SSH authentication (ssh-keygen… · RHCSA Lesson">
+<meta property="og:description" content="SSH (Secure Shell) key authentication replaces a typed password with a key pair. The private key stays on your client; the public key is copied to the serv">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/configuring-key-based-ssh-authentication-ssh-keygen-ssh-copy-id-ssh-pe/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/configuring-key-based-ssh-authentication-ssh-keygen-ssh-copy-id-ssh-pe/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 10: Manage security</p>
+<h1>Configuring key-based SSH authentication (ssh-keygen, ssh-copy-id, ~/.ssh permissions, sshd_config)</h1>
+<article class="lbody">
+<p>SSH (Secure Shell) key authentication replaces a typed password with a key pair. The private key stays on your client; the public key is copied to the server. When you connect, the server challenges the client to prove it holds the matching private key, and the private key itself never crosses the network. Keys resist password guessing, allow automation, and are expected on the RHCSA whenever a task says passwordless login.</p>
+<p>Generate a pair with <code>ssh-keygen</code>. The default type on current RHEL is Ed25519 or RSA depending on version, and you can choose with <code>-t ed25519</code>. Accept the default location in <code>~/.ssh/</code> and choose whether to protect the private key with a passphrase; an empty passphrase allows unattended use, while a passphrase adds protection if the file is stolen, and <code>ssh-agent</code> can cache it.</p>
+<pre class="code" tabindex="0"><code>ssh-keygen -t ed25519            # creates ~/.ssh/id_ed25519 and .pub
+ssh-copy-id student@serverb      # asks for the password once
+ssh student@serverb              # now logs in with the key</code></pre>
+<p><code>ssh-copy-id</code> appends your public key to <code>~/.ssh/authorized_keys</code> on the server for the target user and sets sane permissions. If you copy by hand, the permissions matter, because sshd refuses keys when files are too open: the home directory must not be writable by group or other, <code>~/.ssh</code> should be 700, <code>authorized_keys</code> 600 and the private key 600. Everything must be owned by the user. SELinux labels matter too; if you create the files by moving them, run <code>restorecon -Rv ~/.ssh</code>.</p>
+<p>Server behavior is set in <code>/etc/ssh/sshd_config</code> and, preferably, in drop-in files under <code>/etc/ssh/sshd_config.d/</code> ending in <code>.conf</code>, which are read first; for most options the first value found wins. Common settings: <code>PubkeyAuthentication yes</code> (the default), <code>PasswordAuthentication no</code> to require keys, and <code>PermitRootLogin</code> with values <code>yes</code>, <code>no</code> or <code>prohibit-password</code> (root may log in with a key only).</p>
+<pre class="code" tabindex="0"><code># /etc/ssh/sshd_config.d/50-local.conf
+PasswordAuthentication no
+PermitRootLogin no
+
+sshd -t                  # test syntax
+systemctl reload sshd</code></pre>
+<p>Before disabling passwords, confirm the key login works in a second session so you cannot lock yourself out. If a key is refused, run the client with <code>ssh -v</code> and read the server side in <code>journalctl -u sshd</code>, which usually names the bad permission. Protect private keys like passwords: never copy them to servers, and remove public keys from authorized_keys when access should end.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Key pair</dt><dd>A private key kept on the client and a matching public key placed on servers for authentication.</dd><dt>authorized_keys</dt><dd>The file ~/.ssh/authorized_keys on a server listing public keys allowed to log in as that user.</dd><dt>ssh-copy-id</dt><dd>Copies a public key into a remote user's authorized_keys file with correct permissions.</dd><dt>PermitRootLogin</dt><dd>An sshd setting controlling root logins: yes, no or prohibit-password (key only).</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>User student on servera must log in to serverb without a password. As student you run ssh-keygen accepting defaults, then ssh-copy-id student@serverb and enter the password once. ssh student@serverb hostname now prints serverb without prompting, and journalctl -u sshd on serverb shows Accepted publickey.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Most key failures are permissions: ~/.ssh must be 700, authorized_keys 600, and the home directory not group- or world-writable. Check journalctl -u sshd on the server for the reason.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which file on the server must contain your public key?</summary><p>~/.ssh/authorized_keys in the home directory of the account you log in as.</p></details>
+<details class="sq"><summary>What do you run after changing sshd settings?</summary><p>sshd -t to check syntax, then systemctl reload sshd (or restart).</p></details>
+<details class="sq"><summary>What does PermitRootLogin prohibit-password allow?</summary><p>Root may log in with a key but not with a password.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../managing-default-file-permissions-with-umask-shell-and-etc-login-defs/">← Managing default file permissions with umask (shell and /etc</a><a href="../setting-selinux-enforcing-and-permissive-modes-getenforce-setenforce-e/">Setting SELinux enforcing and permissive modes (getenforce,  →</a></nav>
+</main>
+</body>
+</html>

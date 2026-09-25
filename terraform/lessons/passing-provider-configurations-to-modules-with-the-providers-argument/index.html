@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Passing provider configurations to modules with the… · Terraform Associate Lesson</title>
+<meta name="description" content="Resources in a child module need a provider configuration, such as an AWS provider set to a particular region and account. By default, a child module inher">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Passing provider configurations to modules with the… · Terraform Associate Lesson">
+<meta property="og:description" content="Resources in a child module need a provider configuration, such as an AWS provider set to a particular region and account. By default, a child module inher">
+<link rel="canonical" href="https://senayamyers27-art.github.io/terraform/lessons/passing-provider-configurations-to-modules-with-the-providers-argument/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/terraform/lessons/passing-provider-configurations-to-modules-with-the-providers-argument/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Terraform Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004) · Domain 5: Terraform modules</p>
+<h1>Passing provider configurations to modules with the `providers` argument</h1>
+<article class="lbody">
+<p>Resources in a child module need a provider configuration, such as an AWS provider set to a particular region and account. By default, a child module inherits the default (unaliased) provider configurations of its parent automatically. If your root module has one <code>provider &quot;aws&quot;</code> block, every module that uses AWS resources quietly uses it. That implicit inheritance covers most simple configurations.</p>
+<p>Things change when you have more than one configuration of the same provider. You create extra configurations with the <code>alias</code> meta-argument, for example a second AWS provider for another region: <code>provider &quot;aws&quot; { alias = &quot;west&quot;  region = &quot;us-west-2&quot; }</code>, referenced as <code>aws.west</code>. Aliased configurations are never inherited implicitly. To make a module use one, you pass it explicitly with the <code>providers</code> argument on the module block.</p>
+<pre class="code" tabindex="0"><code>provider &quot;aws&quot; {
+  region = &quot;us-east-1&quot;
+}
+
+provider &quot;aws&quot; {
+  alias  = &quot;west&quot;
+  region = &quot;us-west-2&quot;
+}
+
+module &quot;replica&quot; {
+  source = &quot;./modules/bucket&quot;
+  providers = {
+    aws = aws.west
+  }
+}</code></pre>
+<p>The <code>providers</code> argument is a map. The key is the provider name as the child module sees it, and the value is a provider configuration in the calling module. In the example, everything in <code>./modules/bucket</code> that uses <code>aws</code> gets the us-west-2 configuration. Once you set <code>providers</code> for a module, Terraform uses only the mappings you listed, so include every provider the module needs.</p>
+<p>Some modules need two configurations of the same provider at once, for instance to set up replication between a source bucket and a destination bucket in different regions. Such a module declares the extra names it expects with <code>configuration_aliases</code> inside its <code>required_providers</code> entry, such as <code>configuration_aliases = [aws.src, aws.dst]</code>. The caller then maps both: <code>providers = { aws.src = aws.east, aws.dst = aws.west }</code>.</p>
+<p>Best practice is that reusable child modules should not contain their own <code>provider</code> blocks. Provider configuration belongs in the root module, and child modules declare only their <code>required_providers</code> requirements (source and version constraints). Modules that contain provider blocks are called legacy modules and cannot be used with <code>count</code>, <code>for_each</code> or <code>depends_on</code>. They also cause trouble when removed, because Terraform needs the provider configuration to destroy the module's resources. Keeping providers in the root and passing them down gives callers control over regions, accounts and credentials.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Provider alias</dt><dd>An extra, named configuration of a provider created with the alias meta-argument and referenced as PROVIDER.ALIAS.</dd><dt>providers argument</dt><dd>A map on a module block that assigns the caller's provider configurations to the provider names the child module uses.</dd><dt>Implicit provider inheritance</dt><dd>The default behavior where child modules automatically use the parent's default, unaliased provider configurations.</dd><dt>configuration_aliases</dt><dd>A required_providers setting in a child module that declares additional provider configuration names the caller must pass in.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A disaster recovery module creates a primary database in one region and a replica in another. It declares configuration_aliases = [aws.primary, aws.replica], and the root module calls it with providers = { aws.primary = aws, aws.replica = aws.dr }, so one module call builds resources in two regions.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Default provider configurations are inherited automatically; aliased ones never are and must be passed with the providers map on the module block.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Your root module defines provider aws with alias eu. How do you make module logs use it?</summary><p>Add providers = { aws = aws.eu } to the module &quot;logs&quot; block.</p></details>
+<details class="sq"><summary>Why should reusable modules avoid their own provider blocks?</summary><p>Provider configuration belongs to the caller; modules with provider blocks cannot use count, for_each or depends_on and are hard to remove safely.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Terraform Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../terraform/">Open the Terraform Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../variable-scope-child-modules-only-see-values-passed-in-outputs-are-rea/">← Variable scope: child modules only see values passed in; out</a><a href="../the-version-argument-registry-sources-only-and-ref-for-git-sources/">The `version` argument (registry sources only) and `ref` for →</a></nav>
+</main>
+</body>
+</html>

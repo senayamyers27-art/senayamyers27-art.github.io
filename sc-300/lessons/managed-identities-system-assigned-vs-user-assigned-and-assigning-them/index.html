@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Managed identities: system-assigned vs user-assigned, and… · SC-300 Lesson</title>
+<meta name="description" content="Applications running in Azure often need to call other services, such as reading secrets from Azure Key Vault or files from a storage account. Storing a pa">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Managed identities: system-assigned vs user-assigned, and… · SC-300 Lesson">
+<meta property="og:description" content="Applications running in Azure often need to call other services, such as reading secrets from Azure Key Vault or files from a storage account. Storing a pa">
+<link rel="canonical" href="https://senayamyers27-art.github.io/sc-300/lessons/managed-identities-system-assigned-vs-user-assigned-and-assigning-them/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/sc-300/lessons/managed-identities-system-assigned-vs-user-assigned-and-assigning-them/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">SC-300</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Identity and Access Administrator Associate SC-300 (skills outline of April 27, 2026) · Domain 3: Plan and implement workload identities</p>
+<h1>Managed identities: system-assigned vs user-assigned, and assigning them Azure RBAC roles</h1>
+<article class="lbody">
+<p>Applications running in Azure often need to call other services, such as reading secrets from Azure Key Vault or files from a storage account. Storing a password or key in code or configuration is risky: it can leak and must be rotated. Managed identities solve this by giving an Azure resource an identity in Microsoft Entra ID whose credentials Azure creates, stores and rotates automatically. Your code never sees a secret.</p>
+<p>A system-assigned managed identity is enabled directly on one resource, such as a virtual machine, App Service app or Azure Function. It shares that resource's lifecycle: when the resource is deleted, the identity is deleted too. Each system-assigned identity belongs to exactly one resource, which makes it simple and tidy when one resource needs its own access.</p>
+<p>A user-assigned managed identity is a standalone Azure resource that you create first and then attach to one or more resources. Its lifecycle is independent, so deleting a VM does not delete the identity. Use it when several resources need the same permissions, such as a fleet of VMs in a scale set, or when you want to pre-create and authorize the identity before the compute resource exists. A resource can have one system-assigned identity and several user-assigned identities at the same time.</p>
+<p>Behind the scenes, a managed identity is a special kind of service principal in Entra ID. You can find it under Enterprise applications by filtering the application type to managed identities. Managed identities are available only to Azure resources (and Azure Arc-enabled servers), not to arbitrary workloads outside Azure, and you don't manage their credentials at all.</p>
+<p>A managed identity has no permissions until you grant them. For Azure resources you use Azure RBAC: assign a role such as Storage Blob Data Reader or Key Vault Secrets User to the identity at the narrowest suitable scope (a single resource, resource group or subscription). In the portal, open the target resource, select Access control (IAM), Add role assignment, choose the role, and select Managed identity as the member type. With the Azure CLI it looks like this:</p>
+<pre class="code" tabindex="0"><code>az role assignment create \
+  --assignee &lt;principal-id-of-identity&gt; \
+  --role &quot;Storage Blob Data Reader&quot; \
+  --scope /subscriptions/&lt;sub-id&gt;/resourceGroups/rg-app/providers/Microsoft.Storage/storageAccounts/stapp01</code></pre>
+<p>Inside the resource, code requests a token from the local identity endpoint, usually through an SDK class such as DefaultAzureCredential, and presents it to the target service. To attach user-assigned identities to resources, an admin needs the Managed Identity Operator role; to create and manage them, Managed Identity Contributor. Managed identities can also be granted Microsoft Graph application permissions, but that is done through PowerShell or Graph rather than the portal's API permissions page.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Managed identity</dt><dd>An automatically managed Entra identity for an Azure resource, with no credentials for you to store or rotate.</dd><dt>System-assigned managed identity</dt><dd>An identity enabled on one resource and deleted with it.</dd><dt>User-assigned managed identity</dt><dd>A standalone identity resource that can be attached to multiple Azure resources and has its own lifecycle.</dd><dt>Azure RBAC role assignment</dt><dd>Granting a role to a principal at a scope such as a resource, resource group or subscription.</dd><dt>DefaultAzureCredential</dt><dd>An Azure SDK credential class that automatically uses a managed identity when running in Azure.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Twenty VMs in a scale set process files from one storage account. Instead of enabling twenty system-assigned identities and twenty role assignments, the admin creates one user-assigned managed identity, grants it Storage Blob Data Reader on that storage account only, and attaches it to the scale set. New instances inherit access automatically.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Shared identity across many resources or a lifecycle independent of the resource means user-assigned; a single resource whose identity should disappear with it means system-assigned. Permissions come from Azure RBAC at the smallest scope.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What happens to a system-assigned managed identity when its VM is deleted?</summary><p>It is deleted automatically along with the VM.</p></details>
+<details class="sq"><summary>Which managed identity type should you use for many VMs that need identical access?</summary><p>A user-assigned managed identity attached to all of them.</p></details>
+<details class="sq"><summary>How do you let a managed identity read blobs in one storage account?</summary><p>Assign it an Azure RBAC role such as Storage Blob Data Reader scoped to that storage account.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study SC-300 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../sc-300/">Open the SC-300 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../global-secure-access-microsoft-entra-internet-access-and-private-acces/">← Global Secure Access: Microsoft Entra Internet Access and Pr</a><a href="../service-principals-and-app-registrations-application-objects-client-se/">Service principals and app registrations: application object →</a></nav>
+</main>
+</body>
+</html>

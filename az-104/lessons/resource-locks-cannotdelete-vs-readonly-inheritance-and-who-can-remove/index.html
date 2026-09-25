@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Resource locks: CanNotDelete vs ReadOnly, inheritance and… · Azure Administrator Lesson</title>
+<meta name="description" content="Resource locks protect important resources from accidental changes, including by people who have full permissions. RBAC might let an Owner delete a product">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Resource locks: CanNotDelete vs ReadOnly, inheritance and… · Azure Administrator Lesson">
+<meta property="og:description" content="Resource locks protect important resources from accidental changes, including by people who have full permissions. RBAC might let an Owner delete a product">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-104/lessons/resource-locks-cannotdelete-vs-readonly-inheritance-and-who-can-remove/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-104/lessons/resource-locks-cannotdelete-vs-readonly-inheritance-and-who-can-remove/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Azure Administrator</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure Administrator Associate AZ-104 · Domain 1: Manage Azure identities and governance</p>
+<h1>Resource locks: CanNotDelete vs ReadOnly, inheritance and who can remove them</h1>
+<article class="lbody">
+<p>Resource locks protect important resources from accidental changes, including by people who have full permissions. RBAC might let an Owner delete a production database, but a lock stops the delete until someone deliberately removes the lock first. Locks are a safety catch, not an access-control system.</p>
+<p>There are two lock levels. CanNotDelete (shown as Delete in the portal) lets authorized users read and modify a resource but not delete it. ReadOnly lets authorized users read a resource but not delete or update it, which is roughly like giving everyone the Reader role for that resource. You can apply a lock to a subscription, a resource group or an individual resource from its Locks blade, or with <code>az lock create</code> or <code>New-AzResourceLock</code>.</p>
+<p>Locks are inherited. A lock on a resource group applies to every resource in it, including resources added later, and a lock on a subscription applies to everything in the subscription. If several locks apply, the most restrictive one wins. A CanNotDelete lock on a resource group also means the resource group itself cannot be deleted, although you can still add new resources to it.</p>
+<p>Locks act on the control plane, meaning operations sent to Azure Resource Manager at <code>management.azure.com</code>. They do not stop data-plane operations. A CanNotDelete lock on a storage account stops someone deleting the account but does not stop them deleting blobs inside it. A ReadOnly lock on a SQL server stops the server being deleted or reconfigured but not rows being changed in the database.</p>
+<p>ReadOnly locks have side effects that exam questions like to test, because some 'read' actions in the portal are really POST requests. A ReadOnly lock on a storage account blocks the list keys operation, so users who rely on account keys cannot open data in the portal. A ReadOnly lock on a resource group containing a VM blocks starting, stopping or resizing it. A ReadOnly lock on an App Service blocks things like viewing the log stream or Visual Studio Server Explorer. Many teams therefore prefer CanNotDelete for production and reserve ReadOnly for resources that truly never change.</p>
+<p>To create or delete a lock you need <code>Microsoft.Authorization/locks/*</code> permissions. Among built-in roles, only Owner and User Access Administrator have them; Contributor does not, so a Contributor cannot remove a lock and therefore cannot delete a locked resource. Removing a lock is a normal operation for an Owner: delete the lock, perform the change, then add the lock back.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>CanNotDelete lock</dt><dd>A lock that allows reading and modifying a resource but blocks deleting it.</dd><dt>ReadOnly lock</dt><dd>A lock that allows reading a resource but blocks both updates and deletion.</dd><dt>Lock inheritance</dt><dd>The rule that a lock on a subscription or resource group applies to all resources beneath it, including ones created later.</dd><dt>Control plane</dt><dd>Management operations through Azure Resource Manager, which is the only layer locks protect.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An administrator puts a CanNotDelete lock on the resource group holding a company's production virtual network and firewall. Months later a Contributor runs a cleanup script that tries to delete everything with an old tag; the network resources survive, the script logs errors, and the team can review the change calmly instead of rebuilding the network.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Only Owner and User Access Administrator (among built-in roles) can remove locks. ReadOnly can break normal operations such as listing storage keys or starting VMs, and locks never protect the data inside a resource.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>A resource group has a CanNotDelete lock. Can a Contributor create a new VM in it? Delete the VM later?</summary><p>Yes, they can create it; no, they cannot delete it, because the inherited lock blocks deletion and a Contributor cannot remove locks.</p></details>
+<details class="sq"><summary>Does a CanNotDelete lock on a storage account stop a user from deleting blobs?</summary><p>No. Locks apply to control-plane operations; deleting blobs is a data-plane operation. Use soft delete or immutability for data protection.</p></details>
+<details class="sq"><summary>Why might users be unable to browse a storage account's containers after a ReadOnly lock is applied?</summary><p>Listing account keys is a POST operation that the ReadOnly lock blocks, so Shared Key access through the portal fails.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Azure Administrator for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-104/">Open the Azure Administrator study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../azure-policy-definitions-initiatives-assignments-scopes-and-exclusions/">← Azure Policy: definitions, initiatives, assignments, scopes </a><a href="../tags-applying-tags-why-tags-are-not-inherited-and-enforcing-or-inherit/">Tags: applying tags, why tags are not inherited, and enforci →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SELinux: modes, contexts, restorecon, semanage, booleans… · Linux+ Lesson</title>
+<meta name="description" content="Standard permissions are DAC (discretionary access control): the owner decides who gets access. SELinux (Security-Enhanced Linux) and AppArmor add MAC (man">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="SELinux: modes, contexts, restorecon, semanage, booleans… · Linux+ Lesson">
+<meta property="og:description" content="Standard permissions are DAC (discretionary access control): the owner decides who gets access. SELinux (Security-Enhanced Linux) and AppArmor add MAC (man">
+<link rel="canonical" href="https://senayamyers27-art.github.io/linux-plus/lessons/selinux-modes-contexts-restorecon-semanage-booleans-ausearch-apparmor/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/linux-plus/lessons/selinux-modes-contexts-restorecon-semanage-booleans-ausearch-apparmor/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Linux+</a> / <a href="../">Lessons</a></p>
+<p class="note">CompTIA Linux+ XK0-006 · Domain 3: Security</p>
+<h1>SELinux: modes, contexts, restorecon, semanage, booleans, ausearch; AppArmor profiles and modes</h1>
+<article class="lbody">
+<p>Standard permissions are DAC (discretionary access control): the owner decides who gets access. SELinux (Security-Enhanced Linux) and AppArmor add MAC (mandatory access control): a system-wide policy limits what each program may do regardless of file ownership, so a compromised web server cannot read files outside what its policy allows. RHEL-family systems use SELinux; Ubuntu and Debian use AppArmor, which SUSE also used for years, although newer SUSE releases default to SELinux.</p>
+<p>SELinux has three modes. Enforcing applies the policy and blocks violations. Permissive allows everything but logs what would have been denied, which is useful for troubleshooting. Disabled turns SELinux off entirely. <code>getenforce</code> shows the mode, <code>sestatus</code> gives detail, and <code>setenforce 0</code> or <code>setenforce 1</code> switches between permissive and enforcing until reboot. The persistent setting is <code>SELINUX=</code> in <code>/etc/selinux/config</code>. Switching from disabled back to enabled requires a full filesystem relabel, and disabling SELinux to make a problem go away is the wrong answer on the exam and in practice.</p>
+<p>Every process and file has a context, in the form user:role:type:level, for example <code>system_u:object_r:httpd_sys_content_t:s0</code>. In the default targeted policy the type is what matters: the Apache process runs as <code>httpd_t</code> and may read files labeled <code>httpd_sys_content_t</code>. View contexts with <code>ls -Z</code> for files and <code>ps -eZ</code> for processes.</p>
+<p>Labels are the most common problem. A file created in a home directory and then moved with <code>mv</code> keeps its old label, so the web server is denied access. <code>restorecon -Rv /var/www/html</code> resets files to the default labels defined by policy. <code>chcon -t type file</code> changes a label temporarily, but a relabel or restorecon will undo it. To define a new default for a custom path, use <code>semanage fcontext -a -t httpd_sys_content_t '/srv/web(/.*)?'</code> and then run <code>restorecon -Rv /srv/web</code>. <code>semanage port -a -t http_port_t -p tcp 8081</code> allows a service to use a non-standard port, and <code>semanage port -l</code> lists port labels.</p>
+<p>Booleans are on/off switches for optional policy behavior. <code>getsebool -a</code> lists them, and <code>setsebool -P httpd_can_network_connect on</code> lets Apache make outbound network connections; <code>-P</code> makes it persistent.</p>
+<p>Denials are logged as AVC (access vector cache) messages in <code>/var/log/audit/audit.log</code>. <code>ausearch -m avc -ts recent</code> finds recent denials, <code>sealert</code> (from setroubleshoot) explains them in plain language, and <code>audit2why</code> interprets them. <code>audit2allow</code> can generate a custom policy module, but prefer fixing labels, ports or booleans first.</p>
+<p>AppArmor instead confines programs with path-based profiles stored in <code>/etc/apparmor.d/</code>. Each profile runs in enforce mode (violations blocked and logged) or complain mode (violations only logged). <code>aa-status</code> lists loaded profiles and their modes, <code>aa-enforce</code> and <code>aa-complain</code> switch a profile, <code>aa-disable</code> turns one off, and <code>apparmor_parser -r</code> reloads a profile after editing. Denials appear in the kernel log or audit log with <code>apparmor=&quot;DENIED&quot;</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>MAC</dt><dd>Mandatory access control: a system-enforced policy that restricts programs regardless of file ownership.</dd><dt>SELinux context</dt><dd>The user:role:type:level label on files and processes; the type drives most targeted-policy decisions.</dd><dt>restorecon</dt><dd>Resets file SELinux labels to the defaults defined in policy.</dd><dt>SELinux boolean</dt><dd>A policy switch toggled with setsebool (-P for persistent) to allow optional behaviors.</dd><dt>AppArmor profile</dt><dd>A path-based policy for one program, running in enforce or complain mode.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>After moving a new site into /var/www/html with mv, visitors get 403 Forbidden. ls -Z shows the files labeled user_home_t, and ausearch -m avc -ts recent shows httpd_t denied read access. Running restorecon -Rv /var/www/html relabels them httpd_sys_content_t and the site loads, with SELinux still enforcing.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> The best-practice answer is almost never 'disable SELinux'; look for restorecon, semanage fcontext, semanage port or setsebool -P instead, and use permissive mode only temporarily to confirm SELinux is the cause.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which SELinux mode logs denials without blocking them?</summary><p>Permissive.</p></details>
+<details class="sq"><summary>You serve web content from /srv/web. How do you make its correct label permanent?</summary><p>semanage fcontext -a -t httpd_sys_content_t '/srv/web(/.*)?' followed by restorecon -Rv /srv/web.</p></details>
+<details class="sq"><summary>What is the AppArmor equivalent of SELinux permissive mode for a single profile?</summary><p>Complain mode, set with aa-complain.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Linux+ for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../linux-plus/">Open the Linux+ study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../special-permissions-suid-sgid-sticky-bit-acls-with-setfacl-and-getfacl/">← Special permissions: SUID, SGID, sticky bit; ACLs with setfa</a><a href="../firewalls-firewalld-zones-and-permanent-ufw-nftables-iptables-basics/">Firewalls: firewalld zones and --permanent, ufw, nftables/ip →</a></nav>
+</main>
+</body>
+</html>

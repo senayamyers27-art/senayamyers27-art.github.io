@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>eBGP between directly connected neighbors: neighbor… · ENCOR Lesson</title>
+<meta name="description" content="BGP (Border Gateway Protocol) is the routing protocol of the internet and the usual way enterprises connect to service providers. It is a path-vector proto">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="eBGP between directly connected neighbors: neighbor… · ENCOR Lesson">
+<meta property="og:description" content="BGP (Border Gateway Protocol) is the routing protocol of the internet and the usual way enterprises connect to service providers. It is a path-vector proto">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ccnp-encor/lessons/ebgp-between-directly-connected-neighbors-neighbor-states-and-best-pat/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ccnp-encor/lessons/ebgp-between-directly-connected-neighbors-neighbor-states-and-best-pat/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">ENCOR</a> / <a href="../">Lessons</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2 · Domain 3: Infrastructure</p>
+<h1>eBGP between directly connected neighbors: neighbor states and best-path selection</h1>
+<article class="lbody">
+<p>BGP (Border Gateway Protocol) is the routing protocol of the internet and the usual way enterprises connect to service providers. It is a path-vector protocol: each route carries attributes, including the list of autonomous systems (AS) it has crossed. External BGP (eBGP) runs between routers in different autonomous systems; internal BGP (iBGP) runs within one AS. ENCOR focuses on eBGP between directly connected neighbors and on how BGP picks a best path.</p>
+<p>BGP does not discover neighbors automatically; you configure each one. BGP uses TCP port 179 for reliable transport. A basic configuration:</p>
+<pre class="code" tabindex="0"><code>router bgp 65001
+ bgp router-id 1.1.1.1
+ neighbor 203.0.113.1 remote-as 65100
+ network 198.51.100.0 mask 255.255.255.0</code></pre>
+<p>The <code>network</code> command advertises a prefix only if an exact match (same prefix and mask) exists in the routing table, which is why you sometimes add a static route to Null0 for an aggregate. For eBGP, the neighbor address must be directly connected by default because eBGP packets are sent with a TTL of 1. Peering between loopbacks would need <code>ebgp-multihop</code> (or <code>disable-connected-check</code>) plus <code>update-source</code>. When advertising to an eBGP peer, the router sets itself as the next hop and prepends its AS to the AS_PATH. A router rejects any route containing its own AS in the AS_PATH, which is BGP's loop prevention.</p>
+<p>Neighbor states progress: Idle (not trying, or waiting after an error), Connect (attempting the TCP connection), Active (TCP failed; retrying and listening), OpenSent (TCP up, OPEN message sent), OpenConfirm (OPEN received and parameters acceptable, waiting for KEEPALIVE), and Established (exchanging UPDATE messages). A neighbor flipping between Idle and Active usually means the session cannot come up: TCP cannot complete because of a wrong neighbor address, an ACL blocking TCP 179 or missing reachability, or TCP completes but the peer rejects the OPEN because of a wrong AS number, sending the session back to Idle. In <code>show ip bgp summary</code>, an Established neighbor shows a number of received prefixes in the State/PfxRcd column instead of a state name.</p>
+<p>When BGP has several paths to the same prefix, it picks one best path by walking an ordered list of attributes. First the next hop must be reachable. Then, in Cisco order: highest weight (Cisco-specific, local to the router, default 0 for learned routes); highest local preference (shared within the AS, default 100); prefer locally originated routes; shortest AS_PATH; lowest origin type (IGP before EGP before incomplete); lowest MED (multi-exit discriminator, a hint from a neighboring AS about which entry to use, compared by default only between paths from the same AS); eBGP over iBGP; lowest IGP metric to the next hop; then tie-breakers such as oldest eBGP path and lowest router ID. A common mnemonic for the start is 'We Love Oranges AS Oranges Mean Pure Refreshment' (Weight, Local preference, Originated, AS path, Origin, MED, Paths eBGP over iBGP, Router ID), though it skips a few steps.</p>
+<p>Weight and local preference influence outbound traffic (which exit you use). AS_PATH prepending and MED influence inbound traffic (how others reach you). Check the result with <code>show ip bgp</code>, where '&gt;' marks the best path.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>eBGP</dt><dd>BGP between routers in different autonomous systems; uses TTL 1 by default.</dd><dt>Established</dt><dd>The BGP state in which the session is up and UPDATE messages are exchanged.</dd><dt>Weight</dt><dd>Cisco-specific, router-local attribute; the highest value is preferred first.</dd><dt>Local preference</dt><dd>AS-wide attribute used to choose the exit point; the highest value wins, default 100.</dd><dt>AS_PATH</dt><dd>The list of autonomous systems a route has crossed, used for loop prevention and path length.</dd><dt>MED</dt><dd>Multi-exit discriminator: a lower value suggests a preferred entry point into a neighboring AS.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An enterprise with two ISPs wants outbound traffic to use ISP A. It sets local preference 200 on routes received from ISP A. To steer inbound traffic toward ISP A as well, it prepends its own AS twice on advertisements to ISP B, making that path look longer to the rest of the internet.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Idle or Active means the session is not up; Active does not mean healthy. Remember the order Weight, Local preference, Originated, AS_PATH, Origin, MED, eBGP over iBGP. Weight and local preference are high-wins; AS_PATH length and MED are low-wins.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>A BGP neighbor cycles between Active and Idle. Name two likely causes.</summary><p>The TCP session on port 179 cannot complete because of a wrong neighbor address or no route, or an ACL blocking TCP 179; or TCP completes but the OPEN is rejected because of a remote-as mismatch.</p></details>
+<details class="sq"><summary>Which attribute would you change to influence outbound path choice for the whole AS?</summary><p>Local preference, because it is shared among iBGP peers and higher is preferred.</p></details>
+<details class="sq"><summary>Why does a network statement sometimes fail to advertise a prefix?</summary><p>The exact prefix and mask must exist in the routing table; without a matching route it is not advertised.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study ENCOR for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ccnp-encor/">Open the ENCOR study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../ospfv2-and-ospfv3-multi-area-adjacencies-network-types-area-types-stub/">← OSPFv2 and OSPFv3: multi-area, adjacencies, network types, a</a><a href="../policy-based-routing-with-route-maps/">Policy-based routing with route maps →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AWS CDK basics: constructs, cdk bootstrap, cdk synth, cdk… · Developer Associate Lesson</title>
+<meta name="description" content="The AWS Cloud Development Kit (CDK) lets you define infrastructure in a general-purpose programming language, such as TypeScript, Python, Java, C# or Go, i">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="AWS CDK basics: constructs, cdk bootstrap, cdk synth, cdk… · Developer Associate Lesson">
+<meta property="og:description" content="The AWS Cloud Development Kit (CDK) lets you define infrastructure in a general-purpose programming language, such as TypeScript, Python, Java, C# or Go, i">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/aws-cdk-basics-constructs-cdk-bootstrap-cdk-synth-cdk-deploy/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/aws-cdk-basics-constructs-cdk-bootstrap-cdk-synth-cdk-deploy/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 3: Deployment</p>
+<h1>AWS CDK basics: constructs, cdk bootstrap, cdk synth, cdk deploy</h1>
+<article class="lbody">
+<p>The AWS Cloud Development Kit (CDK) lets you define infrastructure in a general-purpose programming language, such as TypeScript, Python, Java, C# or Go, instead of writing YAML. Your code is synthesized into CloudFormation templates, which CloudFormation then deploys. You get loops, conditions, classes, IDE autocompletion and unit tests for your infrastructure, while keeping CloudFormation's safe stack management.</p>
+<p>Everything in the CDK is a construct: a building block representing one or more AWS resources. Constructs are organized into a tree. At the top is an <code>App</code>; it contains one or more <code>Stack</code> constructs, each of which becomes a CloudFormation stack; stacks contain resource constructs. Constructs come in three levels. L1 constructs map one-to-one to CloudFormation resources and are named with a <code>Cfn</code> prefix, such as <code>CfnBucket</code>; you set every property yourself. L2 constructs, such as <code>s3.Bucket</code> or <code>lambda.Function</code>, are curated, higher-level classes with sensible defaults and helper methods. L3 constructs, also called patterns, combine several resources for a common architecture, for example an API Gateway backed by a Lambda function, or a load-balanced Fargate service.</p>
+<pre class="code" tabindex="0"><code>from aws_cdk import App, Stack, aws_s3 as s3, aws_lambda as _lambda
+
+class ImageStack(Stack):
+    def __init__(self, scope, id, **kw):
+        super().__init__(scope, id, **kw)
+        bucket = s3.Bucket(self, 'Uploads', versioned=True)
+        fn = _lambda.Function(self, 'Resize',
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            handler='app.handler',
+            code=_lambda.Code.from_asset('src'))
+        bucket.grant_read(fn)  # adds a least-privilege IAM policy
+
+app = App()
+ImageStack(app, 'ImageStack')
+app.synth()</code></pre>
+<p>The <code>grant_read</code> call shows a strength of L2 constructs: helper methods create correctly scoped IAM permissions for you, so you write intent rather than JSON policy.</p>
+<p>The CLI workflow has a few commands to know. <code>cdk init app --language python</code> creates a project. <code>cdk bootstrap</code> must be run once per account and Region before the first deployment: it creates a CloudFormation stack (named <code>CDKToolkit</code> by default) with an S3 bucket and ECR repository for assets such as Lambda code and Docker images, plus IAM roles the CDK uses to deploy. If you see an error that the environment is not bootstrapped, or that the assets bucket does not exist, run <code>cdk bootstrap aws://ACCOUNT-ID/REGION</code>. <code>cdk synth</code> runs your app and emits the CloudFormation template (into the <code>cdk.out</code> directory), which is handy for review and testing. <code>cdk diff</code> compares your code with what is deployed. <code>cdk deploy</code> synthesizes, uploads assets, and deploys the stacks through CloudFormation, asking for confirmation when security-related changes like new IAM permissions are included. <code>cdk destroy</code> deletes a stack.</p>
+<p>Because the output is ordinary CloudFormation, all of CloudFormation's behaviour applies: rollbacks on failure, drift, retention policies (<code>removal_policy</code> in the CDK, where many stateful resources are retained by default when deleted), and outputs (<code>CfnOutput</code>). You can unit test synthesized templates with the CDK assertions module, for example checking that a bucket has encryption enabled.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Construct</dt><dd>The basic CDK building block representing one or more AWS resources, arranged in a tree under an App.</dd><dt>L2 construct</dt><dd>A higher-level CDK class with sensible defaults and helper methods, such as s3.Bucket.</dd><dt>cdk bootstrap</dt><dd>Creates the CDKToolkit stack with an asset bucket, ECR repository and deployment roles in an account and Region.</dd><dt>cdk synth</dt><dd>Runs the CDK app and produces CloudFormation templates in the cdk.out directory.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A developer runs cdk deploy in a new Region and gets an error that the stack requires bootstrapping because an assets bucket is missing. They run cdk bootstrap for that account and Region once, and the next cdk deploy uploads the Lambda code asset and creates the stack.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> If a first CDK deployment fails because the staging bucket or bootstrap stack is missing, the answer is cdk bootstrap. To see the CloudFormation template the CDK will produce, use cdk synth.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What do CDK apps ultimately deploy with?</summary><p>AWS CloudFormation, using templates produced by synthesis.</p></details>
+<details class="sq"><summary>What is the difference between an L1 and an L2 construct?</summary><p>L1 constructs (Cfn prefix) map directly to CloudFormation resources with all properties set by you; L2 constructs add defaults and helper methods such as grant functions.</p></details>
+<details class="sq"><summary>How often must cdk bootstrap be run?</summary><p>Once per account and Region combination (and again if the bootstrap template needs upgrading).</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../cloudformation-templates-parameters-outputs-and-exports-fn-importvalue/">← CloudFormation: templates, parameters, outputs and exports, </a><a href="../lambda-versions-and-aliases-weighted-aliases-codedeploy-canary-linear/">Lambda versions and aliases; weighted aliases; CodeDeploy ca →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Method resolution order (MRO), diamonds and inconsistent… · PCAP Lesson</title>
+<meta name="description" content="When you access an attribute on an object, Python searches a list of classes in a fixed order and uses the first match. That list is the method resolution ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Method resolution order (MRO), diamonds and inconsistent… · PCAP Lesson">
+<meta property="og:description" content="When you access an attribute on an object, Python searches a list of classes in a fixed order and uses the first match. That list is the method resolution ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/pcap/lessons/method-resolution-order-mro-diamonds-and-inconsistent-hierarchies/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/pcap/lessons/method-resolution-order-mro-diamonds-and-inconsistent-hierarchies/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">PCAP</a> / <a href="../">Lessons</a></p>
+<p class="note">PCAP – Certified Associate Python Programmer PCAP-31-03 · Domain 4: Object-Oriented Programming</p>
+<h1>Method resolution order (MRO), diamonds and inconsistent hierarchies</h1>
+<article class="lbody">
+<p>When you access an attribute on an object, Python searches a list of classes in a fixed order and uses the first match. That list is the method resolution order (MRO). For single inheritance it is simple: the class, its parent, the grandparent, up to <code>object</code>. With multiple inheritance, Python computes it with an algorithm called C3 linearization, and the exam expects you to predict the result for small hierarchies.</p>
+<p>You can see any class's MRO with <code>ClassName.__mro__</code> (a tuple) or <code>ClassName.mro()</code> (a list). The rules C3 follows can be summarized in two constraints: a class always comes before its own parents, and parents keep the left-to-right order in which they were listed in the class statement. The search follows a single consistent order rather than jumping around, and every class appears exactly once.</p>
+<p>The classic test case is the diamond: <code>B</code> and <code>C</code> both inherit from <code>A</code>, and <code>D</code> inherits from both <code>B</code> and <code>C</code>. Drawn out, the inheritance lines form a diamond shape. The MRO of <code>D</code> is D, B, C, A, object. Notice that <code>A</code> comes after both <code>B</code> and <code>C</code>, not immediately after <code>B</code>. That ensures a method overridden in <code>C</code> is found before the version in <code>A</code>, and that <code>A</code> is visited only once.</p>
+<pre class="code" tabindex="0"><code>class A:
+    def who(self): return 'A'
+class B(A):
+    pass
+class C(A):
+    def who(self): return 'C'
+class D(B, C):
+    pass
+
+print(D().who())                          # C
+print([k.__name__ for k in D.__mro__])    # ['D', 'B', 'C', 'A', 'object']</code></pre>
+<p><code>D().who()</code> returns 'C'. A naive depth-first search going D, B, A would have found <code>A</code>'s version first, but the MRO places <code>C</code> before <code>A</code>. Swapping the order of the bases, <code>class D(C, B)</code>, changes the MRO to D, C, B, A, object.</p>
+<p>Some hierarchies have no order that satisfies both constraints, and Python refuses to create them. For example, with <code>class Top:</code>, <code>class Middle(Top):</code> and then <code>class Bottom(Top, Middle):</code>, the base list says Top should come before Middle, but Middle is a subclass of Top, so Middle must come before Top. The two rules conflict, and the class statement itself raises <code>TypeError: Cannot create a consistent method resolution order (MRO)</code>. The error happens when the class is defined, not when a method is called. Listing the more specific class first, <code>class Bottom(Middle, Top):</code>, is valid.</p>
+<p>The MRO also drives <code>super()</code>. Inside a method, <code>super()</code> means the next class after the current one in the MRO of the object's actual class, which may be a sibling rather than a parent. That is what allows cooperative multiple inheritance, where each class calls <code>super()</code> and every class in the diamond runs exactly once.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>MRO</dt><dd>Method resolution order: the ordered list of classes searched for attributes.</dd><dt>Diamond problem</dt><dd>A hierarchy where two parents share a common ancestor, raising the question of search order.</dd><dt>C3 linearization</dt><dd>The algorithm Python uses to compute a consistent MRO.</dd><dt>__mro__</dt><dd>A class attribute holding its MRO as a tuple of classes.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A GUI toolkit's Button inherits from Clickable and Drawable, both of which inherit from Widget. Printing Button.__mro__ shows Button, Clickable, Drawable, Widget, object, confirming that Widget's setup method runs last and only once.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> In a diamond, the shared ancestor comes after all its subclasses in the MRO. Listing a superclass before one of its own subclasses in the bases raises TypeError when the class is defined.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>For class D(B, C) where B and C both inherit from A, what is the MRO?</summary><p>D, B, C, A, object.</p></details>
+<details class="sq"><summary>When is the inconsistent-MRO TypeError raised?</summary><p>At class definition time, when Python evaluates the class statement with the conflicting bases.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study PCAP for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../pcap/">Open the PCAP study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../single-and-multiple-inheritance-method-overriding-and-super/">← Single and multiple inheritance, method overriding and super</a><a href="../isinstance-issubclass-and-the-is-is-not-operators-versus/">isinstance(), issubclass(), and the is / is not operators ve →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Azure Monitor agent, data collection rules, VM insights… · AZ-802 Lesson</title>
+<meta name="description" content="Azure Monitor gives you one place to collect logs and metrics from Azure VMs and on-premises servers, query them and alert on them. For Windows Server the ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Azure Monitor agent, data collection rules, VM insights… · AZ-802 Lesson">
+<meta property="og:description" content="Azure Monitor gives you one place to collect logs and metrics from Azure VMs and on-premises servers, query them and alert on them. For Windows Server the ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/azure-monitor-agent-data-collection-rules-vm-insights-and-log-analytic/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/azure-monitor-agent-data-collection-rules-vm-insights-and-log-analytic/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 7: Monitor and troubleshoot Windows Server environments</p>
+<h1>Azure Monitor agent, data collection rules, VM insights and Log Analytics queries for hybrid servers</h1>
+<article class="lbody">
+<p>Azure Monitor gives you one place to collect logs and metrics from Azure VMs and on-premises servers, query them and alert on them. For Windows Server the pieces are the Azure Monitor agent, data collection rules, a Log Analytics workspace, VM insights and Kusto Query Language (KQL) queries.</p>
+<p>The Azure Monitor agent (AMA) is the current agent for collecting guest OS data. It replaced the legacy Log Analytics agent, also called the Microsoft Monitoring Agent (MMA), which is retired, so migration questions point to AMA. On Azure VMs, AMA is installed as a VM extension. On-premises and other-cloud servers must first be connected to Azure Arc, because AMA is installed as an extension on the Arc-enabled server; you cannot install AMA on a non-Arc on-premises machine for this purpose. Deployment at scale is typically done through Azure Policy.</p>
+<p>What AMA collects is defined by data collection rules (DCRs). A DCR is an Azure resource that states the data sources, such as specific Windows event logs and levels (optionally filtered with XPath queries, for example only Security event 4625), performance counters and their sample rates, or text logs, and the destinations, usually a Log Analytics workspace and optionally Azure Monitor Metrics. You associate a DCR with machines, and one machine can have several DCRs, so a security team and an operations team can each collect what they need. Filtering in the DCR saves ingestion cost, because Log Analytics bills by data ingested.</p>
+<p>VM insights is a ready-made monitoring experience. When you enable it, a DCR collects a standard set of performance counters into the <code>InsightsMetrics</code> table, and workbooks show CPU, memory, disk and network trends across all your VMs and Arc servers. Its optional Map feature uses the Dependency agent to show processes and network connections between machines, which helps plan migrations and troubleshoot dependencies.</p>
+<p>Data in a Log Analytics workspace is queried with KQL. Common tables for servers are <code>Event</code> (Windows events), <code>Perf</code> (performance counters), <code>Heartbeat</code> (agent check-ins) and <code>InsightsMetrics</code>. A KQL query flows from a table through pipes:</p>
+<pre class="code" tabindex="0"><code>Perf
+| where ObjectName == &quot;Processor&quot; and CounterName == &quot;% Processor Time&quot;
+| summarize avg(CounterValue) by Computer, bin(TimeGenerated, 15m)
+| render timechart
+
+Heartbeat
+| summarize LastSeen = max(TimeGenerated) by Computer
+| where LastSeen &lt; ago(15m)</code></pre>
+<p>The second query finds servers that stopped reporting. You turn such queries into log search alert rules, and alerts send notifications or run automation through action groups. Metric alerts on platform metrics, such as Azure VM CPU, react faster and need no agent.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Azure Monitor agent</dt><dd>The current agent that collects guest OS logs and performance data, deployed as an extension on Azure VMs and Arc servers.</dd><dt>Data collection rule</dt><dd>An Azure resource defining what data to collect from associated machines and where to send it.</dd><dt>Log Analytics workspace</dt><dd>The Azure Monitor data store for logs, queried with KQL and billed mainly by ingestion.</dd><dt>VM insights</dt><dd>A prebuilt Azure Monitor solution showing VM and Arc server performance, with an optional dependency map.</dd><dt>Action group</dt><dd>A reusable set of notifications and actions triggered by Azure Monitor alerts.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A company onboards 60 on-premises servers to Azure Arc, uses Azure Policy to install AMA, and creates one DCR sending System and Application errors plus key performance counters to a workspace, and a second DCR collecting only Security events 4625 and 4740 for the SOC. A log alert on the Heartbeat query emails the on-call admin when any server stops reporting for 15 minutes.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Hybrid servers need Azure Arc before AMA. DCRs decide what is collected; filter there to control cost. MMA is legacy; any answer that installs it for new work is wrong.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What must you do before installing the Azure Monitor agent on an on-premises Windows Server?</summary><p>Connect it to Azure Arc, because AMA is deployed as an extension on the Arc-enabled server resource.</p></details>
+<details class="sq"><summary>How do you collect only failed logon events instead of the whole Security log?</summary><p>Create a data collection rule with an XPath filter for Security event ID 4625 and associate it with the servers.</p></details>
+<details class="sq"><summary>Which Log Analytics table shows when each agent last checked in?</summary><p>The Heartbeat table.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../windows-admin-center-alerts-and-system-insights-predictive-capacity/">← Windows Admin Center alerts and System Insights predictive c</a><a href="../troubleshooting-connectivity-and-name-resolution-test-netconnection-re/">Troubleshooting connectivity and name resolution (Test-NetCo →</a></nav>
+</main>
+</body>
+</html>

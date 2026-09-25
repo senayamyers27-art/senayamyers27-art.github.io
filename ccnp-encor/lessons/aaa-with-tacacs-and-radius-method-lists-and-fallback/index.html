@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AAA with TACACS+ and RADIUS, method lists and fallback · ENCOR Lesson</title>
+<meta name="description" content="Local accounts on every device do not scale: adding or removing an administrator means touching hundreds of devices. AAA centralizes this.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="AAA with TACACS+ and RADIUS, method lists and fallback · ENCOR Lesson">
+<meta property="og:description" content="Local accounts on every device do not scale: adding or removing an administrator means touching hundreds of devices. AAA centralizes this.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ccnp-encor/lessons/aaa-with-tacacs-and-radius-method-lists-and-fallback/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ccnp-encor/lessons/aaa-with-tacacs-and-radius-method-lists-and-fallback/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">ENCOR</a> / <a href="../">Lessons</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2 · Domain 5: Security</p>
+<h1>AAA with TACACS+ and RADIUS, method lists and fallback</h1>
+<article class="lbody">
+<p>Local accounts on every device do not scale: adding or removing an administrator means touching hundreds of devices. AAA centralizes this. It stands for authentication (who are you), authorization (what may you do) and accounting (what did you do). Devices send AAA requests to a central server, such as Cisco ISE, which checks credentials against a directory and returns decisions, while logging activity.</p>
+<p>Two protocols carry AAA. TACACS+ (Terminal Access Controller Access-Control System Plus) was developed by Cisco and is now documented as an informational RFC. It runs over TCP port 49, encrypts the entire packet body, and separates authentication, authorization and accounting into distinct exchanges. That separation lets you authorize each individual command an administrator types and log each command, which makes TACACS+ the preferred choice for device administration. RADIUS (Remote Authentication Dial-In User Service) is an open standard that runs over UDP, commonly ports 1812 for authentication and 1813 for accounting (older implementations used 1645 and 1646). It encrypts only the password field, combines authentication and authorization in one response, and has extensive support for network access, so it is the protocol for 802.1X, VPN and wireless user access. A useful summary: TACACS+ for administrators logging into devices, RADIUS for users and endpoints accessing the network.</p>
+<p>AAA configuration starts with <code>aaa new-model</code>, which enables AAA and immediately changes how lines authenticate, so have a local account ready before you type it. Then define servers and server groups, and method lists that say in what order to try authentication sources:</p>
+<pre class="code" tabindex="0"><code>aaa new-model
+tacacs server ISE1
+ address ipv4 10.0.0.20
+ key &lt;shared-key&gt;
+aaa group server tacacs+ ADMIN-TAC
+ server name ISE1
+!
+aaa authentication login VTY-AUTH group ADMIN-TAC local
+aaa authorization exec VTY-AUTH group ADMIN-TAC local
+aaa authorization commands 15 VTY-AUTH group ADMIN-TAC local
+aaa accounting commands 15 VTY-AUTH start-stop group ADMIN-TAC
+!
+line vty 0 15
+ login authentication VTY-AUTH
+ authorization exec VTY-AUTH
+ authorization commands 15 VTY-AUTH
+ accounting commands 15 VTY-AUTH</code></pre>
+<p>A method list is a named (or <code>default</code>) ordered list of methods. The <code>default</code> list applies automatically to all lines that do not specify a named list; a named list applies only where referenced. Methods are tried left to right, but fallback happens only on an error, meaning no response from the server. If the TACACS+ server is reachable and rejects the password, that is a failure, and the device does not try the next method; the login is denied. So in the example, <code>local</code> is used only when every server in ADMIN-TAC is unreachable. Common trailing methods are <code>local</code>, <code>enable</code> and, dangerously, <code>none</code>, which allows access with no authentication.</p>
+<p>Keep console access safe: many designs use a named list for VTY lines and keep the console on <code>local</code> or a list with local fallback so a network failure never locks you out. Set a source interface for AAA traffic (<code>ip tacacs source-interface Loopback0</code>) so the server recognizes the device. Verify with <code>show aaa servers</code>, <code>test aaa group ADMIN-TAC user pass legacy</code> and <code>debug aaa authentication</code> in a lab.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>AAA</dt><dd>Authentication, authorization and accounting: identifying users, controlling their actions and logging activity.</dd><dt>TACACS+</dt><dd>Cisco-developed AAA protocol on TCP 49 that encrypts the whole body and separates the three A's; best for device administration.</dd><dt>RADIUS</dt><dd>Open-standard AAA protocol on UDP 1812/1813 that encrypts only the password and combines authentication and authorization; used for network access.</dd><dt>Method list</dt><dd>An ordered list of authentication or authorization sources, applied by name or as default.</dd><dt>Fallback</dt><dd>Moving to the next method in a list, which happens only when a method returns an error such as no server response.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>During a WAN outage, a branch router cannot reach the TACACS+ servers. Because its VTY method list is <code>group ADMIN-TAC local</code>, the router falls back to the local break-glass account and the engineer can still log in. When the servers are reachable again, a colleague who mistypes her password is rejected outright rather than falling back to local.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Fallback to the next method happens only on error (no response), never on a rejected password. TACACS+ equals TCP 49, full-body encryption, per-command authorization; RADIUS equals UDP, password-only encryption, 802.1X.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>The TACACS+ server rejects a user's password. Will the device try the local database next?</summary><p>No; a rejection is a failure, not an error, so the method list stops and access is denied.</p></details>
+<details class="sq"><summary>Why is TACACS+ preferred for device administration?</summary><p>It separates authorization from authentication so every command can be authorized and accounted individually, and it encrypts the whole payload.</p></details>
+<details class="sq"><summary>What is the risk of typing aaa new-model without preparation?</summary><p>Line authentication immediately switches to AAA defaults, which can lock you out if no local user or method list is configured.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study ENCOR for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ccnp-encor/">Open the ENCOR study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../device-access-control-line-and-local-user-authentication-ssh-only-vty/">← Device access control: line and local user authentication, S</a><a href="../infrastructure-security-standard-and-extended-acls-placement-and-order/">Infrastructure security: standard and extended ACLs, placeme →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DHCPv4 on IOS: server pools, excluded addresses, relay… · CCNA Lesson</title>
+<meta name="description" content="DHCP (Dynamic Host Configuration Protocol) hands out IP addresses and settings automatically so you do not configure every host by hand. A Cisco router or ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="DHCPv4 on IOS: server pools, excluded addresses, relay… · CCNA Lesson">
+<meta property="og:description" content="DHCP (Dynamic Host Configuration Protocol) hands out IP addresses and settings automatically so you do not configure every host by hand. A Cisco router or ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ccna/lessons/dhcpv4-on-ios-server-pools-excluded-addresses-relay-with-ip-helper-add/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ccna/lessons/dhcpv4-on-ios-server-pools-excluded-addresses-relay-with-ip-helper-add/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CCNA</a> / <a href="../">Lessons</a></p>
+<p class="note">Cisco CCNA 200-301 v2.0 · Domain 1: Network infrastructure &amp; connectivity</p>
+<h1>DHCPv4 on IOS: server pools, excluded addresses, relay with ip helper-address, troubleshooting leases</h1>
+<article class="lbody">
+<p>DHCP (Dynamic Host Configuration Protocol) hands out IP addresses and settings automatically so you do not configure every host by hand. A Cisco router or multilayer switch can act as a DHCP server for small sites, and more commonly as a relay that forwards requests to a central server. You need to know both configurations and how to troubleshoot them.</p>
+<p>The DHCP exchange has four steps, remembered as DORA. The client broadcasts a Discover. The server replies with an Offer containing a proposed address. The client broadcasts a Request to accept that offer (broadcast so other servers know their offers were declined). The server confirms with an Acknowledgment. Clients use UDP port 68 and servers UDP port 67. Leases expire, so clients try to renew with the server at half the lease time.</p>
+<p>To configure an IOS DHCP server, first exclude addresses you assign statically, such as the gateway, servers and printers, then build a pool. Exclusions are global commands and apply across all pools.</p>
+<pre class="code" tabindex="0"><code>ip dhcp excluded-address 192.168.10.1 192.168.10.10
+ip dhcp pool LAN10
+ network 192.168.10.0 255.255.255.0
+ default-router 192.168.10.1
+ dns-server 192.168.1.53
+ domain-name example.local
+ lease 7</code></pre>
+<p>Because Discover messages are broadcasts, they do not cross routers. When the DHCP server is on another subnet, configure a relay on the router interface that faces the clients: <code>ip helper-address 10.1.1.20</code> on interface g0/1 (or the VLAN's SVI). The router receives the broadcast, fills in the giaddr (gateway IP address) field with its interface address and unicasts the request to the server. The server uses giaddr to pick the pool whose network matches, which is why the server must have a pool for that client subnet. By default <code>ip helper-address</code> also forwards several other UDP broadcast services, such as DNS and TFTP.</p>
+<p>Useful verification commands are <code>show ip dhcp binding</code> to see leased addresses and client identifiers, <code>show ip dhcp pool</code> for utilization, <code>show ip dhcp conflict</code> for addresses the server found already in use, and <code>debug ip dhcp server events</code>. A router can also be a DHCP client on an interface with <code>ip address dhcp</code>, which is common on a WAN link to an internet provider.</p>
+<p>Common faults: no helper address on the client-facing interface, so remote clients get APIPA; a helper pointing at the wrong server; a pool whose <code>network</code> statement does not match the client subnet; forgetting <code>default-router</code>, so clients get an address but cannot leave the subnet; exclusions missing, so the server hands out the gateway address; the pool running out of addresses; and DHCP snooping dropping offers on an untrusted port.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>DORA</dt><dd>The DHCP exchange: Discover, Offer, Request, Acknowledgment.</dd><dt>ip dhcp excluded-address</dt><dd>Global IOS command that prevents the DHCP server from leasing a range of addresses.</dd><dt>ip helper-address</dt><dd>Interface command that relays client DHCP broadcasts as unicasts to a server on another subnet.</dd><dt>giaddr</dt><dd>The gateway IP address field a relay agent fills in so the server knows which subnet the client is on.</dd><dt>show ip dhcp binding</dt><dd>Command listing the addresses the IOS DHCP server has leased and to which clients.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A new VLAN 30 is created and its SVI gets 10.30.0.1/24, but PCs on it receive 169.254 addresses. The central Windows DHCP server is at 10.1.1.20. Adding <code>ip helper-address 10.1.1.20</code> under <code>interface vlan 30</code> and creating a 10.30.0.0/24 scope on the server fixes it, and the server's lease list for the new scope confirms the clients are getting addresses.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> The helper address goes on the interface that receives the client broadcasts, not the interface facing the server. This placement is a common exam trap.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What does the relay agent put in giaddr, and why does it matter?</summary><p>The IP address of the interface that received the client's broadcast; the server uses it to choose the pool or scope matching the client's subnet.</p></details>
+<details class="sq"><summary>Clients get addresses but cannot reach anything off-subnet. Which pool command was likely forgotten?</summary><p>default-router, which supplies the default gateway.</p></details>
+<details class="sq"><summary>Why should you exclude the router's interface address from the pool?</summary><p>Otherwise the server could lease that address to a client, creating a duplicate address conflict with the gateway.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CCNA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ccna/">Open the CCNA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../troubleshoot-wired-and-wireless-client-connectivity-verify-ip-settings/">← Troubleshoot wired and wireless client connectivity (verify </a><a href="../switching-concepts-mac-learning-and-aging-frame-forwarding-flooding-of/">Switching concepts: MAC learning and aging, frame forwarding →</a></nav>
+</main>
+</body>
+</html>

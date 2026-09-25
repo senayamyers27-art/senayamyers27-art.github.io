@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Parallel streams and why stateful lambdas cause problems · OCP Java Lesson</title>
+<meta name="description" content="A parallel stream splits its source into parts and processes them on several threads at once, then combines the results. You get one by calling parallelStr">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Parallel streams and why stateful lambdas cause problems · OCP Java Lesson">
+<meta property="og:description" content="A parallel stream splits its source into parts and processes them on several threads at once, then combines the results. You get one by calling parallelStr">
+<link rel="canonical" href="https://senayamyers27-art.github.io/java-se/lessons/parallel-streams-and-why-stateful-lambdas-cause-problems/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/java-se/lessons/parallel-streams-and-why-stateful-lambdas-cause-problems/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">OCP Java</a> / <a href="../">Lessons</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25) · Domain 6: Working with streams and lambda expressions</p>
+<h1>Parallel streams and why stateful lambdas cause problems</h1>
+<article class="lbody">
+<p>A parallel stream splits its source into parts and processes them on several threads at once, then combines the results. You get one by calling <code>parallelStream()</code> on a collection or <code>parallel()</code> on an existing stream; <code>sequential()</code> switches back, and <code>isParallel()</code> tells you the mode. Because the whole pipeline has a single mode, the last <code>parallel()</code> or <code>sequential()</code> call wins. By default the work runs in the common ForkJoinPool.</p>
+<p>Parallelism changes which results are predictable. <code>forEach</code> on a parallel stream processes elements in whatever order the threads finish, so printing <code>1 2 3 4 5</code> may show <code>3 5 1 4 2</code>. Use <code>forEachOrdered</code> if order matters, at some cost in speed. <code>findAny</code> may return any element, while <code>findFirst</code> still returns the first in encounter order. Collecting with <code>toList()</code> or <code>Collectors.toList()</code> still produces elements in encounter order, because each thread builds its own partial result and they are merged in order.</p>
+<p><code>reduce</code> in parallel requires the right building blocks. The accumulator must be associative, meaning <code>(a op b) op c</code> equals <code>a op (b op c)</code>; addition is associative, subtraction is not. The identity must truly be an identity for the operation: <code>reduce(0, Integer::sum)</code> is fine, but <code>reduce(10, Integer::sum)</code> adds 10 once per chunk in parallel and gives a different answer than sequentially. A non-associative operation gives results that vary between runs.</p>
+<p>A stateful lambda is one whose result depends on or changes state outside itself while the stream runs. The classic mistake is adding to a shared ArrayList from <code>forEach</code> or <code>map</code>. ArrayList is not thread-safe, so in parallel you may lose elements, get duplicates or null entries, or even see an <code>ArrayIndexOutOfBoundsException</code>. Even with a synchronized list, the order becomes unpredictable. Counting with a shared <code>int[]</code> or a non-atomic field has the same race condition.</p>
+<pre class="code" tabindex="0"><code>List&lt;Integer&gt; bad = new ArrayList&lt;&gt;();
+IntStream.range(0, 10_000).parallel().forEach(bad::add); // unsafe: size often &lt; 10000
+
+List&lt;Integer&gt; good = IntStream.range(0, 10_000).parallel()
+                              .boxed().toList();         // safe and ordered</code></pre>
+<p>The fix is to let the stream do the accumulation through <code>collect</code>, <code>toList</code>, <code>reduce</code> or <code>sum</code>, which are designed to give each thread its own container and merge them safely. Keep lambdas stateless and free of side effects. Also remember that parallel is not automatically faster: for small data, or for sources that split poorly such as a LinkedList or <code>Stream.iterate</code>, the overhead of splitting and merging can make it slower. Blocking I/O inside a parallel stream can also starve the shared common pool.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Parallel stream</dt><dd>A stream whose operations run on multiple threads, by default in the common ForkJoinPool.</dd><dt>forEachOrdered</dt><dd>A terminal operation that processes elements in encounter order even in a parallel stream.</dd><dt>Associative operation</dt><dd>An operation where grouping does not matter, (a op b) op c = a op (b op c), required for correct parallel reduce.</dd><dt>Stateful lambda</dt><dd>A lambda that reads or modifies shared mutable state during stream execution, which is unsafe in parallel.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A developer speeds up a report by switching to parallelStream() but keeps results.add(row) inside forEach. The report sometimes shows 9,987 rows instead of 10,000. Replacing the side effect with .map(this::toRow).toList() fixes both the missing rows and the ordering.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> For output questions on parallel streams, forEach order is unpredictable, findAny is unpredictable, but collect/toList keep encounter order. A reduce with a non-identity starting value gives a different result in parallel.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why might List.of(1,2,3).parallelStream().forEach(System.out::print) not print 123?</summary><p>forEach on a parallel stream does not guarantee encounter order; forEachOrdered would.</p></details>
+<details class="sq"><summary>Is reduce(0, (a, b) -&gt; a - b) safe for a parallel stream?</summary><p>No. Subtraction is not associative, so splitting the work can produce a different result.</p></details>
+<details class="sq"><summary>What is the safe replacement for adding to a shared ArrayList inside forEach?</summary><p>Use a collecting terminal operation such as toList() or collect(Collectors.toList()).</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study OCP Java for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../java-se/">Open the OCP Java study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../stream-gatherers-java-24-gather-with-gatherers-windowfixed-windowslidi/">← Stream Gatherers (Java 24+): gather() with Gatherers.windowF</a><a href="../module-info-java-module-requires-requires-transitive-exports-opens/">module-info.java: module, requires, requires transitive, exp →</a></nav>
+</main>
+</body>
+</html>

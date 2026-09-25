@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Applying overlays with kubectl apply -k and previewing… · CKAD Lesson</title>
+<meta name="description" content="Kustomize is usually organised as a base and one or more overlays. The base is a directory with the shared manifests and a kustomization.yaml listing them.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Applying overlays with kubectl apply -k and previewing… · CKAD Lesson">
+<meta property="og:description" content="Kustomize is usually organised as a base and one or more overlays. The base is a directory with the shared manifests and a kustomization.yaml listing them.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/applying-overlays-with-kubectl-apply-k-and-previewing-with-kubectl-kus/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/applying-overlays-with-kubectl-apply-k-and-previewing-with-kubectl-kus/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 2: Application Deployment</p>
+<h1>Applying overlays with kubectl apply -k and previewing with kubectl kustomize</h1>
+<article class="lbody">
+<p>Kustomize is usually organised as a base and one or more overlays. The base is a directory with the shared manifests and a <code>kustomization.yaml</code> listing them. Each overlay is another directory with its own <code>kustomization.yaml</code> that points at the base under <code>resources</code> and adds environment-specific changes: a namespace, a name prefix, more replicas, a different image tag, extra ConfigMap values. The base never needs to know which overlays exist.</p>
+<pre class="code" tabindex="0"><code>app/
+  base/
+    deployment.yaml
+    service.yaml
+    kustomization.yaml     # resources: [deployment.yaml, service.yaml]
+  overlays/
+    dev/
+      kustomization.yaml   # resources: [../../base], namespace: dev
+    prod/
+      kustomization.yaml   # resources: [../../base], namespace: prod, patches...
+      replicas.yaml</code></pre>
+<p>Before applying anything, preview the result. <code>kubectl kustomize overlays/prod</code> builds the overlay and prints the final YAML to standard output without touching the cluster. The standalone <code>kustomize build overlays/prod</code> command does the same if the separate tool is installed. Read the output to confirm the namespace, names, labels and images are what the task asked for. Piping it through <code>grep</code> is a quick check, for example <code>kubectl kustomize overlays/prod | grep -E 'namespace|image:'</code>.</p>
+<p>To apply the overlay, use the <code>-k</code> flag instead of <code>-f</code>: <code>kubectl apply -k overlays/prod</code>. kubectl builds the kustomization in memory and applies the result. The argument is always a directory containing a <code>kustomization.yaml</code>, not the file itself. The same flag works with other commands: <code>kubectl delete -k overlays/prod</code> removes everything the overlay creates, <code>kubectl diff -k overlays/prod</code> shows what would change against the live cluster, and <code>kubectl get -k overlays/prod</code> lists the resulting objects.</p>
+<pre class="code" tabindex="0"><code>kubectl kustomize overlays/prod          # preview only
+kubectl diff -k overlays/prod            # compare with the cluster
+kubectl apply -k overlays/prod           # create or update
+kubectl get deploy -n prod
+kubectl delete -k overlays/prod          # clean up</code></pre>
+<p>Paths in <code>resources</code> are relative to the kustomization file that lists them, which is why an overlay usually writes <code>../../base</code>. A common error is 'accumulating resources ... must resolve to a file or a kustomization directory', which means a path is wrong. Another is applying an overlay that sets <code>namespace: prod</code> when that namespace does not exist; either create it first with <code>kubectl create namespace prod</code> or include a Namespace manifest in the resources.</p>
+<p>One more detail: the Kustomize version built into kubectl may lag behind the standalone tool, so very new fields might not be recognised. For the exam, stick with the core fields (<code>resources</code>, <code>namespace</code>, <code>namePrefix</code>, <code>labels</code>, <code>images</code>, <code>patches</code>, generators), which kubectl handles.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Base</dt><dd>A kustomization directory holding shared manifests that overlays build upon.</dd><dt>Overlay</dt><dd>A kustomization that references a base and adds environment-specific changes.</dd><dt>kubectl apply -k</dt><dd>Builds the kustomization in a directory and applies the result to the cluster.</dd><dt>kubectl kustomize</dt><dd>Builds a kustomization and prints the resulting YAML without applying it.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A task gives you /opt/app with base and overlays/staging. You run <code>kubectl kustomize /opt/app/overlays/staging</code> and notice the image tag is still old, fix the <code>images</code> entry, preview again, then run <code>kubectl apply -k /opt/app/overlays/staging</code> and confirm with <code>kubectl get pods -n staging</code>.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> <code>-k</code> takes a directory, not a file, and <code>kubectl kustomize</code> (no apply) is the safe preview. Use <code>kubectl diff -k</code> to see exactly what will change.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How do you see an overlay's final YAML without changing the cluster?</summary><p><code>kubectl kustomize &lt;overlay-dir&gt;</code> (or <code>kustomize build &lt;overlay-dir&gt;</code>).</p></details>
+<details class="sq"><summary>What does an overlay's resources list usually point at?</summary><p>The base directory, via a relative path such as ../../base.</p></details>
+<details class="sq"><summary>How do you remove everything an overlay created?</summary><p><code>kubectl delete -k &lt;overlay-dir&gt;</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../kustomize-kustomization-yaml-resources-nameprefix-namespace-commonlabe/">← Kustomize: kustomization.yaml, resources, namePrefix, namesp</a><a href="../api-deprecations-and-removals-finding-current-apiversions-with-kubectl/">API deprecations and removals: finding current apiVersions w →</a></nav>
+</main>
+</body>
+</html>

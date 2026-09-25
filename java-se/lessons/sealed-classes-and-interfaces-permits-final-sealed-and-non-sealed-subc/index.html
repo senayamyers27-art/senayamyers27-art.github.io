@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sealed classes and interfaces: permits, final, sealed and… · OCP Java Lesson</title>
+<meta name="description" content="A sealed class or interface restricts which other classes or interfaces may directly extend or implement it. Ordinary inheritance is open: anyone can subcl">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Sealed classes and interfaces: permits, final, sealed and… · OCP Java Lesson">
+<meta property="og:description" content="A sealed class or interface restricts which other classes or interfaces may directly extend or implement it. Ordinary inheritance is open: anyone can subcl">
+<link rel="canonical" href="https://senayamyers27-art.github.io/java-se/lessons/sealed-classes-and-interfaces-permits-final-sealed-and-non-sealed-subc/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/java-se/lessons/sealed-classes-and-interfaces-permits-final-sealed-and-non-sealed-subc/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">OCP Java</a> / <a href="../">Lessons</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25) · Domain 3: Using object-oriented concepts in Java</p>
+<h1>Sealed classes and interfaces: permits, final, sealed and non-sealed subclasses</h1>
+<article class="lbody">
+<p>A sealed class or interface restricts which other classes or interfaces may directly extend or implement it. Ordinary inheritance is open: anyone can subclass a non-final class. <code>final</code> closes it completely. Sealing sits in between: you name the exact set of allowed direct subtypes. This lets you model a closed set of alternatives, such as the shapes a drawing tool supports, and it lets the compiler check that a switch covers every case.</p>
+<p>You declare it with the <code>sealed</code> modifier and a <code>permits</code> clause listing the permitted direct subtypes: <code>public sealed class Shape permits Circle, Square, Polygon {}</code>. The <code>permits</code> clause can be omitted when all the permitted subclasses are declared in the same source file; the compiler then infers them. A sealed interface works the same way, and its permitted subtypes can be classes, records, enums or other interfaces.</p>
+<p>Every permitted direct subclass must say how it continues the hierarchy, using exactly one of three modifiers. <code>final</code> means no further subclasses. <code>sealed</code> means it restricts its own subclasses with its own <code>permits</code> clause. <code>non-sealed</code> reopens the hierarchy from that point, so any class can extend it. Leaving the modifier off is a compile error. Records and enums are implicitly final (enums are implicitly sealed or final), so they satisfy the rule without a modifier, which is why sealed interfaces with record implementations are so common.</p>
+<p>There are also location rules. A permitted subclass must directly extend the sealed class, and it must be accessible to it. If the code is in a named module, the sealed class and its permitted subclasses must be in the same module; if it is in the unnamed module (ordinary classpath code), they must be in the same package. A class listed in <code>permits</code> that does not actually extend the sealed class is a compile error, as is a class that extends a sealed class without being listed.</p>
+<pre class="code" tabindex="0"><code>public sealed interface Payment permits Card, BankTransfer, Voucher {}
+
+public record Card(String number) implements Payment {}      // implicitly final
+public final class BankTransfer implements Payment {}
+public non-sealed class Voucher implements Payment {}        // open again
+class GiftVoucher extends Voucher {}                         // allowed
+
+static String fee(Payment p) {
+    return switch (p) {           // exhaustive: all permitted subtypes
+        case Card c -&gt; &quot;2%&quot;;
+        case BankTransfer b -&gt; &quot;flat&quot;;
+        case Voucher v -&gt; &quot;none&quot;;
+    };
+}</code></pre>
+<p>The compiler uses sealing for exhaustiveness. Because <code>Payment</code> has exactly three permitted subtypes, a switch over it with a case for each needs no <code>default</code>. Note that <code>case Voucher v</code> also covers <code>GiftVoucher</code>, since it is a subclass of <code>Voucher</code>. <code>non-sealed</code> is a contextual keyword with a hyphen, the only hyphenated keyword in Java.</p>
+<p>Sealing is about who may subclass; it does not affect who may use the type. A sealed class may still be abstract or concrete, and a sealed class can itself be instantiated if it is not abstract. Think of it as a design statement: &quot;these are all the kinds there are.&quot;</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Sealed class</dt><dd>A class or interface that allows only the direct subtypes named in its permits clause (or in the same file).</dd><dt>permits clause</dt><dd>The list of classes or interfaces allowed to directly extend or implement a sealed type.</dd><dt>non-sealed</dt><dd>A modifier for a permitted subclass that reopens the hierarchy so any class may extend it.</dd><dt>Exhaustive hierarchy</dt><dd>A closed set of subtypes that lets the compiler verify a switch handles every case.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A banking API models account events as <code>sealed interface Event permits Deposit, Withdrawal, Fee</code>, each a record. Reporting code switches over Event without a default, and the day someone adds <code>Interest</code> to the permits list, the compiler shows every report that must handle it.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Every permitted subclass needs exactly one of final, sealed or non-sealed, unless it is a record or enum, which are implicitly final. Unnamed-module code must keep them in the same package.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What happens if a class listed in <code>permits</code> is declared <code>class Circle extends Shape {}</code> with no modifier?</summary><p>Compile error. A permitted subclass must be declared final, sealed or non-sealed.</p></details>
+<details class="sq"><summary>When can the <code>permits</code> clause be omitted?</summary><p>When all permitted subclasses are declared in the same source file as the sealed type.</p></details>
+<details class="sq"><summary>Can a record implement a sealed interface without extra modifiers?</summary><p>Yes. Records are implicitly final, which satisfies the requirement.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study OCP Java for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../java-se/">Open the OCP Java study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../records-components-canonical-and-compact-constructors-accessors-equals/">← Records: components, canonical and compact constructors, acc</a><a href="../enums-with-fields-constructors-methods-and-values-valueof-ordinal/">Enums with fields, constructors, methods and values()/valueO →</a></nav>
+</main>
+</body>
+</html>

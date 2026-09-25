@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CronJobs: schedule syntax, concurrencyPolicy, history… · CKAD Lesson</title>
+<meta name="description" content="A CronJob creates a Job on a repeating schedule. It lives in the batch/v1 API group, and its spec wraps a jobTemplate, which in turn wraps the familiar Pod">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="CronJobs: schedule syntax, concurrencyPolicy, history… · CKAD Lesson">
+<meta property="og:description" content="A CronJob creates a Job on a repeating schedule. It lives in the batch/v1 API group, and its spec wraps a jobTemplate, which in turn wraps the familiar Pod">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/cronjobs-schedule-syntax-concurrencypolicy-history-limits-running-a-jo/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/cronjobs-schedule-syntax-concurrencypolicy-history-limits-running-a-jo/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 1: Application Design and Build</p>
+<h1>CronJobs: schedule syntax, concurrencyPolicy, history limits, running a job manually from a CronJob</h1>
+<article class="lbody">
+<p>A CronJob creates a Job on a repeating schedule. It lives in the <code>batch/v1</code> API group, and its spec wraps a <code>jobTemplate</code>, which in turn wraps the familiar Pod template. So a CronJob manifest has three nested levels: CronJob spec, Job spec, Pod spec.</p>
+<p>The <code>schedule</code> field uses standard five-field cron syntax: minute, hour, day of month, month, day of week. <code>*/5 * * * *</code> means every five minutes, <code>0 2 * * *</code> means 02:00 every day, and <code>30 9 * * 1-5</code> means 09:30 Monday to Friday. Schedules are evaluated in the time zone of the kube-controller-manager unless you set the optional <code>timeZone</code> field with a time zone name. Put quotes around the schedule in YAML and on the command line so the shell and YAML parser do not interpret the asterisks.</p>
+<p><code>concurrencyPolicy</code> decides what happens when a new run is due while the previous Job is still running. <code>Allow</code> (the default) lets them overlap. <code>Forbid</code> skips the new run. <code>Replace</code> cancels the running Job and starts the new one. Choose Forbid for work that must not run twice at once, such as a backup writing to the same file.</p>
+<p><code>successfulJobsHistoryLimit</code> (default 3) and <code>failedJobsHistoryLimit</code> (default 1) control how many finished Jobs, and their Pods, are kept so you can inspect them. Setting a limit to 0 removes finished Jobs straight away. <code>startingDeadlineSeconds</code> sets how late a missed run may still start; if the controller cannot start it within that window, the run is skipped. <code>suspend: true</code> pauses future runs without deleting the CronJob.</p>
+<pre class="code" tabindex="0"><code>apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup
+spec:
+  schedule: &quot;0 2 * * *&quot;
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: backup
+            image: busybox
+            command: [&quot;sh&quot;, &quot;-c&quot;, &quot;echo backing up&quot;]</code></pre>
+<p>Generate the skeleton quickly with <code>kubectl create cronjob backup --image=busybox --schedule=&quot;0 2 * * *&quot; --dry-run=client -o yaml -- sh -c 'echo backing up'</code>. To test it without waiting for the schedule, create a Job from its template: <code>kubectl create job backup-manual --from=cronjob/backup</code>. That Job runs immediately using exactly the same spec, which is the standard way to prove a CronJob works.</p>
+<p>Check what has happened with <code>kubectl get cronjob backup</code> (it shows LAST SCHEDULE and ACTIVE), <code>kubectl get jobs</code> and <code>kubectl describe cronjob backup</code>, whose events list each Job it created or any missed schedules.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>schedule</dt><dd>Five-field cron expression: minute, hour, day of month, month, day of week.</dd><dt>concurrencyPolicy</dt><dd>Allow, Forbid or Replace: what to do if a run is due while the previous one is still active.</dd><dt>History limits</dt><dd>successfulJobsHistoryLimit and failedJobsHistoryLimit, the number of finished Jobs kept.</dd><dt>jobTemplate</dt><dd>The Job specification that the CronJob stamps out for each run.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A report CronJob scheduled every 10 minutes sometimes takes 15 minutes, causing two copies to fight over the same output table. Setting <code>concurrencyPolicy: Forbid</code> makes the controller skip a run while one is active, and <code>kubectl create job report-test --from=cronjob/report</code> lets the developer test changes on demand.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> The command to trigger a CronJob by hand is <code>kubectl create job &lt;new-name&gt; --from=cronjob/&lt;cronjob-name&gt;</code>. Also remember that restartPolicy sits in the innermost Pod template.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What does the schedule <code>*/15 * * * *</code> mean?</summary><p>Run every 15 minutes.</p></details>
+<details class="sq"><summary>Which concurrencyPolicy stops the old Job and starts the new one?</summary><p>Replace. Forbid skips the new run and Allow runs both.</p></details>
+<details class="sq"><summary>How do you run a CronJob's work immediately?</summary><p>Create a Job from it: <code>kubectl create job &lt;name&gt; --from=cronjob/&lt;cronjob&gt;</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../jobs-completions-parallelism-backofflimit-activedeadlineseconds-restar/">← Jobs: completions, parallelism, backoffLimit, activeDeadline</a><a href="../multi-container-patterns-init-containers-sidecars-including-native-sid/">Multi-container patterns: init containers, sidecars (includi →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mounting file systems at boot by UUID or label in /etc/fstab · RHCSA Lesson</title>
+<meta name="description" content="Mounting attaches a file system to a directory, its mount point, so its contents appear there. A mount command lasts only until reboot.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Mounting file systems at boot by UUID or label in /etc/fstab · RHCSA Lesson">
+<meta property="og:description" content="Mounting attaches a file system to a directory, its mount point, so its contents appear there. A mount command lasts only until reboot.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/mounting-file-systems-at-boot-by-uuid-or-label-in-etc-fstab/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/mounting-file-systems-at-boot-by-uuid-or-label-in-etc-fstab/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 5: Configure local storage</p>
+<h1>Mounting file systems at boot by UUID or label in /etc/fstab</h1>
+<article class="lbody">
+<p>Mounting attaches a file system to a directory, its mount point, so its contents appear there. A <code>mount</code> command lasts only until reboot. For a file system to be mounted automatically every boot, it must have an entry in <code>/etc/fstab</code> (file system table). The RHCSA grades your storage work after a reboot, so a correct fstab entry is essential, and a broken one can stop the system at an emergency shell.</p>
+<p>Each non-comment line in <code>/etc/fstab</code> has six whitespace-separated fields. First, the device, preferably identified by <code>UUID=...</code> or <code>LABEL=...</code>. Second, the mount point, or <code>none</code> for swap. Third, the file system type, such as <code>xfs</code>, <code>ext4</code>, <code>vfat</code> or <code>swap</code>. Fourth, mount options, where <code>defaults</code> means a standard set (read-write, allow device files and executables, mount automatically and so on); several options are separated by commas with no spaces. Fifth, the dump field, almost always 0. Sixth, the fsck order: 0 means do not check at boot, 1 is for the root file system and 2 for others that should be checked; XFS file systems normally use 0 because XFS does not use boot-time fsck.</p>
+<pre class="code" tabindex="0"><code>UUID=4f3c1d2e-...-9a7b  /data     xfs   defaults         0 0
+LABEL=backup             /backup   ext4  defaults,noatime 0 2
+/dev/datavg/weblv        /web      xfs   defaults         0 0
+UUID=91b2...             none      swap  defaults         0 0</code></pre>
+<p>Why UUID or label instead of <code>/dev/vdb1</code>? Device names are assigned in the order the kernel detects disks and can change when disks are added or removed, so a name that was correct today might point to a different disk tomorrow. A UUID is created when the file system is made and stays the same wherever the disk appears. Get it with <code>blkid /dev/vdb1</code> or <code>lsblk -f</code>. A label is a name you assign, for example <code>xfs_admin -L backup /dev/vdb1</code> for XFS or <code>e2label /dev/vdb1 backup</code> for ext4, or with <code>-L</code> at <code>mkfs</code> time. LVM paths such as <code>/dev/datavg/weblv</code> are also stable, because they come from LVM names, so they are acceptable too.</p>
+<pre class="code" tabindex="0"><code>mkdir -p /data
+blkid /dev/vdb1                  # copy the UUID
+vim /etc/fstab                   # add the line
+systemctl daemon-reload          # systemd regenerates mount units
+mount -a                         # mount everything in fstab, reports errors
+findmnt --verify                 # check fstab syntax and devices
+findmnt /data ; df -h /data</code></pre>
+<p>Always test before rebooting. <code>mount -a</code> mounts every fstab entry not already mounted and prints an error for any bad line, which is far better than discovering the error at boot. <code>findmnt --verify</code> checks fstab for mistakes. On RHEL, systemd turns fstab entries into mount units, so run <code>systemctl daemon-reload</code> after editing to avoid a warning that the file changed. The mount point directory must exist before mounting.</p>
+<p>If a bad entry does make it through, the boot usually stops in emergency mode; fix fstab there as described in the boot-targets lesson. For removable or optional disks, the <code>nofail</code> option lets the boot continue if the device is missing.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>/etc/fstab</dt><dd>File listing file systems to mount at boot: device, mount point, type, options, dump and fsck order.</dd><dt>Mount point</dt><dd>An existing directory where a file system's contents are attached.</dd><dt>UUID=</dt><dd>fstab device syntax using a file system's universally unique identifier, stable across device renaming.</dd><dt>LABEL=</dt><dd>fstab device syntax using a human-assigned file system label.</dd><dt>mount -a</dt><dd>Mounts all fstab entries not yet mounted; used to test fstab before rebooting.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>You format /dev/vdb1 with XFS and need it at /archive permanently. <code>blkid /dev/vdb1</code> gives its UUID; you add <code>UUID=&lt;that value&gt; /archive xfs defaults 0 0</code> to /etc/fstab, create /archive, run <code>systemctl daemon-reload</code> and <code>mount -a</code>, and <code>findmnt /archive</code> confirms it before you reboot to be sure.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Always run mount -a (and ideally findmnt --verify) after editing /etc/fstab. A typo you catch now is a two-second fix; the same typo at boot drops you into emergency mode.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why are UUIDs preferred over /dev/sdX names in fstab?</summary><p>Device names can change when disks are added or detected in a different order; UUIDs stay with the file system.</p></details>
+<details class="sq"><summary>What does the sixth fstab field control?</summary><p>The fsck order at boot: 0 no check, 1 root, 2 other file systems.</p></details>
+<details class="sq"><summary>How do you test new fstab entries without rebooting?</summary><p>Run mount -a (after systemctl daemon-reload) and check for errors; findmnt --verify also helps.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../creating-and-deleting-logical-volumes-by-size-l-or-extent-count-l-lvcr/">← Creating and deleting logical volumes by size (-L) or extent</a><a href="../adding-new-partitions-logical-volumes-and-swap-without-destroying-exis/">Adding new partitions, logical volumes and swap without dest →</a></nav>
+</main>
+</body>
+</html>

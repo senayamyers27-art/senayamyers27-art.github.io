@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Configuring autofs: /etc/auto.master.d/*.autofs, map… · RHCSA Lesson</title>
+<meta name="description" content="autofs is the automounter. Instead of mounting file systems at boot, it watches directories and mounts a file system the moment someone accesses a path und">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Configuring autofs: /etc/auto.master.d/*.autofs, map… · RHCSA Lesson">
+<meta property="og:description" content="autofs is the automounter. Instead of mounting file systems at boot, it watches directories and mounts a file system the moment someone accesses a path und">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/configuring-autofs-etc-auto-master-d-autofs-map-files-and-wildcard-and/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/configuring-autofs-etc-auto-master-d-autofs-map-files-and-wildcard-and/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 6: Create and configure file systems</p>
+<h1>Configuring autofs: /etc/auto.master.d/*.autofs, map files and wildcard (* and &amp;) entries</h1>
+<article class="lbody">
+<p>autofs is the automounter. Instead of mounting file systems at boot, it watches directories and mounts a file system the moment someone accesses a path under them, then unmounts it after a period of inactivity. It is the standard way to give users network home directories: nothing is mounted until a user logs in, and an unreachable server does not slow down boot.</p>
+<p>Setup has three parts. Install and enable the service with <code>dnf install autofs</code> and <code>systemctl enable --now autofs</code>. Create a master map entry, preferably a drop-in file ending in <code>.autofs</code> under <code>/etc/auto.master.d/</code>, that names a base directory and the map file that controls it. Then write the map file itself.</p>
+<pre class="code" tabindex="0"><code># /etc/auto.master.d/guests.autofs
+/rhome   /etc/auto.guests
+
+# /etc/auto.guests  (indirect map)
+user1   -rw,sync   server1:/rhome/user1</code></pre>
+<p>With that indirect map, autofs owns <code>/rhome</code>. Accessing <code>/rhome/user1</code> mounts <code>server1:/rhome/user1</code> there. Do not create <code>/rhome/user1</code> yourself; autofs creates the key directories on demand, and <code>ls /rhome</code> looks empty until something is accessed. That surprises people but is normal. Test with <code>cd /rhome/user1</code> or <code>ls /rhome/user1</code>.</p>
+<p>Wildcards let one line cover every user. In the key column <code>*</code> matches any name, and in the location <code>&amp;</code> is replaced by the key that matched. So the line <code>* -rw,sync server1:/rhome/&amp;</code> means accessing <code>/rhome/alice</code> mounts <code>server1:/rhome/alice</code>, and <code>/rhome/bob</code> mounts <code>server1:/rhome/bob</code>.</p>
+<p>A direct map uses <code>/-</code> as the base in the master map, and its map file lists full absolute paths as keys, for example <code>/mnt/docs -ro server1:/exports/docs</code>. Direct maps suit a few fixed mount points scattered across the tree; indirect maps suit many mounts under one parent.</p>
+<p>After changing maps, run <code>systemctl restart autofs</code> (or reload). If a mount does not appear, check the service status, <code>journalctl -u autofs</code>, that the master map file name ends in <code>.autofs</code>, that the server export is reachable with a manual <code>mount</code>, and that you are not mixing up the master map and map file names. Because autofs mounts on demand, there is no <code>/etc/fstab</code> line for these paths.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>autofs</dt><dd>A service that mounts file systems automatically when a path is accessed and unmounts them when idle.</dd><dt>Master map</dt><dd>The top-level autofs configuration, in /etc/auto.master and /etc/auto.master.d/*.autofs, mapping base directories to map files.</dd><dt>Indirect map</dt><dd>A map whose keys are names relative to a base directory given in the master map.</dd><dt>Wildcard entry</dt><dd>A map line with * as the key and &amp; in the location, so any key name maps to a matching server path.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Users ldapuser1 through ldapuser9 need home directories from server1:/home/guests mounted under /home/guests. You add /home/guests /etc/auto.guests to /etc/auto.master.d/guests.autofs, write * -rw,sync server1:/home/guests/&amp; in /etc/auto.guests, enable autofs, and su - ldapuser5 lands in a mounted home directory.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Do not create the subdirectories under an autofs base or add fstab lines for them. An empty ls of the base directory is expected; test by accessing the full path.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>In the map line * -rw server1:/home/&amp;, what does &amp; mean?</summary><p>It is replaced by the key that * matched, so /base/alice mounts server1:/home/alice.</p></details>
+<details class="sq"><summary>What name must a master map drop-in file have?</summary><p>It must be in /etc/auto.master.d/ and end in .autofs.</p></details>
+<details class="sq"><summary>How does a direct map differ from an indirect map in the master map?</summary><p>A direct map uses /- as its base and lists absolute paths in its map file; an indirect map names a base directory and lists relative keys.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../mounting-and-unmounting-nfs-network-file-systems-mount-t-nfs-netdev/">← Mounting and unmounting NFS network file systems (mount -t n</a><a href="../extending-existing-logical-volumes-and-their-file-systems-lvextend-r-x/">Extending existing logical volumes and their file systems (l →</a></nav>
+</main>
+</body>
+</html>

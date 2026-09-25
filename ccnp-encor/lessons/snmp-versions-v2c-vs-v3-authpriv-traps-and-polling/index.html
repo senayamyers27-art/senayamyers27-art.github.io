@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SNMP versions (v2c vs v3 authPriv), traps and polling · ENCOR Lesson</title>
+<meta name="description" content="SNMP (Simple Network Management Protocol) lets a network management system (NMS) monitor devices. Each device runs an SNMP agent that exposes data organize">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="SNMP versions (v2c vs v3 authPriv), traps and polling · ENCOR Lesson">
+<meta property="og:description" content="SNMP (Simple Network Management Protocol) lets a network management system (NMS) monitor devices. Each device runs an SNMP agent that exposes data organize">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ccnp-encor/lessons/snmp-versions-v2c-vs-v3-authpriv-traps-and-polling/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ccnp-encor/lessons/snmp-versions-v2c-vs-v3-authpriv-traps-and-polling/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">ENCOR</a> / <a href="../">Lessons</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2 · Domain 4: Network Assurance</p>
+<h1>SNMP versions (v2c vs v3 authPriv), traps and polling</h1>
+<article class="lbody">
+<p>SNMP (Simple Network Management Protocol) lets a network management system (NMS) monitor devices. Each device runs an SNMP agent that exposes data organized in a MIB (Management Information Base), a tree of objects each identified by an OID (object identifier), such as interface counters or CPU utilization. SNMP is still the most widely supported monitoring protocol, and ENCOR tests its versions, security and message types.</p>
+<p>There are two ways information flows. In polling, the NMS sends Get, GetNext or GetBulk requests to UDP port 161 on the agent and receives responses, usually on a schedule such as every five minutes, which gives regular performance graphs. A Set request changes a value, which is why write access is dangerous. In notifications, the agent sends an unsolicited message to the NMS on UDP port 162 when an event happens, such as a link going down. A trap is sent once with no acknowledgment, so it can be lost. An inform, available from v2c on, is acknowledged by the NMS and resent if not, making it reliable at the cost of more overhead. Polling gives trends; notifications give fast alerts. Most deployments use both.</p>
+<p>SNMPv1 and SNMPv2c authenticate with a community string sent in clear text. Anyone who captures a packet learns the string, and a read-write community lets them change configuration. SNMPv2c adds GetBulk, informs and 64-bit counters (important on fast interfaces, where 32-bit counters wrap quickly) but keeps the same weak security. If you must use v2c, use read-only communities, restrict them with an ACL, and never use default strings such as public or private.</p>
+<p>SNMPv3 adds real security through the user-based security model. It has three security levels. noAuthNoPriv uses a username only. authNoPriv adds authentication with a hash (HMAC with SHA or MD5; SHA variants are preferred), proving who sent the message and that it was not changed. authPriv adds privacy, encrypting the payload with AES (or DES in old deployments). authPriv is the recommended level. SNMPv3 also uses views to restrict which parts of the MIB a group can read or write.</p>
+<pre class="code" tabindex="0"><code>snmp-server view NMS-VIEW iso included
+snmp-server group NMS-GRP v3 priv read NMS-VIEW access 10
+snmp-server user nmsuser NMS-GRP v3 auth sha AuthPass123 priv aes 128 PrivPass123
+snmp-server host 10.0.0.50 version 3 priv nmsuser
+snmp-server enable traps</code></pre>
+<p>Here the group uses <code>priv</code>, which is authPriv; ACL 10 limits which hosts can query. Note that SNMPv3 users do not appear in the running configuration for security reasons; verify them with <code>show snmp user</code> and groups with <code>show snmp group</code>. For troubleshooting, check that the NMS and device agree on username, authentication and privacy protocols and passwords, and that UDP 161 and 162 are permitted along the path.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>MIB and OID</dt><dd>The structured database of manageable objects and the numeric identifier for each object.</dd><dt>Community string</dt><dd>The clear-text shared password used by SNMPv1 and v2c.</dd><dt>Trap</dt><dd>An unacknowledged notification sent by the agent to the NMS on UDP 162.</dd><dt>Inform</dt><dd>An acknowledged notification, retransmitted if the NMS does not confirm it.</dd><dt>authPriv</dt><dd>The SNMPv3 security level with both authentication and encryption.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An audit finds routers using SNMPv2c with the community public and read-write access. The team migrates to SNMPv3 authPriv with SHA and AES, restricts polling to the monitoring server subnet with an ACL, removes the old communities, and changes link-down notifications to informs so alerts are not lost during congestion.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Polling is NMS to agent on UDP 161; traps and informs are agent to NMS on UDP 162. Only SNMPv3 authPriv both authenticates and encrypts. Informs are acknowledged; traps are not.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What does SNMPv3 authNoPriv provide that noAuthNoPriv does not, and what does it still lack?</summary><p>It adds message authentication and integrity with a hash, but it does not encrypt the payload.</p></details>
+<details class="sq"><summary>Why might an inform be preferred over a trap?</summary><p>Informs are acknowledged and resent if lost, so critical events are more reliably delivered.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study ENCOR for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ccnp-encor/">Open the ENCOR study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../diagnose-problems-with-debugs-conditional-debugs-ping-and-traceroute/">← Diagnose problems with debugs, conditional debugs, ping and </a><a href="../syslog-severity-levels-and-logging-configuration/">Syslog severity levels and logging configuration →</a></nav>
+</main>
+</body>
+</html>

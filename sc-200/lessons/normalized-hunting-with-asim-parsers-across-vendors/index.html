@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Normalized hunting with ASIM parsers across vendors · SC-200 Lesson</title>
+<meta name="description" content="Most organizations have several firewalls, proxies, DNS servers and identity systems from different vendors. Each logs the same kind of event with differen">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Normalized hunting with ASIM parsers across vendors · SC-200 Lesson">
+<meta property="og:description" content="Most organizations have several firewalls, proxies, DNS servers and identity systems from different vendors. Each logs the same kind of event with differen">
+<link rel="canonical" href="https://senayamyers27-art.github.io/sc-200/lessons/normalized-hunting-with-asim-parsers-across-vendors/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/sc-200/lessons/normalized-hunting-with-asim-parsers-across-vendors/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">SC-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Security Operations Analyst Associate SC-200 · Domain 3: Perform threat hunting</p>
+<h1>Normalized hunting with ASIM parsers across vendors</h1>
+<article class="lbody">
+<p>Most organizations have several firewalls, proxies, DNS servers and identity systems from different vendors. Each logs the same kind of event with different table names, column names and values. One firewall calls the source address SrcIP, another src_ip, a third puts it in a Syslog message. Writing every detection and hunt once per vendor does not scale.</p>
+<p>The Advanced Security Information Model (ASIM) solves this by normalizing data at query time. ASIM defines schemas for common event types, including network session, DNS, web session, authentication, process event, file event, registry event, audit event, user management and DHCP. Each schema has standard column names and value formats, for example SrcIpAddr, DstIpAddr, DstPortNumber and EventResult with values such as Success or Failure.</p>
+<p>Parsers are KQL functions that read vendor-specific data and output rows in the ASIM schema. There are source-specific parsers, one per product, and unifying parsers that call all the source-specific parsers for a schema and union the results. When you query the unifying parser <code>_Im_NetworkSession</code>, you get network sessions from every supported source in one normalized result, without knowing which tables they came from. New sources are added by adding their parser; queries built on the unifying parser pick them up automatically.</p>
+<p>There are two flavors of unifying parser. Filtering parsers, named with the <code>_Im_</code> prefix, accept parameters such as <code>starttime</code>, <code>endtime</code>, and schema-specific filters like source IP address prefixes or domain names. The filters are pushed down into each source parser, so less data is processed and queries run faster. Parameter-less parsers, named with <code>_ASim_</code>, return everything and are handy for exploration. Built-in parsers are deployed with Sentinel and start with an underscore; workspace-deployed versions without the underscore exist for customization.</p>
+<pre class="code" tabindex="0"><code>_Im_NetworkSession(starttime = ago(1d), endtime = now())
+| where DstPortNumber == 3389 and EventResult == &quot;Success&quot;
+| summarize Sessions = count() by SrcIpAddr, DstIpAddr</code></pre>
+<p>This single query finds Remote Desktop Protocol sessions across every normalized firewall and network source. The same idea applies to detections: many Sentinel analytics rule templates are built on ASIM so they work across vendors. The trade-off is that query-time parsing costs some performance and you rely on parsers existing for your products. For heavy use, ingestion-time normalization into ASIM tables is also possible.</p>
+<p>When hunting across vendors, reach for the ASIM unifying parser for the schema first, pass filters as parameters, and only drop to a raw vendor table when you need a field ASIM does not map.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>ASIM</dt><dd>The Advanced Security Information Model, which normalizes events from different sources into common schemas.</dd><dt>Unifying parser</dt><dd>An ASIM function that combines all source-specific parsers for a schema into one normalized result.</dd><dt>Filtering parser</dt><dd>An _Im_ parser that accepts parameters such as time and IP filters to improve performance.</dd><dt>Source-specific parser</dt><dd>An ASIM function that normalizes data from one product into a schema.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A company runs two different firewall brands after a merger. Instead of maintaining two versions of each hunt, the SOC rewrites its lateral movement hunts to use _Im_NetworkSession with time filters. When a third firewall is added and its ASIM parser installed, the existing hunts cover it with no changes.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> One query across many vendors for the same event type means ASIM. Use the _Im_ filtering parsers with parameters for performance; _ASim_ parsers take no parameters.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What is the benefit of querying _Im_NetworkSession instead of each firewall's table?</summary><p>One normalized query covers every supported source, and new sources are included automatically.</p></details>
+<details class="sq"><summary>Why pass starttime and endtime to a filtering parser?</summary><p>The filters are applied inside each source parser, reducing processed data and speeding up the query.</p></details>
+<details class="sq"><summary>Name three ASIM schemas.</summary><p>Examples: network session, DNS, authentication, process event, web session, file event.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study SC-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../sc-200/">Open the SC-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../long-term-data-search-jobs-restore-sentinel-data-lake-kql-jobs/">← Long-term data: search jobs, restore, Sentinel data lake KQL</a><a href="../threat-intelligence-ti-indicators-taxii-feeds-threat-analytics-reports/">Threat intelligence: TI indicators, TAXII feeds, threat anal →</a></nav>
+</main>
+</body>
+</html>

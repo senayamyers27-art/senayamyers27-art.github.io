@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KQL: where, project, summarize, bin(), join and render… · AI-200 Lesson</title>
+<meta name="description" content="Kusto Query Language (KQL) is how you query Application Insights and Log Analytics data. A query starts with a table name and pipes rows through operators,">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="KQL: where, project, summarize, bin(), join and render… · AI-200 Lesson">
+<meta property="og:description" content="Kusto Query Language (KQL) is how you query Application Insights and Log Analytics data. A query starts with a table name and pipes rows through operators,">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/kql-where-project-summarize-bin-join-and-render-against-requests-depen/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/kql-where-project-summarize-bin-join-and-render-against-requests-depen/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 4: Secure, monitor, and troubleshoot Azure solutions</p>
+<h1>KQL: where, project, summarize, bin(), join and render against requests, dependencies, exceptions and traces</h1>
+<article class="lbody">
+<p>Kusto Query Language (KQL) is how you query Application Insights and Log Analytics data. A query starts with a table name and pipes rows through operators, each separated by <code>|</code>, much like a Unix shell pipeline. The tables you will use most from Application Insights are <code>requests</code> (incoming calls to your app, with name, url, resultCode, success and duration), <code>dependencies</code> (outgoing calls, with target, type, success and duration), <code>exceptions</code> (errors, with type, outerMessage and problemId) and <code>traces</code> (log messages, with message and severityLevel). All share <code>timestamp</code>, <code>operation_Id</code> and <code>cloud_RoleName</code>. In a workspace-based resource queried directly from Log Analytics, the same data appears in tables named AppRequests, AppDependencies, AppExceptions and AppTraces with slightly different column names.</p>
+<p><code>where</code> filters rows. Filter on time first so the query scans less data: <code>where timestamp &gt; ago(1h)</code>. Combine conditions with <code>and</code>, and use <code>==</code>, <code>!=</code>, <code>contains</code>, <code>has</code> or <code>startswith</code> on strings. <code>project</code> chooses and renames columns, like SELECT in SQL; <code>extend</code> adds calculated columns.</p>
+<p><code>summarize</code> aggregates rows into groups, like GROUP BY: <code>summarize count(), avg(duration), percentile(duration, 95) by name</code>. The function <code>bin()</code> rounds values into buckets, and it is how you build time series: <code>summarize count() by bin(timestamp, 5m)</code> produces one row per five-minute interval. Other useful operators are <code>top</code>, <code>order by</code> (or <code>sort by</code>), <code>take</code> and <code>distinct</code>.</p>
+<pre class="code" tabindex="0"><code>requests
+| where timestamp &gt; ago(24h)
+| summarize total = sum(itemCount), failed = sumif(itemCount, success == false)
+    by bin(timestamp, 15m)
+| extend failureRate = 100.0 * failed / total
+| render timechart</code></pre>
+<p><code>join</code> combines two tables on a common column, and <code>operation_Id</code> is the natural key for connecting a request with its exceptions or dependencies. The default join kind in KQL is <code>innerunique</code>, which deduplicates the left side; specify <code>kind=inner</code> or <code>kind=leftouter</code> when you mean those. Keep the left side small by filtering first.</p>
+<pre class="code" tabindex="0"><code>requests
+| where timestamp &gt; ago(1h) and success == false
+| project operation_Id, name, resultCode, duration
+| join kind=inner (
+    exceptions | where timestamp &gt; ago(1h) | project operation_Id, type, outerMessage
+  ) on operation_Id
+| summarize count() by name, type
+| order by count_ desc</code></pre>
+<p><code>render</code> turns results into a chart in the portal: <code>timechart</code> for time series, <code>barchart</code>, <code>columnchart</code>, <code>piechart</code> and others. You can pin charts to dashboards or workbooks, and the same queries power log search alerts in the next lesson.</p>
+<p>A practical habit: when investigating one failing request, take its operation_Id and query each table with <code>where operation_Id == &quot;...&quot;</code> to see everything that happened in that transaction, including traces logged along the way.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>KQL</dt><dd>Kusto Query Language, the pipe-based query language for Log Analytics and Application Insights.</dd><dt>summarize</dt><dd>The KQL operator that aggregates rows into groups with functions such as count, avg and percentile.</dd><dt>bin()</dt><dd>A function that rounds values into fixed-size buckets, often used with timestamp to build time series.</dd><dt>join</dt><dd>An operator that combines rows from two tables on matching columns, such as operation_Id.</dd><dt>render</dt><dd>An operator that displays query results as a chart, for example a timechart.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>After a release, error rates rose. An engineer ran a query joining failed requests with exceptions on operation_Id, summarized by request name and exception type, and found that one endpoint threw a KeyError from a missing configuration setting. A timechart of failures by bin(timestamp, 5m) showed the spike started exactly at deployment time, confirming the cause.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Know which table holds what (requests incoming, dependencies outgoing, exceptions errors, traces logs), use bin(timestamp, interval) inside summarize for time charts and join on operation_Id to correlate.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Write the KQL fragment that counts requests per 5-minute interval.</summary><p>requests | summarize count() by bin(timestamp, 5m), optionally followed by | render timechart.</p></details>
+<details class="sq"><summary>Which column would you join requests and exceptions on to correlate a failure with its error?</summary><p>operation_Id, the trace ID shared by all telemetry from the same operation.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../distributed-tracing-across-services-sampling-and-live-metrics/">← Distributed tracing across services, sampling and live metri</a><a href="../alerts-metric-vs-log-search-alerts-and-action-groups/">Alerts: metric vs log search alerts and action groups →</a></nav>
+</main>
+</body>
+</html>

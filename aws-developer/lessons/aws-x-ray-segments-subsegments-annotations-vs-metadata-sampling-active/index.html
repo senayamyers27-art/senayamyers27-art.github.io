@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AWS X-Ray: segments, subsegments, annotations vs… · Developer Associate Lesson</title>
+<meta name="description" content="Logs tell you what one component did; distributed tracing shows a whole request as it travels through API Gateway, Lambda, DynamoDB, SQS and external APIs.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="AWS X-Ray: segments, subsegments, annotations vs… · Developer Associate Lesson">
+<meta property="og:description" content="Logs tell you what one component did; distributed tracing shows a whole request as it travels through API Gateway, Lambda, DynamoDB, SQS and external APIs.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/aws-x-ray-segments-subsegments-annotations-vs-metadata-sampling-active/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/aws-x-ray-segments-subsegments-annotations-vs-metadata-sampling-active/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 4: Troubleshooting and Optimization</p>
+<h1>AWS X-Ray: segments, subsegments, annotations vs metadata, sampling, active tracing, the X-Ray daemon/CloudWatch agent</h1>
+<article class="lbody">
+<p>Logs tell you what one component did; distributed tracing shows a whole request as it travels through API Gateway, Lambda, DynamoDB, SQS and external APIs. AWS X-Ray collects that trace data, draws a service map of your application, and lets you find which call made a request slow or failed.</p>
+<p>A trace is the full journey of one request, identified by a trace ID that is passed between services in the <code>X-Amzn-Trace-Id</code> header. Each service that handles the request sends a segment: a JSON document describing the work that service did, with start and end times, the resource name, HTTP request and response details, and any error or fault. Inside a segment, subsegments break the work down further, such as each downstream AWS SDK call, HTTP call or SQL query, or a block of your own code you want to time. Calls to services that do not send their own segments (an external API, for instance) appear as inferred nodes from subsegments. The service map groups segments into nodes and colours them by error (4xx), fault (5xx) and throttle (429) rates.</p>
+<p>You can attach extra data to segments in two ways, and the difference is tested often. Annotations are simple key-value pairs (string, number or Boolean) that X-Ray indexes, so you can search and filter traces with filter expressions such as <code>annotation.customer_tier = &quot;gold&quot;</code> and create groups from them. Metadata is key-value data of any type, including objects and lists, that is stored with the trace but not indexed, so you can view it but not search on it. Put IDs and categories you will filter by in annotations; put larger debugging payloads in metadata.</p>
+<pre class="code" tabindex="0"><code>from aws_xray_sdk.core import xray_recorder
+
+@xray_recorder.capture('charge_card')   # creates a subsegment
+def charge_card(order):
+    sub = xray_recorder.current_subsegment()
+    sub.put_annotation('order_id', order['id'])
+    sub.put_metadata('order', order)</code></pre>
+<p>Sampling controls how many requests are traced, to keep cost and overhead low. The default rule records the first request each second (the reservoir) and five percent of additional requests. You can create custom sampling rules in the console, matched by service name, URL path, HTTP method and so on, with their own reservoir and rate, and the SDKs pick them up without code changes. If a question asks for tracing more or fewer requests for one path, the answer is a sampling rule.</p>
+<p>To enable tracing for Lambda, turn on active tracing (<code>TracingConfig: Mode: Active</code>, or <code>Tracing: Active</code> in SAM Globals). Lambda then creates segments for the invocation, and the execution role needs permission to send data (<code>xray:PutTraceSegments</code> and <code>xray:PutTelemetryRecords</code>, included in the <code>AWSXRayDaemonWriteAccess</code> managed policy). API Gateway has a per-stage X-Ray tracing setting. To see downstream calls as subsegments, instrument your code with the X-Ray SDK (or AWS Distro for OpenTelemetry, which AWS now recommends for new instrumentation) so that AWS SDK clients and HTTP libraries are patched.</p>
+<p>On EC2, ECS and on-premises servers, the SDK does not send data directly to the X-Ray API. It sends segments over UDP port 2000 to a local collector, the X-Ray daemon or the CloudWatch agent (which can act as that collector), which buffers them and uploads them in batches. On ECS you run it as a sidecar container, and the SDK finds it through the <code>AWS_XRAY_DAEMON_ADDRESS</code> environment variable. The instance or task role needs the same write permissions. In Lambda and Elastic Beanstalk (with an option setting), this collector is provided for you. Missing traces from EC2 usually mean the daemon is not running or the role lacks permission.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Segment</dt><dd>The record of work done by one service for a traced request, including timing, request details and errors.</dd><dt>Subsegment</dt><dd>A finer-grained part of a segment, such as one downstream call or a timed block of code.</dd><dt>Annotation</dt><dd>An indexed key-value pair on a segment that can be used in filter expressions to search traces.</dd><dt>Metadata</dt><dd>Non-indexed key-value data of any type stored with a segment for viewing but not searching.</dd><dt>Sampling rule</dt><dd>A rule that sets how many requests of a given kind are traced, using a reservoir and a fixed rate.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Support needs to find traces for a specific customer's failed orders. The developer adds put_annotation('customer_id', id) in the order function. Now the team can run the filter expression annotation.customer_id = &quot;C-1042&quot; in the X-Ray console and open the exact slow traces, where a subsegment shows a DynamoDB call being throttled.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Need to search or filter traces by a value: annotation. Need to store extra detail for viewing only: metadata. No traces from EC2 or ECS: check the daemon or agent on UDP 2000 and the role's X-Ray write permissions.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Can you filter traces by a metadata value?</summary><p>No; metadata is not indexed. Use an annotation for values you need to search on.</p></details>
+<details class="sq"><summary>What does the default X-Ray sampling rule record?</summary><p>The first request each second, plus five percent of any additional requests.</p></details>
+<details class="sq"><summary>What must be done to trace a Lambda function besides code instrumentation?</summary><p>Enable active tracing on the function and give its execution role X-Ray write permissions such as PutTraceSegments.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../common-lambda-errors-throttling-429-timeouts-accessdenied-from-the-exe/">← Common Lambda errors: throttling (429), timeouts, AccessDeni</a><a href="../custom-metrics-putmetricdata-cloudwatch-embedded-metric-format-high-re/">Custom metrics: PutMetricData, CloudWatch embedded metric fo →</a></nav>
+</main>
+</body>
+</html>

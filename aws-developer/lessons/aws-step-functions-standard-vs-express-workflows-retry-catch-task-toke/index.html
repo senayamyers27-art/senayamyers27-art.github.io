@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AWS Step Functions: Standard vs Express workflows… · Developer Associate Lesson</title>
+<meta name="description" content="AWS Step Functions is a serverless orchestration service. You describe a workflow as a state machine in Amazon States Language (ASL), a JSON-based format, ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="AWS Step Functions: Standard vs Express workflows… · Developer Associate Lesson">
+<meta property="og:description" content="AWS Step Functions is a serverless orchestration service. You describe a workflow as a state machine in Amazon States Language (ASL), a JSON-based format, ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/aws-step-functions-standard-vs-express-workflows-retry-catch-task-toke/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/aws-step-functions-standard-vs-express-workflows-retry-catch-task-toke/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 1: Development with AWS Services</p>
+<h1>AWS Step Functions: Standard vs Express workflows, retry/catch, task tokens for callbacks</h1>
+<article class="lbody">
+<p>AWS Step Functions is a serverless orchestration service. You describe a workflow as a state machine in Amazon States Language (ASL), a JSON-based format, and Step Functions runs it: calling Lambda functions and other AWS services, passing data between steps, waiting, branching and handling errors. Because the workflow's logic lives in the state machine rather than in your code, each Lambda function stays small and the console shows every execution visually, step by step.</p>
+<p>The main state types are <code>Task</code> (do work, such as invoke a Lambda function or call an AWS API directly through an SDK integration), <code>Choice</code> (branch on data), <code>Parallel</code> (run branches at the same time), <code>Map</code> (run the same steps for each item in an array), <code>Wait</code> (pause for a time or until a timestamp), <code>Pass</code>, <code>Succeed</code> and <code>Fail</code>.</p>
+<p>There are two workflow types, chosen when you create the state machine. Standard workflows can run for up to one year, use exactly-once execution of each step, and keep a full execution history you can inspect in the console; they are billed per state transition. They suit long-running, auditable business processes, including ones that wait for humans. Express workflows run for up to five minutes, are designed for high-volume event processing (such as handling streaming data or API requests), are billed by number of executions, duration and memory, and send history to CloudWatch Logs rather than keeping it in the service. Asynchronous Express workflows have at-least-once semantics and synchronous ones at-most-once, so steps should be idempotent.</p>
+<p>Error handling is declared on states. A <code>Retry</code> block lists error names (such as <code>States.Timeout</code>, <code>States.TaskFailed</code>, <code>Lambda.ServiceException</code> or your own custom error names) with <code>IntervalSeconds</code>, <code>MaxAttempts</code> and <code>BackoffRate</code> for exponential backoff. A <code>Catch</code> block runs after retries are exhausted and sends execution to a fallback state, with <code>ResultPath</code> controlling where the error details are placed in the state's data. This is how you build compensation, for example refunding a payment when shipping fails.</p>
+<pre class="code" tabindex="0"><code>&quot;ChargeCard&quot;: {
+  &quot;Type&quot;: &quot;Task&quot;,
+  &quot;Resource&quot;: &quot;arn:aws:states:::lambda:invoke&quot;,
+  &quot;Retry&quot;: [{ &quot;ErrorEquals&quot;: [&quot;States.TaskFailed&quot;], &quot;IntervalSeconds&quot;: 2, &quot;MaxAttempts&quot;: 3, &quot;BackoffRate&quot;: 2 }],
+  &quot;Catch&quot;: [{ &quot;ErrorEquals&quot;: [&quot;States.ALL&quot;], &quot;ResultPath&quot;: &quot;$.error&quot;, &quot;Next&quot;: &quot;NotifyFailure&quot; }],
+  &quot;Next&quot;: &quot;ShipOrder&quot;
+}</code></pre>
+<p>Service integrations come in three patterns. Request Response calls a service and moves on as soon as it replies. Run a Job (<code>.sync</code>) waits for a job such as an AWS Batch job or another state machine to finish. Wait for Callback (<code>.waitForTaskToken</code>) pauses the workflow and passes a task token to something outside, for example a message in SQS for a human approval system or a third-party integration. The workflow stays paused until that external process calls <code>SendTaskSuccess</code> or <code>SendTaskFailure</code> with the token (or the task times out; <code>HeartbeatSeconds</code> can detect a worker that went silent). Task tokens are how Standard workflows wait days for a manager to approve something without paying for idle compute.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Amazon States Language (ASL)</dt><dd>The JSON-based language used to define Step Functions state machines.</dd><dt>Standard workflow</dt><dd>A Step Functions workflow type for long-running (up to one year), exactly-once, fully audited executions.</dd><dt>Express workflow</dt><dd>A Step Functions workflow type for high-volume, short (up to five minutes) executions, logged to CloudWatch Logs.</dd><dt>Task token</dt><dd>A token Step Functions passes to an external process in the Wait for Callback pattern; the workflow resumes when SendTaskSuccess or SendTaskFailure is called with it.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An expense workflow saves a claim, then uses an SQS task with .waitForTaskToken to put the token in a message for the approval app. Two days later a manager clicks Approve, and the app calls SendTaskSuccess with the token, so the Standard workflow resumes and pays the claim.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Long-running, auditable, or waiting on humans points to Standard. High event rates with short duration points to Express. Anything that must pause until an outside system responds points to a task token with .waitForTaskToken.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What does a Catch block do that Retry does not?</summary><p>Catch redirects the execution to a fallback state after the error (and any retries) is not resolved, while Retry only re-attempts the same state.</p></details>
+<details class="sq"><summary>Why would a workflow that runs for several days need a Standard workflow?</summary><p>Express workflows are limited to five minutes, while Standard workflows can run for up to one year.</p></details>
+<details class="sq"><summary>How does an external system resume a workflow paused on a task token?</summary><p>It calls SendTaskSuccess (or SendTaskFailure) with the task token it received.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../messaging-and-streaming-sqs-standard-vs-fifo-message-groups-deduplicat/">← Messaging and streaming: SQS standard vs FIFO (message group</a><a href="../calling-aws-services-with-the-sdks-and-cli-credential-provider-chain-p/">Calling AWS services with the SDKs and CLI: credential provi →</a></nav>
+</main>
+</body>
+</html>

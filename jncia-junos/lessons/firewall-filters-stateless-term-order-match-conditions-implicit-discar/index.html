@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Firewall filters: stateless, term order, match… · JNCIA-Junos Lesson</title>
+<meta name="description" content="Junos firewall filters inspect packets and decide what to do with them. Other vendors call the same feature access control lists (ACLs).">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Firewall filters: stateless, term order, match… · JNCIA-Junos Lesson">
+<meta property="og:description" content="Junos firewall filters inspect packets and decide what to do with them. Other vendors call the same feature access control lists (ACLs).">
+<link rel="canonical" href="https://senayamyers27-art.github.io/jncia-junos/lessons/firewall-filters-stateless-term-order-match-conditions-implicit-discar/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/jncia-junos/lessons/firewall-filters-stateless-term-order-match-conditions-implicit-discar/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">JNCIA-Junos</a> / <a href="../">Lessons</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106 · Domain 7: Routing policy and firewall filters</p>
+<h1>Firewall filters: stateless, term order, match conditions, implicit discard at the end</h1>
+<article class="lbody">
+<p>Junos firewall filters inspect packets and decide what to do with them. Other vendors call the same feature access control lists (ACLs). Filters are configured under <code>firewall family &lt;family&gt; filter &lt;name&gt;</code>, where the family is usually <code>inet</code> for IPv4 or <code>inet6</code> for IPv6. They are applied to interfaces and are processed in the Packet Forwarding Engine at high speed.</p>
+<p>Firewall filters are stateless. Each packet is examined on its own, with no memory of previous packets or connections. If you allow a client inside your network to open a TCP connection to a server outside, a stateless filter on the inbound direction must also explicitly allow the server's replies. The <code>tcp-established</code> match condition helps here: it matches TCP packets with the ACK or RST flag set, which is what reply packets look like. This is different from stateful security policies on SRX Series firewalls, which track sessions and permit return traffic automatically.</p>
+<p>A filter is made of terms, evaluated in order from top to bottom, just like policy terms. Each term has a <code>from</code> section with match conditions and a <code>then</code> section with actions. The first term that matches and applies a terminating action decides the packet's fate, and later terms are not checked.</p>
+<pre class="code" tabindex="0"><code>set firewall family inet filter PROTECT term SSH from source-address 192.0.2.0/24
+set firewall family inet filter PROTECT term SSH from protocol tcp
+set firewall family inet filter PROTECT term SSH from destination-port ssh
+set firewall family inet filter PROTECT term SSH then accept
+set firewall family inet filter PROTECT term ICMP from protocol icmp
+set firewall family inet filter PROTECT term ICMP then accept</code></pre>
+<p>Common match conditions for IPv4 include <code>source-address</code>, <code>destination-address</code> (and <code>address</code> for either), <code>source-prefix-list</code> and <code>destination-prefix-list</code>, <code>protocol</code> (tcp, udp, icmp, ospf and so on), <code>source-port</code> and <code>destination-port</code> (by number or name), <code>icmp-type</code>, <code>tcp-flags</code>, <code>tcp-established</code> and <code>tcp-initial</code>, <code>dscp</code> and <code>fragment-flags</code>. The logic matches routing policy: different conditions in one term are combined with AND, and multiple values for one condition are combined with OR. A term with no <code>from</code> section matches all packets.</p>
+<p>Every filter ends with an implicit term that discards everything not matched earlier. You do not see it in the configuration, but it is always there. In the example above, a Telnet packet from anywhere, or an SSH packet from outside 192.0.2.0/24, matches no term and is silently discarded. This default-deny behavior is secure, but it also means that when you apply a filter you must explicitly permit everything you still need, or you can cut off traffic, including your own management session. A common practice is to end filters with an explicit final term that counts or logs what is being dropped, so the implicit discard never happens without you seeing it.</p>
+<p>Because order matters and new terms are added at the bottom, use <code>insert</code> to reposition terms and review the filter with <code>show firewall family inet filter &lt;name&gt;</code> in configuration mode before committing.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Stateless filter</dt><dd>A filter that evaluates each packet independently without tracking connections, so return traffic must be explicitly allowed.</dd><dt>Implicit discard</dt><dd>The hidden final action of every Junos firewall filter that silently drops packets not matched by any term.</dd><dt>tcp-established</dt><dd>A match condition for TCP packets with the ACK or RST flag set, typically reply traffic.</dd><dt>Match condition</dt><dd>A <code>from</code> criterion such as address, protocol or port used to select packets in a filter term.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An engineer applies a filter permitting only HTTPS to a web server subnet and commits. Suddenly the server cannot resolve names or download updates. The filter is stateless and ends with an implicit discard, so the DNS and update replies coming back are dropped. Adding a term for return traffic, using <code>tcp-established</code> for TCP and a term for the DNS responses, restores service.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Filters are stateless, evaluated top to bottom, and end with an implicit discard. Multiple conditions in one term are ANDed, multiple values in one condition are ORed.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>A packet matches no term in a filter. What happens to it?</summary><p>It is silently discarded by the implicit final term.</p></details>
+<details class="sq"><summary>Why might a stateless filter need a <code>tcp-established</code> term?</summary><p>Because it does not track connections, reply packets must be explicitly permitted; <code>tcp-established</code> matches them.</p></details>
+<details class="sq"><summary>A term has <code>from protocol tcp</code> and <code>from destination-port [ 22 443 ]</code>. Which packets match?</summary><p>TCP packets to destination port 22 or 443.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study JNCIA-Junos for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../jncia-junos/">Open the JNCIA-Junos study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../testing-with-test-policy/">← Testing with `test policy`</a><a href="../filter-actions-terminating-accept-discard-reject-and-non-terminating-c/">Filter actions: terminating (accept, discard, reject) and no →</a></nav>
+</main>
+</body>
+</html>

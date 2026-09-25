@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>EndpointSlices, Services without selectors… · CKA Lesson</title>
+<meta name="description" content="A Service's selector is not what kube-proxy actually uses. The EndpointSlice controller evaluates the selector and writes the matching Pods' IPs and ports ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="EndpointSlices, Services without selectors… · CKA Lesson">
+<meta property="og:description" content="A Service's selector is not what kube-proxy actually uses. The EndpointSlice controller evaluates the selector and writes the matching Pods' IPs and ports ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/endpointslices-services-without-selectors-externaltrafficpolicy-and-se/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/endpointslices-services-without-selectors-externaltrafficpolicy-and-se/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 3: Services and Networking</p>
+<h1>EndpointSlices, Services without selectors, externalTrafficPolicy and sessionAffinity</h1>
+<article class="lbody">
+<p>A Service's selector is not what kube-proxy actually uses. The EndpointSlice controller evaluates the selector and writes the matching Pods' IPs and ports into EndpointSlice objects, and kube-proxy, DNS and ingress controllers consume those. EndpointSlices replaced the older Endpoints API, which could not scale to very large Services because one object held every address.</p>
+<p>Each EndpointSlice is labelled <code>kubernetes.io/service-name=&lt;service&gt;</code> and holds a limited number of endpoints (100 by default), so a large Service has several slices. Each endpoint records its addresses and conditions: <code>ready</code>, <code>serving</code> and <code>terminating</code>. Pods that fail their readiness probe stay listed but not ready, and kube-proxy stops sending them new traffic.</p>
+<pre class="code" tabindex="0"><code>kubectl get endpointslices -l kubernetes.io/service-name=web
+kubectl describe endpointslice &lt;name&gt;</code></pre>
+<p>A Service without a selector gets no automatic EndpointSlices. That is useful for pointing a cluster Service at something outside the cluster, such as a database on a fixed IP, while clients still use a normal Service DNS name. You create the Service with ports but no selector, then create an EndpointSlice yourself with the service-name label, <code>addressType: IPv4</code>, the endpoint addresses and matching port names.</p>
+<pre class="code" tabindex="0"><code>apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: legacy-db-1
+  labels: {kubernetes.io/service-name: legacy-db}
+addressType: IPv4
+ports:
+- {name: pg, port: 5432, protocol: TCP}
+endpoints:
+- addresses: [&quot;10.20.0.15&quot;]</code></pre>
+<p><code>externalTrafficPolicy</code> applies to NodePort and LoadBalancer Services and controls traffic arriving from outside. With <code>Cluster</code> (the default), any node accepts the traffic and may forward it to a Pod on another node; load spreads evenly, but the source IP is replaced with the node's, so the application sees the wrong client address. With <code>Local</code>, a node only forwards to Pods on itself, the client's source IP is preserved and there is no extra hop, but nodes without a local Pod drop the traffic (cloud load balancers use a health check node port to avoid them), and load can be uneven. <code>internalTrafficPolicy</code> is the equivalent for in-cluster traffic.</p>
+<p><code>sessionAffinity: ClientIP</code> makes kube-proxy send all connections from the same client IP to the same backend Pod, for a timeout set in <code>sessionAffinityConfig.clientIP.timeoutSeconds</code> (10800 seconds, three hours, by default). The default is <code>None</code>, which picks a backend per connection. Affinity is by IP only, so many clients behind one NAT gateway all stick to one Pod.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>EndpointSlice</dt><dd>An object listing a subset of a Service's backend addresses, ports and readiness conditions.</dd><dt>Selectorless Service</dt><dd>A Service without a selector whose EndpointSlices you manage manually.</dd><dt>externalTrafficPolicy: Local</dt><dd>Only node-local Pods receive external traffic, preserving the client source IP.</dd><dt>sessionAffinity: ClientIP</dt><dd>Routes a given client IP consistently to the same backend Pod.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A web application behind a NodePort Service logs every visitor as a node IP, breaking its rate limiting. Setting <code>externalTrafficPolicy: Local</code> preserves real client IPs. The team also runs the Pods as a DaemonSet so every node has a local endpoint and no traffic is dropped.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> An empty EndpointSlice means the selector matches no Ready Pods; check labels and readiness before blaming kube-proxy. For externalTrafficPolicy, remember: Local preserves source IP, Cluster spreads load.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which label links an EndpointSlice to its Service?</summary><p>kubernetes.io/service-name set to the Service's name.</p></details>
+<details class="sq"><summary>What is the trade-off of externalTrafficPolicy Local?</summary><p>It preserves client source IPs and avoids an extra hop, but nodes without local Pods cannot serve the traffic and load may be uneven.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../service-types-clusterip-nodeport-30000-32767-loadbalancer-cloud-contro/">← Service types: ClusterIP, NodePort (30000–32767), LoadBalanc</a><a href="../networkpolicies-default-deny-ingress-and-egress-rules-podselector-name/">NetworkPolicies: default deny, ingress and egress rules, pod →</a></nav>
+</main>
+</body>
+</html>

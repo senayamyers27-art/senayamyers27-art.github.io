@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Private endpoints and Private Link vs service endpoints… · SC-500 Lesson</title>
+<meta name="description" content="Platform services such as Storage, SQL Database and Key Vault have public endpoints by default. Two features let you reach them from a virtual network with">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Private endpoints and Private Link vs service endpoints… · SC-500 Lesson">
+<meta property="og:description" content="Platform services such as Storage, SQL Database and Key Vault have public endpoints by default. Two features let you reach them from a virtual network with">
+<link rel="canonical" href="https://senayamyers27-art.github.io/sc-500/lessons/private-endpoints-and-private-link-vs-service-endpoints-private-dns-zo/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/sc-500/lessons/private-endpoints-and-private-link-vs-service-endpoints-private-dns-zo/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">SC-500</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Cloud and AI Security Engineer Associate (replaces Azure Security Engineer Associate / AZ-500) SC-500 · Domain 2: Secure storage, databases, and networking</p>
+<h1>Private endpoints and Private Link vs service endpoints, private DNS zones</h1>
+<article class="lbody">
+<p>Platform services such as Storage, SQL Database and Key Vault have public endpoints by default. Two features let you reach them from a virtual network without traversing the public internet, and the exam frequently asks you to choose between them.</p>
+<p>A virtual network service endpoint is enabled on a subnet for a service (for example <code>Microsoft.Storage</code>). Traffic from that subnet to the service then travels over the Azure backbone with the subnet's identity attached, and the service's firewall can allow that subnet by name. The service still uses its public IP address; your VMs just reach it via an optimized route. Service endpoints are free and simple, but they only work from within Azure VNets (not from on-premises over VPN or ExpressRoute in general), they apply to the whole service in a region unless you add service endpoint policies (supported for Storage) to restrict which accounts can be reached, and they do not stop data exfiltration to another customer's account of the same service on their own.</p>
+<p>A private endpoint is a network interface in your subnet with a private IP address from your address space, mapped to one specific resource (a particular storage account's blob sub-resource, one SQL server, one vault) through Azure Private Link. Clients connect to that private IP. Because it is a normal IP in your network, it is reachable from peered VNets and from on-premises over VPN or ExpressRoute. Because it maps to one resource, it inherently prevents reaching other customers' resources through it. You can then set the resource's public network access to Disabled. Private endpoints have an hourly and data processing cost.</p>
+<p>Azure Private Link is the underlying technology. Besides Microsoft services, you can expose your own service behind a Standard Load Balancer as a Private Link service so customers or other teams consume it through private endpoints in their networks.</p>
+<p>DNS is the part that trips people up. Clients still use the public name, such as <code>mystorage.blob.core.windows.net</code>. When a private endpoint is created, the public DNS record is changed to a CNAME pointing to <code>mystorage.privatelink.blob.core.windows.net</code>. You create an Azure private DNS zone named <code>privatelink.blob.core.windows.net</code>, link it to your VNets, and hold an A record for mystorage pointing to the private IP. The portal can do this automatically. Inside linked VNets the name resolves to the private IP; outside, it resolves to the public IP (which is now blocked). For on-premises clients, forward queries for the service's zone to Azure DNS through Azure DNS Private Resolver or a DNS forwarder VM in Azure.</p>
+<p>Test with <code>nslookup mystorage.blob.core.windows.net</code> from a VM: a 10.x or other private address means it worked; a public address means DNS is not set up.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Service endpoint</dt><dd>A subnet setting that routes traffic to an Azure service over the backbone and lets the service firewall allow that subnet; the service keeps its public IP.</dd><dt>Private endpoint</dt><dd>A NIC with a private IP in your subnet mapped to one specific resource through Private Link.</dd><dt>Private Link service</dt><dd>Your own service behind a Standard Load Balancer, exposed to consumers through private endpoints.</dd><dt>Private DNS zone</dt><dd>An Azure DNS zone, such as privatelink.blob.core.windows.net, that resolves service names to private endpoint IPs for linked VNets.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>On-premises analysts must query an Azure SQL database over ExpressRoute with no public exposure. You create a private endpoint for the SQL server in a hub subnet, link the privatelink.database.windows.net private DNS zone to the hub VNet, configure DNS Private Resolver with a conditional forwarder from on-premises DNS, and set public network access to Disabled.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> On-premises access, a private IP, per-resource scope and exfiltration protection point to private endpoints. Free, simple, subnet-level access with the public IP retained points to service endpoints. If a private endpoint 'doesn't work', suspect DNS first.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which option allows on-premises clients to reach a storage account over VPN using a private IP?</summary><p>A private endpoint, with DNS resolving the name to its private IP.</p></details>
+<details class="sq"><summary>After creating a private endpoint, a VM still resolves the storage account to a public IP. What is missing?</summary><p>The privatelink private DNS zone with an A record, linked to the VM's VNet (or equivalent custom DNS).</p></details>
+<details class="sq"><summary>Does a service endpoint change the destination IP address of the service?</summary><p>No, the service is still reached at its public IP; only the route and source identity change.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study SC-500 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../sc-500/">Open the SC-500 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../azure-virtual-network-manager-security-admin-rules-vs-nsgs/">← Azure Virtual Network Manager security admin rules vs NSGs</a><a href="../azure-firewall-standard-vs-premium-tls-inspection-idps-url-filtering-f/">Azure Firewall (Standard vs Premium: TLS inspection, IDPS, U →</a></nav>
+</main>
+</body>
+</html>

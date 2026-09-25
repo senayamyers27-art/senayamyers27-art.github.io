@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Flexible constructor bodies (Java 25): statements before… · OCP Java Lesson</title>
+<meta name="description" content="Before Java 25, the call to super(...) or this(...) had to be the very first statement in a constructor. That rule made it awkward to validate or prepare a">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Flexible constructor bodies (Java 25): statements before… · OCP Java Lesson">
+<meta property="og:description" content="Before Java 25, the call to super(...) or this(...) had to be the very first statement in a constructor. That rule made it awkward to validate or prepare a">
+<link rel="canonical" href="https://senayamyers27-art.github.io/java-se/lessons/flexible-constructor-bodies-java-25-statements-before-super-or-this/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/java-se/lessons/flexible-constructor-bodies-java-25-statements-before-super-or-this/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">OCP Java</a> / <a href="../">Lessons</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25) · Domain 3: Using object-oriented concepts in Java</p>
+<h1>Flexible constructor bodies (Java 25): statements before super(...) or this(...)</h1>
+<article class="lbody">
+<p>Before Java 25, the call to <code>super(...)</code> or <code>this(...)</code> had to be the very first statement in a constructor. That rule made it awkward to validate or prepare arguments before handing them to the parent constructor; developers resorted to static helper methods or complicated expressions inside the argument list. Flexible constructor bodies, finalized in Java 25, relax the rule: you may now write statements before the explicit constructor call.</p>
+<p>The constructor body is split into two parts. The statements before <code>super(...)</code> or <code>this(...)</code> form the prologue, and the statements after it form the epilogue. The explicit constructor call still has to be a top-level statement of the constructor body; it cannot be placed inside an <code>if</code>, a loop or a <code>try</code> block, and a constructor still calls <code>super</code> or <code>this</code> at most once. If there is no explicit call, the compiler still inserts <code>super()</code> at the start, as before.</p>
+<p>The prologue runs in an early construction context, before the object has been initialized by its superclass. So the prologue may not use the object being built. You cannot read its fields, call its instance methods, use <code>this</code> explicitly (except to assign a field), use <code>super.something</code>, or create an instance of an inner class that would capture <code>this</code>. What you may do is work with parameters and local variables, call static methods, throw exceptions, and assign values to fields declared in this class that have no initializer (assignment only, not reading). A <code>return</code> statement is not allowed in the prologue.</p>
+<pre class="code" tabindex="0"><code>class Account {
+    Account(long cents) { /* ... */ }
+}
+
+class SavingsAccount extends Account {
+    private final double rate;
+
+    SavingsAccount(long cents, double rate) {
+        if (cents &lt; 0) {                       // prologue: validate first
+            throw new IllegalArgumentException(&quot;negative&quot;);
+        }
+        this.rate = rate;                      // allowed: assign own field
+        super(cents);                          // explicit constructor call
+        System.out.println(&quot;created&quot;);        // epilogue: may use this
+    }
+}</code></pre>
+<p>Assigning fields in the prologue matters because of overridden methods. If a superclass constructor calls a method that a subclass overrides, that method previously ran before the subclass fields were set and could see their default values, such as <code>null</code> or 0. When the subclass assigns its fields before calling <code>super(...)</code>, the overridden method sees the real values.</p>
+<p>This changes the initialization order you learned earlier only a little. For a constructor with a prologue, the prologue runs first; then the superclass is constructed; then this class's instance initializers and field initializers run in textual order; then the epilogue. Validation in the prologue also means a bad argument fails fast, before the superclass does any work.</p>
+<p>Exam questions on this topic usually show a prologue and ask whether it compiles. Check for any read of an instance field, any instance method call, any <code>super.</code> access, a <code>return</code>, or a <code>super(...)</code> call nested inside another statement: each of those is a compile error.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Prologue</dt><dd>The statements in a constructor before the explicit super(...) or this(...) call, which cannot use the object being constructed.</dd><dt>Epilogue</dt><dd>The statements after the explicit constructor call, where the object can be used normally.</dd><dt>Early construction context</dt><dd>The prologue and constructor-call arguments, where references to the current instance are restricted.</dd><dt>Explicit constructor invocation</dt><dd>A super(...) or this(...) statement that chains to another constructor.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A <code>Temperature</code> class extends a <code>Measurement</code> base class whose constructor logs the value. The subclass now checks in its prologue that the value is above absolute zero and throws IllegalArgumentException if not, so an invalid object never reaches the parent constructor or the log.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> In a prologue, allowed means parameters, locals, static calls, throwing and assigning this class's fields. Not allowed means reading fields, calling instance methods, super.x, return, or putting super(...) inside a block.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Can a Java 25 constructor call a static helper method before <code>super(...)</code>?</summary><p>Yes. Static methods do not need the instance, so they are allowed in the prologue.</p></details>
+<details class="sq"><summary>Does <code>Child(int x) { System.out.println(this.name); super(); }</code> compile?</summary><p>No. Reading an instance field in the prologue uses the object before it is initialized.</p></details>
+<details class="sq"><summary>Can <code>super(...)</code> appear inside an <code>if</code> block in a constructor?</summary><p>No. The explicit constructor call must be a top-level statement of the constructor body.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study OCP Java for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../java-se/">Open the OCP Java study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../classes-fields-methods-constructors-initializer-blocks-and-initializat/">← Classes, fields, methods, constructors, initializer blocks a</a><a href="../inheritance-overriding-vs-overloading-vs-hiding-polymorphism-and-casti/">Inheritance, overriding vs overloading vs hiding, polymorphi →</a></nav>
+</main>
+</body>
+</html>

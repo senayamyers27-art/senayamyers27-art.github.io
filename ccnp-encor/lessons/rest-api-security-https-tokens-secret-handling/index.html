@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>REST API security: HTTPS, tokens, secret handling · ENCOR Lesson</title>
+<meta name="description" content="Controllers such as Catalyst Center and SD-WAN Manager, and devices running RESTCONF, expose REST APIs that can read and change the entire network. Whoever">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="REST API security: HTTPS, tokens, secret handling · ENCOR Lesson">
+<meta property="og:description" content="Controllers such as Catalyst Center and SD-WAN Manager, and devices running RESTCONF, expose REST APIs that can read and change the entire network. Whoever">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ccnp-encor/lessons/rest-api-security-https-tokens-secret-handling/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ccnp-encor/lessons/rest-api-security-https-tokens-secret-handling/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">ENCOR</a> / <a href="../">Lessons</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2 · Domain 5: Security</p>
+<h1>REST API security: HTTPS, tokens, secret handling</h1>
+<article class="lbody">
+<p>Controllers such as Catalyst Center and SD-WAN Manager, and devices running RESTCONF, expose REST APIs that can read and change the entire network. Whoever holds valid API credentials effectively holds administrator access. ENCOR expects you to understand how these APIs are protected and how to handle credentials safely in automation.</p>
+<p>Transport security comes first. APIs should be reachable only over HTTPS, which uses TLS (Transport Layer Security) to encrypt requests and responses and to prove the server's identity with a certificate. Plain HTTP would expose credentials and tokens to anyone on the path. Clients should validate the server certificate against a trusted certificate authority. Disabling verification, for example with <code>verify=False</code> in Python requests, is common in labs with self-signed certificates but in production it allows man-in-the-middle attacks. The better fix is to install a certificate from your enterprise certificate authority on the controller or device, or to point the client at the correct CA bundle.</p>
+<p>Authentication methods vary. HTTP Basic authentication sends a base64-encoded username and password in the Authorization header on each request; base64 is encoding, not encryption, so it is only acceptable over HTTPS. Most controllers use token-based authentication instead: the client sends credentials once to an authentication endpoint and receives a token, then includes the token in subsequent requests. Catalyst Center, for example, returns a token from its authentication endpoint that you pass in the <code>X-Auth-Token</code> header. Tokens expire after a set time, limiting the damage if one leaks. Other schemes include API keys (long-lived secrets identifying an application), OAuth 2.0 bearer tokens (<code>Authorization: Bearer &lt;token&gt;</code>) with scopes, and session cookies with cross-site request forgery (CSRF) tokens, which SD-WAN Manager uses.</p>
+<p>Authorization should follow least privilege. Create service accounts for automation with only the roles they need, such as read-only for monitoring scripts, rather than reusing a personal administrator account. Controllers support role-based access control for this. Log and review API activity, and apply rate limiting and source address restrictions where possible.</p>
+<p>Secret handling is where most real-world failures happen. Never hard-code passwords, tokens or keys in scripts, and never commit them to version control; a secret pushed to a repository should be considered compromised and rotated even if deleted later. Instead, read secrets from environment variables, a protected configuration file excluded from the repository, or, best, a secrets manager or vault that provides access control, auditing and rotation. Mask secrets in logs and error messages. Rotate credentials periodically and immediately when someone leaves or a leak is suspected. Store tokens only in memory for the length of the job, and request a fresh one when they expire.</p>
+<p>Finally, validate input and handle errors: a 401 response means authentication failed or the token expired, and a 403 means the identity is authenticated but not permitted, which is a signal to check roles rather than retry.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>HTTPS</dt><dd>HTTP protected by TLS, encrypting traffic and authenticating the server with a certificate.</dd><dt>Token authentication</dt><dd>Exchanging credentials once for a time-limited token that is sent with later requests.</dd><dt>Bearer token</dt><dd>A token presented in the Authorization header; whoever holds it can use it.</dd><dt>Least privilege</dt><dd>Granting an account only the permissions its task requires.</dd><dt>Secrets manager</dt><dd>A system that stores credentials securely with access control, auditing and rotation.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A developer's script for Catalyst Center contains an administrator password in plain text and is pushed to a shared Git repository. The team rotates the password, creates a read-only service account for the script, stores its credentials in the company vault, and changes the script to fetch them at runtime and request a fresh token for each run.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Basic authentication is only encoded, not encrypted, so it needs HTTPS. 401 means authenticate again; 403 means you lack permission. A leaked secret must be rotated, not just deleted from the file.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why is verify=False dangerous in production scripts?</summary><p>It disables certificate validation, allowing a man-in-the-middle to impersonate the API server and capture credentials or tokens.</p></details>
+<details class="sq"><summary>Why do token-based APIs improve on sending credentials with every request?</summary><p>Credentials are sent once; the token is time-limited and can be scoped, reducing exposure if it leaks.</p></details>
+<details class="sq"><summary>Name two safe places to keep API secrets for a script.</summary><p>Environment variables or, preferably, a secrets manager or vault; not in the script or repository.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study ENCOR for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ccnp-encor/">Open the ENCOR study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../control-plane-policing-copp/">← Control Plane Policing (CoPP)</a><a href="../network-security-design-threat-defense-endpoint-security-next-generati/">Network security design: threat defense, endpoint security,  →</a></nav>
+</main>
+</body>
+</html>

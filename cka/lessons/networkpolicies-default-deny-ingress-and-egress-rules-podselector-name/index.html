@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NetworkPolicies: default deny, ingress and egress rules… · CKA Lesson</title>
+<meta name="description" content="By default, every Pod can talk to every other Pod. NetworkPolicies let you restrict that, like a firewall defined with labels.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="NetworkPolicies: default deny, ingress and egress rules… · CKA Lesson">
+<meta property="og:description" content="By default, every Pod can talk to every other Pod. NetworkPolicies let you restrict that, like a firewall defined with labels.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/networkpolicies-default-deny-ingress-and-egress-rules-podselector-name/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/networkpolicies-default-deny-ingress-and-egress-rules-podselector-name/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 3: Services and Networking</p>
+<h1>NetworkPolicies: default deny, ingress and egress rules, podSelector, namespaceSelector (kubernetes.io/metadata.name), ipBlock, ports</h1>
+<article class="lbody">
+<p>By default, every Pod can talk to every other Pod. NetworkPolicies let you restrict that, like a firewall defined with labels. They are enforced by the CNI plugin, so a plugin without policy support (plain Flannel, for example) silently ignores them.</p>
+<p>A policy selects Pods with <code>spec.podSelector</code> in its own namespace; an empty selector <code>{}</code> means all Pods in the namespace. <code>policyTypes</code> lists Ingress, Egress or both. Once a Pod is selected by any policy for a direction, only traffic explicitly allowed by some policy is permitted in that direction. Policies are additive allow-lists; there are no deny rules, and multiple policies are combined as a union.</p>
+<pre class="code" tabindex="0"><code># default deny all ingress and egress in namespace app
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: default-deny, namespace: app}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]</code></pre>
+<p>Rules list peers in <code>from</code> (ingress) or <code>to</code> (egress) and optional <code>ports</code>. A peer can be a <code>podSelector</code> (Pods in the policy's namespace), a <code>namespaceSelector</code> (all Pods in matching namespaces) or an <code>ipBlock</code> with a <code>cidr</code> and optional <code>except</code> ranges, typically for traffic outside the cluster. Every namespace automatically carries the label <code>kubernetes.io/metadata.name=&lt;name&gt;</code>, so you can select a namespace by name without adding labels.</p>
+<p>The single most tested detail is AND versus OR. A podSelector and a namespaceSelector in the same list item mean both: Pods with that label in those namespaces. As two separate items (two dashes) they mean either: any Pod with that label in this namespace, or any Pod in those namespaces.</p>
+<pre class="code" tabindex="0"><code>ingress:
+- from:
+  - namespaceSelector:
+      matchLabels: {kubernetes.io/metadata.name: frontend}
+    podSelector:            # same item: AND
+      matchLabels: {app: web}
+  ports:
+  - {protocol: TCP, port: 8080}
+egress:
+- to:
+  - namespaceSelector: {}
+    podSelector: {matchLabels: {k8s-app: kube-dns}}
+  ports:
+  - {protocol: UDP, port: 53}
+  - {protocol: TCP, port: 53}</code></pre>
+<p>When you add an egress default deny, remember DNS. Without an egress rule allowing UDP and TCP port 53 to the CoreDNS Pods, name lookups fail and it looks as if every connection is broken. Replies to allowed connections are permitted automatically, because enforcement is stateful. Ports can be numbers or named container ports, and <code>endPort</code> allows a range.</p>
+<p>Test policies with a temporary Pod carrying the right labels, for example <code>kubectl run t --rm -it --image=busybox -l app=web -n frontend -- wget -qO- -T 2 api.app:8080</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>NetworkPolicy</dt><dd>A namespaced object that allow-lists ingress and egress traffic for selected Pods.</dd><dt>Default deny</dt><dd>A policy selecting all Pods with no allow rules, blocking all traffic in the listed directions.</dd><dt>namespaceSelector</dt><dd>A peer selector matching all Pods in namespaces whose labels match.</dd><dt>ipBlock</dt><dd>A peer defined by a CIDR range, with optional exceptions.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>After applying a default-deny policy for Egress in namespace <code>api</code>, every request fails with a name resolution error. Adding an egress rule allowing port 53 over UDP and TCP to Pods labelled k8s-app=kube-dns in any namespace restores DNS, and further rules then allow only the database port.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Count the dashes: podSelector and namespaceSelector under one dash are ANDed, under separate dashes are ORed. And egress deny without a DNS exception breaks everything.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How do you select the namespace named monitoring without adding labels to it?</summary><p>Use a namespaceSelector matching kubernetes.io/metadata.name: monitoring.</p></details>
+<details class="sq"><summary>If no NetworkPolicy selects a Pod, what traffic is allowed to it?</summary><p>All traffic; isolation only begins once some policy selects the Pod for that direction.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../endpointslices-services-without-selectors-externaltrafficpolicy-and-se/">← EndpointSlices, Services without selectors, externalTrafficP</a><a href="../gateway-api-gatewayclass-gateway-listeners-and-allowedroutes-httproute/">Gateway API: GatewayClass, Gateway listeners and allowedRout →</a></nav>
+</main>
+</body>
+</html>

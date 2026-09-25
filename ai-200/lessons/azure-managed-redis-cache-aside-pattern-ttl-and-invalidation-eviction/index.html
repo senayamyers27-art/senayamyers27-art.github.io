@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Azure Managed Redis: cache-aside pattern, TTL and… · AI-200 Lesson</title>
+<meta name="description" content="Redis is an in-memory data store that answers in well under a millisecond, which makes it the standard cache in front of slower databases and expensive AI ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Azure Managed Redis: cache-aside pattern, TTL and… · AI-200 Lesson">
+<meta property="og:description" content="Redis is an in-memory data store that answers in well under a millisecond, which makes it the standard cache in front of slower databases and expensive AI ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/azure-managed-redis-cache-aside-pattern-ttl-and-invalidation-eviction/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/azure-managed-redis-cache-aside-pattern-ttl-and-invalidation-eviction/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 2: Develop AI solutions by using Azure data management services</p>
+<h1>Azure Managed Redis: cache-aside pattern, TTL and invalidation, eviction policies</h1>
+<article class="lbody">
+<p>Redis is an in-memory data store that answers in well under a millisecond, which makes it the standard cache in front of slower databases and expensive AI model calls. Azure Managed Redis is Microsoft's current managed Redis offering, built on Redis Enterprise software, with tiers optimized for memory, balance or compute, clustering, high availability and optional modules such as search and JSON. From Python you connect with the <code>redis</code> (redis-py) package over TLS, authenticating with an access key or, preferably, Microsoft Entra ID.</p>
+<p>The most common caching pattern is cache-aside (lazy loading). The application, not the cache, is in charge. On a read, the app checks the cache first. On a hit, it returns the cached value. On a miss, it reads from the database, writes the result into the cache with an expiry, and returns it. The cache only ever holds data someone asked for.</p>
+<pre class="code" tabindex="0"><code>import json, redis
+r = redis.Redis(host=HOST, port=10000, ssl=True, password=KEY)
+
+def get_product(pid):
+    key = f&quot;product:{pid}&quot;
+    cached = r.get(key)
+    if cached:
+        return json.loads(cached)
+    product = db_read_product(pid)
+    r.set(key, json.dumps(product), ex=300)   # TTL 300 seconds
+    return product
+
+def update_product(pid, data):
+    db_write_product(pid, data)
+    r.delete(f&quot;product:{pid}&quot;)                 # invalidate</code></pre>
+<p>TTL (time to live) is how long a key lives before Redis removes it. Set it with <code>ex=</code> on SET or with EXPIRE; check it with TTL. A TTL bounds how stale cached data can be and frees memory automatically. Short TTLs mean fresher data and more database load; long TTLs mean the opposite. Adding a little random jitter to TTLs avoids many keys expiring together and stampeding the database.</p>
+<p>TTL alone allows stale reads until expiry. Invalidation removes or updates the cached entry when the source changes. With cache-aside, the usual approach is: write to the database, then delete the cache key, so the next read reloads fresh data. Deleting is safer than writing the new value into the cache, because it avoids races where an older value overwrites a newer one. For events from other systems, a change feed or message can drive invalidation.</p>
+<p>When memory is full, the eviction policy decides what happens. <code>noeviction</code> rejects new writes with an error. <code>allkeys-lru</code> evicts the least recently used keys from all keys, a good default for a pure cache. <code>volatile-lru</code> evicts least recently used keys only among keys that have a TTL, protecting keys without expiry. There are LFU (least frequently used) variants, <code>allkeys-random</code> and <code>volatile-random</code>, and <code>volatile-ttl</code>, which evicts keys closest to expiring first. If your cache holds only disposable data, an allkeys policy fits; if the same instance holds data that must not disappear, use a volatile policy and give only cache entries a TTL.</p>
+<p>Monitor the cache hit ratio, memory use and evictions. A low hit ratio suggests TTLs are too short or keys are too specific; frequent evictions suggest the cache is too small.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Cache-aside</dt><dd>A pattern where the app checks the cache, loads from the database on a miss and populates the cache itself.</dd><dt>TTL</dt><dd>Time to live: the number of seconds a key exists before Redis expires it automatically.</dd><dt>Invalidation</dt><dd>Removing or refreshing a cached entry when the underlying data changes.</dd><dt>Eviction policy</dt><dd>The rule Redis follows to free memory when full, such as allkeys-lru or volatile-lru.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A product page API took 120 ms per request reading PostgreSQL. With cache-aside and a 5-minute TTL in Azure Managed Redis, repeated reads returned in a few milliseconds. When an admin changed a price, customers saw the old price for minutes, so the update path now deletes the product key right after the database write, and the next read reloads it.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Know the policy names: allkeys-* evicts from every key, volatile-* only from keys with a TTL, and noeviction returns errors on writes when memory is full.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>In cache-aside, who loads data into the cache on a miss?</summary><p>The application: it reads the database, then writes the value into the cache with a TTL.</p></details>
+<details class="sq"><summary>Why delete the cache key after a database update instead of writing the new value?</summary><p>Deleting avoids races where a slower writer puts stale data back into the cache; the next read reloads the current value.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../retrieval-augmented-generation-chunking-embedding-storing-top-k-retrie/">← Retrieval-augmented generation: chunking, embedding, storing</a><a href="../redis-vector-indexes-and-semantic-caching-of-model-responses/">Redis vector indexes and semantic caching of model responses →</a></nav>
+</main>
+</body>
+</html>

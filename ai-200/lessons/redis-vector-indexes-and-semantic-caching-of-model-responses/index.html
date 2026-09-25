@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Redis vector indexes and semantic caching of model responses · AI-200 Lesson</title>
+<meta name="description" content="Redis is not only a key-value cache. With the search module (RediSearch, part of Redis Stack and available as a module on Azure Managed Redis), Redis can i">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Redis vector indexes and semantic caching of model responses · AI-200 Lesson">
+<meta property="og:description" content="Redis is not only a key-value cache. With the search module (RediSearch, part of Redis Stack and available as a module on Azure Managed Redis), Redis can i">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/redis-vector-indexes-and-semantic-caching-of-model-responses/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/redis-vector-indexes-and-semantic-caching-of-model-responses/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 2: Develop AI solutions by using Azure data management services</p>
+<h1>Redis vector indexes and semantic caching of model responses</h1>
+<article class="lbody">
+<p>Redis is not only a key-value cache. With the search module (RediSearch, part of Redis Stack and available as a module on Azure Managed Redis), Redis can index fields inside hashes or JSON documents, including vector fields, and run K-nearest-neighbor queries in memory. On Azure Managed Redis you choose modules when you create the cache, so plan for search up front.</p>
+<p>You create an index with <code>FT.CREATE</code>, naming the key prefix to index, the data structure (HASH or JSON) and a schema. A vector field declares its algorithm (FLAT for exact search, HNSW for approximate), the element type (such as FLOAT32), the dimension count and the distance metric (COSINE, L2 or IP). Every key written with that prefix is indexed automatically.</p>
+<pre class="code" tabindex="0"><code>FT.CREATE idx:cache ON HASH PREFIX 1 semcache: SCHEMA
+  prompt TEXT
+  model TAG
+  embedding VECTOR HNSW 6 TYPE FLOAT32 DIM 1536 DISTANCE_METRIC COSINE
+
+FT.SEARCH idx:cache &quot;(@model:{gpt-small})=&gt;[KNN 3 @embedding $vec AS score]&quot;
+  PARAMS 2 vec &lt;binary float32 bytes&gt; SORTBY score DIALECT 2</code></pre>
+<p>The KNN query syntax combines a pre-filter (here, a TAG filter on model) with a vector search, and the <code>$vec</code> parameter carries the query vector as raw bytes, which in Python you produce with NumPy's <code>astype(np.float32).tobytes()</code>. DIALECT 2 is required for this parameterized vector syntax. Results come back with the distance score; for COSINE, a smaller distance means more similar.</p>
+<p>Semantic caching applies this to model calls. A normal cache only hits on exactly the same key, but users ask the same question in many phrasings: &quot;How do I reset my password?&quot; and &quot;I forgot my password, what now?&quot;. A semantic cache embeds each incoming prompt, searches the cache index for the nearest previous prompt and, if the distance is below a threshold, returns the stored answer without calling the model. On a miss, the app calls the model, then stores the prompt, its embedding and the response with a TTL.</p>
+<p>The benefit is lower latency and lower model cost for repetitive traffic such as FAQs and support bots. The risks need design. The similarity threshold is a trade-off: too loose and users get answers to a different question; too strict and the cache rarely hits. Scope entries with filters, such as model version, language, tenant or user, so one tenant's cached answer never reaches another, and do not cache responses that contain personal data or depend on the user's own context. Use TTLs so answers based on changing facts expire, and invalidate entries when the underlying documents change.</p>
+<p>Semantic caching complements RAG rather than replacing it: RAG grounds answers in your data, and the semantic cache avoids repeating the whole retrieval-and-generation path for questions that have effectively been answered already.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>FT.CREATE</dt><dd>The Redis search command that defines an index over hashes or JSON keys, including vector fields.</dd><dt>KNN query</dt><dd>A Redis search query that returns the K nearest vectors to a supplied query vector.</dd><dt>Semantic cache</dt><dd>A cache that returns stored model responses for prompts whose embeddings are similar enough to the new prompt.</dd><dt>Similarity threshold</dt><dd>The maximum distance at which a cached prompt is considered a match in a semantic cache.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A support bot receives thousands of password questions daily in slightly different words. The team adds a Redis semantic cache: each prompt is embedded and searched with KNN 1, filtered by language and model version, and cached answers with cosine distance under a tuned threshold are returned immediately. Model calls for common questions fell sharply, and entries expire after a day so policy changes flow through.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Semantic caching matches meaning, not exact text, so the exam trade-off is the similarity threshold; always scope cache entries (tenant, model, language) and give them a TTL.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Besides the algorithm (FLAT or HNSW), which three settings does a Redis VECTOR field need?</summary><p>The element type, the number of dimensions and the distance metric, for example TYPE FLOAT32 DIM 1536 DISTANCE_METRIC COSINE.</p></details>
+<details class="sq"><summary>What happens if a semantic cache's similarity threshold is too loose?</summary><p>Different questions are treated as the same, so users receive cached answers that do not fit what they asked.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../azure-managed-redis-cache-aside-pattern-ttl-and-invalidation-eviction/">← Azure Managed Redis: cache-aside pattern, TTL and invalidati</a><a href="../choosing-the-store-cosmos-db-vs-postgresql-pgvector-vs-redis-for-a-giv/">Choosing the store: Cosmos DB vs PostgreSQL + pgvector vs Re →</a></nav>
+</main>
+</body>
+</html>

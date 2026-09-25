@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>System logging (`/var/log/messages`, `show log`) and… · JNCIA-Junos Lesson</title>
+<meta name="description" content="Logs tell you what the device has been doing: interfaces going up and down, commits, logins, routing protocol neighbors changing state and hardware events.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="System logging (`/var/log/messages`, `show log`) and… · JNCIA-Junos Lesson">
+<meta property="og:description" content="Logs tell you what the device has been doing: interfaces going up and down, commits, logins, routing protocol neighbors changing state and hardware events.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/jncia-junos/lessons/system-logging-var-log-messages-show-log-and-protocol-traceoptions/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/jncia-junos/lessons/system-logging-var-log-messages-show-log-and-protocol-traceoptions/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">JNCIA-Junos</a> / <a href="../">Lessons</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106 · Domain 5: Operational monitoring and maintenance</p>
+<h1>System logging (`/var/log/messages`, `show log`) and protocol traceoptions</h1>
+<article class="lbody">
+<p>Logs tell you what the device has been doing: interfaces going up and down, commits, logins, routing protocol neighbors changing state and hardware events. Junos writes these to files under <code>/var/log</code>, and the most important one is <code>messages</code>, which is configured by default on most platforms to collect events at notice level and above from all facilities.</p>
+<p>You read logs from operational mode with <code>show log messages</code>. The output can be long, so pipe it: <code>show log messages | match ge-0/0/1</code> finds lines mentioning an interface, <code>show log messages | last 20</code> shows the most recent entries, and <code>| except</code> hides noisy lines. Another useful file is <code>interactive-commands</code>, if configured, which records the commands users typed. <code>show log</code> alone lists the files in <code>/var/log</code>.</p>
+<pre class="code" tabindex="0"><code>user@R1&gt; show log messages | match SNMP_TRAP_LINK | last 3
+Mar  2 10:01:12 R1 mib2d[1780]: SNMP_TRAP_LINK_DOWN: ifIndex 526, ifAdminStatus up(1), ifOperStatus down(2), ifName ge-0/0/1</code></pre>
+<p>To watch a log live, use <code>monitor start messages</code>. New lines are printed to your terminal as they are written, which is ideal while you reproduce a problem. Stop it with <code>monitor stop</code>. You can also press Esc-Q to pause the output temporarily. Log files rotate when they reach their size limit, keeping a set of compressed older files such as <code>messages.0.gz</code>.</p>
+<p>Syslog tells you what happened; traceoptions tell you why. Traceoptions are a detailed debugging facility you enable per protocol or process. You choose a file name and one or more flags that select what to record. For OSPF, for example, the <code>hello</code> flag records hello packets, <code>error</code> records errors and <code>state</code> records neighbor state changes.</p>
+<pre class="code" tabindex="0"><code>set protocols ospf traceoptions file ospf-trace size 1m files 3
+set protocols ospf traceoptions flag hello detail
+set protocols ospf traceoptions flag error</code></pre>
+<p>After committing, read the trace with <code>show log ospf-trace</code> or watch it with <code>monitor start ospf-trace</code>. Trace files are also stored in <code>/var/log</code>. Traceoptions can generate a lot of output and use Routing Engine CPU, so enable only the flags you need, limit the file size and number of files, and remove or deactivate the traceoptions when you finish. The <code>all</code> flag is tempting but is usually far too verbose on a production device.</p>
+<p>A typical workflow is: check <code>show log messages</code> for the event (for example, an OSPF neighbor went down), then enable traceoptions for that protocol to see the details (for example, that hello intervals do not match), fix the problem and then turn the tracing off.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>/var/log/messages</dt><dd>The main system log file on Junos, holding events from all facilities at the configured severity.</dd><dt>show log</dt><dd>Displays a log file from /var/log, or lists the files when used alone.</dd><dt>monitor start</dt><dd>Prints new lines of a log or trace file to the terminal in real time until <code>monitor stop</code>.</dd><dt>traceoptions</dt><dd>Per-protocol or per-process debugging configuration that writes detailed events to a trace file based on selected flags.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An OSPF adjacency to a new router will not form. <code>show log messages | match OSPF</code> shows nothing useful, so the engineer enables <code>traceoptions</code> with the <code>hello</code> and <code>error</code> flags. The trace shows hellos arriving with a dead interval of 120 seconds while the local setting is 40. Matching the timers brings the neighbor up, and she deletes the traceoptions.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Syslog records events at a chosen severity; traceoptions give protocol-level debugging detail. Both end up in /var/log and both are read with <code>show log &lt;file&gt;</code>. Always remove traceoptions after troubleshooting.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How do you display only the last 10 lines of the messages log?</summary><p><code>show log messages | last 10</code>.</p></details>
+<details class="sq"><summary>How do you see new log entries in real time and then stop?</summary><p><code>monitor start messages</code> to begin and <code>monitor stop</code> to end.</p></details>
+<details class="sq"><summary>Why should traceoptions be removed after use?</summary><p>They can generate large files and consume Routing Engine CPU and storage.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study JNCIA-Junos for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../jncia-junos/">Open the JNCIA-Junos study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../network-tools-ping-traceroute-ssh-telnet-from-the-cli/">← Network tools: ping, traceroute, SSH, telnet from the CLI</a><a href="../managing-files-file-list-file-show-request-system-storage-cleanup/">Managing files: `file list`, `file show`, `request system st →</a></nav>
+</main>
+</body>
+</html>

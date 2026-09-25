@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>/etc/fstab fields: device, mount point, type, options… · RHCSA Lesson</title>
+<meta name="description" content="/etc/fstab (file system table) lists file systems to mount at boot. Each non-comment line has six fields separated by spaces or tabs.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="/etc/fstab fields: device, mount point, type, options… · RHCSA Lesson">
+<meta property="og:description" content="/etc/fstab (file system table) lists file systems to mount at boot. Each non-comment line has six fields separated by spaces or tabs.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/etc-fstab-fields-device-mount-point-type-options-dump-fsck-order/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/etc-fstab-fields-device-mount-point-type-options-dump-fsck-order/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 6: Create and configure file systems</p>
+<h1>/etc/fstab fields: device, mount point, type, options, dump, fsck order</h1>
+<article class="lbody">
+<p><code>/etc/fstab</code> (file system table) lists file systems to mount at boot. Each non-comment line has six fields separated by spaces or tabs. You will edit this file on nearly every RHCSA storage task, so learn the fields in order until you can write a line without looking.</p>
+<pre class="code" tabindex="0"><code># device                  mount point  type  options           dump fsck
+UUID=5b2e...c7            /data        xfs   defaults          0    0
+LABEL=logs                /logs        ext4  defaults,noatime  0    2
+/dev/vg1/lvapp            /app         xfs   defaults          0    0
+UUID=3f1c...9a2e          none         swap  defaults          0    0
+server1:/export/share     /mnt/share   nfs   defaults,_netdev  0    0</code></pre>
+<p>Field 1 is the device: <code>UUID=</code>, <code>LABEL=</code>, a logical volume path such as <code>/dev/vg1/lvapp</code> (stable because LVM names persist), or <code>host:/path</code> for NFS (Network File System). Avoid raw names like <code>/dev/vdb1</code> for disks. Field 2 is the mount point, an existing absolute directory, or <code>none</code> for swap. Field 3 is the type: <code>xfs</code>, <code>ext4</code>, <code>vfat</code>, <code>swap</code>, <code>nfs</code> and so on.</p>
+<p>Field 4 holds comma-separated options with no spaces. <code>defaults</code> means rw, suid, dev, exec, auto, nouser and async. Useful extras: <code>ro</code> (read-only), <code>noexec</code>, <code>nosuid</code>, <code>noauto</code> (do not mount at boot), <code>nofail</code> (boot continues if the device is missing), <code>_netdev</code> (wait for the network), and for vfat <code>uid=</code>, <code>gid=</code> and <code>umask=</code>.</p>
+<p>Field 5 is the dump flag, used by the old <code>dump</code> backup tool; set it to 0. Field 6 is the fsck order: 0 means never check at boot, 1 is for the root file system, and 2 is for other file systems checked after root. XFS does not use boot-time fsck, so XFS lines normally use 0, and so do swap and network file systems. ext4 data file systems commonly use 2.</p>
+<p>Workflow: get the UUID with <code>blkid</code> or <code>lsblk -f</code>, create the mount point with <code>mkdir -p</code>, add the line, run <code>systemctl daemon-reload</code>, then <code>mount -a</code> and <code>findmnt --verify</code>. Tip for speed: <code>blkid /dev/vdb1 &gt;&gt; /etc/fstab</code> appends the UUID so you can edit it into shape instead of retyping it, but clean up the extra text carefully.</p>
+<p>Order matters for nested mounts: a line for <code>/data/archive</code> must come after the line for <code>/data</code>. Fields are whitespace separated, so a space inside the options list breaks the whole line.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>/etc/fstab</dt><dd>The file that lists file systems and swap to mount or activate at boot, one six-field line each.</dd><dt>defaults</dt><dd>The option set rw, suid, dev, exec, auto, nouser and async.</dd><dt>fsck order</dt><dd>The sixth fstab field: 0 skips checking, 1 is root, 2 is other file systems checked after root.</dd><dt>nofail</dt><dd>An fstab option that lets boot continue if the device is not present.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>You need /dev/vgdata/lvweb (XFS) mounted read-only at /srv/web at boot. You add the line /dev/vgdata/lvweb /srv/web xfs ro 0 0, run systemctl daemon-reload and mount -a, and findmnt /srv/web shows the options column starting with ro.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Exam questions often ask what the fifth and sixth fields mean. Dump is legacy and set to 0; fsck order is 1 for root, 2 for others, and 0 for XFS, swap and network mounts.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>List the six fstab fields in order.</summary><p>Device, mount point, file system type, mount options, dump flag and fsck order.</p></details>
+<details class="sq"><summary>Why do XFS lines usually end in 0 0?</summary><p>The dump flag is unused, and XFS is not checked by fsck at boot (it repairs via its journal and xfs_repair), so the fsck order is 0.</p></details>
+<details class="sq"><summary>What does noauto do?</summary><p>It keeps the file system from mounting at boot or with mount -a; it mounts only when requested explicitly.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../mounting-unmounting-and-using-file-systems-mount-a-and-findmnt-verify/">← Mounting, unmounting and using file systems; mount -a and fi</a><a href="../mounting-and-unmounting-nfs-network-file-systems-mount-t-nfs-netdev/">Mounting and unmounting NFS network file systems (mount -t n →</a></nav>
+</main>
+</body>
+</html>

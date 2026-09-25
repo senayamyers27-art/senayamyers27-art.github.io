@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Records: components, canonical and compact constructors… · OCP Java Lesson</title>
+<meta name="description" content="A record is a special kind of class designed to carry immutable data. The declaration record Point(int x, int y) {} lists the components in its header, and">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Records: components, canonical and compact constructors… · OCP Java Lesson">
+<meta property="og:description" content="A record is a special kind of class designed to carry immutable data. The declaration record Point(int x, int y) {} lists the components in its header, and">
+<link rel="canonical" href="https://senayamyers27-art.github.io/java-se/lessons/records-components-canonical-and-compact-constructors-accessors-equals/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/java-se/lessons/records-components-canonical-and-compact-constructors-accessors-equals/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">OCP Java</a> / <a href="../">Lessons</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25) · Domain 3: Using object-oriented concepts in Java</p>
+<h1>Records: components, canonical and compact constructors, accessors, equals/toString</h1>
+<article class="lbody">
+<p>A record is a special kind of class designed to carry immutable data. The declaration <code>record Point(int x, int y) {}</code> lists the components in its header, and from that the compiler generates a <code>private final</code> field for each component, a canonical constructor taking all components in order, an accessor method for each component named exactly like it (<code>x()</code> and <code>y()</code>, not <code>getX()</code>), and implementations of <code>equals</code>, <code>hashCode</code> and <code>toString</code> based on all components.</p>
+<p>Records have fixed structural rules. A record is implicitly <code>final</code>, so nothing can extend it, and it implicitly extends <code>java.lang.Record</code>, so it cannot extend anything else; it can implement interfaces. You cannot declare extra instance fields in the body, though <code>static</code> fields, static methods, instance methods and nested types are allowed. The generated fields are final, so records are shallowly immutable: a <code>List</code> component can still be modified unless you copy it.</p>
+<p>The canonical constructor can be written out in full with all parameters, in which case you must assign every field yourself. More commonly you write a compact constructor, which has no parameter list: <code>record Point(int x, int y) { Point { if (x &lt; 0) throw new IllegalArgumentException(); } }</code>. Inside a compact constructor, the parameters are in scope and you can reassign them (for example to normalize or copy a value), and the fields are assigned automatically at the end. You may not assign the fields directly with <code>this.x = ...</code> in a compact constructor; that is a compile error.</p>
+<p>You can add other constructors, but each must start with (or, in Java 25, reach after a prologue) a call to another constructor using <code>this(...)</code>, eventually delegating to the canonical constructor. Records cannot call <code>super(...)</code>. You can also override an accessor, which must be <code>public</code> and have the same return type, or override <code>toString</code>, <code>equals</code> or <code>hashCode</code>.</p>
+<pre class="code" tabindex="0"><code>record Range(int low, int high) {
+    Range {                          // compact canonical constructor
+        if (low &gt; high) {
+            int tmp = low; low = high; high = tmp;  // reassign parameters
+        }
+    }
+    Range(int single) { this(single, single); }
+    int size() { return high - low; }
+}
+var r = new Range(9, 3);
+System.out.println(r);               // Range[low=3, high=9]
+System.out.println(r.low());         // 3
+System.out.println(r.equals(new Range(3, 9)));  // true</code></pre>
+<p>The generated <code>toString</code> prints the record name followed by each component and value in square brackets, such as <code>Range[low=3, high=9]</code>. The generated <code>equals</code> returns true when the other object is the same record type and all components are equal, so two separately created records with the same values are equal, which makes records reliable keys in a <code>HashMap</code> or <code>HashSet</code>.</p>
+<p>Records also pair naturally with pattern matching: a record pattern like <code>case Range(var lo, var hi)</code> deconstructs a record using its accessors, which is one reason they are central to modern Java.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Record component</dt><dd>A name and type in a record header; each becomes a private final field and a public accessor.</dd><dt>Canonical constructor</dt><dd>The constructor whose parameters match the record components in order and that assigns every field.</dd><dt>Compact constructor</dt><dd>A canonical constructor written without a parameter list, used to validate or normalize parameters before fields are assigned automatically.</dd><dt>Accessor method</dt><dd>The generated method named after a component, such as x(), that returns its value.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An order service uses <code>record Money(long cents, String currency)</code> for amounts. Its compact constructor rejects null currencies and upper-cases the code, so every Money object in the system is valid, and two Money objects for the same amount compare equal in tests.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Record accessors are named after the components (name(), not getName()). In a compact constructor, reassign the parameters, never this.field, and never declare a parameter list.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Can a record declare a private instance field in its body?</summary><p>No. Only the components become instance fields; the body may add static fields but not instance fields.</p></details>
+<details class="sq"><summary>What is printed by <code>System.out.println(new Point(1, 2));</code> for <code>record Point(int x, int y)</code>?</summary><p>Point[x=1, y=2].</p></details>
+<details class="sq"><summary>Can a record extend another class?</summary><p>No. It implicitly extends java.lang.Record, but it may implement interfaces.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study OCP Java for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../java-se/">Open the OCP Java study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../abstract-classes-and-interfaces-default-static-and-private-interface-m/">← Abstract classes and interfaces: default, static and private</a><a href="../sealed-classes-and-interfaces-permits-final-sealed-and-non-sealed-subc/">Sealed classes and interfaces: permits, final, sealed and no →</a></nav>
+</main>
+</body>
+</html>

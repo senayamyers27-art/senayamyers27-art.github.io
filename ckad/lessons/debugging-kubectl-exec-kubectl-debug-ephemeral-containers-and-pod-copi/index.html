@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debugging: kubectl exec, kubectl debug (ephemeral… · CKAD Lesson</title>
+<meta name="description" content="Logs and events do not always explain a problem. Sometimes you need to get inside the Pod's environment, test the network from within the cluster, or reach">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Debugging: kubectl exec, kubectl debug (ephemeral… · CKAD Lesson">
+<meta property="og:description" content="Logs and events do not always explain a problem. Sometimes you need to get inside the Pod's environment, test the network from within the cluster, or reach">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/debugging-kubectl-exec-kubectl-debug-ephemeral-containers-and-pod-copi/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/debugging-kubectl-exec-kubectl-debug-ephemeral-containers-and-pod-copi/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 3: Application Observability and Maintenance</p>
+<h1>Debugging: kubectl exec, kubectl debug (ephemeral containers and Pod copies), port-forward, temporary busybox Pods</h1>
+<article class="lbody">
+<p>Logs and events do not always explain a problem. Sometimes you need to get inside the Pod's environment, test the network from within the cluster, or reach an app from your own terminal. kubectl gives you four tools for this.</p>
+<p><code>kubectl exec</code> runs a command inside a running container. <code>kubectl exec web-5d8f7 -- cat /etc/nginx/nginx.conf</code> runs one command; <code>kubectl exec -it web-5d8f7 -c app -- sh</code> opens an interactive shell (<code>-i</code> keeps standard input open, <code>-t</code> allocates a terminal). Everything after <code>--</code> is the command. Use it to check files, environment variables (<code>env</code>), mounted volumes and connectivity. It only works if the container is running and the image actually contains the tool you call; minimal and distroless images often have no shell at all.</p>
+<p><code>kubectl debug</code> handles those cases. With an ephemeral container, <code>kubectl debug -it web-5d8f7 --image=busybox --target=app</code>, kubectl adds a temporary container to the running Pod. It shares the Pod's network, and with <code>--target</code> it shares the process namespace of that container, so you can see its processes. Ephemeral containers cannot be removed or restarted and have no ports or probes; they exist purely for troubleshooting. With a copy, <code>kubectl debug web-5d8f7 -it --copy-to=web-debug --container=app -- sh</code>, kubectl creates a new Pod based on the original and lets you change its command or image, useful when the original crashes immediately and you want to start it with a shell instead. Delete the copy afterwards.</p>
+<pre class="code" tabindex="0"><code>kubectl exec -it web-5d8f7 -c app -- sh
+kubectl debug -it web-5d8f7 --image=busybox --target=app
+kubectl debug web-5d8f7 -it --copy-to=web-debug --container=app -- sh
+kubectl port-forward pod/web-5d8f7 8080:80
+kubectl port-forward svc/web 8080:80
+kubectl run tmp --image=busybox --rm -it --restart=Never -- sh</code></pre>
+<p><code>kubectl port-forward</code> opens a tunnel from a port on your machine, through the API server, to a Pod. <code>kubectl port-forward pod/web-5d8f7 8080:80</code> makes <code>curl localhost:8080</code> reach port 80 in the Pod. You can target <code>svc/web</code> or <code>deploy/web</code>, but kubectl still picks a single Pod behind it; it does not load-balance. It runs in the foreground until stopped; add <code>&amp;</code> in a shell to background it. It is ideal for testing an app without creating a Service or Ingress.</p>
+<p>A temporary Pod tests things from inside the cluster network, as another Pod would see them. <code>kubectl run tmp --image=busybox --rm -it --restart=Never -- sh</code> gives you a shell that is deleted when you exit. From there, <code>wget -qO- web.default.svc.cluster.local</code> tests a Service, and <code>nslookup web</code> tests DNS. For a single check, <code>kubectl run tmp --image=busybox --rm -it --restart=Never -- wget -qO- -T 2 web:80</code> prints the result and cleans up. This is the fastest way to confirm a NetworkPolicy blocks or allows traffic. The <code>curlimages/curl</code> or <code>nicolaka/netshoot</code> images are alternatives when you need more tools.</p>
+<p>Pick the tool by question: inside the app's container, use exec; tools missing or container crashing, use debug; from your laptop, use port-forward; as another Pod would see it, use a temporary Pod.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>kubectl exec</dt><dd>Runs a command, or an interactive shell with -it, inside a running container.</dd><dt>Ephemeral container</dt><dd>A temporary debugging container added to a running Pod by kubectl debug.</dd><dt>kubectl debug --copy-to</dt><dd>Creates a modified copy of a Pod for troubleshooting.</dd><dt>kubectl port-forward</dt><dd>Tunnels a local port to a port on a Pod through the API server.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A distroless Go service returns errors but has no shell for exec. The developer runs <code>kubectl debug -it api-6f4 --image=busybox --target=api</code>, then uses <code>wget</code> from the ephemeral container to confirm the app answers on localhost:8080 but cannot reach the database hostname, which points to a DNS configuration issue.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Remember <code>--rm -it --restart=Never</code> for throwaway test Pods, and that port-forward to a Service still reaches only one Pod.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What can you do when a container image has no shell?</summary><p>Use <code>kubectl debug</code> to add an ephemeral container with tools such as busybox, sharing the Pod's network and optionally its process namespace.</p></details>
+<details class="sq"><summary>What does <code>kubectl port-forward svc/web 8080:80</code> do?</summary><p>Forwards local port 8080 to port 80 of one Pod selected by the Service.</p></details>
+<details class="sq"><summary>Why test a Service from a temporary busybox Pod rather than your terminal?</summary><p>It sees the cluster network and DNS as other Pods do, including NetworkPolicy effects.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../reading-pod-status-pending-imagepullbackoff-crashloopbackoff-oomkilled/">← Reading Pod status: Pending, ImagePullBackOff, CrashLoopBack</a><a href="../output-tricks-for-fast-troubleshooting-o-wide-o-yaml-jsonpath-show-lab/">Output tricks for fast troubleshooting: -o wide, -o yaml, js →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lifecycle management policies that tier or delete blobs… · Azure Administrator Lesson</title>
+<meta name="description" content="Setting access tiers by hand does not scale when a storage account holds millions of blobs. Lifecycle management lets you define rules that Azure runs auto">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Lifecycle management policies that tier or delete blobs… · Azure Administrator Lesson">
+<meta property="og:description" content="Setting access tiers by hand does not scale when a storage account holds millions of blobs. Lifecycle management lets you define rules that Azure runs auto">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-104/lessons/lifecycle-management-policies-that-tier-or-delete-blobs-by-age/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-104/lessons/lifecycle-management-policies-that-tier-or-delete-blobs-by-age/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Azure Administrator</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure Administrator Associate AZ-104 · Domain 2: Implement and manage storage</p>
+<h1>Lifecycle management policies that tier or delete blobs by age</h1>
+<article class="lbody">
+<p>Setting access tiers by hand does not scale when a storage account holds millions of blobs. Lifecycle management lets you define rules that Azure runs automatically, moving blobs to cooler tiers as they age and deleting them when they are no longer needed. It is the standard way to keep storage costs in line with how data is actually used.</p>
+<p>A lifecycle management policy is a JSON document of rules, attached to a storage account (general-purpose v2, premium block blob or legacy Blob Storage accounts) under Data management &gt; Lifecycle management. Each rule has filters that select blobs and actions that say what to do. Filters include <code>blobTypes</code> (such as <code>blockBlob</code>), <code>prefixMatch</code> (a container name followed by an optional path, such as <code>logs/app1</code>) and <code>blobIndexMatch</code> (blob index tags). Actions apply to the current version of blobs (base blobs), and separately to previous versions and snapshots.</p>
+<p>Actions include <code>tierToCool</code>, <code>tierToCold</code>, <code>tierToArchive</code> and <code>delete</code>, each with a condition. Conditions are based on age: days since the blob was last modified (<code>daysAfterModificationGreaterThan</code>), days since creation, or days since last access (<code>daysAfterLastAccessTimeGreaterThan</code>), which requires last access time tracking to be enabled on the account. With last access time you can also use <code>enableAutoTierToHotFromCool</code> to move a blob back to Hot when it is read again.</p>
+<pre class="code" tabindex="0"><code>{
+  &quot;rules&quot;: [{
+    &quot;name&quot;: &quot;age-logs&quot;,
+    &quot;enabled&quot;: true,
+    &quot;type&quot;: &quot;Lifecycle&quot;,
+    &quot;definition&quot;: {
+      &quot;filters&quot;: { &quot;blobTypes&quot;: [&quot;blockBlob&quot;], &quot;prefixMatch&quot;: [&quot;logs/&quot;] },
+      &quot;actions&quot;: { &quot;baseBlob&quot;: {
+        &quot;tierToCool&quot;:    { &quot;daysAfterModificationGreaterThan&quot;: 30 },
+        &quot;tierToArchive&quot;: { &quot;daysAfterModificationGreaterThan&quot;: 90 },
+        &quot;delete&quot;:        { &quot;daysAfterModificationGreaterThan&quot;: 365 }
+      } }
+    }
+  }]
+}</code></pre>
+<p>The policy above moves blobs in the logs container to Cool after 30 days without modification, to Archive after 90 and deletes them after a year. The portal's list view builds the same JSON for you through a wizard, and the code view shows it. Azure runs the policy about once a day, and after you create or change a policy it can take up to 24 hours before actions start, so do not expect blobs to move immediately in a lab.</p>
+<p>Design points: order actions so tiers only get cooler over time, remember minimum retention periods (moving from Cool to Archive before 30 days incurs early deletion charges), and use a separate rule with <code>version</code> or <code>snapshot</code> actions to clean up old versions if versioning is on, otherwise old versions keep costing money.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Lifecycle management policy</dt><dd>A set of JSON rules on a storage account that automatically tier or delete blobs based on conditions.</dd><dt>prefixMatch</dt><dd>A rule filter that limits a rule to blobs whose names start with a container name and optional path.</dd><dt>daysAfterModificationGreaterThan</dt><dd>A condition that triggers an action when a blob has not been modified for more than the given number of days.</dd><dt>Last access time tracking</dt><dd>An account setting that records blob reads so rules can act on days since last access.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An IoT platform writes diagnostic files to a telemetry container. Engineers read them for a few weeks, auditors occasionally ask for older data, and nothing older than two years is needed. A lifecycle rule tiers telemetry blobs to Cool at 30 days, to Archive at 180 days and deletes them at 730 days, cutting storage cost without any scripts.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Lifecycle rules act on age since modification, creation or last access; last-access rules need access tracking enabled. Changes can take up to 24 hours to apply, and versions and snapshots need their own actions.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>You want blobs moved to Cool if nobody has read them for 60 days. What must be enabled?</summary><p>Last access time tracking on the storage account, then a rule with daysAfterLastAccessTimeGreaterThan 60.</p></details>
+<details class="sq"><summary>Which filter restricts a lifecycle rule to one container?</summary><p>prefixMatch with the container name (optionally followed by a path).</p></details>
+<details class="sq"><summary>You created a lifecycle rule an hour ago and nothing has changed. Is something wrong?</summary><p>Not necessarily; policies run about once a day and can take up to 24 hours to take effect.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Azure Administrator for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-104/">Open the Azure Administrator study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../blob-containers-and-access-tiers-hot-cool-cold-and-archive-rehydration/">← Blob containers and access tiers: Hot, Cool, Cold and Archiv</a><a href="../data-protection-blob-and-container-soft-delete-versioning-snapshots-ch/">Data protection: blob and container soft delete, versioning, →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>State contents: resource attributes, including sensitive… · Terraform Associate Lesson</title>
+<meta name="description" content="The state file is a JSON document. Open a local terraform.tfstate in a text editor and you will see a format version, the Terraform version that wrote it, ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="State contents: resource attributes, including sensitive… · Terraform Associate Lesson">
+<meta property="og:description" content="The state file is a JSON document. Open a local terraform.tfstate in a text editor and you will see a format version, the Terraform version that wrote it, ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/terraform/lessons/state-contents-resource-attributes-including-sensitive-values-in-plain/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/terraform/lessons/state-contents-resource-attributes-including-sensitive-values-in-plain/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Terraform Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004) · Domain 2: Terraform fundamentals</p>
+<h1>State contents: resource attributes, including sensitive values, in plain JSON</h1>
+<article class="lbody">
+<p>The state file is a JSON document. Open a local <code>terraform.tfstate</code> in a text editor and you will see a format version, the Terraform version that wrote it, a serial number that increases with every write, a lineage identifier that ties all versions of one state together, the root module's outputs, and a <code>resources</code> list. Each resource entry records its mode (managed or data), type, name, provider, and one or more instances with their full attribute values and dependencies.</p>
+<p>The important security point is that state contains every attribute Terraform knows about, and that includes sensitive values. A database resource's password argument, a generated <code>random_password</code> result, private keys created by the <code>tls</code> provider, and access keys returned by an identity resource are all stored, in plaintext, in the state file. Marking a variable or output <code>sensitive = true</code> hides the value from plan output and the console, but it does not remove or encrypt it in state.</p>
+<pre class="code" tabindex="0"><code>{
+  &quot;version&quot;: 4,
+  &quot;serial&quot;: 7,
+  &quot;resources&quot;: [
+    {
+      &quot;mode&quot;: &quot;managed&quot;,
+      &quot;type&quot;: &quot;random_password&quot;,
+      &quot;name&quot;: &quot;db&quot;,
+      &quot;instances&quot;: [ { &quot;attributes&quot;: { &quot;result&quot;: &quot;(plaintext secret here)&quot; } } ]
+    }
+  ]
+}</code></pre>
+<p>Because of this, you should treat state as sensitive data. Do not commit <code>terraform.tfstate</code> or its backup to Git; add them to <code>.gitignore</code>. Store state in a remote backend that encrypts data at rest and in transit and restricts who can read it, such as HCP Terraform, or a cloud storage bucket with encryption, versioning and tight access policies. Limit which people and pipelines can read state, since reading state can be equivalent to reading every secret in it. Saved plan files also contain sensitive data and need the same care.</p>
+<p>Newer Terraform versions reduce how many secrets reach state. Ephemeral values, such as ephemeral input variables and ephemeral resources, exist only during a run and are never written to state or plan files. Write-only arguments let a provider accept a value, such as a password, that Terraform sends to the API but does not store. Using a secrets manager and reading secrets at runtime, rather than generating them in Terraform, is another way to keep them out of state.</p>
+<p>To inspect state safely, use the CLI rather than opening the file: <code>terraform state list</code> shows resource addresses, <code>terraform state show ADDRESS</code> shows one resource's attributes with sensitive values redacted, and <code>terraform show -json</code> gives a machine-readable view. <code>terraform output -json</code> reveals sensitive output values in plaintext, which is useful for scripts but should be handled carefully.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>terraform.tfstate</dt><dd>The default local state file, a JSON document recording managed resources and their attributes.</dd><dt>sensitive</dt><dd>A flag on variables and outputs that redacts values in CLI output; the values are still stored in state.</dd><dt>Ephemeral value</dt><dd>A value that exists only during a Terraform run and is never persisted to state or plan files.</dd><dt>Serial and lineage</dt><dd>State metadata: the serial increments on each write, and the lineage identifies a single state's history.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A security scan of a public repository finds a committed <code>terraform.tfstate</code> containing a database administrator password. The team rotates the password, removes the file from history, adds state files to <code>.gitignore</code>, and moves state to an encrypted remote backend with restricted access.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> <code>sensitive = true</code> hides values from output, not from state. The correct protection for secrets in state is a secure, encrypted, access-controlled backend, plus ephemeral values or write-only arguments where available.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Is a variable marked <code>sensitive = true</code> encrypted in the state file?</summary><p>No. It is redacted from plan and CLI output, but state stores it in plaintext JSON, so state itself must be protected.</p></details>
+<details class="sq"><summary>Name two ways to keep a secret out of state entirely in recent Terraform versions.</summary><p>Use ephemeral values (ephemeral variables or resources) or write-only arguments, which Terraform does not persist.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Terraform Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../terraform/">Open the Terraform Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../what-state-is-for-mapping-configuration-to-real-objects-tracking-metad/">← What state is for: mapping configuration to real objects, tr</a><a href="../the-write-plan-apply-workflow-for-individuals-and-teams/">The Write → Plan → Apply workflow for individuals and teams →</a></nav>
+</main>
+</body>
+</html>

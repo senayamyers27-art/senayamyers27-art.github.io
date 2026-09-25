@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Keeping sensitive data out of code and logs: default… · Developer Associate Lesson</title>
+<meta name="description" content="Many real breaches start with a secret in the wrong place: an access key committed to a public repository, a database password in a container image, or a c">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Keeping sensitive data out of code and logs: default… · Developer Associate Lesson">
+<meta property="og:description" content="Many real breaches start with a secret in the wrong place: an access key committed to a public repository, a database password in a container image, or a c">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/keeping-sensitive-data-out-of-code-and-logs-default-credential-chain-n/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/keeping-sensitive-data-out-of-code-and-logs-default-credential-chain-n/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 2: Security</p>
+<h1>Keeping sensitive data out of code and logs: default credential chain, no hardcoded keys, CloudWatch Logs data protection masking</h1>
+<article class="lbody">
+<p>Many real breaches start with a secret in the wrong place: an access key committed to a public repository, a database password in a container image, or a customer's card number printed in a debug log. The exam checks that you know where sensitive data should and should not go, and which AWS features help.</p>
+<p>Never hardcode AWS access keys in source code, configuration files, container images or plain environment variables. Code running on AWS should rely on the default credential provider chain, which automatically finds temporary credentials from the Lambda execution role, ECS task role or EC2 instance profile and refreshes them. On a developer laptop, use named profiles with IAM Identity Center (SSO) or short-lived credentials rather than long-lived IAM user keys. In CI/CD systems outside AWS, use OIDC federation with <code>AssumeRoleWithWebIdentity</code> instead of storing keys as pipeline secrets. If a key is ever exposed, deactivate and delete it immediately, then investigate its use in CloudTrail; assume it was used.</p>
+<p>Application secrets such as database passwords and third-party API keys belong in Secrets Manager or Parameter Store SecureString, retrieved at runtime by a role that has permission to read only that secret. Keep them out of source control (use <code>.gitignore</code> for local env files), out of CloudFormation templates (use dynamic references and <code>NoEcho</code> parameters), and out of build logs. Secret-scanning tools in repositories and CI pipelines can flag secrets that slip into code.</p>
+<p>Logs are the other leak. Log what you need to troubleshoot (request IDs, operation names, error codes, timings) but not passwords, tokens, full card numbers or personal data. Avoid logging entire incoming events or request headers by default, since they may contain <code>Authorization</code> headers or personal information; log a sanitized subset instead. Structured JSON logging with explicit fields makes this easier to control than printing whole objects.</p>
+<p>Amazon CloudWatch Logs data protection adds a safety net. You attach a data protection policy to a log group (or account-wide) that uses managed data identifiers for common sensitive types, such as email addresses, credit card numbers, AWS secret keys and various national identifiers, and can include custom identifiers you define with regular expressions. Matching data is masked when viewed in the console, Logs Insights, subscriptions and exports; only principals with the <code>logs:Unmask</code> permission can see the original values. The policy can also produce audit findings, sent to CloudWatch Logs, S3 or Amazon Data Firehose, so you learn that sensitive data is being logged and can fix the code. Masking only applies to data ingested after the policy is in place.</p>
+<p>Other layers: encrypt log groups with a KMS key if required, set log retention periods instead of keeping logs forever, and restrict who can read log groups with IAM. For S3 data, Amazon Macie can discover sensitive data in buckets.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Hardcoded credentials</dt><dd>Access keys or passwords written directly into code or artifacts, easily leaked and hard to rotate.</dd><dt>Data protection policy</dt><dd>A CloudWatch Logs policy that detects and masks sensitive data in log events using data identifiers.</dd><dt>Managed data identifier</dt><dd>A predefined pattern for a sensitive data type, such as credit card numbers, used by CloudWatch Logs data protection.</dd><dt>logs:Unmask</dt><dd>The IAM permission that lets a principal view masked sensitive values in CloudWatch Logs.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A payments team discovers a debug statement logging full request bodies, including card numbers. They remove it, and also attach a data protection policy to the service's log groups with the credit card managed identifier. Future accidental leaks appear masked, only the security team holds logs:Unmask, and audit findings alert them if card data shows up again.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> For code on AWS, the right answer is a role picked up through the default credential chain, not access keys anywhere. For sensitive data in logs, the AWS-native answer is a CloudWatch Logs data protection policy.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What should a developer do with an access key accidentally pushed to a public repository?</summary><p>Deactivate and delete it immediately, review CloudTrail for its use, and switch the code to role-based or federated temporary credentials.</p></details>
+<details class="sq"><summary>Who can see the original value of data masked by CloudWatch Logs data protection?</summary><p>Only principals granted the logs:Unmask permission.</p></details>
+<details class="sq"><summary>Does a data protection policy mask events already stored before it was created?</summary><p>No; it applies to log events ingested after the policy is in place.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../secrets-and-configuration-secrets-manager-rotation-vs-systems-manager/">← Secrets and configuration: Secrets Manager (rotation) vs Sys</a><a href="../presigned-urls-for-temporary-s3-access-iam-access-analyzer-for-least-p/">Presigned URLs for temporary S3 access; IAM Access Analyzer  →</a></nav>
+</main>
+</body>
+</html>

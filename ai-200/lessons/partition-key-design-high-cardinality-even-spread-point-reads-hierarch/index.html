@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Partition key design: high cardinality, even spread… · AI-200 Lesson</title>
+<meta name="description" content="Cosmos DB scales out by partitioning. Every item's partition key value places it in a logical partition, the set of all items that share that value.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Partition key design: high cardinality, even spread… · AI-200 Lesson">
+<meta property="og:description" content="Cosmos DB scales out by partitioning. Every item's partition key value places it in a logical partition, the set of all items that share that value.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/partition-key-design-high-cardinality-even-spread-point-reads-hierarch/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/partition-key-design-high-cardinality-even-spread-point-reads-hierarch/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 2: Develop AI solutions by using Azure data management services</p>
+<h1>Partition key design: high cardinality, even spread, point reads; hierarchical partition keys</h1>
+<article class="lbody">
+<p>Cosmos DB scales out by partitioning. Every item's partition key value places it in a logical partition, the set of all items that share that value. Logical partitions are grouped onto physical partitions, each with its own storage and a share of the container's throughput. You pick the partition key path, such as <code>/customerId</code>, when creating the container, and it cannot be changed afterwards without migrating the data to a new container. That makes it the most important design decision in Cosmos DB.</p>
+<p>A good partition key has high cardinality: many distinct values, so data and load can spread across many logical and physical partitions. A key like <code>/country</code> with a handful of values, or <code>/status</code> with three, is poor. A key like <code>/userId</code> or <code>/deviceId</code> with millions of values is usually good.</p>
+<p>It must also spread load evenly, both storage and requests. If one value is far busier than others, its partition becomes a hot partition: requests to it are throttled with HTTP 429 even though the container as a whole has spare throughput, because throughput is divided among physical partitions. A single logical partition also has a storage limit of 20 GB, so any key where one value could collect unbounded data (a timestamp day for all tenants, or one huge tenant) is risky.</p>
+<p>Finally, choose a key your most frequent reads can supply. A point read with id and partition key costs about 1 RU for a 1 KB item. A query that filters on the partition key stays inside one partition. A query without it fans out to all partitions and costs more as the container grows. Look at your dominant access pattern: if the app nearly always loads data per user, <code>/userId</code> fits; if it loads per order by order id, making <code>/id</code> the partition key can be ideal for point reads.</p>
+<p>Sometimes no single property satisfies all three goals. A multitenant SaaS app partitioned by <code>/tenantId</code> suffers when one large tenant exceeds 20 GB or dominates traffic. Hierarchical partition keys (also called subpartitioning) let you define up to three levels, such as <code>/tenantId</code>, then <code>/userId</code>, then <code>/sessionId</code>. Data for one tenant can then span multiple physical partitions, while queries that filter on the tenant (a prefix of the hierarchy) are still routed efficiently to only the partitions holding that tenant.</p>
+<pre class="code" tabindex="0"><code>from azure.cosmos import PartitionKey
+db.create_container(
+    id=&quot;events&quot;,
+    partition_key=PartitionKey(path=[&quot;/tenantId&quot;, &quot;/userId&quot;], kind=&quot;MultiHash&quot;))
+container.read_item(item=&quot;e1&quot;, partition_key=[&quot;contoso&quot;, &quot;u-77&quot;])</code></pre>
+<p>An older workaround is a synthetic key, a property you compute by concatenating values (for example <code>tenantId-userId</code>) or appending a random suffix. It still works, but hierarchical keys are now the cleaner answer when a question mentions a large tenant exceeding the logical partition limit.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Logical partition</dt><dd>All items sharing one partition key value; limited to 20 GB of storage.</dd><dt>Physical partition</dt><dd>An internal unit of storage and throughput that hosts many logical partitions.</dd><dt>Hot partition</dt><dd>A partition receiving a disproportionate share of requests, causing 429 throttling despite spare total throughput.</dd><dt>Hierarchical partition key</dt><dd>A partition key of up to three levels, such as tenant then user, that lets one top-level value span physical partitions.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A chat app partitioned messages by /roomId. One popular room caused 429 errors while other rooms were idle, and it was approaching the 20 GB logical partition limit. The team created a new container with a hierarchical key of /roomId then /userId and migrated with the change feed. Load spread out, and queries filtered by roomId still target only that room's partitions.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> The winning partition key has high cardinality, even request and storage distribution and appears in most queries; when one tenant outgrows 20 GB, think hierarchical partition keys.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why is /status (new, paid, shipped) a poor partition key for orders?</summary><p>It has very low cardinality, so data and traffic concentrate in a few logical partitions, causing hot partitions and size limits.</p></details>
+<details class="sq"><summary>Can you change a container's partition key after creation?</summary><p>No. You must create a new container with the new key and migrate the data, for example with the change feed.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../cosmos-db-for-nosql-with-the-python-sdk-azure-cosmos-cosmosclient-crea/">← Cosmos DB for NoSQL with the Python SDK (azure-cosmos): Cosm</a><a href="../request-units-point-reads-vs-queries-indexing-policy-include-exclude-p/">Request Units: point reads vs queries, indexing policy inclu →</a></nav>
+</main>
+</body>
+</html>

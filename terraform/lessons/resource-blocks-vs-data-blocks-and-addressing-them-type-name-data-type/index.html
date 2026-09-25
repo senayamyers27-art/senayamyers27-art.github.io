@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Resource blocks vs data blocks, and addressing them… · Terraform Associate Lesson</title>
+<meta name="description" content="Terraform configurations are built mostly from two kinds of blocks that come from providers. A resource block declares an infrastructure object that Terraf">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Resource blocks vs data blocks, and addressing them… · Terraform Associate Lesson">
+<meta property="og:description" content="Terraform configurations are built mostly from two kinds of blocks that come from providers. A resource block declares an infrastructure object that Terraf">
+<link rel="canonical" href="https://senayamyers27-art.github.io/terraform/lessons/resource-blocks-vs-data-blocks-and-addressing-them-type-name-data-type/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/terraform/lessons/resource-blocks-vs-data-blocks-and-addressing-them-type-name-data-type/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Terraform Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004) · Domain 4: Terraform configuration</p>
+<h1>Resource blocks vs data blocks, and addressing them (`TYPE.NAME`, `data.TYPE.NAME`)</h1>
+<article class="lbody">
+<p>Terraform configurations are built mostly from two kinds of blocks that come from providers. A <code>resource</code> block declares an infrastructure object that Terraform manages: it creates it, updates it when the arguments change, and destroys it when the block is removed. A <code>data</code> block declares a data source: a read-only query for information about something that already exists, which Terraform reads but never creates, changes or destroys.</p>
+<pre class="code" tabindex="0"><code>data &quot;aws_ami&quot; &quot;ubuntu&quot; {
+  most_recent = true
+  owners      = [&quot;099720109477&quot;]
+  filter {
+    name   = &quot;name&quot;
+    values = [&quot;ubuntu/images/*-amd64-server-*&quot;]
+  }
+}
+
+resource &quot;aws_instance&quot; &quot;web&quot; {
+  ami           = data.aws_ami.ubuntu.id
+  instance_type = &quot;t3.micro&quot;
+}</code></pre>
+<p>Both blocks have two labels: the type, which comes from the provider, and a local name that you choose. The combination must be unique within a module for each mode. The type determines which arguments are allowed; the name is only for referring to the block elsewhere in your code and appears in plan output and state.</p>
+<p>Addresses are how you refer to these blocks. A managed resource is addressed as <code>TYPE.NAME</code>, such as <code>aws_instance.web</code>, and its attributes as <code>aws_instance.web.id</code> or <code>aws_instance.web.public_ip</code>. A data source always carries the <code>data.</code> prefix: <code>data.TYPE.NAME</code>, such as <code>data.aws_ami.ubuntu</code>, with attributes like <code>data.aws_ami.ubuntu.id</code>. Forgetting the <code>data.</code> prefix is a common error that <code>terraform validate</code> reports as a reference to an undeclared resource.</p>
+<p>Addresses grow when you use modules and multiple instances. A resource inside a module called <code>network</code> is <code>module.network.aws_vpc.main</code>. A resource with <code>count</code> has instances such as <code>aws_instance.web[0]</code>, and one with <code>for_each</code> has instances such as <code>aws_instance.web[&quot;blue&quot;]</code>. You use these full addresses with commands such as <code>terraform state show</code>, <code>-target</code> and <code>-replace</code>.</p>
+<p>When are data sources read? Normally during planning, so their results are available to compute the plan. If a data source's arguments depend on values that are not known until apply, such as the ID of a resource about to be created, Terraform defers reading it to apply time and shows it in the plan with <code>&lt;=</code> and <code>(known after apply)</code>. Data sources are read again on every plan, so they always reflect current reality, and their results are also recorded in state.</p>
+<p>Choosing between them is usually simple. If Terraform should own the object's lifecycle, use a resource. If something else owns it, such as another team's network, a vendor-published machine image, or the current account's identity, use a data source to look it up rather than hard-coding IDs. This keeps configurations portable across accounts and regions.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Resource block</dt><dd>Declares an infrastructure object that Terraform creates, updates and destroys.</dd><dt>Data block (data source)</dt><dd>Declares a read-only lookup of existing information that Terraform reads but does not manage.</dd><dt>Resource address</dt><dd>The reference form <code>TYPE.NAME</code> for resources and <code>data.TYPE.NAME</code> for data sources, extended with module paths and instance keys.</dd><dt>Local name</dt><dd>The second label of a resource or data block, chosen by you and unique per type within a module.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Instead of hard-coding a machine image ID that differs in every region, a configuration uses <code>data &quot;aws_ami&quot; &quot;ubuntu&quot;</code> to look up the latest approved image, and the instance references <code>data.aws_ami.ubuntu.id</code>. Deploying to a new region needs no code change.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Data sources are addressed with the <code>data.</code> prefix and are never destroyed by Terraform. If an exam question asks how to use an existing object that Terraform should not manage, the answer is a data source.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How do you reference the <code>id</code> attribute of a data source <code>aws_vpc</code> named <code>shared</code>?</summary><p><code>data.aws_vpc.shared.id</code>.</p></details>
+<details class="sq"><summary>What happens to a data source when you run <code>terraform destroy</code>?</summary><p>Nothing on the real system; Terraform only reads data sources, so there is nothing to destroy.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Terraform Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../terraform/">Open the Terraform Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../parallelism-and-the-dependency-graph-during-apply/">← Parallelism and the dependency graph during apply</a><a href="../cross-resource-references-and-implicit-dependencies/">Cross-resource references and implicit dependencies →</a></nav>
+</main>
+</body>
+</html>

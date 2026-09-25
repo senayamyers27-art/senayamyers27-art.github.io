@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rolling updates: maxSurge, maxUnavailable… · CKAD Lesson</title>
+<meta name="description" content="When you change a Deployment's Pod template, the controller has to replace old Pods with new ones. The strategy field controls how.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Rolling updates: maxSurge, maxUnavailable… · CKAD Lesson">
+<meta property="og:description" content="When you change a Deployment's Pod template, the controller has to replace old Pods with new ones. The strategy field controls how.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/rolling-updates-maxsurge-maxunavailable-minreadyseconds-the-recreate-s/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/rolling-updates-maxsurge-maxunavailable-minreadyseconds-the-recreate-s/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 2: Application Deployment</p>
+<h1>Rolling updates: maxSurge, maxUnavailable, minReadySeconds; the Recreate strategy</h1>
+<article class="lbody">
+<p>When you change a Deployment's Pod template, the controller has to replace old Pods with new ones. The <code>strategy</code> field controls how. The default, <code>RollingUpdate</code>, replaces Pods gradually so the app keeps serving during the change. The alternative, <code>Recreate</code>, deletes all old Pods first and only then creates new ones.</p>
+<p>Two settings shape a rolling update. <code>maxSurge</code> is how many Pods above the desired replica count may exist during the update. <code>maxUnavailable</code> is how many Pods below the desired count may be unavailable. Each can be an absolute number or a percentage of replicas; both default to 25%. Percentages are rounded: surge rounds up and unavailable rounds down. They cannot both be zero, because then the rollout could never make progress.</p>
+<pre class="code" tabindex="0"><code>spec:
+  replicas: 4
+  minReadySeconds: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0</code></pre>
+<p>Walk through the example. With 4 replicas, maxSurge 1 and maxUnavailable 0, the controller may run at most 5 Pods and must keep at least 4 available. It creates one new Pod, waits until it is available, removes one old Pod, and repeats. This is the safest zero-downtime setting but needs spare capacity for the extra Pod. The opposite extreme, maxSurge 0 and maxUnavailable 1, uses no extra capacity but runs one Pod short during the update.</p>
+<p>Availability depends on readiness. A new Pod counts as available once its readiness probe passes and it has stayed ready for <code>minReadySeconds</code> (default 0). Raising minReadySeconds slows the rollout slightly but catches Pods that start and then crash a few seconds later. If new Pods never become ready, the rollout stalls instead of taking down the old version, which is a key safety property of rolling updates. <code>progressDeadlineSeconds</code> (default 600) marks such a stuck rollout as failed in its status; it does not roll back automatically.</p>
+<p><code>Recreate</code> has no surge or unavailable settings. It causes downtime between the old Pods terminating and the new ones becoming ready, but it guarantees that two versions never run at once. Choose it when versions cannot coexist, for example when both would write to the same ReadWriteOnce volume or when a schema change makes the old code incompatible.</p>
+<pre class="code" tabindex="0"><code>spec:
+  strategy:
+    type: Recreate</code></pre>
+<p>If you switch from RollingUpdate to Recreate by editing, remove the <code>rollingUpdate</code> block too, or the API server rejects the change. Watch a rollout in action with <code>kubectl rollout status deploy/web</code> and <code>kubectl get rs -w</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>RollingUpdate</dt><dd>Default Deployment strategy that replaces Pods gradually while the app keeps serving.</dd><dt>maxSurge</dt><dd>How many Pods above the desired count may exist during an update (default 25%).</dd><dt>maxUnavailable</dt><dd>How many Pods below the desired count may be unavailable during an update (default 25%).</dd><dt>minReadySeconds</dt><dd>How long a new Pod must stay ready before it counts as available.</dd><dt>Recreate</dt><dd>Strategy that terminates all old Pods before creating new ones, causing brief downtime.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A payments API with 10 replicas must never drop below full capacity. The team sets maxUnavailable 0, maxSurge 2 and minReadySeconds 15, so the rollout adds two new Pods at a time and retires old ones only after the new ones have stayed healthy for 15 seconds.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Do the arithmetic: max Pods = replicas + maxSurge, minimum available = replicas - maxUnavailable. Pick Recreate when a task says old and new versions must never run together.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>With 10 replicas and the default strategy, how many Pods may exist at most during an update?</summary><p>13: maxSurge 25% of 10 is 2.5, rounded up to 3.</p></details>
+<details class="sq"><summary>Why would you choose the Recreate strategy?</summary><p>When two versions cannot run at the same time, accepting brief downtime.</p></details>
+<details class="sq"><summary>What happens if the new Pods never become ready during a rolling update?</summary><p>The rollout stalls and old Pods keep serving; after progressDeadlineSeconds it is reported as failed, but it is not rolled back automatically.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../deployments-and-replicasets-how-the-pod-template-labels-and-selectors/">← Deployments and ReplicaSets: how the Pod template, labels an</a><a href="../kubectl-rollout-status-history-undo-to-revision-pause-and-resume-kubec/">kubectl rollout status, history, undo (--to-revision), pause →</a></nav>
+</main>
+</body>
+</html>

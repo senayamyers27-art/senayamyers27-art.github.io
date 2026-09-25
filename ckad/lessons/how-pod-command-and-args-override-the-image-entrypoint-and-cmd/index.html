@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>How Pod `command` and `args` override the image… · CKAD Lesson</title>
+<meta name="description" content="Kubernetes lets you change how a container starts without rebuilding its image. In a container spec, the command field overrides the image's ENTRYPOINT and">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="How Pod `command` and `args` override the image… · CKAD Lesson">
+<meta property="og:description" content="Kubernetes lets you change how a container starts without rebuilding its image. In a container spec, the command field overrides the image's ENTRYPOINT and">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/how-pod-command-and-args-override-the-image-entrypoint-and-cmd/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/how-pod-command-and-args-override-the-image-entrypoint-and-cmd/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 1: Application Design and Build</p>
+<h1>How Pod `command` and `args` override the image ENTRYPOINT and CMD</h1>
+<article class="lbody">
+<p>Kubernetes lets you change how a container starts without rebuilding its image. In a container spec, the <code>command</code> field overrides the image's ENTRYPOINT and the <code>args</code> field overrides the image's CMD. The naming is confusing because Docker's CMD is Kubernetes' args, so it is worth memorising the mapping: command = ENTRYPOINT, args = CMD.</p>
+<p>There are four combinations. If you set neither, the image's ENTRYPOINT and CMD run as built. If you set only <code>args</code>, the image's ENTRYPOINT runs with your args instead of the image CMD. If you set only <code>command</code>, your command runs and the image's CMD is ignored completely (it is not appended). If you set both, your command runs with your args and the image defaults are ignored.</p>
+<p>Both fields are arrays of strings, and Kubernetes does not run them through a shell. That means <code>command: [&quot;echo $HOME&quot;]</code> does not work the way it would in a terminal: there is no shell to split words or expand variables. When you need shell features such as pipes, <code>&amp;&amp;</code>, loops or redirection, call a shell explicitly.</p>
+<pre class="code" tabindex="0"><code>apiVersion: v1
+kind: Pod
+metadata:
+  name: looper
+spec:
+  containers:
+  - name: app
+    image: busybox
+    command: [&quot;sh&quot;, &quot;-c&quot;]
+    args: [&quot;while true; do date; sleep 5; done&quot;]</code></pre>
+<p>Kubernetes does expand its own variable syntax <code>$(VAR_NAME)</code> inside command and args, using environment variables defined in the container's <code>env</code> list. So <code>args: [&quot;--port=$(PORT)&quot;]</code> works if <code>PORT</code> is set in <code>env</code>. If the variable does not exist, the text is left as written. This expansion is done by Kubernetes, not a shell.</p>
+<p>The fastest way to produce this YAML on the exam is imperative generation. <code>kubectl run looper --image=busybox --dry-run=client -o yaml -- sh -c 'while true; do date; sleep 5; done'</code> puts everything after <code>--</code> into <code>args</code>. Adding <code>--command</code> changes that: <code>kubectl run t --image=busybox --command -- sleep 3600</code> puts the words into <code>command</code> instead. Check the generated YAML before you apply it.</p>
+<p>When debugging, <code>kubectl describe pod</code> shows the effective Command and Args for each container, and <code>kubectl get pod &lt;name&gt; -o yaml</code> shows exactly what you wrote. A container that exits immediately with a Completed or CrashLoopBackOff status is often a sign that the override replaced a long-running server command with something that finishes, or that a shell string was passed without <code>sh -c</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>command</dt><dd>Container field that replaces the image ENTRYPOINT.</dd><dt>args</dt><dd>Container field that replaces the image CMD.</dd><dt>$(VAR) expansion</dt><dd>Kubernetes substitution of container environment variables inside command and args, done without a shell.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An image's ENTRYPOINT is <code>nginx</code> with CMD <code>-g daemon off;</code>. A task asks you to start it in debug mode. Setting only <code>args: [&quot;-g&quot;, &quot;daemon off;&quot;, &quot;-e&quot;, &quot;stderr&quot;]</code> keeps the nginx entrypoint and replaces just the default arguments, with no need to rebuild the image.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Setting only <code>command</code> discards the image CMD rather than appending it. And <code>--command</code> on kubectl run decides whether the words after <code>--</code> land in command or args.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which Kubernetes field overrides a Dockerfile CMD?</summary><p><code>args</code>. The <code>command</code> field overrides ENTRYPOINT.</p></details>
+<details class="sq"><summary>Why does <code>command: [&quot;echo hello &amp;&amp; sleep 10&quot;]</code> fail?</summary><p>Kubernetes runs it without a shell, so it looks for a program literally named with that whole string; use <code>[&quot;sh&quot;, &quot;-c&quot;, &quot;echo hello &amp;&amp; sleep 10&quot;]</code>.</p></details>
+<details class="sq"><summary>What does <code>kubectl run p --image=busybox -- sleep 60</code> set?</summary><p>It sets <code>args: [sleep, 60]</code>. The busybox image has no ENTRYPOINT, so those args become the whole command that runs.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../building-tagging-saving-and-loading-images-with-docker-or-podman-build/">← Building, tagging, saving and loading images with docker or </a><a href="../choosing-a-workload-deployment-statefulset-daemonset-job-cronjob-bare/">Choosing a workload: Deployment, StatefulSet, DaemonSet, Job →</a></nav>
+</main>
+</body>
+</html>

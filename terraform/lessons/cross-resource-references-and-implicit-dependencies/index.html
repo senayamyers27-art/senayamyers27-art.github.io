@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cross-resource references and implicit dependencies · Terraform Associate Lesson</title>
+<meta name="description" content="Resources rarely stand alone. A subnet belongs to a network, an instance sits in a subnet, a DNS record points at a load balancer.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Cross-resource references and implicit dependencies · Terraform Associate Lesson">
+<meta property="og:description" content="Resources rarely stand alone. A subnet belongs to a network, an instance sits in a subnet, a DNS record points at a load balancer.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/terraform/lessons/cross-resource-references-and-implicit-dependencies/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/terraform/lessons/cross-resource-references-and-implicit-dependencies/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Terraform Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004) · Domain 4: Terraform configuration</p>
+<h1>Cross-resource references and implicit dependencies</h1>
+<article class="lbody">
+<p>Resources rarely stand alone. A subnet belongs to a network, an instance sits in a subnet, a DNS record points at a load balancer. In Terraform you connect them with references: expressions that use another object's attributes as argument values.</p>
+<pre class="code" tabindex="0"><code>resource &quot;aws_vpc&quot; &quot;main&quot; {
+  cidr_block = &quot;10.0.0.0/16&quot;
+}
+
+resource &quot;aws_subnet&quot; &quot;app&quot; {
+  vpc_id     = aws_vpc.main.id
+  cidr_block = &quot;10.0.1.0/24&quot;
+}
+
+resource &quot;aws_instance&quot; &quot;web&quot; {
+  subnet_id     = aws_subnet.app.id
+  ami           = var.ami_id
+  instance_type = &quot;t3.micro&quot;
+}</code></pre>
+<p>The common reference forms are: <code>TYPE.NAME.ATTRIBUTE</code> for resources; <code>data.TYPE.NAME.ATTRIBUTE</code> for data sources; <code>var.NAME</code> for input variables; <code>local.NAME</code> for local values; <code>module.NAME.OUTPUT</code> for a child module's outputs; and <code>path.module</code>, <code>path.root</code> and <code>terraform.workspace</code> for filesystem and workspace information. You can reference arguments you set and attributes the provider computes, such as <code>id</code>, <code>arn</code> or <code>public_ip</code>; the provider documentation lists both under argument and attribute references.</p>
+<p>Every reference to another resource or data source creates an implicit dependency. In the example, Terraform sees that the subnet uses <code>aws_vpc.main.id</code>, so the network must exist before the subnet can be created. The instance references the subnet, so it waits for the subnet. You never state the order; Terraform infers it and builds the dependency graph. Resources with no references between them are free to be created in parallel.</p>
+<p>Implicit dependencies also explain <code>(known after apply)</code> in plans. The network's ID does not exist until the provider creates it, so during planning the subnet's <code>vpc_id</code> is unknown. Terraform carries the unknown value forward and fills it in during apply once the network is created. For destroy, the same edges are used in reverse: the instance goes first, then the subnet, then the network.</p>
+<p>Prefer implicit dependencies wherever possible. They are precise, because Terraform knows exactly which attribute is needed, and they document themselves in the code. Explicit <code>depends_on</code> is needed only when a dependency exists that no attribute reference expresses, such as an application inside a virtual machine that needs a permissions policy to exist first. That is covered in a later lesson.</p>
+<p>A reference is also a contract. If you rename a resource, every expression referring to it must change too, and Terraform will otherwise see the rename as a destroy and create; use a <code>moved</code> block to tell Terraform the object is the same.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Reference</dt><dd>An expression that uses a value from another object, such as <code>aws_vpc.main.id</code> or <code>var.region</code>.</dd><dt>Implicit dependency</dt><dd>An ordering relationship Terraform infers automatically from a reference between objects.</dd><dt>Computed attribute</dt><dd>An attribute set by the provider after creation, such as an ID, often shown as known after apply.</dd><dt>moved block</dt><dd>A block that tells Terraform a resource's address changed so it updates state instead of replacing the object.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An engineer adds a security group and sets <code>vpc_security_group_ids = [aws_security_group.web.id]</code> on an existing instance. The plan creates the security group first and then updates the instance, without any explicit ordering, because the reference created a dependency.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Terraform orders operations using references, not file order. If a question asks how Terraform knows to create the network before the subnet, the answer is the implicit dependency from <code>aws_vpc.main.id</code>.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What creates an implicit dependency between two resources?</summary><p>One resource's argument referencing the other's attributes, such as <code>vpc_id = aws_vpc.main.id</code>.</p></details>
+<details class="sq"><summary>Why does a subnet's <code>vpc_id</code> show <code>(known after apply)</code> when the network is new?</summary><p>The network's ID is only assigned by the provider when it is created during apply, so it is unknown at plan time.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Terraform Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../terraform/">Open the Terraform Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../resource-blocks-vs-data-blocks-and-addressing-them-type-name-data-type/">← Resource blocks vs data blocks, and addressing them (`TYPE.N</a><a href="../input-variables-type-default-description-sensitive-nullable-and-value/">Input variables: `type`, `default`, `description`, `sensitiv →</a></nav>
+</main>
+</body>
+</html>

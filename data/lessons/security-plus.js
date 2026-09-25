@@ -567,7 +567,7 @@ CertHub.addLessons("security-plus", [
     "A certificate extension listing additional hostnames or identities the certificate is valid for."
    ]
   ],
-  "example": "A company needs one certificate for example.com, www.example.com and shop.example.org. A wildcard would not cover the second domain, so they request a SAN certificate listing all three names, generate the CSR on the web server, and install the signed certificate with its intermediate chain.",
+  "example": "A company needs one certificate for example.com, www.example.com and shop.example.org. A wildcard for *.example.com would not cover example.com itself or the separate domain example.org, so they request a SAN certificate listing all three names, generate the CSR on the web server, and install the signed certificate with its intermediate chain.",
   "tip": "A wildcard covers many subdomains of one domain; a SAN lists specific names, even across different domains. Self-signed means no CA vouches for it.",
   "check": [
    [
@@ -1111,7 +1111,7 @@ CertHub.addLessons("security-plus", [
    "Security misconfiguration covers insecure settings: default accounts left enabled, unnecessary features installed, verbose error messages that reveal stack traces, missing security headers, directory listing turned on, or cloud storage left open to the public. Defenses are hardened baseline configurations, automated configuration checks, and removing anything not needed.",
    "Software and data integrity failures happen when code or data is trusted without verifying it. Examples are applications that download updates or plugins without checking signatures, insecure build pipelines that let attackers insert code, and deserialization of untrusted data. Code signing, verifying hashes, securing the CI/CD pipeline and using trusted repositories address this category.",
    "Server-side request forgery (SSRF) tricks a server into making requests on the attacker's behalf. If an application fetches a URL supplied by the user, for example to preview an image, an attacker might supply an internal address so the server retrieves data from internal systems or a cloud metadata service that the attacker cannot reach directly. Defenses include validating and allow-listing destinations, blocking requests to internal address ranges, and segmenting the network so the web server cannot reach sensitive internal services.",
-   "Other categories on the list include cryptographic failures, insecure design, vulnerable and outdated components, identification and authentication failures, and security logging and monitoring failures. A web application firewall can help catch some attacks, but it supplements secure coding rather than replacing it."
+   "Other categories on the 2021 list include cryptographic failures, insecure design, vulnerable and outdated components, identification and authentication failures, and security logging and monitoring failures. Category names and groupings shift between editions (the 2025 edition, for example, folds SSRF into broken access control), so learn the concepts rather than the exact list. A web application firewall can help catch some attacks, but it supplements secure coding rather than replacing it."
   ],
   "terms": [
    [

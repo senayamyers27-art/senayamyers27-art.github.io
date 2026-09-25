@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Filter actions: terminating (accept, discard, reject) and… · JNCIA-Junos Lesson</title>
+<meta name="description" content="The then section of a firewall filter term decides what happens to matching packets. Actions come in two kinds.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Filter actions: terminating (accept, discard, reject) and… · JNCIA-Junos Lesson">
+<meta property="og:description" content="The then section of a firewall filter term decides what happens to matching packets. Actions come in two kinds.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/jncia-junos/lessons/filter-actions-terminating-accept-discard-reject-and-non-terminating-c/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/jncia-junos/lessons/filter-actions-terminating-accept-discard-reject-and-non-terminating-c/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">JNCIA-Junos</a> / <a href="../">Lessons</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106 · Domain 7: Routing policy and firewall filters</p>
+<h1>Filter actions: terminating (accept, discard, reject) and non-terminating (count, log, syslog, policer)</h1>
+<article class="lbody">
+<p>The <code>then</code> section of a firewall filter term decides what happens to matching packets. Actions come in two kinds. Terminating actions decide the packet's fate and stop filter evaluation. Non-terminating actions (also called action modifiers) do something extra, such as counting or rate limiting, and can be combined with a terminating action in the same term.</p>
+<p>The terminating actions you need to know are <code>accept</code>, <code>discard</code> and <code>reject</code>. <code>accept</code> lets the packet continue. <code>discard</code> drops it silently, sending nothing back. <code>reject</code> drops it and sends an ICMP message to the source, by default a destination unreachable message indicating the traffic was administratively filtered; you can choose other ICMP message types or a TCP reset. Discard is usually the safer choice facing untrusted networks because it gives an attacker less information and generates no extra traffic, while reject can be friendlier inside a network because applications fail quickly instead of timing out. <code>routing-instance</code> is also terminating: it sends the packet to a forwarding instance for filter-based forwarding.</p>
+<p>The main non-terminating actions are these. <code>count &lt;name&gt;</code> increments a named counter for matching packets and bytes, shown with <code>show firewall filter &lt;name&gt;</code> or <code>show firewall</code>. <code>log</code> records packet headers in a buffer on the Routing Engine, viewed with <code>show firewall log</code>; the buffer is small and is overwritten over time. <code>syslog</code> sends a message about the packet to the system log, so it can go to local files or a remote syslog server if a file or host is configured for the firewall facility. <code>policer &lt;name&gt;</code> applies a rate limit defined under <code>firewall policer</code>, so traffic above a bandwidth and burst size is dropped or marked. Others include <code>forwarding-class</code> and <code>loss-priority</code> for class of service, <code>sample</code> for traffic sampling, and the flow-control action <code>next term</code>.</p>
+<pre class="code" tabindex="0"><code>set firewall policer LIMIT-ICMP if-exceeding bandwidth-limit 1m burst-size-limit 15k
+set firewall policer LIMIT-ICMP then discard
+set firewall family inet filter PROTECT term ICMP from protocol icmp
+set firewall family inet filter PROTECT term ICMP then policer LIMIT-ICMP
+set firewall family inet filter PROTECT term ICMP then count ICMP-IN
+set firewall family inet filter PROTECT term ICMP then accept
+set firewall family inet filter PROTECT term LAST then count DROPPED
+set firewall family inet filter PROTECT term LAST then discard</code></pre>
+<p>An important rule: if a term has only non-terminating actions and no terminating action, Junos treats the term as though it also said <code>accept</code>. So a term with only <code>count</code> will count and accept the packet, not pass it on to later terms. If you want to count a packet and still let later terms decide, add <code>next term</code> explicitly.</p>
+<p>Counters and logs are your window into what a filter is doing. When a filter seems to block the wrong thing, check which term's counter is increasing with <code>show firewall filter &lt;name&gt;</code>, and use <code>clear firewall filter &lt;name&gt;</code> to reset the counters before a test. The final <code>count DROPPED</code> term above makes the normally invisible implicit discard visible.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>discard</dt><dd>A terminating action that drops the packet silently.</dd><dt>reject</dt><dd>A terminating action that drops the packet and sends an ICMP unreachable (or TCP reset) to the source.</dd><dt>count</dt><dd>A non-terminating action that increments a named packet and byte counter.</dd><dt>policer</dt><dd>A non-terminating action that rate-limits matching traffic using a policer defined under <code>firewall policer</code>.</dd><dt>log vs syslog</dt><dd><code>log</code> stores packet headers in a Routing Engine buffer for <code>show firewall log</code>; <code>syslog</code> writes to the system log.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A router's CPU spikes whenever someone floods it with pings. The engineer adds a term to its loopback filter that matches ICMP, applies a policer limiting it to a small rate, counts it and accepts it. Normal troubleshooting pings still work, the counter shows how much ICMP is arriving, and the flood no longer overwhelms the Routing Engine.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> A term with only non-terminating actions implicitly accepts the packet. Discard is silent; reject sends ICMP back. Log goes to a local buffer (<code>show firewall log</code>); syslog goes to the system log.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>A term matches a packet and has only <code>then count WEB</code>. What happens to the packet?</summary><p>It is counted and accepted, because a term with no terminating action implies accept.</p></details>
+<details class="sq"><summary>What is the difference between discard and reject?</summary><p>Discard drops silently; reject drops and sends an ICMP unreachable or TCP reset to the sender.</p></details>
+<details class="sq"><summary>Where do you view packets recorded by the <code>log</code> action?</summary><p>With <code>show firewall log</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study JNCIA-Junos for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../jncia-junos/">Open the JNCIA-Junos study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../firewall-filters-stateless-term-order-match-conditions-implicit-discar/">← Firewall filters: stateless, term order, match conditions, i</a><a href="../applying-filters-to-interfaces-input-output-and-to-lo0-to-protect-the/">Applying filters to interfaces (input/output) and to lo0 to  →</a></nav>
+</main>
+</body>
+</html>

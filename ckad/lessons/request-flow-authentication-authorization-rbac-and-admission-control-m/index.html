@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Request flow: authentication, authorization (RBAC) and… · CKAD Lesson</title>
+<meta name="description" content="Every change in Kubernetes goes through the API server: kubectl, controllers, the kubelet and your own applications all send it HTTPS requests. Before a re">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Request flow: authentication, authorization (RBAC) and… · CKAD Lesson">
+<meta property="og:description" content="Every change in Kubernetes goes through the API server: kubectl, controllers, the kubelet and your own applications all send it HTTPS requests. Before a re">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/request-flow-authentication-authorization-rbac-and-admission-control-m/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/request-flow-authentication-authorization-rbac-and-admission-control-m/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 4: Application Environment, Configuration and Security</p>
+<h1>Request flow: authentication, authorization (RBAC) and admission control (mutating and validating)</h1>
+<article class="lbody">
+<p>Every change in Kubernetes goes through the API server: kubectl, controllers, the kubelet and your own applications all send it HTTPS requests. Before a request can create or change an object, it passes through three gates in a fixed order: authentication, authorization and admission control. Knowing the order helps you interpret errors.</p>
+<p>Authentication answers 'Who are you?' The API server tries its configured authenticators: client certificates (common in kubeconfig files for administrators), bearer tokens (including ServiceAccount tokens used by Pods), and external identity providers through OpenID Connect (OIDC). Kubernetes has no User object; a human user is just a name and groups asserted by a trusted credential. ServiceAccounts, in contrast, are real objects and appear as <code>system:serviceaccount:&lt;namespace&gt;:&lt;name&gt;</code>. If no authenticator accepts the request, it fails with 401 Unauthorized. <code>kubectl auth whoami</code> shows who the API server thinks you are.</p>
+<p>Authorization answers 'Are you allowed to do this?' The request is described as a verb (get, list, watch, create, update, patch, delete), a resource (and optional subresource such as <code>pods/log</code>), an API group, a namespace and a name. The configured authorizers, usually Node and RBAC (Role-Based Access Control), decide. RBAC is purely additive: there are no deny rules, and anything not explicitly allowed is denied. A refusal returns 403 Forbidden with a message such as <code>User &quot;jane&quot; cannot list resource &quot;pods&quot; in API group &quot;&quot; in the namespace &quot;prod&quot;</code>.</p>
+<p>Admission control answers 'Is this particular object acceptable, and should it be adjusted?' It applies to requests that create, update or delete objects, not to reads. Mutating admission runs first and may change the object: the ServiceAccount admission controller fills in the default ServiceAccount, LimitRanger adds default requests and limits, and mutating webhooks can inject sidecars. The object is then validated against its schema. Validating admission runs next and can only accept or reject: ResourceQuota rejects objects that would exceed a namespace quota, Pod Security Admission rejects Pods that break the namespace's security level, and ValidatingAdmissionPolicies or validating webhooks enforce custom rules. If all pass, the object is stored in etcd.</p>
+<pre class="code" tabindex="0"><code>kubectl -&gt; API server
+  1. Authentication   (who?)          fail -&gt; 401 Unauthorized
+  2. Authorization    (allowed?)      fail -&gt; 403 Forbidden
+  3. Mutating admission (adjust)
+  4. Schema validation
+  5. Validating admission (accept?)   fail -&gt; error naming the policy or quota
+  6. Persist to etcd</code></pre>
+<p>Reading errors with this in mind is a practical exam skill. 'forbidden: User ... cannot create resource' is authorization, fixed with RBAC. 'forbidden: exceeded quota' comes from the ResourceQuota admission controller and is fixed by lowering requests or raising the quota. 'violates PodSecurity &quot;restricted:latest&quot;' comes from Pod Security Admission and is fixed in the Pod's securityContext. And a Pod that gained resources or a sidecar you did not write was modified by mutating admission. For Deployments, admission rejections of Pods appear in the ReplicaSet's events, not the Deployment's, so check <code>kubectl describe rs</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Authentication</dt><dd>Establishing who is making the request; failure returns 401.</dd><dt>Authorization</dt><dd>Deciding whether the identity may perform the verb on the resource; failure returns 403.</dd><dt>Mutating admission</dt><dd>Admission step that can modify an object before it is stored.</dd><dt>Validating admission</dt><dd>Admission step that accepts or rejects an object without changing it.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A Deployment shows 0/3 ready and no Pods exist. <code>kubectl describe rs</code> shows 'pods &quot;web-...&quot; is forbidden: exceeded quota: compute, requested: limits.memory=512Mi'. The request passed authentication and RBAC, but the validating ResourceQuota admission controller rejected the Pods.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Order: authentication, authorization, mutating admission, validation, validating admission. 401 means identity, 403 with 'cannot' means RBAC, and quota or PodSecurity messages mean admission.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which stage returns 401 Unauthorized?</summary><p>Authentication, when no authenticator accepts the credentials.</p></details>
+<details class="sq"><summary>Does admission control run on <code>kubectl get</code>?</summary><p>No; admission applies to create, update and delete requests, not reads.</p></details>
+<details class="sq"><summary>Which runs first, mutating or validating admission, and why?</summary><p>Mutating, so that validating controllers check the final, modified object.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../extending-kubernetes-customresourcedefinitions-custom-resources-and-op/">← Extending Kubernetes: CustomResourceDefinitions, custom reso</a><a href="../rbac-objects-role-clusterrole-rolebinding-clusterrolebinding-kubectl-a/">RBAC objects: Role, ClusterRole, RoleBinding, ClusterRoleBin →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Creating vfat, ext4 and xfs file systems (mkfs.vfat… · RHCSA Lesson</title>
+<meta name="description" content="A partition or logical volume is only raw block space until you put a file system on it. The file system decides how files, directories, permissions and fr">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Creating vfat, ext4 and xfs file systems (mkfs.vfat… · RHCSA Lesson">
+<meta property="og:description" content="A partition or logical volume is only raw block space until you put a file system on it. The file system decides how files, directories, permissions and fr">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/creating-vfat-ext4-and-xfs-file-systems-mkfs-vfat-mkfs-ext4-mkfs-xfs/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/creating-vfat-ext4-and-xfs-file-systems-mkfs-vfat-mkfs-ext4-mkfs-xfs/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 6: Create and configure file systems</p>
+<h1>Creating vfat, ext4 and xfs file systems (mkfs.vfat, mkfs.ext4, mkfs.xfs)</h1>
+<article class="lbody">
+<p>A partition or logical volume is only raw block space until you put a file system on it. The file system decides how files, directories, permissions and free space are tracked. RHEL uses XFS as its default, supports ext4 as a mature alternative, and uses vfat (the FAT family) where other operating systems or firmware must read the disk, such as the EFI (Extensible Firmware Interface) system partition or a USB stick.</p>
+<p>Each type has its own <code>mkfs</code> helper. <code>mkfs.xfs</code> comes from the xfsprogs package, <code>mkfs.ext4</code> from e2fsprogs, and <code>mkfs.vfat</code> from dosfstools. You can also run <code>mkfs -t xfs /dev/vdb1</code>, which simply calls the right helper. Labels are optional but handy: XFS and ext4 take <code>-L label</code>, while vfat uses <code>-n LABEL</code>.</p>
+<pre class="code" tabindex="0"><code>mkfs.xfs  /dev/vg1/data        # default RHEL file system
+mkfs.ext4 -L logs /dev/vdb1    # ext4 with a label
+mkfs.vfat -n USBDATA /dev/vdc1 # FAT, readable by other systems
+lsblk -f                       # shows FSTYPE, LABEL, UUID
+blkid /dev/vdb1                # prints UUID and TYPE</code></pre>
+<p>Know the differences the exam leans on. XFS is fast with large files and parallel I/O, can be grown while mounted, but cannot be shrunk. ext4 can be grown online and shrunk offline. vfat has no Linux ownership or permission bits at all; the owner and mode you see are set at mount time with options such as <code>uid=</code>, <code>gid=</code> and <code>umask=</code>, so <code>chmod</code> and <code>chown</code> on files inside it do not work the way you expect.</p>
+<p><code>mkfs</code> destroys whatever was on the device. If the device already holds a file system, <code>mkfs.xfs</code> refuses and asks for <code>-f</code> to force it; <code>mkfs.ext4</code> asks for confirmation. That refusal is a useful safety check, so read the message before forcing. Double-check the device name with <code>lsblk</code> first, especially on a VM with several similar disks.</p>
+<p>Creating the file system does not make it usable yet: you still need a mount point directory, a mount, and usually an <code>/etc/fstab</code> line. After <code>mkfs</code>, run <code>blkid</code> to get the new UUID for that fstab line. Note that re-running <code>mkfs</code> on the same device generates a new UUID, so any fstab entry that used the old one must be updated.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>XFS</dt><dd>The default RHEL file system; high performance and growable online, but it cannot be shrunk.</dd><dt>ext4</dt><dd>The fourth extended file system; mature, growable online and shrinkable while unmounted.</dd><dt>vfat</dt><dd>The Linux driver for FAT file systems, used for EFI partitions and removable media; it stores no Linux ownership or permissions.</dd><dt>blkid</dt><dd>Prints the UUID, label and file system type of block devices, used when writing /etc/fstab entries.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A task asks for an ext4 file system labeled archive on the logical volume /dev/vgdata/lvarch. You run mkfs.ext4 -L archive /dev/vgdata/lvarch, confirm with lsblk -f that FSTYPE is ext4 and LABEL is archive, and then use blkid to copy its UUID into /etc/fstab.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Match the requested type exactly. A grader checking for ext4 will fail an XFS volume even if it mounts and works, so confirm with lsblk -f or blkid before moving on.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which option sets a label for XFS and ext4, and which for vfat?</summary><p>XFS and ext4 use -L label; mkfs.vfat uses -n LABEL.</p></details>
+<details class="sq"><summary>Why can't you fix ownership inside a vfat file system with chown?</summary><p>FAT stores no Linux owner or permission bits; ownership and mode are set for the whole file system at mount time with options like uid=, gid= and umask=.</p></details>
+<details class="sq"><summary>What happens to the UUID if you run mkfs again on the same device?</summary><p>A new UUID is generated, so any /etc/fstab entry using the old UUID must be updated.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../creating-and-enabling-swap-mkswap-swapon-swapon-show-and-making-it-per/">← Creating and enabling swap (mkswap, swapon, swapon --show) a</a><a href="../mounting-unmounting-and-using-file-systems-mount-a-and-findmnt-verify/">Mounting, unmounting and using file systems; mount -a and fi →</a></nav>
+</main>
+</body>
+</html>

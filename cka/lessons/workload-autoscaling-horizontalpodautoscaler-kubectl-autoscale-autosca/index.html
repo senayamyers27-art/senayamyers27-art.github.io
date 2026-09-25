@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Workload autoscaling: HorizontalPodAutoscaler (kubectl… · CKA Lesson</title>
+<meta name="description" content="Autoscaling in Kubernetes happens at three levels. The HorizontalPodAutoscaler (HPA) changes the number of replicas.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Workload autoscaling: HorizontalPodAutoscaler (kubectl… · CKA Lesson">
+<meta property="og:description" content="Autoscaling in Kubernetes happens at three levels. The HorizontalPodAutoscaler (HPA) changes the number of replicas.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/workload-autoscaling-horizontalpodautoscaler-kubectl-autoscale-autosca/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/workload-autoscaling-horizontalpodautoscaler-kubectl-autoscale-autosca/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 2: Workloads and Scheduling</p>
+<h1>Workload autoscaling: HorizontalPodAutoscaler (kubectl autoscale, autoscaling/v2), metrics-server and CPU requests; awareness of VPA and Cluster Autoscaler</h1>
+<article class="lbody">
+<p>Autoscaling in Kubernetes happens at three levels. The HorizontalPodAutoscaler (HPA) changes the number of replicas. The Vertical Pod Autoscaler (VPA) changes the requests of each Pod. The Cluster Autoscaler changes the number of nodes. The CKA focuses on the HPA and expects awareness of the other two.</p>
+<p>The HPA is a controller loop in the kube-controller-manager. Periodically it reads current metrics for the Pods of a target (a Deployment, StatefulSet or ReplicaSet), compares them with a target value and computes a desired replica count, roughly current replicas multiplied by current metric divided by target metric, clamped between <code>minReplicas</code> and <code>maxReplicas</code>.</p>
+<p>CPU and memory metrics come from the Resource Metrics API, which is served by metrics-server. metrics-server is not installed by kubeadm; you install it yourself (often from its manifest or Helm chart). In lab clusters whose kubelets use self-signed serving certificates, it commonly needs the <code>--kubelet-insecure-tls</code> argument to scrape them, which is acceptable for a lab but not for production. Confirm it works with <code>kubectl top pods</code>.</p>
+<p>Utilization targets are percentages of the Pod's requests. If the containers have no CPU request, the HPA cannot compute utilization and <code>kubectl get hpa</code> shows <code>&lt;unknown&gt;</code> in the TARGETS column. This is one of the most common exam and real-world pitfalls.</p>
+<pre class="code" tabindex="0"><code>kubectl autoscale deployment web --cpu-percent=50 --min=2 --max=10
+kubectl get hpa web
+kubectl describe hpa web   # conditions and scaling events</code></pre>
+<pre class="code" tabindex="0"><code>apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: {name: web}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: web}
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target: {type: Utilization, averageUtilization: 50}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 120</code></pre>
+<p>The <code>autoscaling/v2</code> API supports multiple metrics (the HPA picks the largest resulting replica count), custom and external metrics through adapters, and a <code>behavior</code> section that tunes scale-up and scale-down rates and stabilization windows. By default scale-down is deliberately slow, using a stabilization window of a few minutes to avoid flapping.</p>
+<p>The VPA is a separate add-on that recommends or applies new requests for Pods; it should not control the same CPU or memory metric as an HPA on the same workload. The Cluster Autoscaler, usually tied to a cloud provider's node groups, adds nodes when Pods are Pending because nothing fits and removes underused nodes. Both are outside kubeadm's default install.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>HorizontalPodAutoscaler</dt><dd>A controller that adjusts a workload's replica count to meet a metric target.</dd><dt>metrics-server</dt><dd>An add-on that collects CPU and memory usage from kubelets and serves the Resource Metrics API.</dd><dt>averageUtilization</dt><dd>A target expressed as a percentage of the Pods' resource requests.</dd><dt>Vertical Pod Autoscaler</dt><dd>An add-on that recommends or sets container requests based on observed usage.</dd><dt>Cluster Autoscaler</dt><dd>An add-on that adds or removes nodes based on Pending Pods and node utilization.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An HPA created with <code>kubectl autoscale</code> shows TARGETS <code>&lt;unknown&gt;/50%</code>. <code>kubectl top pods</code> works, so metrics-server is fine; <code>kubectl get deploy web -o yaml</code> reveals no CPU request. Adding <code>requests: {cpu: 100m}</code> and letting the Pods roll makes the HPA report real utilization and scale.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> <code>&lt;unknown&gt;</code> targets mean either metrics-server is missing or not working, or the Pods have no request for that resource. Check <code>kubectl top</code> first, then the requests.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why does a CPU utilization HPA need CPU requests on the Pods?</summary><p>Utilization is calculated as a percentage of the requested CPU; with no request there is nothing to divide by.</p></details>
+<details class="sq"><summary>Which component serves the metrics the HPA uses for CPU and memory?</summary><p>metrics-server, via the Resource Metrics API.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../priorityclasses-and-preemption/">← PriorityClasses and preemption</a><a href="../static-pods-vs-scheduler-placed-pods-what-happens-when-the-scheduler-i/">Static Pods vs scheduler-placed Pods; what happens when the  →</a></nav>
+</main>
+</body>
+</html>

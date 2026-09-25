@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Interrupting the boot process to gain access (rd.break… · RHCSA Lesson</title>
+<meta name="description" content="If the root password is lost, rescue and emergency modes do not help because both ask for it. RHEL documents a recovery procedure that stops the boot insid">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Interrupting the boot process to gain access (rd.break… · RHCSA Lesson">
+<meta property="og:description" content="If the root password is lost, rescue and emergency modes do not help because both ask for it. RHEL documents a recovery procedure that stops the boot insid">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/interrupting-the-boot-process-to-gain-access-rd-break-chroot-sysroot-p/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/interrupting-the-boot-process-to-gain-access-rd-break-chroot-sysroot-p/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 4: Operate running systems</p>
+<h1>Interrupting the boot process to gain access (rd.break, chroot /sysroot, passwd, touch /.autorelabel)</h1>
+<article class="lbody">
+<p>If the root password is lost, rescue and emergency modes do not help because both ask for it. RHEL documents a recovery procedure that stops the boot inside the initramfs, before systemd on the real system takes over and before any password is requested. It is a legitimate administrator technique and a classic RHCSA task. It also shows why physical or console access to a server must be protected: anyone with console access can do the same, which is why data centres restrict console access and why a GRUB password or disk encryption can be used to block it.</p>
+<p>The key parameter is <code>rd.break</code>, understood by dracut, the tool that builds the initramfs. It tells the initramfs to stop and give you a shell just before switching to the real root file system. At that point the real root is mounted read-only at <code>/sysroot</code>, and you are working in the tiny initramfs environment.</p>
+<pre class="code" tabindex="0"><code># GRUB: press e, add rd.break to the end of the linux line, Ctrl+X
+mount -o remount,rw /sysroot
+chroot /sysroot
+passwd root                # set the new password
+touch /.autorelabel
+exit                       # leave the chroot
+exit                       # continue booting (or reboot)</code></pre>
+<p>Step by step: remount <code>/sysroot</code> read-write so you can change files. <code>chroot /sysroot</code> makes <code>/sysroot</code> appear as <code>/</code> for your shell, so commands such as <code>passwd</code> operate on the real system's <code>/etc/shadow</code> instead of the initramfs. Change the password with <code>passwd</code> (or <code>passwd root</code>). Then create the empty file <code>/.autorelabel</code>.</p>
+<p>That last step is the one people forget, and it matters because of SELinux (Security-Enhanced Linux). During this procedure SELinux policy is not loaded, so when <code>passwd</code> replaces <code>/etc/shadow</code> the new file gets no correct SELinux label. With SELinux enforcing, the system would then deny access to the file and nobody could log in. <code>/.autorelabel</code> tells the system to relabel every file with its correct context on the next boot, which takes a few minutes and triggers an extra automatic reboot. Do not interrupt it.</p>
+<p>Typing <code>exit</code> twice leaves the chroot and then the initramfs shell, and the boot continues. Some systems need a GRUB edit to remove <code>rhgb quiet</code> to see messages, and on some virtual machines the console is on a serial line, but the procedure is the same. An alternative sometimes used is booting with <code>init=/bin/bash</code>; in all cases the idea is to get a root shell before authentication and then restore SELinux labels.</p>
+<p>Afterwards, verify by logging in as root with the new password. If login fails with the correct password, the relabel step was probably skipped; you can fix it by repeating the procedure, or, from a working root shell, with <code>restorecon -v /etc/shadow</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>rd.break</dt><dd>Kernel parameter that makes the initramfs stop and open a shell before switching to the real root.</dd><dt>/sysroot</dt><dd>Where the real root file system is mounted inside the initramfs, read-only by default.</dd><dt>chroot</dt><dd>Runs a shell with a given directory treated as the root /, here /sysroot.</dd><dt>/.autorelabel</dt><dd>Empty file that triggers a full SELinux relabel of the file system at the next boot.</dd><dt>dracut</dt><dd>The tool that builds the initramfs and understands rd.* kernel parameters.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>On an exam system the root password is unknown. You add rd.break in GRUB, remount /sysroot read-write, chroot, run <code>passwd</code> and <code>touch /.autorelabel</code>, then exit twice. The system relabels, reboots on its own and you log in as root with the new password.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Remember the order: remount,rw /sysroot, chroot /sysroot, passwd, touch /.autorelabel, exit, exit. Skipping the autorelabel leaves /etc/shadow mislabeled and logins fail under SELinux.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why must you remount /sysroot before changing the password?</summary><p>It is mounted read-only at the rd.break point, so the password change could not be written.</p></details>
+<details class="sq"><summary>What problem does touch /.autorelabel prevent?</summary><p>The new /etc/shadow lacking a correct SELinux context, which would block logins when SELinux is enforcing.</p></details>
+<details class="sq"><summary>Why do you chroot into /sysroot?</summary><p>So passwd modifies the real system's files rather than the initramfs environment.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../booting-into-different-targets-manually-from-the-grub-menu-systemd-uni/">← Booting into different targets manually from the GRUB menu (</a><a href="../identifying-cpu-and-memory-intensive-processes-with-top-ps-aux-sort-an/">Identifying CPU- and memory-intensive processes with top, ps →</a></nav>
+</main>
+</body>
+</html>

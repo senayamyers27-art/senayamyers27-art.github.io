@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Redundant VPNs: two tunnels, route distance/priority… · FortiGate Admin Lesson</title>
+<meta name="description" content="Branches that depend on a VPN need it to survive the failure of a single link or tunnel. FortiGate builds VPN redundancy by running two (or more) tunnels a">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Redundant VPNs: two tunnels, route distance/priority… · FortiGate Admin Lesson">
+<meta property="og:description" content="Branches that depend on a VPN need it to survive the failure of a single link or tunnel. FortiGate builds VPN redundancy by running two (or more) tunnels a">
+<link rel="canonical" href="https://senayamyers27-art.github.io/fortinet-fortigate/lessons/redundant-vpns-two-tunnels-route-distance-priority-dpd-tunnel-monitori/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/fortinet-fortigate/lessons/redundant-vpns-two-tunnels-route-distance-priority-dpd-tunnel-monitori/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">FortiGate Admin</a> / <a href="../">Lessons</a></p>
+<p class="note">Fortinet NSE 4 - FortiOS 7.6 Administrator NSE4_FGT_AD-7.6 · Domain 5: VPN</p>
+<h1>Redundant VPNs: two tunnels, route distance/priority, DPD, tunnel monitoring</h1>
+<article class="lbody">
+<p>Branches that depend on a VPN need it to survive the failure of a single link or tunnel. FortiGate builds VPN redundancy by running two (or more) tunnels and using routing plus liveness detection to fail over between them automatically. The mechanics, distance/priority and dead peer detection, are exactly what the exam probes.</p>
+<p>The design is to build one tunnel per path, for example one over each of the branch's two ISPs, each as a route-based tunnel with its own tunnel interface. You then add a route to the remote subnet through each tunnel, but with different administrative distances (or priorities) so one is primary and the other is a standby. A lower-distance route on the primary tunnel means only it is active while both are healthy; the higher-distance route on the backup tunnel waits in the routing database and becomes active only if the primary route is withdrawn. (Alternatively, equal distance with different priorities keeps both routes in the table with one preferred.)</p>
+<p>For failover to actually happen, the FortiGate must notice when the primary tunnel dies and remove its route. That is the job of dead peer detection (DPD): DPD sends periodic liveness probes to the peer and, if the peer stops responding, declares the tunnel dead and brings it down. When the tunnel goes down, its route is withdrawn, and the backup tunnel's higher-distance route takes over. Without DPD, a dead tunnel can appear up (a black hole), its route stays in the table, and traffic keeps being sent into a tunnel that is not passing data, so failover never triggers. Tunnel monitoring (a link monitor over the tunnel, or auto-negotiate/keepalive behaviour) can similarly detect a broken tunnel and drive route changes.</p>
+<p>So the recipe for redundant branch VPNs: two route-based tunnels, routes with different distances (or priorities) making one primary and one backup, DPD enabled so a dead tunnel is detected and its route removed, and firewall policies allowing traffic over both tunnels so the backup works the moment it activates. Enabling DPD is the piece people forget, and it is why 'two tunnels with DPD off' is a wrong answer, the dead tunnel would linger and traffic would not move.</p>
+<p>This same pattern underlies dual-hub and dual-ISP designs and complements SD-WAN, which can steer over multiple tunnel members by SLA. The exam-level point is the interplay: routing decides preference, DPD/monitoring provides the trigger to change it.</p>
+<p>In a lab with two tunnels you disable the primary path, and with DPD enabled watch the primary route drop and traffic move to the backup, then compare with DPD off to see the tunnel linger.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Redundant tunnels</dt><dd>Two or more tunnels over different paths so the VPN survives a single link or tunnel failure.</dd><dt>Route distance/priority for failover</dt><dd>Different administrative distances (or priorities) on the tunnels' routes make one primary and one backup.</dd><dt>Dead peer detection (DPD)</dt><dd>Periodic liveness probes that detect an unresponsive peer, bring the tunnel down and let its route be withdrawn.</dd><dt>Tunnel monitoring</dt><dd>Link monitoring over a tunnel that detects a broken path and drives route changes for failover.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A branch builds two route-based tunnels to HQ, one per ISP, gives the primary tunnel's route a lower distance, and enables DPD; when the primary ISP fails, DPD brings that tunnel down, its route is removed, and traffic shifts to the backup tunnel.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Redundant VPN failover needs both parts: different route distances/priorities to set primary vs backup, and DPD (or tunnel monitoring) to detect a dead tunnel so its route is withdrawn. DPD off breaks failover.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How do you make branch VPNs fail over between two ISPs?</summary><p>Build one route-based tunnel per ISP, give the primary a lower route distance (or priority), enable DPD so a dead tunnel is detected, and allow traffic on both tunnels in policies.</p></details>
+<details class="sq"><summary>What does dead peer detection do?</summary><p>It sends liveness probes and, when the peer stops responding, brings the tunnel down so its route can be withdrawn and a backup takes over.</p></details>
+<details class="sq"><summary>Why is 'two tunnels with DPD off' a poor design?</summary><p>Without DPD a dead tunnel can appear up, its route stays active, traffic black-holes into it, and failover never triggers.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study FortiGate Admin for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../fortinet-fortigate/">Open the FortiGate Admin study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../routes-and-firewall-policies-needed-for-tunnel-traffic/">← Routes and firewall policies needed for tunnel traffic</a><a href="../topologies-hub-and-spoke-full-mesh-partial-mesh-advpn-short-cuts/">Topologies: hub and spoke, full mesh, partial mesh, ADVPN sh →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Configuring firewall settings with firewall-cmd: zones… · RHCSA Lesson</title>
+<meta name="description" content="The networking lesson covered opening services and ports. The security objective goes further: using zones and source addresses to control who may connect,">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Configuring firewall settings with firewall-cmd: zones… · RHCSA Lesson">
+<meta property="og:description" content="The networking lesson covered opening services and ports. The security objective goes further: using zones and source addresses to control who may connect,">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/configuring-firewall-settings-with-firewall-cmd-zones-services-ports-s/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/configuring-firewall-settings-with-firewall-cmd-zones-services-ports-s/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 10: Manage security</p>
+<h1>Configuring firewall settings with firewall-cmd: zones, services, ports, sources, runtime vs permanent</h1>
+<article class="lbody">
+<p>The networking lesson covered opening services and ports. The security objective goes further: using zones and source addresses to control who may connect, and being precise about runtime and permanent configuration. The goal is least privilege, meaning allow only what a service needs from only the networks that need it.</p>
+<p>firewalld assigns each incoming packet to one zone. If the packet's source address matches a source bound to a zone, that zone applies. Otherwise the zone of the incoming interface applies, and if the interface has none, the default zone. Predefined zones range from <code>drop</code> (silently drop everything) and <code>block</code> (reject everything) through <code>public</code> and <code>internal</code> to <code>trusted</code> (allow everything). Each has its own services and ports.</p>
+<p>Binding a source network to a zone lets you treat certain clients differently. For example, allow SSH only from an admin network by putting that network in the <code>internal</code> zone with ssh allowed, and removing ssh from <code>public</code>.</p>
+<pre class="code" tabindex="0"><code>firewall-cmd --permanent --zone=internal --add-source=10.0.5.0/24
+firewall-cmd --permanent --zone=internal --add-service=ssh
+firewall-cmd --permanent --zone=public --remove-service=ssh
+firewall-cmd --reload
+firewall-cmd --get-active-zones
+firewall-cmd --zone=internal --list-all</code></pre>
+<p>Other zone commands: <code>--set-default-zone=name</code> changes the default immediately and permanently, <code>--change-interface=enp1s0 --zone=internal</code> moves an interface (for NetworkManager-managed interfaces the lasting setting is the connection's <code>connection.zone</code>), and <code>--list-all-zones</code> shows everything. Services and ports are added per zone with <code>--add-service</code>, <code>--add-port=port/proto</code> and removed with the matching <code>--remove-</code> options; <code>--query-service=http</code> answers yes or no.</p>
+<p>Runtime versus permanent is the concept most often tested. Runtime changes apply now and vanish on reload or reboot. Permanent changes are saved but do not apply until reload. The two can drift apart; <code>firewall-cmd --list-all</code> shows runtime and <code>firewall-cmd --permanent --list-all</code> shows saved configuration. A safe way to experiment remotely is to make runtime changes, test, then <code>--runtime-to-permanent</code>. If you lock yourself out with a runtime change, a reload or reboot restores the saved rules.</p>
+<p>When a service must stay reachable after reboot, the permanent configuration must include it. Always compare runtime and permanent output before finishing a task.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Source binding</dt><dd>Assigning a source address or network to a zone so packets from it use that zone's rules.</dd><dt>Default zone</dt><dd>The zone used for interfaces and traffic not assigned to any other zone, public unless changed.</dd><dt>Runtime configuration</dt><dd>The firewall rules currently in effect, lost on reload or reboot unless saved.</dd><dt>--runtime-to-permanent</dt><dd>Saves the current runtime firewall configuration as the permanent configuration.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Only the 192.168.50.0/24 admin network may use the web console on TCP 9090. You add that network as a source to the internal zone with cockpit allowed, remove cockpit from public, all with --permanent, reload, and confirm with --get-active-zones and --zone=internal --list-all.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Source bindings take priority over interface zones. Compare firewall-cmd --list-all with --permanent --list-all to be sure your runtime and saved rules agree.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How does firewalld choose a zone for an incoming packet?</summary><p>A matching source binding first, then the zone of the incoming interface, then the default zone.</p></details>
+<details class="sq"><summary>How do you save working runtime rules without retyping them?</summary><p>firewall-cmd --runtime-to-permanent.</p></details>
+<details class="sq"><summary>Which command shows the saved, rather than running, rules for a zone?</summary><p>firewall-cmd --permanent --zone=name --list-all.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../locking-and-unlocking-accounts-usermod-l-passwd-l-chage-e-0/">← Locking and unlocking accounts (usermod -L, passwd -l, chage</a><a href="../managing-default-file-permissions-with-umask-shell-and-etc-login-defs/">Managing default file permissions with umask (shell and /etc →</a></nav>
+</main>
+</body>
+</html>

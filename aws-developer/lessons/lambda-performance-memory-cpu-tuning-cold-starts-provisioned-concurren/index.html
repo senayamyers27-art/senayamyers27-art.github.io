@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lambda performance: memory/CPU tuning, cold starts… · Developer Associate Lesson</title>
+<meta name="description" content="Lambda performance tuning is about three things: how fast each invocation runs, how long new execution environments take to start, and how concurrency is s">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Lambda performance: memory/CPU tuning, cold starts… · Developer Associate Lesson">
+<meta property="og:description" content="Lambda performance tuning is about three things: how fast each invocation runs, how long new execution environments take to start, and how concurrency is s">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/lambda-performance-memory-cpu-tuning-cold-starts-provisioned-concurren/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/lambda-performance-memory-cpu-tuning-cold-starts-provisioned-concurren/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 4: Troubleshooting and Optimization</p>
+<h1>Lambda performance: memory/CPU tuning, cold starts, provisioned concurrency, reserved concurrency</h1>
+<article class="lbody">
+<p>Lambda performance tuning is about three things: how fast each invocation runs, how long new execution environments take to start, and how concurrency is shared. Each has a specific lever.</p>
+<p>Memory is the only compute size setting: Lambda allocates CPU power (and network bandwidth) in proportion to configured memory, so doubling memory roughly doubles available CPU. For CPU-bound code (image processing, compression, encryption, JSON parsing of large documents), raising memory often cuts duration so much that cost stays the same or drops, because you pay for memory multiplied by duration. At higher memory settings a function gets more than one virtual CPU, which only helps if the code uses multiple threads or processes. Use the <code>REPORT</code> log line's <code>Max Memory Used</code> to find functions that are over- or under-provisioned, and test different settings empirically, for example with the open-source AWS Lambda Power Tuning tool or AWS Compute Optimizer recommendations. Arm-based Graviton (arm64) functions often give better price performance.</p>
+<p>A cold start happens when Lambda must create a new execution environment: download your code, start the runtime and run your initialization code before the handler. It appears as <code>Init Duration</code> in the <code>REPORT</code> line and in X-Ray. Cold starts occur on the first request, after scaling up, after deploying new code, and after an environment has been idle and reclaimed. To reduce them: keep deployment packages small, import only what you need, initialize SDK clients once outside the handler but avoid heavy work that is not needed on every path, choose runtimes and frameworks with fast startup, and, for supported runtimes such as Java, consider Lambda SnapStart, which snapshots an initialized environment and resumes from it. Connecting a function to a VPC no longer adds significant cold start time in the way it once did.</p>
+<p>Provisioned concurrency pre-initializes a set number of execution environments so they are ready to respond immediately, eliminating cold starts for traffic up to that number. It is configured on a published version or alias (not <code>$LATEST</code>), costs money while provisioned whether used or not, and can be scaled with Application Auto Scaling on a schedule (for business hours) or with target tracking on utilization. Use it for latency-sensitive, synchronous workloads such as interactive APIs with strict response-time requirements. Requests above the provisioned amount are served by normal on-demand environments, with cold starts.</p>
+<p>Reserved concurrency is about capacity, not speed. It sets aside a number of concurrent executions from the account's Regional pool for one function, guaranteeing it can always scale to that level, and it also acts as a maximum. That cap is useful to protect a downstream resource, for example limiting a function to 50 concurrent executions so it cannot open more connections than a relational database allows, or to stop one runaway function from starving the others. Reserved concurrency has no extra charge. Invocations beyond the reserved amount are throttled.</p>
+<p>Keep the distinction straight: provisioned concurrency is for eliminating cold starts and costs extra; reserved concurrency guarantees and limits scaling at no cost. A function can have both, with provisioned concurrency not exceeding its reserved concurrency. For database connection pressure specifically, Amazon RDS Proxy pools and shares connections among many Lambda environments.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Cold start</dt><dd>The added latency when Lambda creates and initializes a new execution environment before running the handler.</dd><dt>Init Duration</dt><dd>The REPORT log field showing how long initialization took for an invocation that had a cold start.</dd><dt>Provisioned concurrency</dt><dd>Pre-initialized execution environments on a version or alias that remove cold starts, billed while configured.</dd><dt>Reserved concurrency</dt><dd>A free setting that guarantees and caps a function's concurrent executions.</dd><dt>Lambda SnapStart</dt><dd>A feature for supported runtimes that resumes new environments from a snapshot of an initialized one to shorten cold starts.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A banking API's p99 latency spikes every morning at 9:00 when traffic ramps up and new environments cold start. The team adds provisioned concurrency to the live alias with a scheduled Application Auto Scaling action that raises it before 9:00 and lowers it in the evening, and sets reserved concurrency on a reporting function so it cannot exhaust the database's connections.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Latency from cold starts: provisioned concurrency (or SnapStart for supported runtimes). Protect a downstream system or guarantee capacity: reserved concurrency. Slow CPU-heavy function: increase memory.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which setting removes cold starts, and what does it require?</summary><p>Provisioned concurrency, configured on a published version or alias, billed while provisioned.</p></details>
+<details class="sq"><summary>How can you stop a Lambda function from overwhelming an RDS database with connections?</summary><p>Set reserved concurrency to cap concurrent executions, and consider RDS Proxy to pool connections.</p></details>
+<details class="sq"><summary>Why might increasing memory reduce cost?</summary><p>More memory gives more CPU, so the function finishes faster; since cost is memory times duration, the total can stay the same or drop.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../cloudwatch-alarms-with-sns-notifications-structured-logging-and-correl/">← CloudWatch alarms with SNS notifications; structured logging</a><a href="../stream-and-queue-troubleshooting-kinesis-iteratorage-parallelization-f/">Stream and queue troubleshooting: Kinesis IteratorAge, paral →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DaemonSets and StatefulSets from an operator's point of… · CKA Lesson</title>
+<meta name="description" content="Deployments suit stateless, interchangeable Pods. Two other controllers cover cases they do not: DaemonSets, which run one Pod per node, and StatefulSets, ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="DaemonSets and StatefulSets from an operator's point of… · CKA Lesson">
+<meta property="og:description" content="Deployments suit stateless, interchangeable Pods. Two other controllers cover cases they do not: DaemonSets, which run one Pod per node, and StatefulSets, ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/daemonsets-and-statefulsets-from-an-operator-s-point-of-view-including/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/daemonsets-and-statefulsets-from-an-operator-s-point-of-view-including/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 2: Workloads and Scheduling</p>
+<h1>DaemonSets and StatefulSets from an operator's point of view, including tolerations for control plane nodes</h1>
+<article class="lbody">
+<p>Deployments suit stateless, interchangeable Pods. Two other controllers cover cases they do not: DaemonSets, which run one Pod per node, and StatefulSets, which give Pods stable identities and storage.</p>
+<p>A DaemonSet ensures that every eligible node runs exactly one copy of a Pod. When a node joins, the DaemonSet adds a Pod to it; when a node leaves, the Pod goes with it. This is how node-level agents are deployed: kube-proxy, CNI agents, log shippers, monitoring exporters and CSI node plugins. You can limit a DaemonSet to some nodes with a nodeSelector or node affinity in its Pod template. DaemonSets support RollingUpdate (the default) and OnDelete update strategies.</p>
+<p>Control plane nodes on kubeadm clusters carry the taint <code>node-role.kubernetes.io/control-plane:NoSchedule</code>. A DaemonSet whose Pods do not tolerate it will skip those nodes, so <code>kubectl get ds</code> shows fewer desired Pods than you have nodes. If an agent must also run on control plane nodes, add a toleration to the Pod template.</p>
+<pre class="code" tabindex="0"><code>spec:
+  template:
+    spec:
+      tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule</code></pre>
+<p>The DaemonSet controller also adds some tolerations automatically, for example for not-ready, unreachable and pressure conditions, so node agents are not evicted when a node struggles. There is no <code>kubectl create daemonset</code> shortcut; a quick trick is <code>kubectl create deployment ... --dry-run=client -o yaml</code>, then change the kind to DaemonSet and remove <code>replicas</code> and <code>strategy</code>.</p>
+<p>A StatefulSet manages Pods that need a stable identity. Pods are named with an ordinal, <code>db-0</code>, <code>db-1</code>, <code>db-2</code>, and are created in order and, by default, removed in reverse order. It requires a headless Service (named in <code>serviceName</code>) that gives each Pod a stable DNS name such as <code>db-0.db.prod.svc.cluster.local</code>. Its <code>volumeClaimTemplates</code> create one PersistentVolumeClaim per Pod, like <code>data-db-0</code>, and if a Pod is rescheduled it reattaches the same claim.</p>
+<p>Operationally, scaling a StatefulSet down removes the highest ordinals first and, by default, leaves their PVCs in place so data survives a later scale-up. Rolling updates proceed from the highest ordinal to the lowest, and a <code>partition</code> value lets you update only ordinals at or above a number for canary-style testing. When a StatefulSet Pod will not start, check its PVC and the node its volume is tied to, as storage is the most common cause.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>DaemonSet</dt><dd>A controller that runs one copy of a Pod on each eligible node.</dd><dt>StatefulSet</dt><dd>A controller giving Pods stable ordinal names, stable DNS and per-Pod persistent storage.</dd><dt>Headless Service</dt><dd>A Service with clusterIP None that publishes individual Pod DNS records, required by StatefulSets.</dd><dt>Control plane taint</dt><dd>node-role.kubernetes.io/control-plane:NoSchedule, which keeps ordinary Pods off control plane nodes.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A log-shipping DaemonSet shows DESIRED 2 in a three-node cluster. The missing node is the control plane, which is tainted. Adding a toleration for node-role.kubernetes.io/control-plane with operator Exists raises DESIRED to 3 and a Pod appears on cp1.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> When a DaemonSet has fewer Pods than nodes, compare node taints (<code>kubectl describe node | grep -i taint</code>) with the Pod template's tolerations and nodeSelector before anything else.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What DNS name does Pod web-1 of a StatefulSet with serviceName web in namespace shop get?</summary><p>web-1.web.shop.svc.cluster.local.</p></details>
+<details class="sq"><summary>What happens to PVCs when you scale a StatefulSet down, by default?</summary><p>They are kept, so the data is reattached if you scale back up.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../deployments-and-replicasets-as-self-healing-primitives-rolling-updates/">← Deployments and ReplicaSets as self-healing primitives; roll</a><a href="../configmaps-and-secrets-creation-env-and-volume-consumption-immutable-o/">ConfigMaps and Secrets: creation, env and volume consumption →</a></nav>
+</main>
+</body>
+</html>

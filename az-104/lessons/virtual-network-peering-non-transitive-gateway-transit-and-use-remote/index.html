@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Virtual network peering: non-transitive, gateway transit… · Azure Administrator Lesson</title>
+<meta name="description" content="Virtual network peering connects two VNets so resources in them communicate using private IP addresses, as if they were one network. Traffic travels over t">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Virtual network peering: non-transitive, gateway transit… · Azure Administrator Lesson">
+<meta property="og:description" content="Virtual network peering connects two VNets so resources in them communicate using private IP addresses, as if they were one network. Traffic travels over t">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-104/lessons/virtual-network-peering-non-transitive-gateway-transit-and-use-remote/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-104/lessons/virtual-network-peering-non-transitive-gateway-transit-and-use-remote/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Azure Administrator</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure Administrator Associate AZ-104 · Domain 4: Implement and manage virtual networking</p>
+<h1>Virtual network peering: non-transitive, gateway transit and use remote gateways, global peering</h1>
+<article class="lbody">
+<p>Virtual network peering connects two VNets so resources in them communicate using private IP addresses, as if they were one network. Traffic travels over the Microsoft backbone, never the public internet, with low latency and no gateway in the path. Peering VNets in the same region is regional peering; peering VNets in different regions is global peering, which works the same way. VNets can be in different subscriptions, and even in different Microsoft Entra tenants with the right permissions.</p>
+<p>A peering is really two links, one from each side. In the portal, creating a peering on one VNet can create both links at once; with the CLI or PowerShell you create both yourself (<code>az network vnet peering create</code> on each side). The peering status shows Initiated when only one side exists and Connected when both do. The VNets must not have overlapping address spaces. Peering traffic is charged for data in and out, with higher rates for global peering.</p>
+<p>Peering is non-transitive. If VNet A is peered with VNet B, and B is peered with C, A cannot reach C through B. This is the most tested fact about peering. In a hub-and-spoke design, where spokes peer only with a central hub, spokes cannot talk to each other by default. To allow spoke-to-spoke traffic, you either peer the spokes directly, or route traffic through a network virtual appliance or Azure Firewall in the hub using user-defined routes, with 'Allow forwarded traffic' enabled on the peerings. Azure Virtual Network Manager and Azure Virtual WAN can also build connected topologies for you.</p>
+<p>Each peering link has settings. Allow access to the remote VNet (on by default) permits communication. Allow forwarded traffic accepts traffic that did not originate in the peer VNet, such as traffic routed through an appliance. Allow gateway transit, set on the hub side, lets peered VNets use the hub's VPN or ExpressRoute gateway. Use remote gateways, set on the spoke side, tells the spoke to use the peer's gateway instead of its own.</p>
+<p>Gateway transit is how a hub-and-spoke network shares one VPN gateway. The hub has the gateway and enables Allow gateway transit; each spoke enables Use remote gateways. Spokes can then reach on-premises through the hub gateway, and on-premises learns routes to the spokes. A spoke that already has its own gateway cannot use remote gateways, and a VNet can use remote gateways from only one peering. Gateway transit works with global peering as well as regional peering.</p>
+<p>Troubleshooting peering usually comes down to three checks: are both links Connected, do the address spaces overlap, and do network security groups or route tables block the traffic? Network Watcher's effective routes on a VM's NIC show whether a 'VNet peering' route to the remote address space exists.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>VNet peering</dt><dd>A private, backbone connection between two VNets that lets resources communicate by private IP.</dd><dt>Global peering</dt><dd>Peering between VNets in different Azure regions.</dd><dt>Non-transitive</dt><dd>The property that peering connects only the two VNets involved, not VNets peered to either of them.</dd><dt>Gateway transit</dt><dd>A peering option letting peered VNets use the hub VNet's VPN or ExpressRoute gateway, paired with Use remote gateways on the spoke.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A company has a hub VNet with a VPN gateway to its headquarters and three spoke VNets for applications. The hub peerings allow gateway transit and each spoke uses remote gateways, so all spokes reach headquarters through one gateway. When Spoke1 needs to reach Spoke2, the administrator adds user-defined routes pointing through Azure Firewall in the hub, because peering is not transitive.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Peering is non-transitive: A-B and B-C does not give A-C. Allow gateway transit goes on the VNet that has the gateway; Use remote gateways goes on the VNet that borrows it. Address spaces must not overlap.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Spoke1 and Spoke2 are each peered with Hub. Can a VM in Spoke1 reach a VM in Spoke2?</summary><p>Not by default, because peering is non-transitive; peer the spokes or route via an appliance in the hub.</p></details>
+<details class="sq"><summary>Which setting do you enable on a spoke so it uses the hub's VPN gateway?</summary><p>Use remote gateways (with Allow gateway transit enabled on the hub side).</p></details>
+<details class="sq"><summary>A peering shows the status Initiated. What does that mean?</summary><p>Only one side of the peering has been created; create the link from the other VNet.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Azure Administrator for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-104/">Open the Azure Administrator study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../virtual-networks-and-subnets-address-space-planning-the-5-reserved-ips/">← Virtual networks and subnets: address space planning, the 5 </a><a href="../public-ip-addresses-standard-sku-static-allocation-zones/">Public IP addresses: Standard SKU, static allocation, zones →</a></nav>
+</main>
+</body>
+</html>

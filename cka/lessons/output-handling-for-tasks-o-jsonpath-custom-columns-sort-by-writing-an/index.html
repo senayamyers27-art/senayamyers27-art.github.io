@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Output handling for tasks: -o jsonpath, custom-columns… · CKA Lesson</title>
+<meta name="description" content="Many CKA tasks end with 'write the result to /opt/answers/...'. The grader reads that file, so its content must be exactly what was asked, often a name, a ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Output handling for tasks: -o jsonpath, custom-columns… · CKA Lesson">
+<meta property="og:description" content="Many CKA tasks end with 'write the result to /opt/answers/...'. The grader reads that file, so its content must be exactly what was asked, often a name, a ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/output-handling-for-tasks-o-jsonpath-custom-columns-sort-by-writing-an/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/output-handling-for-tasks-o-jsonpath-custom-columns-sort-by-writing-an/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 5: Troubleshooting</p>
+<h1>Output handling for tasks: -o jsonpath, custom-columns, --sort-by, writing answers to files</h1>
+<article class="lbody">
+<p>Many CKA tasks end with 'write the result to /opt/answers/...'. The grader reads that file, so its content must be exactly what was asked, often a name, a list or a number. kubectl's output options let you extract precisely the right data without editing by hand.</p>
+<p>JSONPath lets you pull fields out of the JSON representation of objects. Look at the structure first with <code>kubectl get pod web -o json</code> or <code>-o yaml</code>, then write a path starting at the root. For lists, <code>.items[*]</code> iterates over all objects. <code>range</code> and <code>end</code> let you print one item per line, and filters with <code>?()</code> select array elements by a condition.</p>
+<pre class="code" tabindex="0"><code>kubectl get pods -o jsonpath='{.items[*].metadata.name}'
+kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{&quot;\t&quot;}{.status.nodeInfo.kubeletVersion}{&quot;\n&quot;}{end}'
+kubectl get nodes -o jsonpath='{.items[*].status.addresses[?(@.type==&quot;InternalIP&quot;)].address}'
+kubectl get secret db -o jsonpath='{.data.password}' | base64 -d</code></pre>
+<p>Custom columns produce a readable table with headings you choose, each column defined as <code>NAME:&lt;jsonpath without braces&gt;</code>. Add <code>--no-headers</code> if the task wants only values. Custom columns are often easier than jsonpath for listing several fields per object.</p>
+<pre class="code" tabindex="0"><code>kubectl get pods -A -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name,NODE:.spec.nodeName
+kubectl get pv --sort-by=.spec.capacity.storage
+kubectl get pods --sort-by=.metadata.creationTimestamp -o name
+kubectl get pods -A --sort-by='.status.containerStatuses[0].restartCount'</code></pre>
+<p><code>--sort-by</code> takes a JSONPath expression (braces optional) and sorts ascending. Combine it with <code>tail -1</code> or <code>head -1</code> to pick the newest, largest or most restarted. <code>-o name</code> prints <code>pod/web-6c9</code> style identifiers, and <code>-o wide</code> adds IPs and nodes. Remember that <code>kubectl top</code> has its own <code>--sort-by</code> that only accepts cpu or memory.</p>
+<p>When writing to files, use a plain redirect, <code>&gt; /opt/answers/file.txt</code>, and then <code>cat</code> the file to confirm. Watch for details: does the task want names only or a full table, one per line or space-separated, with or without headers, and with or without the <code>pod/</code> prefix? Create the directory if needed. Quoting also matters: wrap jsonpath expressions in single quotes so the shell does not interpret braces, brackets or double quotes inside.</p>
+<p>Finally, <code>kubectl explain pod.spec.containers --recursive</code> is a quick way to discover field paths you are unsure of, without leaving the terminal.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>-o jsonpath</dt><dd>Output mode that prints values selected by a JSONPath template.</dd><dt>range ... end</dt><dd>JSONPath construct for iterating over a list, commonly used to print one item per line.</dd><dt>-o custom-columns</dt><dd>Output mode that prints a table with user-defined column names and JSONPath values.</dd><dt>--sort-by</dt><dd>Sorts list output by a JSONPath field, in ascending order.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A task asks for the names of all nodes and their internal IPs, one pair per line, in /opt/answers/nodes.txt. You write a jsonpath range over .items printing the name, a tab and the InternalIP address filter, redirect it to the file, and cat it to confirm three lines.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Single-quote jsonpath expressions, check the object structure with -o yaml before writing the path, and always cat the answer file afterwards.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How do you print each Pod name on its own line with jsonpath?</summary><p><code>kubectl get pods -o jsonpath='{range .items[*]}{.metadata.name}{&quot;\n&quot;}{end}'</code>.</p></details>
+<details class="sq"><summary>How do you sort PersistentVolumes by capacity?</summary><p><code>kubectl get pv --sort-by=.spec.capacity.storage</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../cluster-access-problems-kubeconfig-contexts-expired-certificates-conne/">← Cluster access problems: kubeconfig contexts, expired certif</a><a href="../stuck-terminating-pods-on-lost-nodes-and-force-deletion/">Stuck Terminating Pods on lost nodes and force deletion →</a></nav>
+</main>
+</body>
+</html>

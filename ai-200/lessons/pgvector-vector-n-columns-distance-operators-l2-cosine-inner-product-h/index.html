@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>pgvector: vector(n) columns, distance operators (&lt;-&gt; L2… · AI-200 Lesson</title>
+<meta name="description" content="With the extension created, you store embeddings in a column of type vector(n), where n is the number of dimensions your embedding model returns. Inserting">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="pgvector: vector(n) columns, distance operators (&lt;-&gt; L2… · AI-200 Lesson">
+<meta property="og:description" content="With the extension created, you store embeddings in a column of type vector(n), where n is the number of dimensions your embedding model returns. Inserting">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/pgvector-vector-n-columns-distance-operators-l2-cosine-inner-product-h/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/pgvector-vector-n-columns-distance-operators-l2-cosine-inner-product-h/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 2: Develop AI solutions by using Azure data management services</p>
+<h1>pgvector: vector(n) columns, distance operators (&lt;-&gt; L2, &lt;=&gt; cosine, &lt;#&gt; inner product), HNSW vs IVFFlat indexes and tuning (m, ef_search, lists, probes)</h1>
+<article class="lbody">
+<p>With the extension created, you store embeddings in a column of type <code>vector(n)</code>, where n is the number of dimensions your embedding model returns. Inserting a vector with a different length fails, which protects you from mixing models. A typical table keeps the chunk text, its metadata and its embedding together, so a single SQL query can filter and rank.</p>
+<pre class="code" tabindex="0"><code>CREATE TABLE chunks (
+  id bigserial PRIMARY KEY,
+  doc_id int, lang text, body text,
+  embedding vector(1536));
+
+SELECT id, body, embedding &lt;=&gt; $1 AS distance
+FROM chunks WHERE lang = 'en'
+ORDER BY embedding &lt;=&gt; $1
+LIMIT 5;</code></pre>
+<p>pgvector defines three main distance operators. <code>&lt;-&gt;</code> is L2 (Euclidean) distance. <code>&lt;=&gt;</code> is cosine distance, which is 1 minus cosine similarity, so smaller is more similar. <code>&lt;#&gt;</code> is the negative inner product; it is negated because PostgreSQL index scans only work with ascending order, so sorting ascending by <code>&lt;#&gt;</code> returns the largest inner products first. In every case you ORDER BY the operator ascending and use LIMIT for top-k. For normalized embeddings (length 1), cosine and inner product give the same ranking, and inner product is slightly cheaper.</p>
+<p>Without an index, the query does an exact scan of every row, which is perfectly accurate but slows down as the table grows. pgvector offers two approximate nearest neighbor (ANN) index types, and each index is built for one operator class that must match the operator in your query: <code>vector_l2_ops</code> for <code>&lt;-&gt;</code>, <code>vector_cosine_ops</code> for <code>&lt;=&gt;</code> and <code>vector_ip_ops</code> for <code>&lt;#&gt;</code>. If the operator does not match, the planner ignores the index.</p>
+<p>HNSW (Hierarchical Navigable Small World) builds a multi-layer graph. It has better speed and recall trade-offs, can be created on an empty table and stays accurate as rows are added, but it builds more slowly and uses more memory. Its build parameters are <code>m</code>, the maximum connections per node, and <code>ef_construction</code>, the size of the candidate list during building; larger values improve recall and cost build time and memory. At query time, <code>hnsw.ef_search</code> sets the candidate list size: raise it for better recall, lower it for speed.</p>
+<p>IVFFlat (inverted file with flat lists) clusters vectors into <code>lists</code> and searches only the closest lists. It builds faster and uses less memory, but it should be created after the table has representative data, because the clusters are computed at build time. The pgvector guidance is roughly rows divided by 1000 lists for up to a million rows, and the square root of rows beyond that. At query time, <code>ivfflat.probes</code> sets how many lists to search; more probes mean better recall and slower queries.</p>
+<pre class="code" tabindex="0"><code>CREATE INDEX ON chunks USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64);
+SET hnsw.ef_search = 100;
+-- or
+CREATE INDEX ON chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+SET ivfflat.probes = 10;</code></pre>
+<p>Use <code>EXPLAIN ANALYZE</code> to confirm the index is used. Remember that a restrictive WHERE filter applied after an approximate index scan can return fewer than k rows; raising ef_search or probes helps.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>vector(n)</dt><dd>The pgvector column type holding an embedding of exactly n dimensions.</dd><dt>&lt;=&gt; operator</dt><dd>pgvector's cosine distance operator; smaller values mean more similar vectors.</dd><dt>HNSW</dt><dd>A graph-based ANN index with strong recall and speed, tuned with m, ef_construction and hnsw.ef_search.</dd><dt>IVFFlat</dt><dd>A cluster-based ANN index built after loading data, tuned with lists at build time and ivfflat.probes at query time.</dd><dt>Operator class</dt><dd>The index setting, such as vector_cosine_ops, that must match the distance operator used in queries.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A search query was slow even after an index was created. EXPLAIN showed a sequential scan: the index used vector_l2_ops but the query ordered by &lt;=&gt;. Rebuilding the HNSW index with vector_cosine_ops made the planner use it. Recall on filtered queries was a little low, so they raised hnsw.ef_search for that session.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Match operator and operator class (&lt;-&gt; with vector_l2_ops, &lt;=&gt; with vector_cosine_ops, &lt;#&gt; with vector_ip_ops). Build IVFFlat after loading data; HNSW works on empty tables. ef_search and probes trade speed for recall.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why is the inner product operator &lt;#&gt; negative?</summary><p>PostgreSQL index scans order ascending, so negating the inner product makes the most similar vectors sort first.</p></details>
+<details class="sq"><summary>Which parameter do you raise to improve recall for an IVFFlat index at query time?</summary><p>ivfflat.probes, which searches more lists at the cost of speed.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../azure-database-for-postgresql-flexible-server-allow-listing-and-enabli/">← Azure Database for PostgreSQL flexible server: allow-listing</a><a href="../retrieval-augmented-generation-chunking-embedding-storing-top-k-retrie/">Retrieval-augmented generation: chunking, embedding, storing →</a></nav>
+</main>
+</body>
+</html>

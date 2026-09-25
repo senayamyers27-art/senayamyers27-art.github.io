@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GRE tunnels: configuration, keepalives, recursive routing… · ENCOR Lesson</title>
+<meta name="description" content="Generic Routing Encapsulation (GRE) is a simple tunneling protocol that wraps one packet inside another. The original packet, which can be IPv4, IPv6 or ev">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="GRE tunnels: configuration, keepalives, recursive routing… · ENCOR Lesson">
+<meta property="og:description" content="Generic Routing Encapsulation (GRE) is a simple tunneling protocol that wraps one packet inside another. The original packet, which can be IPv4, IPv6 or ev">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ccnp-encor/lessons/gre-tunnels-configuration-keepalives-recursive-routing-problems-mtu-an/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ccnp-encor/lessons/gre-tunnels-configuration-keepalives-recursive-routing-problems-mtu-an/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">ENCOR</a> / <a href="../">Lessons</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2 · Domain 2: Virtualization</p>
+<h1>GRE tunnels: configuration, keepalives, recursive routing problems, MTU and MSS</h1>
+<article class="lbody">
+<p>Generic Routing Encapsulation (GRE) is a simple tunneling protocol that wraps one packet inside another. The original packet, which can be IPv4, IPv6 or even multicast and routing protocol traffic, becomes the payload of a new IP packet with a GRE header, using IP protocol number 47. GRE lets you build a virtual point-to-point link across a network that does not know about your addresses, such as the internet, and run routing protocols over it. GRE provides no encryption or authentication of its own, which is why it is often combined with IPsec.</p>
+<p>A basic GRE tunnel needs a tunnel interface on each router with three things: an IP address for the tunnel itself (the overlay), a tunnel source (a local interface or address in the underlay) and a tunnel destination (the far router's underlay address).</p>
+<pre class="code" tabindex="0"><code>interface Tunnel0
+ ip address 172.16.0.1 255.255.255.252
+ tunnel source GigabitEthernet0/0
+ tunnel destination 203.0.113.2
+ ip mtu 1400
+ ip tcp adjust-mss 1360</code></pre>
+<p>The default tunnel mode is <code>tunnel mode gre ip</code>. A tunnel interface comes up as soon as the router has a route to the tunnel destination, even if the far end is down or misconfigured. GRE keepalives fix this: <code>keepalive 10 3</code> sends a keepalive every 10 seconds and brings the line protocol down after 3 missed replies. Running a routing protocol over the tunnel also detects failure through its own hellos.</p>
+<p>Recursive routing is the classic GRE problem. The router must reach the tunnel destination through the underlay. If a routing protocol running over the tunnel ever learns a better route to the tunnel destination through the tunnel itself, the router would have to send the tunnel's packets through the tunnel, which is impossible. IOS detects this, logs a message saying the tunnel is temporarily disabled due to recursive routing, and the tunnel flaps. Prevent it by never advertising the underlay (the tunnel source and destination networks) into the routing protocol running over the tunnel, for example by using separate protocols or processes, filtering with distribute lists, or using static routes for the underlay.</p>
+<p>GRE adds overhead: 20 bytes for the new IP header plus 4 bytes of GRE header, so 24 bytes in total. On a standard 1500-byte Ethernet path, a full-size original packet no longer fits and must be fragmented or dropped. Setting <code>ip mtu</code> on the tunnel (commonly 1400 to leave room for IPsec later) makes the router fragment before encapsulating or signals senders with ICMP. Because many networks block ICMP, Path MTU Discovery can fail, so you also set <code>ip tcp adjust-mss</code>, which rewrites the maximum segment size in TCP SYN packets. The MSS is the MTU minus 40 bytes of IPv4 and TCP headers, so an MTU of 1400 pairs with an MSS of 1360.</p>
+<p>Verify with <code>show interfaces tunnel 0</code>, <code>show ip interface brief</code> and ping across the tunnel with large packets and the don't-fragment bit, for example <code>ping 172.16.0.2 size 1400 df-bit</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>GRE</dt><dd>Generic Routing Encapsulation: a tunneling protocol (IP protocol 47) that carries one packet inside another without encryption.</dd><dt>Tunnel source and destination</dt><dd>The underlay addresses the GRE packets use between the two tunnel endpoints.</dd><dt>Recursive routing</dt><dd>A failure where the route to the tunnel destination points through the tunnel itself, causing the tunnel to go down.</dd><dt>MSS</dt><dd>Maximum segment size: the largest TCP payload a host will accept, normally MTU minus 40 bytes.</dd><dt>GRE keepalive</dt><dd>Periodic probes that bring the tunnel line protocol down when the far end stops responding.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Two branches build a GRE tunnel over the internet and run EIGRP across it. Someone adds <code>network 0.0.0.0</code> under EIGRP, which advertises the public interfaces into EIGRP. Each router learns the other's public address via the tunnel, the log reports recursive routing, and the tunnel flaps until the network statement is narrowed to the tunnel and LAN subnets.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> A GRE tunnel is up/up whenever the destination is routable, even if the far end is dead, unless keepalives are enabled. GRE adds 24 bytes; set ip mtu and ip tcp adjust-mss (MTU minus 40).</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What causes the log message that a tunnel was temporarily disabled due to recursive routing?</summary><p>The best route to the tunnel destination was learned through the tunnel itself, usually because underlay addresses were advertised into the routing protocol running over the tunnel.</p></details>
+<details class="sq"><summary>If the tunnel ip mtu is 1400, what should ip tcp adjust-mss be set to?</summary><p>1360, which is 1400 minus 20 bytes of IP header and 20 bytes of TCP header.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study ENCOR for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ccnp-encor/">Open the ENCOR study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../vrf-and-vrf-lite-separate-routing-tables-overlapping-addresses-per-vrf/">← VRF and VRF-Lite: separate routing tables, overlapping addre</a><a href="../ipsec-ike-phases-tunnel-vs-transport-mode-crypto-maps-vs-tunnel-protec/">IPsec: IKE phases, tunnel vs transport mode, crypto maps vs  →</a></nav>
+</main>
+</body>
+</html>

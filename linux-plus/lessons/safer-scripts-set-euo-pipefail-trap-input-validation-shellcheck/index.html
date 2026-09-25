@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Safer scripts: set -euo pipefail, trap, input validation… · Linux+ Lesson</title>
+<meta name="description" content="By default Bash is forgiving: if a command fails, the script carries on, an unset variable quietly becomes an empty string, and a failure early in a pipeli">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Safer scripts: set -euo pipefail, trap, input validation… · Linux+ Lesson">
+<meta property="og:description" content="By default Bash is forgiving: if a command fails, the script carries on, an unset variable quietly becomes an empty string, and a failure early in a pipeli">
+<link rel="canonical" href="https://senayamyers27-art.github.io/linux-plus/lessons/safer-scripts-set-euo-pipefail-trap-input-validation-shellcheck/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/linux-plus/lessons/safer-scripts-set-euo-pipefail-trap-input-validation-shellcheck/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Linux+</a> / <a href="../">Lessons</a></p>
+<p class="note">CompTIA Linux+ XK0-006 · Domain 4: Automation, orchestration, and scripting</p>
+<h1>Safer scripts: set -euo pipefail, trap, input validation, shellcheck</h1>
+<article class="lbody">
+<p>By default Bash is forgiving: if a command fails, the script carries on, an unset variable quietly becomes an empty string, and a failure early in a pipeline is ignored. That tolerance turns small mistakes into big damage, such as a script that runs <code>rm -rf &quot;$dir/&quot;*</code> when <code>dir</code> was never set. Defensive scripting habits prevent this, and Linux+ expects you to recognize them.</p>
+<p><code>set -e</code> (errexit) makes the script exit when a command fails, unless the failure is part of a condition such as an <code>if</code> test or a command followed by <code>||</code>. <code>set -u</code> (nounset) treats references to unset variables as errors, catching typos and missing arguments. <code>set -o pipefail</code> makes a pipeline return the status of the last command that failed rather than only the final command, so <code>grep pattern missing.txt | sort</code> reports failure. Combined, <code>set -euo pipefail</code> near the top of a script is a common strict-mode starting point. It is not magic: some commands legitimately return non-zero (grep with no matches returns 1), so handle those with <code>|| true</code> or an explicit check. <code>set -x</code> prints each command before running it, which is useful for debugging, and <code>bash -n script.sh</code> checks syntax without running anything.</p>
+<p><code>trap</code> runs a command when the script receives a signal or exits. <code>trap cleanup EXIT</code> calls a cleanup function however the script ends, which is ideal for removing temporary files or releasing lock files. <code>trap 'echo interrupted; exit 130' INT TERM</code> handles Ctrl+C and termination, and <code>trap '...' ERR</code> can log the failing line. Create temporary files safely with <code>mktemp</code> rather than fixed names like <code>/tmp/data</code>, which another user could pre-create or turn into a symlink.</p>
+<pre class="code" tabindex="0"><code>#!/usr/bin/env bash
+set -euo pipefail
+tmp=$(mktemp)
+trap 'rm -f &quot;$tmp&quot;' EXIT
+[[ $# -eq 1 ]] || { echo &quot;usage: $0 &lt;username&gt;&quot; &gt;&amp;2; exit 2; }
+user=$1
+[[ $user =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || { echo &quot;invalid username&quot; &gt;&amp;2; exit 2; }
+getent passwd &quot;$user&quot; &gt; &quot;$tmp&quot;</code></pre>
+<p>Input validation treats every argument, environment variable and file line as untrusted. Check the argument count (<code>$#</code>), match values against an allow-list or strict regular expression, confirm files exist and directories are what you expect, and refuse dangerous values such as an empty path or <code>/</code>. Quote every expansion so input cannot split into extra arguments or expand wildcards, and use <code>--</code> before user-supplied file names so a name beginning with a dash is not treated as an option (<code>rm -- &quot;$file&quot;</code>). Never pass input to <code>eval</code> or build commands as strings, because that invites command injection. Scripts that run with sudo or from cron as root deserve extra care, and they should use absolute paths or set PATH explicitly.</p>
+<p>ShellCheck is a static analysis tool that reads a script and warns about common bugs: unquoted variables, useless use of cat, <code>[ $a == $b ]</code> errors, unreachable code, and many portability problems. Run <code>shellcheck script.sh</code> and fix or consciously suppress each finding; its warnings have codes such as SC2086 (double quote to prevent globbing and word splitting). Many teams run ShellCheck automatically in CI (continuous integration) pipelines so problems are caught before scripts reach servers.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>set -e</dt><dd>Exits the script when a command fails outside a conditional context.</dd><dt>set -u</dt><dd>Treats use of an unset variable as an error.</dd><dt>pipefail</dt><dd>Makes a pipeline's exit status reflect the rightmost failing command, not just the last command.</dd><dt>trap</dt><dd>Registers a command to run on signals or on script EXIT, often for cleanup.</dd><dt>ShellCheck</dt><dd>A static analyzer that flags bugs and risky patterns in shell scripts.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A cleanup script contained rm -rf &quot;$BASE_DIR&quot;/cache/*. When run from cron, BASE_DIR was not set, so it targeted /cache. After a near miss, the team adds set -euo pipefail so the unset variable aborts the script, validates that BASE_DIR is a non-empty existing directory, adds a trap to remove temp files, and runs shellcheck in CI on every change.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Know what each strict-mode flag catches: -e failed commands, -u unset variables, and pipefail failures hidden inside pipelines.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Without pipefail, what exit status does false | true return?</summary><p>0, because only the last command's status (true) counts.</p></details>
+<details class="sq"><summary>How do you guarantee a temporary file is deleted when a script exits, even on error?</summary><p>Create it with mktemp and register trap 'rm -f &quot;$tmp&quot;' EXIT (or a cleanup function).</p></details>
+<details class="sq"><summary>What does ShellCheck warning SC2086 usually ask you to do?</summary><p>Double-quote a variable expansion to prevent word splitting and globbing.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Linux+ for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../linux-plus/">Open the Linux+ study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../bash-control-flow-if-test-case-for-and-while-loops-functions-arrays/">← Bash control flow: if/test, case, for and while loops, funct</a><a href="../python-basics-for-admins-data-types-sets-and-dicts-venv-pip-running-sc/">Python basics for admins: data types, sets and dicts, venv,  →</a></nav>
+</main>
+</body>
+</html>

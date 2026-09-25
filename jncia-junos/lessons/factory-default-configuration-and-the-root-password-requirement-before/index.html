@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Factory-default configuration and the root-password… · JNCIA-Junos Lesson</title>
+<meta name="description" content="Every Junos device ships with a factory-default configuration: a minimal set of statements that lets the device boot and, on some platforms, do something u">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Factory-default configuration and the root-password… · JNCIA-Junos Lesson">
+<meta property="og:description" content="Every Junos device ships with a factory-default configuration: a minimal set of statements that lets the device boot and, on some platforms, do something u">
+<link rel="canonical" href="https://senayamyers27-art.github.io/jncia-junos/lessons/factory-default-configuration-and-the-root-password-requirement-before/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/jncia-junos/lessons/factory-default-configuration-and-the-root-password-requirement-before/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">JNCIA-Junos</a> / <a href="../">Lessons</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106 · Domain 4: Configuration basics</p>
+<h1>Factory-default configuration and the root-password requirement before the first commit</h1>
+<article class="lbody">
+<p>Every Junos device ships with a factory-default configuration: a minimal set of statements that lets the device boot and, on some platforms, do something useful straight away. Knowing what it contains and what it lacks explains the first thing you will run into on a new box: Junos will not let you commit anything until you set a root password.</p>
+<p>The contents of the factory default vary by platform. Routers such as MX tend to have a very small default: system logging settings and little else, with interfaces unconfigured. EX switches typically put their ports into Ethernet switching in the default VLAN so they work as a plain switch out of the box. SRX branch firewalls usually include security zones, a basic policy allowing trust-to-untrust traffic, source NAT, a DHCP server on the inside and a DHCP client on the outside, so a small office can plug in and go. Whatever the platform, the factory default has no root password.</p>
+<p>That missing password is intentional. The first time you log in at the console as root, no password is asked. But when you try to commit any change, Junos checks for a root authentication statement, and if there is none the commit fails with an error saying the <code>root-authentication</code> statement is missing. You must set one before any other change can take effect. This stops a device from being deployed on a network with an open root account.</p>
+<pre class="code" tabindex="0"><code>[edit]
+root# set system host-name lab-r1
+root# commit
+[edit]
+  'system'
+    Missing mandatory statement: 'root-authentication'
+error: configuration check-out failed
+root# set system root-authentication plain-text-password
+New password:
+Retype new password:
+root# commit
+commit complete</code></pre>
+<p>With <code>plain-text-password</code>, Junos prompts for the password twice and stores it as a hash, so the configuration shows an <code>encrypted-password</code> string rather than your actual password. You can also supply an existing hash with <code>encrypted-password</code> or an SSH public key with <code>ssh-rsa</code> or <code>ssh-ed25519</code>, depending on what your release supports.</p>
+<p>You can return a device to its factory default at any time. In configuration mode, <code>load factory-default</code> replaces the candidate with the factory default; you must then set the root password again before you can commit. In operational mode, <code>request system zeroize</code> goes further, erasing all configuration and log data and returning the device to factory state, which is appropriate before returning or disposing of hardware. Many devices also have a reset button that restores the defaults.</p>
+<p>The takeaway is simple: on a new or reset device, the very first configuration you commit must include a root password.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Factory-default configuration</dt><dd>The platform-specific configuration a Junos device ships with and returns to after a reset.</dd><dt>root-authentication</dt><dd>The mandatory <code>[edit system]</code> statement that sets the root account's password or key.</dd><dt>plain-text-password</dt><dd>An option that prompts for a password and stores it in hashed form in the configuration.</dd><dt>load factory-default</dt><dd>A configuration-mode command that replaces the candidate with the factory-default configuration.</dd><dt>request system zeroize</dt><dd>An operational command that erases configuration and data and returns the device to factory state.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>You unbox a vSRX in your lab, log in as root at the console, type <code>cli</code> and <code>configure</code>, set a host name and commit. The commit fails with 'Missing mandatory statement: root-authentication'. You add <code>set system root-authentication plain-text-password</code>, enter a strong password twice, commit again and it succeeds.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> After <code>load factory-default</code> the root password is gone from the candidate, so you must set it again before committing. Questions often describe this failed commit and ask why.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why does the first commit on a new Junos device fail?</summary><p>Because the factory default has no root password, and Junos requires <code>system root-authentication</code> before any commit succeeds.</p></details>
+<details class="sq"><summary>How is a password entered with <code>plain-text-password</code> stored?</summary><p>Junos hashes it and stores it as <code>encrypted-password</code> in the configuration.</p></details>
+<details class="sq"><summary>What is the difference between <code>load factory-default</code> and <code>request system zeroize</code>?</summary><p><code>load factory-default</code> replaces only the candidate configuration (which you then commit); <code>request system zeroize</code> erases configuration and data and resets the whole device.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study JNCIA-Junos for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../jncia-junos/">Open the JNCIA-Junos study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../remote-access-ssh-console-out-of-band-management-interface-fxp0-em0-me/">← Remote access: SSH, console, out-of-band management interfac</a><a href="../initial-configuration-host-name-root-authentication-users-and-login-cl/">Initial configuration: host name, root authentication, users →</a></nav>
+</main>
+</body>
+</html>

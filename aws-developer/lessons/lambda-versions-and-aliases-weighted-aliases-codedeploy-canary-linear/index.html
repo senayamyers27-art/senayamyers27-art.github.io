@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lambda versions and aliases; weighted aliases; CodeDeploy… · Developer Associate Lesson</title>
+<meta name="description" content="Deploying new Lambda code safely means being able to point callers at a known version, shift traffic gradually, and roll back quickly. Versions and aliases">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Lambda versions and aliases; weighted aliases; CodeDeploy… · Developer Associate Lesson">
+<meta property="og:description" content="Deploying new Lambda code safely means being able to point callers at a known version, shift traffic gradually, and roll back quickly. Versions and aliases">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/lambda-versions-and-aliases-weighted-aliases-codedeploy-canary-linear/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/lambda-versions-and-aliases-weighted-aliases-codedeploy-canary-linear/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 3: Deployment</p>
+<h1>Lambda versions and aliases; weighted aliases; CodeDeploy canary, linear and all-at-once traffic shifting with alarm rollback</h1>
+<article class="lbody">
+<p>Deploying new Lambda code safely means being able to point callers at a known version, shift traffic gradually, and roll back quickly. Versions and aliases provide the building blocks, and AWS CodeDeploy automates the shifting.</p>
+<p>When you edit a function, you change <code>$LATEST</code>, the mutable working copy. Publishing a version (<code>aws lambda publish-version</code>) takes an immutable snapshot of the code and configuration, numbered 1, 2, 3 and so on. A version's code and most settings cannot change afterwards, so a version is a reliable deployment unit. Each version has its own ARN: a qualified ARN ends with <code>:3</code> for version 3, while an unqualified ARN refers to <code>$LATEST</code>.</p>
+<p>An alias is a named pointer to a version, such as <code>prod</code>, <code>staging</code> or <code>live</code>, with its own ARN ending in <code>:prod</code>. Callers and triggers (API Gateway integrations, event source mappings, S3 notifications) should reference the alias, not a version number. To release, you update the alias to point to a new version; to roll back, you point it back. The caller's configuration never changes. Aliases can also have their own provisioned concurrency and resource-based policy permissions.</p>
+<p>A weighted alias splits traffic between two versions: for example <code>prod</code> sends 90% of invocations to version 3 and 10% to version 4, using a routing configuration (<code>--routing-config AdditionalVersionWeights={&quot;4&quot;=0.1}</code>). You can then watch metrics for the new version and increase the weight. Aliases cannot point to <code>$LATEST</code> with weights; both must be published versions.</p>
+<p>AWS CodeDeploy automates weighted shifting for Lambda. A deployment configuration defines the pattern: canary shifts a small percentage first, then the rest after an interval (for example <code>CodeDeployDefault.LambdaCanary10Percent5Minutes</code>: 10% for five minutes, then 100%); linear shifts equal increments at fixed intervals (for example <code>LambdaLinear10PercentEvery1Minute</code>: 10% more every minute until 100%); all-at-once shifts everything immediately. You can create custom configurations too. During the deployment, CodeDeploy monitors CloudWatch alarms you attach, such as error rate or latency alarms for the new alias version. If an alarm goes into ALARM state, CodeDeploy stops and automatically rolls the alias back to the previous version. Hook functions (<code>BeforeAllowTraffic</code> and <code>AfterAllowTraffic</code>) can run validation tests before and after the shift, and a failing hook also triggers rollback.</p>
+<p>In SAM this is just a few lines on the function: <code>AutoPublishAlias: live</code> publishes a new version on each deployment and moves the <code>live</code> alias, and <code>DeploymentPreference</code> with <code>Type: Canary10Percent5Minutes</code>, a list of <code>Alarms</code> and optional <code>Hooks</code> makes CodeDeploy do the traffic shifting and rollback.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>$LATEST</dt><dd>The mutable, unpublished version of a Lambda function that reflects the most recent code and configuration edits.</dd><dt>Version</dt><dd>An immutable, numbered snapshot of a Lambda function's code and configuration.</dd><dt>Alias</dt><dd>A named pointer to a function version, optionally weighted between two versions, with its own ARN.</dd><dt>Canary deployment</dt><dd>A traffic shift that sends a small percentage to the new version first, then the rest after a wait.</dd><dt>Linear deployment</dt><dd>A traffic shift that moves equal percentages to the new version at regular intervals.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A team uses SAM with AutoPublishAlias: live and DeploymentPreference Type Linear10PercentEvery1Minute plus an alarm on the function's Errors metric. Four minutes into a release, errors spike, the alarm fires, and CodeDeploy moves the live alias back to the previous version without anyone changing API Gateway.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Canary is two steps (small percent, then all); linear is many equal steps. Automatic rollback in CodeDeploy is driven by CloudWatch alarms or failing hooks. Point triggers at aliases, never at $LATEST, in production.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why should API Gateway call an alias rather than a version number?</summary><p>So releases and rollbacks only require moving the alias, without changing API Gateway's integration.</p></details>
+<details class="sq"><summary>What does LambdaCanary10Percent5Minutes do?</summary><p>Shifts 10% of traffic to the new version, waits five minutes, then shifts the remaining 90%.</p></details>
+<details class="sq"><summary>What triggers an automatic rollback in a CodeDeploy Lambda deployment?</summary><p>A configured CloudWatch alarm entering ALARM state, or a failing BeforeAllowTraffic or AfterAllowTraffic hook.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../aws-cdk-basics-constructs-cdk-bootstrap-cdk-synth-cdk-deploy/">← AWS CDK basics: constructs, cdk bootstrap, cdk synth, cdk de</a><a href="../api-gateway-stages-stage-variables-deployments-mock-integrations-canar/">API Gateway stages, stage variables, deployments, mock integ →</a></nav>
+</main>
+</body>
+</html>

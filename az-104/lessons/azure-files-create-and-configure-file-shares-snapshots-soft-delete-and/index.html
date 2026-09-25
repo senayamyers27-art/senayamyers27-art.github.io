@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Azure Files: create and configure file shares, snapshots… · Azure Administrator Lesson</title>
+<meta name="description" content="Azure Files provides fully managed file shares in the cloud that clients mount like a network drive, using SMB (Server Message Block) or, for premium share">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Azure Files: create and configure file shares, snapshots… · Azure Administrator Lesson">
+<meta property="og:description" content="Azure Files provides fully managed file shares in the cloud that clients mount like a network drive, using SMB (Server Message Block) or, for premium share">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-104/lessons/azure-files-create-and-configure-file-shares-snapshots-soft-delete-and/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-104/lessons/azure-files-create-and-configure-file-shares-snapshots-soft-delete-and/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Azure Administrator</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure Administrator Associate AZ-104 · Domain 2: Implement and manage storage</p>
+<h1>Azure Files: create and configure file shares, snapshots, soft delete, and SMB port 445 considerations</h1>
+<article class="lbody">
+<p>Azure Files provides fully managed file shares in the cloud that clients mount like a network drive, using SMB (Server Message Block) or, for premium shares, NFS (Network File System). Windows, Linux and macOS can all connect, and the shares can replace or extend on-premises file servers. Azure File Sync can cache a share on local Windows Servers for fast access in branch offices.</p>
+<p>You create a file share inside a storage account. A standard general-purpose v2 account hosts standard shares on hard-disk storage, with tiers such as transaction optimized, hot and cool that trade storage cost against transaction cost. A premium FileStorage account hosts premium shares on solid-state storage for low latency and high IOPS (input/output operations per second), and is the only option for NFS shares. Each share has a size quota or provisioned size, which in premium shares also determines performance. In the portal: storage account &gt; File shares &gt; + File share; with the CLI, <code>az storage share-rm create</code>.</p>
+<p>To mount a share on Windows, the portal's Connect button generates a script that essentially runs <code>net use Z: \\&lt;account&gt;.file.core.windows.net\&lt;share&gt;</code> with credentials, either the storage account key or, better, identity-based authentication. On Linux you mount with the <code>cifs</code> file system type. The share's UNC path always uses the account's file endpoint.</p>
+<p>SMB uses TCP port 445. Clients outside Azure connect across the internet, and many internet service providers and corporate networks block outbound port 445 because of old SMB worms. If a mount fails from an office, test with PowerShell: <code>Test-NetConnection -ComputerName &lt;account&gt;.file.core.windows.net -Port 445</code>. If TcpTestSucceeded is false, options are to open the port on the firewall, connect over a site-to-site VPN, point-to-site VPN or ExpressRoute (usually with a private endpoint), or use Azure File Sync so users talk to a local server. Connections from outside the Azure region require SMB 3.x with encryption, so old SMB clients cannot connect across the internet.</p>
+<p>Share snapshots capture a read-only, point-in-time copy of an entire file share. They are incremental, so only changes since the previous snapshot use space. Users on Windows can open Previous Versions on a folder in the mounted share to restore files themselves. Azure Backup for Azure Files uses share snapshots under the hood and adds scheduling and retention.</p>
+<p>Soft delete for file shares keeps a deleted share, including its snapshots, for a retention period you set, so you can undelete it from the File shares list with 'Show deleted shares'. It is enabled by default on new storage accounts. Soft delete works at the share level; to recover an individual file you use snapshots or backup.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Azure file share</dt><dd>A managed SMB or NFS share hosted in a storage account that clients mount like a network drive.</dd><dt>Share snapshot</dt><dd>An incremental, read-only point-in-time copy of a whole file share.</dd><dt>File share soft delete</dt><dd>A setting that retains deleted file shares for a period so they can be undeleted.</dd><dt>Port 445</dt><dd>The TCP port SMB uses, often blocked by ISPs and firewalls, which prevents mounting Azure file shares from outside.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Staff in a branch office cannot map a new Azure file share, although it works from an Azure VM. The administrator runs Test-NetConnection to the share's endpoint on port 445 from the office and sees it fail because the ISP blocks the port. The fix is to route access over the existing site-to-site VPN to a private endpoint for the storage account.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> If a share mounts from Azure VMs but not from on-premises, suspect blocked port 445 first. Soft delete protects whole shares; snapshots or Azure Backup restore individual files. NFS requires a premium account.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which PowerShell command checks whether a client can reach an Azure file share over SMB?</summary><p>Test-NetConnection -ComputerName &lt;account&gt;.file.core.windows.net -Port 445.</p></details>
+<details class="sq"><summary>A user deletes one file from a share. Which feature lets them restore it themselves in Windows?</summary><p>Share snapshots, through the Previous Versions tab (Azure Backup also uses snapshots for this).</p></details>
+<details class="sq"><summary>Which account type do you need for an NFS file share?</summary><p>A premium FileStorage account.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Azure Administrator for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-104/">Open the Azure Administrator study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../data-protection-blob-and-container-soft-delete-versioning-snapshots-ch/">← Data protection: blob and container soft delete, versioning,</a><a href="../arm-templates-and-bicep-files-interpret-and-modify-deploy-export-a-dep/">ARM templates and Bicep files: interpret and modify, deploy, →</a></nav>
+</main>
+</body>
+</html>

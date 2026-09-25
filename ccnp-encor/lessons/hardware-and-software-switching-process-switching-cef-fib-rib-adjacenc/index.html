@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hardware and software switching: process switching, CEF… · ENCOR Lesson</title>
+<meta name="description" content="A router has to make a forwarding decision for every packet: look up the destination, pick an outgoing interface and next hop, rewrite the Layer 2 header a">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Hardware and software switching: process switching, CEF… · ENCOR Lesson">
+<meta property="og:description" content="A router has to make a forwarding decision for every packet: look up the destination, pick an outgoing interface and next hop, rewrite the Layer 2 header a">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ccnp-encor/lessons/hardware-and-software-switching-process-switching-cef-fib-rib-adjacenc/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ccnp-encor/lessons/hardware-and-software-switching-process-switching-cef-fib-rib-adjacenc/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">ENCOR</a> / <a href="../">Lessons</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2 · Domain 1: Architecture</p>
+<h1>Hardware and software switching: process switching, CEF, FIB, RIB, adjacency table</h1>
+<article class="lbody">
+<p>A router has to make a forwarding decision for every packet: look up the destination, pick an outgoing interface and next hop, rewrite the Layer 2 header and send it. How that decision is made determines how fast the device can forward. Cisco devices have used three generations of switching methods, and ENCOR expects you to know how they differ and which tables are involved.</p>
+<p>Process switching is the oldest and slowest method. Each packet is handed to the main CPU, which runs a process that looks up the destination in the routing table, resolves the next hop's Layer 2 address and rewrites the frame. Every packet repeats the whole lookup. Today, process switching is used only for traffic that cannot be handled any other way, such as packets addressed to the router itself or packets needing special handling.</p>
+<p>Fast switching improved on this with a route cache: the first packet to a destination was process switched, and the result was cached so later packets to the same destination used the cache. The weakness was that the cache was built on demand and had to be invalidated when routes changed, so a burst of new destinations could still overwhelm the CPU.</p>
+<p>Cisco Express Forwarding (CEF) is the current method and is enabled by default. CEF builds its tables in advance from the control plane rather than on demand. The routing protocols and static routes populate the RIB (Routing Information Base, the routing table you see with <code>show ip route</code>). From the RIB, CEF builds the FIB (Forwarding Information Base), a copy of the best routes optimized for fast lookup, with recursive next hops already resolved. Separately, CEF builds the adjacency table from ARP (IPv4) and neighbor discovery (IPv6), holding the prebuilt Layer 2 rewrite header for each directly connected next hop. A FIB entry points to an adjacency, so forwarding is a single longest-match lookup followed by a header rewrite. Because the tables are prebuilt, the first packet to a destination is forwarded as quickly as the thousandth.</p>
+<p>On platforms with dedicated forwarding hardware, such as Catalyst switches, the FIB and adjacency information are programmed into ASICs (application-specific integrated circuits) and TCAM, so forwarding happens entirely in hardware without the CPU. This is often called hardware switching, and the CPU-based versions are called software switching. On software routers, CEF runs in software on the CPU but is still far faster than process switching.</p>
+<p>Some adjacency entries are special. A glean adjacency means the destination is on a connected subnet but ARP has not resolved it yet, so the packet is sent to the CPU to trigger ARP. A punt adjacency sends packets to the CPU for features CEF cannot handle. Drop and null adjacencies discard traffic. You can inspect these tables with <code>show ip cef</code>, <code>show ip cef &lt;prefix&gt; detail</code> and <code>show adjacency detail</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>RIB</dt><dd>Routing Information Base: the routing table built by routing protocols, static and connected routes.</dd><dt>FIB</dt><dd>Forwarding Information Base: CEF's lookup-optimized copy of the RIB's best routes with next hops resolved.</dd><dt>Adjacency table</dt><dd>CEF's table of directly connected next hops with prebuilt Layer 2 rewrite headers, built from ARP or ND.</dd><dt>Process switching</dt><dd>Forwarding each packet by a CPU process with a full routing table lookup; slowest method.</dd><dt>CEF</dt><dd>Cisco Express Forwarding: prebuilds the FIB and adjacency table so forwarding needs no per-destination CPU work.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An engineer notices traffic to one server is slow. <code>show ip cef 10.20.30.40 detail</code> shows the correct next hop, but <code>show adjacency detail</code> reveals the next hop is in glean state because ARP is failing on that VLAN, sending packets to the CPU. Fixing the VLAN mismatch lets ARP resolve and traffic returns to hardware forwarding.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> The RIB is built by the control plane; the FIB and adjacency table are derived from it by CEF for the data plane. CEF tables are built before traffic arrives, unlike fast switching's demand-built route cache.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Where does CEF get the Layer 2 rewrite information for a next hop?</summary><p>From the adjacency table, which CEF builds from ARP (IPv4) or neighbor discovery (IPv6) entries.</p></details>
+<details class="sq"><summary>Why is CEF faster than fast switching for the first packet to a new destination?</summary><p>CEF's FIB and adjacency table are prebuilt from the RIB and ARP, while fast switching had to process switch the first packet to create a cache entry.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study ENCOR for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ccnp-encor/">Open the ENCOR study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../qos-components-classification-and-marking-dscp-cos-policing-shaping-qu/">← QoS components: classification and marking (DSCP, CoS), poli</a><a href="../cam-and-tcam-tables-and-what-each-stores/">CAM and TCAM tables and what each stores →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gateway API: GatewayClass, Gateway listeners and… · CKA Lesson</title>
+<meta name="description" content="Gateway API is the newer, role-oriented way to manage traffic entering the cluster, designed as the successor to Ingress. It splits configuration into reso">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Gateway API: GatewayClass, Gateway listeners and… · CKA Lesson">
+<meta property="og:description" content="Gateway API is the newer, role-oriented way to manage traffic entering the cluster, designed as the successor to Ingress. It splits configuration into reso">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/gateway-api-gatewayclass-gateway-listeners-and-allowedroutes-httproute/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/gateway-api-gatewayclass-gateway-listeners-and-allowedroutes-httproute/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 3: Services and Networking</p>
+<h1>Gateway API: GatewayClass, Gateway listeners and allowedRoutes, HTTPRoute parentRefs, matches and weighted backendRefs; installing the CRDs and a controller</h1>
+<article class="lbody">
+<p>Gateway API is the newer, role-oriented way to manage traffic entering the cluster, designed as the successor to Ingress. It splits configuration into resources owned by different people: the infrastructure provider, the cluster operator and application developers.</p>
+<p>Gateway API is not built into Kubernetes; it ships as CRDs. You install the CRDs, typically the standard channel manifest from a Gateway API release, and then an implementation (a controller) such as Envoy Gateway, NGINX Gateway Fabric, Istio, Cilium or Contour, each with its own install instructions. Check with <code>kubectl get crd | grep gateway.networking.k8s.io</code> and <code>kubectl get gatewayclass</code>.</p>
+<p>A GatewayClass is cluster-scoped and names the controller that implements it in <code>controllerName</code>, much like an IngressClass. A Gateway requests a traffic entry point using a class. Its <code>listeners</code> each have a <code>name</code>, <code>protocol</code> (HTTP, HTTPS, TLS, TCP), <code>port</code>, an optional <code>hostname</code> and, for HTTPS, a <code>tls</code> section referencing certificate Secrets. <code>allowedRoutes</code> controls which routes may attach: <code>namespaces.from</code> is Same (default), All or Selector, and <code>kinds</code> can limit route types.</p>
+<pre class="code" tabindex="0"><code>apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata: {name: web-gw, namespace: infra}
+spec:
+  gatewayClassName: example
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+    allowedRoutes:
+      namespaces: {from: All}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata: {name: shop, namespace: shop}
+spec:
+  parentRefs:
+  - {name: web-gw, namespace: infra, sectionName: http}
+  hostnames: [&quot;shop.example.com&quot;]
+  rules:
+  - matches:
+    - path: {type: PathPrefix, value: /api}
+    backendRefs:
+    - {name: api-v1, port: 8080, weight: 90}
+    - {name: api-v2, port: 8080, weight: 10}</code></pre>
+<p>An HTTPRoute attaches to a Gateway through <code>parentRefs</code> (name, namespace if different, and optionally <code>sectionName</code> to pick one listener). <code>hostnames</code> filter by the Host header. Each rule has <code>matches</code>, on path (Exact, PathPrefix or RegularExpression), headers, query parameters or method, optional <code>filters</code> such as header modification, redirects or URL rewrites, and <code>backendRefs</code> pointing at Services and ports. Weights split traffic proportionally, which makes canary releases simple: 90 and 10 sends about ten percent to v2.</p>
+<p>Attachment requires agreement from both sides: the route references the Gateway, and the Gateway's allowedRoutes must permit the route's namespace. A backendRef to a Service in another namespace additionally needs a ReferenceGrant in the target namespace. When something does not work, <code>kubectl describe</code> the Gateway and HTTPRoute and read the status conditions: Accepted, Programmed on the Gateway, and ResolvedRefs on routes explain most failures, such as NotAllowedByListeners or BackendNotFound.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>GatewayClass</dt><dd>A cluster-scoped resource naming the controller that implements Gateways of that class.</dd><dt>Gateway</dt><dd>A request for a traffic entry point with one or more listeners.</dd><dt>HTTPRoute</dt><dd>Routing rules that attach to Gateway listeners via parentRefs and forward to backendRefs.</dd><dt>allowedRoutes</dt><dd>Listener setting controlling which namespaces and route kinds may attach.</dd><dt>ReferenceGrant</dt><dd>An object permitting cross-namespace references, such as a route to another namespace's Service.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An HTTPRoute in namespace shop never receives traffic, and its status shows the parent did not accept it with reason NotAllowedByListeners. The Gateway in namespace infra uses the default allowedRoutes of Same. Changing the listener to <code>from: All</code> (or Selector with a label on shop) lets the route attach.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> If a route is ignored, check both sides of attachment: parentRefs (including sectionName and namespace) and the listener's allowedRoutes. The status conditions tell you which side refused.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which Gateway API resource names the controller implementation?</summary><p>The GatewayClass, via controllerName.</p></details>
+<details class="sq"><summary>How do you send roughly 20 percent of traffic to a new version with HTTPRoute?</summary><p>List both Services in backendRefs with weights such as 80 and 20.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../networkpolicies-default-deny-ingress-and-egress-rules-podselector-name/">← NetworkPolicies: default deny, ingress and egress rules, pod</a><a href="../ingress-controllers-ingressclass-and-the-default-class-ingress-rules-p/">Ingress controllers, IngressClass and the default class; Ing →</a></nav>
+</main>
+</body>
+</html>

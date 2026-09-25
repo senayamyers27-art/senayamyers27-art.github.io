@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Advanced hunting schema: DeviceProcessEvents… · SC-200 Lesson</title>
+<meta name="description" content="Advanced hunting in the Defender portal exposes Defender XDR data as tables grouped by source. Knowing which table holds which kind of event, and how table">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Advanced hunting schema: DeviceProcessEvents… · SC-200 Lesson">
+<meta property="og:description" content="Advanced hunting in the Defender portal exposes Defender XDR data as tables grouped by source. Knowing which table holds which kind of event, and how table">
+<link rel="canonical" href="https://senayamyers27-art.github.io/sc-200/lessons/advanced-hunting-schema-deviceprocessevents-devicenetworkevents-device/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/sc-200/lessons/advanced-hunting-schema-deviceprocessevents-devicenetworkevents-device/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">SC-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Security Operations Analyst Associate SC-200 · Domain 3: Perform threat hunting</p>
+<h1>Advanced hunting schema: DeviceProcessEvents, DeviceNetworkEvents, DeviceLogonEvents, EmailEvents, EmailUrlInfo, IdentityLogonEvents, CloudAppEvents, AlertInfo and AlertEvidence</h1>
+<article class="lbody">
+<p>Advanced hunting in the Defender portal exposes Defender XDR data as tables grouped by source. Knowing which table holds which kind of event, and how tables link, is the difference between a quick hunt and a frustrating one. The schema reference in the portal lists every column; here are the tables SC-200 focuses on.</p>
+<p>Device tables come from Defender for Endpoint. DeviceProcessEvents records process creation: FileName, FolderPath, ProcessCommandLine, the SHA256 hash, the account, and the parent through the InitiatingProcess columns such as InitiatingProcessFileName. It is where you hunt for encoded PowerShell, living-off-the-land binaries or Office apps spawning shells. DeviceNetworkEvents records network connections: RemoteIP, RemotePort, RemoteUrl, the ActionType (for example successful or failed connection) and the initiating process. DeviceLogonEvents records logons to devices, with AccountName, LogonType (such as interactive, network or remote interactive) and ActionType showing success or failure. Other device tables cover files, registry, images loaded and general events.</p>
+<p>Email tables come from Defender for Office 365. EmailEvents has one row per message delivery, including SenderFromAddress, RecipientEmailAddress, Subject, DeliveryAction, DeliveryLocation and ThreatTypes. EmailUrlInfo lists URLs found in messages, and EmailAttachmentInfo lists attachments. They all share NetworkMessageId, the key you join on to connect a message to its URLs or files. UrlClickEvents records Safe Links clicks, and EmailPostDeliveryEvents records actions such as ZAP after delivery.</p>
+<p>IdentityLogonEvents records authentication activity seen by Defender for Identity on Active Directory and by Microsoft Entra ID, with the protocol (for example Kerberos or NTLM), the account, device and failure reason. It suits hunting for password spraying against on-premises accounts or legacy protocol use. Identity tables also include IdentityQueryEvents and IdentityDirectoryEvents. CloudAppEvents comes from Defender for Cloud Apps and records activity in cloud apps such as Exchange Online, SharePoint and Teams: ActionType, Application, account, IP address and a RawEventData column in JSON, which you parse for details such as inbox rule parameters.</p>
+<p>AlertInfo has one row per alert from any Defender product (and Sentinel when onboarded): AlertId, Title, Severity, Category, ServiceSource and DetectionSource. AlertEvidence has one row per entity attached to an alert: EntityType, EvidenceRole and entity columns such as DeviceId, AccountName, FileName or RemoteIP. Join them on AlertId to ask questions like 'which devices appeared in high-severity alerts this week'.</p>
+<pre class="code" tabindex="0"><code>EmailEvents
+| where Timestamp &gt; ago(7d) and ThreatTypes has &quot;Phish&quot;
+| join kind=inner EmailUrlInfo on NetworkMessageId
+| project Timestamp, RecipientEmailAddress, Subject, Url</code></pre>
+<p>Remember the time column in these tables is Timestamp, and advanced hunting keeps about 30 days of Defender data. For longer history, the data must be in Sentinel.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>DeviceProcessEvents</dt><dd>The table of process creation events, including command lines and parent process details.</dd><dt>NetworkMessageId</dt><dd>The email identifier that links EmailEvents with EmailUrlInfo, EmailAttachmentInfo and related tables.</dd><dt>IdentityLogonEvents</dt><dd>Authentication events from Defender for Identity (on-premises AD) and Microsoft Entra ID.</dd><dt>AlertEvidence</dt><dd>One row per entity attached to an alert, joined to AlertInfo on AlertId.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>After a phishing incident, an analyst joins EmailEvents to EmailUrlInfo on NetworkMessageId to list every recipient of the malicious URL, then joins UrlClickEvents to see who clicked, then queries DeviceProcessEvents on those users' devices for processes launched by the browser in the next hour. One device shows a downloaded script running.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Match question wording to tables: process and command line means DeviceProcessEvents; connection or remote IP means DeviceNetworkEvents; on-premises Kerberos or NTLM logons means IdentityLogonEvents; mailbox rules in Exchange Online usually means CloudAppEvents.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which column joins EmailEvents to EmailUrlInfo?</summary><p>NetworkMessageId.</p></details>
+<details class="sq"><summary>Where would you look for the parent process of a suspicious PowerShell launch?</summary><p>In DeviceProcessEvents, using the InitiatingProcess columns such as InitiatingProcessFileName.</p></details>
+<details class="sq"><summary>How do you list the entities in high-severity alerts?</summary><p>Join AlertInfo (filtered on Severity) with AlertEvidence on AlertId.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study SC-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../sc-200/">Open the SC-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../kql-for-hunting-has-vs-contains-in-and-has-any-let-statements-and-dyna/">← KQL for hunting: has vs contains, in and has_any, let statem</a><a href="../turning-a-hunting-query-into-a-custom-detection-rule-security-copilot/">Turning a hunting query into a custom detection rule; Securi →</a></nav>
+</main>
+</body>
+</html>

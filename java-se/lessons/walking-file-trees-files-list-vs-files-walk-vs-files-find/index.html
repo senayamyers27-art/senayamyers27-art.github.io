@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Walking file trees: Files.list vs Files.walk vs Files.find · OCP Java Lesson</title>
+<meta name="description" content="Three Files methods return a Stream&lt;Path&gt; describing directory contents, and the difference between them is a common exam question. All three are lazy, all">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Walking file trees: Files.list vs Files.walk vs Files.find · OCP Java Lesson">
+<meta property="og:description" content="Three Files methods return a Stream&lt;Path&gt; describing directory contents, and the difference between them is a common exam question. All three are lazy, all">
+<link rel="canonical" href="https://senayamyers27-art.github.io/java-se/lessons/walking-file-trees-files-list-vs-files-walk-vs-files-find/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/java-se/lessons/walking-file-trees-files-list-vs-files-walk-vs-files-find/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">OCP Java</a> / <a href="../">Lessons</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25) · Domain 9: Using the Java I/O API</p>
+<h1>Walking file trees: Files.list vs Files.walk vs Files.find</h1>
+<article class="lbody">
+<p>Three <code>Files</code> methods return a <code>Stream&lt;Path&gt;</code> describing directory contents, and the difference between them is a common exam question. All three are lazy, all three hold open directory handles, and all three should be used in try-with-resources.</p>
+<p><code>Files.list(dir)</code> returns the entries directly inside one directory: files and subdirectories, but not the contents of those subdirectories. It is not recursive, and it does not include the directory itself. It throws <code>NotDirectoryException</code> if the path is not a directory. Think of it as <code>ls</code>.</p>
+<p><code>Files.walk(start)</code> traverses the whole tree depth-first, starting with <code>start</code> itself and descending into every subdirectory. <code>Files.walk(start, maxDepth)</code> limits the depth: a maxDepth of 0 gives only the start path, 1 gives the start plus its direct children, and so on. So <code>Files.walk(dir, 1)</code> is like <code>Files.list(dir)</code> plus <code>dir</code> itself. By default walk does not follow symbolic links; passing <code>FileVisitOption.FOLLOW_LINKS</code> makes it follow them, and a link cycle then causes a <code>FileSystemLoopException</code> wrapped in an UncheckedIOException.</p>
+<p><code>Files.find(start, maxDepth, matcher)</code> also walks the tree but filters as it goes. The matcher is a <code>BiPredicate&lt;Path, BasicFileAttributes&gt;</code>, which gives you the file's attributes, such as size, modification time and whether it is a directory, without an extra system call per file. Unlike walk, the maxDepth parameter is required. Using find is usually more efficient than walk followed by a filter that calls <code>Files.size</code> or <code>Files.isDirectory</code> on every path.</p>
+<pre class="code" tabindex="0"><code>Path root = Path.of(&quot;project&quot;);
+try (Stream&lt;Path&gt; s = Files.list(root)) {
+    s.forEach(System.out::println);               // direct children only
+}
+try (Stream&lt;Path&gt; s = Files.walk(root)) {
+    long javaFiles = s.filter(p -&gt; p.toString().endsWith(&quot;.java&quot;)).count();
+}
+try (Stream&lt;Path&gt; s = Files.find(root, 10,
+        (p, attr) -&gt; attr.isRegularFile() &amp;&amp; attr.size() &gt; 1_000_000)) {
+    s.forEach(p -&gt; System.out.println(&quot;large: &quot; + p));
+}</code></pre>
+<p>Errors that happen while the stream is being consumed, such as a subdirectory you are not permitted to read, are thrown as <code>UncheckedIOException</code>. For more control, including actions before and after visiting each directory and the ability to skip subtrees, the older <code>Files.walkFileTree(start, visitor)</code> takes a <code>FileVisitor</code>, usually a subclass of <code>SimpleFileVisitor</code> overriding <code>visitFile</code> and <code>postVisitDirectory</code>. It is the standard way to delete a directory tree, because each directory must be emptied before it can be deleted.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Files.list</dt><dd>Returns a lazy Stream&lt;Path&gt; of the direct entries of one directory, without recursion.</dd><dt>Files.walk</dt><dd>Returns a lazy depth-first Stream&lt;Path&gt; of a directory tree, including the start path, optionally limited by maxDepth.</dd><dt>Files.find</dt><dd>Walks a tree to a required maxDepth and returns paths matching a BiPredicate&lt;Path, BasicFileAttributes&gt;.</dd><dt>BasicFileAttributes</dt><dd>An interface exposing size, timestamps and file type information read with the directory entry.</dd><dt>FOLLOW_LINKS</dt><dd>A FileVisitOption that makes walk and find follow symbolic links.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A cleanup script uses Files.find(logDir, 3, (p, a) -&gt; a.isRegularFile() &amp;&amp; a.lastModifiedTime().toInstant().isBefore(cutoff)) to find old log files without calling Files.getLastModifiedTime separately for each file, then deletes each match.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> list is one level and excludes the start directory; walk is recursive and includes the start directory; find requires maxDepth and a BiPredicate taking attributes. All return streams that must be closed.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Does Files.walk(dir) include dir itself in the stream?</summary><p>Yes. The start path is the first element.</p></details>
+<details class="sq"><summary>What does Files.walk(dir, 0) return?</summary><p>A stream containing only dir.</p></details>
+<details class="sq"><summary>What are the parameter types of the matcher passed to Files.find?</summary><p>Path and BasicFileAttributes, in a BiPredicate.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study OCP Java for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../java-se/">Open the OCP Java study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../reading-and-writing-text-with-files-readalllines-files-lines-files-wri/">← Reading and writing text with Files.readAllLines, Files.line</a><a href="../byte-and-character-streams-bufferedreader-and-bufferedwriter/">Byte and character streams, BufferedReader and BufferedWrite →</a></nav>
+</main>
+</body>
+</html>

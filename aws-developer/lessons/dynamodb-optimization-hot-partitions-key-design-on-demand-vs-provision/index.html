@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DynamoDB optimization: hot partitions, key design… · Developer Associate Lesson</title>
+<meta name="description" content="DynamoDB performance depends heavily on how your data spreads across partitions. A table's data and throughput are divided among partitions by the hash of ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="DynamoDB optimization: hot partitions, key design… · Developer Associate Lesson">
+<meta property="og:description" content="DynamoDB performance depends heavily on how your data spreads across partitions. A table's data and throughput are divided among partitions by the hash of ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/dynamodb-optimization-hot-partitions-key-design-on-demand-vs-provision/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/dynamodb-optimization-hot-partitions-key-design-on-demand-vs-provision/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 4: Troubleshooting and Optimization</p>
+<h1>DynamoDB optimization: hot partitions, key design, on-demand vs provisioned capacity, adaptive capacity</h1>
+<article class="lbody">
+<p>DynamoDB performance depends heavily on how your data spreads across partitions. A table's data and throughput are divided among partitions by the hash of the partition key, and each partition has its own throughput limit: up to 3,000 read capacity units and 1,000 write capacity units per second. So a table can have plenty of total capacity and still throttle if requests concentrate on a few keys.</p>
+<p>A hot partition (or hot key) is a partition receiving a disproportionate share of traffic. Symptoms: <code>ProvisionedThroughputExceededException</code> or <code>ThrottlingException</code>, rising <code>ThrottledRequests</code> and read or write throttle events in CloudWatch, even though consumed capacity for the whole table looks well below what is provisioned. CloudWatch Contributor Insights for DynamoDB can show the most accessed and most throttled keys, making hot keys easy to identify.</p>
+<p>Key design is the real fix. Choose a partition key with high cardinality (many distinct values) that is accessed fairly evenly, such as user ID, order ID or device ID. Poor choices include status values (<code>active</code> or <code>inactive</code>), dates for time-series writes (all of today's writes hit one key) or a single tenant that is much larger than others. For unavoidably hot write patterns, use write sharding: add a suffix to the key, either random (for example <code>2026-09-25#7</code> with a suffix from 0 to 9) or calculated from another attribute so you can find the item again, then query all suffixes and merge results when reading. For read-heavy hot items, put a cache such as DAX or ElastiCache in front of the table. Also avoid large items (store big blobs in S3 and keep a pointer), because read and write units scale with item size, and use <code>Query</code> instead of <code>Scan</code>.</p>
+<p>Capacity modes: On-demand mode charges per request and scales automatically to your traffic with no capacity planning, which suits new applications, unpredictable or spiky traffic, and workloads with idle periods. Provisioned mode has you set RCUs and WCUs, usually with auto scaling that adjusts capacity between minimum and maximum values to track a target utilization. It is cheaper for steady, predictable traffic, but auto scaling reacts over minutes, so sudden spikes can throttle before it catches up. Reserved capacity can lower provisioned costs further for long-term steady workloads. Global secondary indexes need enough capacity too: a GSI with too little write capacity throttles writes to the base table.</p>
+<p>DynamoDB also has built-in protections. Burst capacity lets a partition temporarily use unused capacity saved from the recent past to absorb short spikes. Adaptive capacity automatically and instantly gives more of the table's throughput to partitions receiving more traffic, so uneven access works as long as the total stays within the table's capacity and each partition stays within its per-partition limits. Adaptive capacity can also split a partition to isolate frequently accessed items. These features reduce throttling from moderate imbalance but cannot fix a single key that exceeds a partition's maximum throughput; that still requires better key design or caching.</p>
+<p>Client-side, the SDKs retry throttled requests automatically with exponential backoff, which smooths brief throttling but is not a substitute for good design.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Hot partition</dt><dd>A partition receiving a disproportionate share of requests, causing throttling despite unused table capacity.</dd><dt>Write sharding</dt><dd>Adding a random or calculated suffix to partition keys to spread writes across more partitions.</dd><dt>On-demand capacity</dt><dd>A DynamoDB mode billed per request that scales automatically without capacity planning.</dd><dt>Adaptive capacity</dt><dd>DynamoDB's automatic reallocation of throughput to busier partitions and isolation of frequently accessed items.</dd><dt>Burst capacity</dt><dd>Unused capacity DynamoDB briefly retains to absorb short traffic spikes.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An IoT table uses the date as its partition key, so every write for the day lands on one key and throttles at peak. The team changes the key to deviceId#date for per-device queries, and for a daily roll-up adds a GSI whose partition key is date plus a suffix from 0 to 9, querying all ten shards to build the report.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Throttling while total consumed capacity is low means a hot partition: fix the partition key (higher cardinality, write sharding) or cache hot reads. Unpredictable or spiky traffic with no capacity planning points to on-demand mode.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why can a table throttle even though its provisioned capacity is barely used?</summary><p>Throughput limits apply per partition, so traffic concentrated on one partition key can exceed that partition's limit.</p></details>
+<details class="sq"><summary>When is provisioned capacity with auto scaling a better choice than on-demand?</summary><p>For steady, predictable traffic, where it is usually cheaper.</p></details>
+<details class="sq"><summary>What does write sharding do?</summary><p>It adds a suffix to the partition key so writes that would hit one key are spread across several partitions.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../stream-and-queue-troubleshooting-kinesis-iteratorage-parallelization-f/">← Stream and queue troubleshooting: Kinesis IteratorAge, paral</a><a href="../caching-for-performance-api-gateway-stage-caching-cloudfront-elasticac/">Caching for performance: API Gateway stage caching, CloudFro →</a></nav>
+</main>
+</body>
+</html>

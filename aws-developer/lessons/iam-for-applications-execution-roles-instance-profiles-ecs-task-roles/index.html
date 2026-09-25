@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IAM for applications: execution roles, instance profiles… · Developer Associate Lesson</title>
+<meta name="description" content="Applications need permissions just as people do, and AWS Identity and Access Management (IAM) provides them through roles. A role is an identity with permi">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="IAM for applications: execution roles, instance profiles… · Developer Associate Lesson">
+<meta property="og:description" content="Applications need permissions just as people do, and AWS Identity and Access Management (IAM) provides them through roles. A role is an identity with permi">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/iam-for-applications-execution-roles-instance-profiles-ecs-task-roles/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/iam-for-applications-execution-roles-instance-profiles-ecs-task-roles/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 2: Security</p>
+<h1>IAM for applications: execution roles, instance profiles, ECS task roles, least-privilege policies, policy evaluation (explicit deny wins)</h1>
+<article class="lbody">
+<p>Applications need permissions just as people do, and AWS Identity and Access Management (IAM) provides them through roles. A role is an identity with permission policies but no long-term password or access keys; whoever is allowed to assume it gets temporary credentials from the AWS Security Token Service (STS). Giving your code a role, rather than embedding an IAM user's access keys, is the pattern the exam expects every time.</p>
+<p>Each compute service has its own way to attach a role. A Lambda execution role is assumed by the Lambda service on the function's behalf; its trust policy allows <code>lambda.amazonaws.com</code>, and its permissions decide what the function code can call. At minimum it needs permission to write to CloudWatch Logs (the <code>AWSLambdaBasicExecutionRole</code> managed policy); reading from SQS or streams through an event source mapping also requires the matching read permissions on this role. For EC2, a role is attached through an instance profile, a container for the role that the instance exposes through the instance metadata service; the SDK credential chain picks up the credentials automatically. For Amazon ECS, the task role gives the application containers their AWS permissions, while the separate task execution role is used by the ECS agent to pull images from Amazon ECR and send logs. Mixing these two up is a common trap.</p>
+<p>Least privilege means granting only the actions and resources the code actually needs. A policy statement has <code>Effect</code> (Allow or Deny), <code>Action</code>, <code>Resource</code> and optional <code>Condition</code>. Instead of <code>dynamodb:*</code> on <code>*</code>, grant <code>dynamodb:GetItem</code> and <code>dynamodb:PutItem</code> on the ARN of one table. Conditions narrow further, for example by source VPC, tag, or requiring encryption.</p>
+<pre class="code" tabindex="0"><code>{
+  &quot;Version&quot;: &quot;2012-10-17&quot;,
+  &quot;Statement&quot;: [{
+    &quot;Effect&quot;: &quot;Allow&quot;,
+    &quot;Action&quot;: [&quot;dynamodb:GetItem&quot;, &quot;dynamodb:PutItem&quot;],
+    &quot;Resource&quot;: &quot;arn:aws:dynamodb:us-east-1:111122223333:table/Orders&quot;
+  }]
+}</code></pre>
+<p>Policy evaluation within one account follows a simple logic. Every request starts as implicitly denied. AWS then gathers all applicable policies: identity-based policies, resource-based policies, permissions boundaries, session policies, and service control policies (SCPs) from AWS Organizations. If any applicable policy has an explicit <code>Deny</code> that matches, the request is denied, no matter how many Allows exist. Otherwise, if an Allow grants it (and no boundary, SCP or session policy limits it), the request is allowed. If nothing allows it, the implicit deny stands. So: explicit deny beats allow, and allow beats the default implicit deny.</p>
+<p>Managed policies (AWS managed or customer managed) are reusable and versioned; inline policies are embedded in a single role or user and deleted with it. Permissions boundaries set the maximum permissions an identity-based policy can grant, which is useful when developers are allowed to create roles for their own functions. To test policies, use the IAM policy simulator, and read the <code>AccessDenied</code> error message, which often names the missing action and the type of policy that blocked it.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Execution role</dt><dd>The IAM role a Lambda function assumes to get temporary credentials for calling other AWS services.</dd><dt>Instance profile</dt><dd>A container that attaches an IAM role to an EC2 instance so applications on it receive temporary credentials.</dd><dt>ECS task role</dt><dd>The IAM role whose permissions the application containers in an ECS task use, distinct from the task execution role.</dd><dt>Explicit deny</dt><dd>A policy statement with Effect Deny that overrides any Allow for matching requests.</dd><dt>Least privilege</dt><dd>Granting only the specific actions and resources needed to perform a task.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A containerized service on Fargate fails with AccessDenied when writing to S3, even though the task execution role has AmazonS3FullAccess. The developer realizes the application uses the task role, not the execution role, and attaches a policy allowing s3:PutObject on the one bucket to the task role instead.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> If a question shows both an Allow and a Deny for the same action, the answer is denied. If it asks how an app on EC2 should get credentials, pick an IAM role via an instance profile, never access keys on the instance.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which role lets an ECS container call DynamoDB, and which lets ECS pull the image from ECR?</summary><p>The task role grants the application's permissions; the task execution role lets the ECS agent pull images and write logs.</p></details>
+<details class="sq"><summary>A user has an identity policy allowing s3:* and an SCP denies s3:DeleteBucket. Can they delete a bucket?</summary><p>No; the explicit deny in the SCP overrides the allow.</p></details>
+<details class="sq"><summary>What does a Lambda execution role need at minimum?</summary><p>Permission to create log streams and write log events to CloudWatch Logs, as in AWSLambdaBasicExecutionRole.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../caching-strategies-with-elasticache-lazy-loading-write-through-ttls-ch/">← Caching strategies with ElastiCache: lazy loading, write-thr</a><a href="../resource-based-policies-lambda-permissions-for-s3-sns-api-gateway-s3-b/">Resource-based policies: Lambda permissions for S3/SNS/API G →</a></nav>
+</main>
+</body>
+</html>

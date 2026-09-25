@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lambda coding practices: initializing SDK clients and… · Developer Associate Lesson</title>
+<meta name="description" content="A Lambda function is a handler: a function Lambda calls once per invocation with two arguments, the event (the input data) and the context (runtime informa">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Lambda coding practices: initializing SDK clients and… · Developer Associate Lesson">
+<meta property="og:description" content="A Lambda function is a handler: a function Lambda calls once per invocation with two arguments, the event (the input data) and the context (runtime informa">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/lambda-coding-practices-initializing-sdk-clients-and-connections-outsi/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/lambda-coding-practices-initializing-sdk-clients-and-connections-outsi/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 1: Development with AWS Services</p>
+<h1>Lambda coding practices: initializing SDK clients and connections outside the handler, reading events, returning API Gateway proxy responses</h1>
+<article class="lbody">
+<p>A Lambda function is a handler: a function Lambda calls once per invocation with two arguments, the event (the input data) and the context (runtime information such as the request ID and remaining time). Writing the handler well has a direct effect on speed, cost and correctness.</p>
+<p>Lambda reuses execution environments. The first invocation in a new environment runs the init phase, which loads your code and runs everything outside the handler; this is part of a cold start. Later invocations in the same environment skip straight to the handler. So create SDK clients, database connections, and load configuration or large libraries at module level, outside the handler. They are created once and reused across many warm invocations, which saves time and avoids opening a new database connection on every request. Keep anything request-specific inside the handler, and do not store user data in global variables, because the next invocation may come from a different user.</p>
+<pre class="code" tabindex="0"><code>import os, json, boto3
+
+table = boto3.resource('dynamodb').Table(os.environ['TABLE_NAME'])  # runs once per environment
+
+def handler(event, context):
+    order_id = event['pathParameters']['id']
+    item = table.get_item(Key={'orderId': order_id}).get('Item')
+    if not item:
+        return {'statusCode': 404, 'body': json.dumps({'message': 'not found'})}
+    return {
+        'statusCode': 200,
+        'headers': {'Content-Type': 'application/json'},
+        'body': json.dumps(item, default=str)
+    }</code></pre>
+<p>Reading the event correctly means knowing its shape for each source. An S3 notification arrives as <code>event['Records'][i]['s3']['bucket']['name']</code> and <code>['object']['key']</code> (keys are URL-encoded, so decode them). SQS delivers <code>Records</code> with <code>body</code> as a string you usually parse as JSON. An API Gateway proxy integration event includes <code>httpMethod</code> (REST API) or <code>requestContext.http.method</code> (HTTP API payload version 2.0), <code>path</code> (<code>rawPath</code> in 2.0), <code>headers</code>, <code>queryStringParameters</code>, <code>pathParameters</code>, and <code>body</code> as a string, possibly Base64-encoded when <code>isBase64Encoded</code> is true. Always handle missing fields, because in a REST API event <code>queryStringParameters</code> is null when no query string is sent (in a 2.0 event the field is simply absent).</p>
+<p>With a Lambda proxy integration, API Gateway passes the whole request to the function and expects a specific response object back: <code>statusCode</code> (number), optional <code>headers</code> and <code>multiValueHeaders</code>, <code>body</code> as a string (so you must <code>json.dumps</code> or <code>JSON.stringify</code> objects), and optional <code>isBase64Encoded</code> for binary content. If you return a different shape, such as a raw object or a body that is not a string, API Gateway cannot map it and the client receives a 502 Bad Gateway with a message like 'Malformed Lambda proxy response'. For browser clients calling a proxy integration, the function itself must return CORS headers such as <code>Access-Control-Allow-Origin</code>.</p>
+<p>Other good practices: use the context object's <code>get_remaining_time_in_millis()</code> to stop gracefully before timing out; log in structured JSON; keep deployment packages small; and avoid recursive patterns, such as a function that writes to the same S3 bucket prefix that triggers it.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Handler</dt><dd>The function Lambda calls for each invocation, receiving the event and the context object.</dd><dt>Init phase</dt><dd>The part of a cold start where Lambda loads code and runs initialization outside the handler, done once per execution environment.</dd><dt>Lambda proxy integration</dt><dd>An API Gateway integration that passes the full HTTP request to Lambda and expects a response with statusCode, headers and a string body.</dd><dt>Context object</dt><dd>The second handler argument, exposing the request ID, function name, memory limit and remaining execution time.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A team's API returns 502 errors after a refactor. The logs show the function now returns {'statusCode': 200, 'body': {'id': 7}}. Because the body is an object rather than a string, API Gateway rejects the response; wrapping it in json.dumps fixes the error.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Expect a question where the fix for slow or connection-exhausting functions is moving client or connection creation outside the handler. A 502 from a proxy integration almost always means the response shape or string body is wrong.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why initialize a database connection outside the handler?</summary><p>It runs once per execution environment and is reused by warm invocations, reducing latency and the number of connections opened.</p></details>
+<details class="sq"><summary>What must the body field be in a Lambda proxy response?</summary><p>A string; objects must be serialized, for example with JSON.stringify or json.dumps.</p></details>
+<details class="sq"><summary>Where is the query string found in a REST API proxy event, and what is its value when none is sent?</summary><p>In queryStringParameters, which is null when the request has no query string, so code must handle that case.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../lambda-invocation-models-synchronous-asynchronous-retries-destinations/">← Lambda invocation models: synchronous, asynchronous (retries</a><a href="../dynamodb-partition-and-sort-keys-query-vs-scan-lsi-vs-gsi-rcu-wcu-math/">DynamoDB: partition and sort keys, Query vs Scan, LSI vs GSI →</a></nav>
+</main>
+</body>
+</html>

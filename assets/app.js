@@ -66,13 +66,12 @@
     ${trackPicker()}
     <div id="trackcards">${trackCards()}</div>
     <h2>Your progress</h2>
+    ${(() => { const st = CertHub.activity.streak(); return `<div class="panel startcard"><div class="grow"><strong>${st.current ? `${st.current}-day study streak` : "Start a study streak"}</strong><br><span class="note">${st.current ? (st.today ? "You studied today. " : "Study today to keep it going. ") : "Answer a question or read a lesson each day. "}${st.best ? `Best: ${st.best} days.` : ""}</span></div><button type="button" class="btn ghost sm" data-gact="reminder">Set a daily reminder</button></div>`; })()}
     <div class="panel">
       <p class="note" style="margin:0">Progress, lab notes and checkmarks are saved in this browser only. Nothing is sent anywhere. Back up to move them to another device.</p>
       <div class="btns"><button type="button" class="btn ghost sm no-framed" data-gact="download">Download backup</button><button type="button" class="btn ghost sm" data-gact="copybackup">Copy backup</button><label class="btn ghost sm" for="imp">Restore from file</label><input type="file" id="imp" accept="application/json" class="hide"><button type="button" class="btn ghost sm" data-gact="pasterestore">Restore from text</button></div>
     </div>
-    <div class="panel installcard supportcard"><div class="grow"><strong>Keep it free</strong><br><span class="note">No ads and no tracking. Share it, report a mistake${CertHub.site && CertHub.site.support && CertHub.site.support.url ? " or chip in" : ""} to help.</span></div><a class="btn ghost sm" href="#support">Support this site</a></div>
-    <h2>How the content is written</h2>
-    <div class="panel"><p style="margin:0">Questions and plans come from each vendor's official exam objectives, and for Security+ from Senaya's UTD Fullstack Cybersecurity bootcamp notes. Every question shows its source, and answer options are shuffled each time. Labs use free tools and follow what analysts, network engineers and GRC teams do on the job. Anything that scans, captures or analyzes samples stays inside your own isolated lab.</p></div>`;
+    <div class="panel installcard supportcard"><div class="grow"><strong>Keep it free</strong><br><span class="note">No ads and no tracking. Share it, report a mistake${CertHub.site && CertHub.site.support && CertHub.site.support.url ? " or chip in" : ""} to help.</span></div><a class="btn ghost sm" href="#support">Support this site</a></div>`;
   }
 
   /* ---------- restore from pasted text ---------- */
@@ -102,6 +101,16 @@
   // (never inherited ones like "constructor" or "__proto__").
   const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
   const POLICY_TITLES = { privacy: "Privacy Policy", terms: "Terms of Use", security: "Security", install: "Install the App", support: "Support This Site" };
+  // Optional page counts (GoatCounter): no cookies, no personal data, skipped when the browser asks not to be tracked.
+  let lastCounted = "";
+  function countView() {
+    const gc = CertHub.site && CertHub.site.analytics;
+    if (!gc || navigator.doNotTrack === "1" || navigator.globalPrivacyControl) return;
+    const p = location.pathname + location.hash;
+    if (p === lastCounted) return; lastCounted = p;
+    const q = new URLSearchParams({ p, t: document.title, r: document.referrer && !document.referrer.startsWith(location.origin) ? document.referrer : "", rnd: Math.random().toString(36).slice(2) });
+    try { fetch(`${gc}/count?${q}`, { mode: "no-cors", credentials: "omit", keepalive: true, referrerPolicy: "no-referrer" }).catch(() => {}); } catch (e) {}
+  }
   function route() {
     let raw = "";
     try { raw = decodeURIComponent(location.hash.replace(/^#/, "")); } catch (e) { raw = ""; }
@@ -132,6 +141,7 @@
     $("#brandname").textContent = brand;
     $("#back").hidden = view === "home";
     document.title = title === "Cyber Cert Study" ? title : `${title} · Cyber Cert Study`;
+    countView();
     window.scrollTo(0, 0);
   }
   // Re-render the current view in place (after marking a lab done, for example).
@@ -143,6 +153,7 @@
     if (a === "download") CertHub.exportAll();
     if (a === "copybackup") ui.copy(CertHub.backupText(), "progress backup");
     if (a === "pasterestore") CertHub.restoreFromText();
+    if (a === "reminder") CertHub.addReminder("Study for my certification", location.origin + location.pathname);
     if (a === "share") {
       const data = { title: "Cyber Cert Study", text: "Free study plans, quizzes and hands-on labs for cybersecurity certifications.", url: location.origin + "/" };
       if (navigator.share) navigator.share(data).catch(() => {}); else ui.copy(data.url, "site link");

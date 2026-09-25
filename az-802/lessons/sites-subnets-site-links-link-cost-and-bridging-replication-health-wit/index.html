@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sites, subnets, site links, link cost and bridging… · AZ-802 Lesson</title>
+<meta name="description" content="Active Directory sites describe your physical network so AD can make sensible decisions. A site is a set of well-connected IP subnets, typically one office">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Sites, subnets, site links, link cost and bridging… · AZ-802 Lesson">
+<meta property="og:description" content="Active Directory sites describe your physical network so AD can make sensible decisions. A site is a set of well-connected IP subnets, typically one office">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/sites-subnets-site-links-link-cost-and-bridging-replication-health-wit/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/sites-subnets-site-links-link-cost-and-bridging-replication-health-wit/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 1: Deploy and manage AD DS</p>
+<h1>Sites, subnets, site links, link cost and bridging; replication health with repadmin and dcdiag</h1>
+<article class="lbody">
+<p>Active Directory sites describe your physical network so AD can make sensible decisions. A site is a set of well-connected IP subnets, typically one office or datacenter. Sites control two things: which DC a client talks to (clients prefer DCs in their own site for logon, a process called site coverage and DC locator), and how replication flows. Inside a site, DCs replicate quickly and uncompressed, triggered by change notification within seconds. Between sites, replication is compressed and runs on a schedule to save WAN bandwidth.</p>
+<p>To make this work, you create subnet objects (for example 10.20.0.0/16) and associate each with a site in Active Directory Sites and Services or with <code>New-ADReplicationSubnet</code>. A client's IP address is matched to a subnet, which tells it its site. A subnet that is missing from AD means clients in that range may authenticate against a distant DC, which is a common cause of slow logons.</p>
+<p>Site links connect sites and carry three important settings. The cost is a relative number: when there are multiple paths, AD chooses the path with the lowest total cost, so give fast links low costs and slow or backup links high costs. The replication interval (default 180 minutes, minimum 15) sets how often replication happens across the link. The schedule restricts when it may happen. The default site link, DEFAULTIPSITELINK, contains every site until you design your own.</p>
+<p>Site link bridging controls transitivity. By default, Bridge all site links is enabled, meaning that if Site A links to B and B links to C, AD can calculate a path from A to C by adding the costs. On networks that are not fully routed (for example, a firewall prevents A from reaching C directly), you disable that setting and create explicit site link bridges only where they reflect real connectivity. The Knowledge Consistency Checker (KCC) runs on every DC and builds the replication topology automatically; in each site, one DC acts as the Inter-Site Topology Generator (ISTG) and picks bridgehead servers for inter-site replication.</p>
+<p>Two tools check replication health. <code>repadmin</code> inspects and drives replication: <code>repadmin /replsummary</code> shows failures and largest deltas per DC, <code>repadmin /showrepl</code> lists inbound partners and last results, <code>repadmin /syncall /AdeP</code> forces a push across all partitions and sites, and <code>repadmin /queue</code> shows pending work. <code>dcdiag</code> runs a battery of tests on a DC: connectivity, advertising, services, SYSVOL, FSMO checks and more; <code>dcdiag /test:dns</code> focuses on DNS registration, which underlies most replication problems. PowerShell equivalents include <code>Get-ADReplicationFailure</code> and <code>Get-ADReplicationPartnerMetadata</code>.</p>
+<p>When repadmin reports errors, check DNS first (can each DC resolve its partner's GUID-based CNAME in _msdcs?), then network ports and time skew. A DC that has not replicated for longer than the tombstone lifetime is at risk of lingering objects and should usually be demoted and rebuilt rather than forced back into replication.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Site</dt><dd>An AD object representing a set of well-connected subnets, used for client DC selection and replication scheduling.</dd><dt>Site link cost</dt><dd>A relative value AD sums along paths; the lowest total cost path is preferred.</dd><dt>Site link bridge</dt><dd>A way to make site links transitive; the default Bridge all site links setting makes all links transitive.</dd><dt>KCC</dt><dd>Knowledge Consistency Checker: the process on each DC that builds the replication topology automatically.</dd><dt>repadmin /replsummary</dt><dd>A command that summarizes replication status, failures and largest deltas for all DCs.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Users in a new branch report slow logons. dcdiag passes, but the branch subnet 10.44.0.0/16 was never added in Sites and Services, so clients use a DC across the WAN. Creating the subnet and linking it to the Branch site fixes DC selection immediately.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Lower cost wins. If a question gives two paths between sites, add the site link costs along each and pick the smaller. Remember inter-site replication follows the schedule and interval, while intra-site replication uses change notification.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What happens to clients whose IP address is not in any AD subnet?</summary><p>They cannot be mapped to a site and may use any DC, often a distant one, causing slow logons.</p></details>
+<details class="sq"><summary>When would you disable Bridge all site links?</summary><p>When the network is not fully routed, so AD should not assume every site can replicate to every other site transitively.</p></details>
+<details class="sq"><summary>Which command gives a quick summary of replication failures across all DCs?</summary><p>repadmin /replsummary.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../fsmo-roles-schema-master-domain-naming-master-rid-master-pdc-emulator/">← FSMO roles (schema master, domain naming master, RID master,</a><a href="../forest-external-shortcut-and-realm-trusts-transitivity-and-direction-s/">Forest, external, shortcut and realm trusts; transitivity an →</a></nav>
+</main>
+</body>
+</html>

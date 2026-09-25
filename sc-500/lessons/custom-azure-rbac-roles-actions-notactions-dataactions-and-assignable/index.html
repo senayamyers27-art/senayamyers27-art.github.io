@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Custom Azure RBAC roles: actions, notActions, dataActions… · SC-500 Lesson</title>
+<meta name="description" content="When no built-in role fits, you can create a custom Azure RBAC role. A custom role is a JSON role definition that lists exactly which operations are allowe">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Custom Azure RBAC roles: actions, notActions, dataActions… · SC-500 Lesson">
+<meta property="og:description" content="When no built-in role fits, you can create a custom Azure RBAC role. A custom role is a JSON role definition that lists exactly which operations are allowe">
+<link rel="canonical" href="https://senayamyers27-art.github.io/sc-500/lessons/custom-azure-rbac-roles-actions-notactions-dataactions-and-assignable/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/sc-500/lessons/custom-azure-rbac-roles-actions-notactions-dataactions-and-assignable/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">SC-500</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Cloud and AI Security Engineer Associate (replaces Azure Security Engineer Associate / AZ-500) SC-500 · Domain 1: Manage identity, access, and governance</p>
+<h1>Custom Azure RBAC roles: actions, notActions, dataActions and assignable scopes</h1>
+<article class="lbody">
+<p>When no built-in role fits, you can create a custom Azure RBAC role. A custom role is a JSON role definition that lists exactly which operations are allowed. You create it in the portal (clone an existing role and edit it), with Azure PowerShell (<code>New-AzRoleDefinition</code>) or with the Azure CLI (<code>az role definition create --role-definition role.json</code>). Custom roles are stored in the Microsoft Entra tenant and can be shared across the subscriptions listed in their assignable scopes.</p>
+<p>Operations are written as resource provider strings, for example <code>Microsoft.Compute/virtualMachines/start/action</code> or <code>Microsoft.Storage/storageAccounts/read</code>. Wildcards are allowed: <code>Microsoft.Compute/virtualMachines/*</code> means every operation on VMs. The <code>Actions</code> property lists control-plane (management) operations that go through Azure Resource Manager: create, read, update, delete and special actions such as restart. The <code>NotActions</code> property subtracts operations from a wildcard in <code>Actions</code>. For instance, <code>Actions: [&quot;*&quot;]</code> with <code>NotActions: [&quot;Microsoft.Authorization/*/Delete&quot;, &quot;Microsoft.Authorization/*/Write&quot;]</code> is essentially how Contributor is defined.</p>
+<p>Important: <code>NotActions</code> is not a deny. It only removes operations from this role's grant. If the same user also has another role that allows the excluded operation, they can still perform it. To actually block something you rely on the absence of permissions, Azure Policy, resource locks or system-created deny assignments.</p>
+<p>Data-plane operations act on the data inside a resource, such as reading a blob or a queue message, and are listed in <code>DataActions</code> and <code>NotDataActions</code>. For example, <code>Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read</code> is a data action. This split is why Contributor on a storage account can manage the account but cannot read blobs through Entra ID authorization; that needs a data role such as Storage Blob Data Reader. Only services that support Entra data-plane authorization (Storage, Key Vault with RBAC, Service Bus, Event Hubs and others) have data actions.</p>
+<p><code>AssignableScopes</code> lists where the custom role can be assigned: one or more management groups, subscriptions or resource groups. A role scoped to a subscription can be assigned at that subscription or anything below it. Custom roles that include <code>DataActions</code> cannot list a management group in their assignable scopes, and there are tenant-wide limits on how many custom roles you can create, so keep them few and reusable. Creating or updating a custom role requires <code>Microsoft.Authorization/roleDefinitions/write</code>, which Owner and User Access Administrator have.</p>
+<p>A good workflow is: find the closest built-in role, export it with <code>az role definition list --name &quot;Virtual Machine Contributor&quot;</code>, edit the JSON, give it a clear name and description, set assignable scopes as narrow as possible, and test it with a test user and Check access before rolling it out.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Actions</dt><dd>Control-plane operations the role allows, such as creating or restarting a VM.</dd><dt>NotActions</dt><dd>Operations removed from the Actions wildcard for this role only; not a deny if another role grants them.</dd><dt>DataActions</dt><dd>Data-plane operations the role allows, such as reading blobs or Key Vault secrets.</dd><dt>AssignableScopes</dt><dd>The management groups, subscriptions or resource groups where a custom role may be assigned.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Operators must start, stop and restart VMs but never create or delete them. You create 'VM Operator' with Actions for <code>virtualMachines/read</code>, <code>start/action</code>, <code>powerOff/action</code>, <code>restart/action</code> and <code>deallocate/action</code>, set AssignableScopes to the production subscription and assign it to the operations group at that scope.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Questions often test that NotActions is not a deny and that reading data in a storage account needs a DataActions role, not Contributor. Also watch for a role that cannot be assigned because the target scope is outside its AssignableScopes.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>A user has a custom role with NotActions for VM delete and also has Contributor on the same resource group. Can they delete a VM?</summary><p>Yes. NotActions only trims that role's own grant; Contributor still allows the delete.</p></details>
+<details class="sq"><summary>Which property would hold <code>Microsoft.KeyVault/vaults/secrets/getSecret/action</code>?</summary><p>DataActions, because reading a secret value is a data-plane operation.</p></details>
+<details class="sq"><summary>What limits where a custom role can be assigned?</summary><p>Its AssignableScopes list; it can be assigned only at those scopes or below them.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study SC-500 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../sc-500/">Open the SC-500 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../microsoft-entra-built-in-roles-vs-azure-rbac-roles-scopes-management-g/">← Microsoft Entra built-in roles vs Azure RBAC roles, scopes (</a><a href="../privileged-identity-management-eligible-vs-active-assignments-activati/">Privileged Identity Management: eligible vs active assignmen →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>EIGRP: feasible successors, variance, stub routing · ENCOR Lesson</title>
+<meta name="description" content="EIGRP's speed and stability come from DUAL, the Diffusing Update Algorithm. To understand feasible successors, variance and stub routing you need two dista">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="EIGRP: feasible successors, variance, stub routing · ENCOR Lesson">
+<meta property="og:description" content="EIGRP's speed and stability come from DUAL, the Diffusing Update Algorithm. To understand feasible successors, variance and stub routing you need two dista">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ccnp-encor/lessons/eigrp-feasible-successors-variance-stub-routing/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ccnp-encor/lessons/eigrp-feasible-successors-variance-stub-routing/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">ENCOR</a> / <a href="../">Lessons</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2 · Domain 3: Infrastructure</p>
+<h1>EIGRP: feasible successors, variance, stub routing</h1>
+<article class="lbody">
+<p>EIGRP's speed and stability come from DUAL, the Diffusing Update Algorithm. To understand feasible successors, variance and stub routing you need two distances that EIGRP tracks for every path.</p>
+<p>The reported distance (RD), also called advertised distance, is the metric from the neighbor to the destination, as the neighbor reports it. The feasible distance (FD) is your total metric to the destination through that neighbor: the neighbor's reported distance plus the cost of your link to the neighbor. The best path, with the lowest FD, is the successor, and it is installed in the routing table. The lowest FD is remembered as the feasible distance for the route.</p>
+<p>A feasible successor is a backup path that is guaranteed loop-free. The rule, called the feasibility condition, is that a neighbor's reported distance must be strictly less than your current feasible distance. The logic: if the neighbor is closer to the destination than you are, its path cannot be going back through you. When the successor fails and a feasible successor exists, the router switches to it immediately without asking anyone, which is why EIGRP can converge in well under a second. If there is no feasible successor, the route goes active: the router sends queries to all neighbors asking for an alternative path and waits for replies before it can choose. In large networks, queries can travel far, and if a router does not answer within the active timer (three minutes by default), the route becomes stuck in active (SIA) and the neighbor relationship may be reset.</p>
+<p>You can see successors and feasible successors with <code>show ip eigrp topology</code>. Each entry lists paths as '(FD/RD)'. Paths that do not meet the feasibility condition appear only with <code>show ip eigrp topology all-links</code>.</p>
+<p>Variance enables unequal-cost load balancing. By default EIGRP installs only equal-cost paths. With <code>variance 2</code>, EIGRP also installs any feasible successor whose FD is less than 2 times the successor's FD. Traffic is shared in proportion to the metrics. Only paths that are feasible successors qualify, so a path that fails the feasibility condition is never used even if its metric is within the variance. <code>maximum-paths</code> still limits how many paths are installed.</p>
+<p>Stub routing controls query scope. A remote branch router with a single hub connection should never be used as a transit path, and queries sent to it are wasted. Configuring <code>eigrp stub</code> on the branch (in classic mode under <code>router eigrp</code>, or <code>eigrp stub</code> under the address family in named mode) tells neighbors it is a stub, so the hub does not send it queries and SIA risk shrinks. By default a stub advertises connected and summary routes (<code>eigrp stub connected summary</code>); other options include <code>static</code>, <code>redistributed</code>, <code>receive-only</code> and <code>leak-map</code>. A stub does not advertise routes learned from one neighbor to another, which also prevents the branch from becoming an accidental transit.</p>
+<p>Summarization is the other tool for limiting query scope: a query stops at a router that does not have the specific prefix in its topology table, such as one that only knows a summary.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Feasible distance</dt><dd>The router's total metric to a destination through the best path.</dd><dt>Reported distance</dt><dd>The metric to the destination as advertised by a neighbor.</dd><dt>Feasibility condition</dt><dd>A neighbor's reported distance must be less than the current feasible distance for it to be a feasible successor.</dd><dt>Variance</dt><dd>A multiplier that allows EIGRP to install feasible successors with higher metrics for unequal-cost load balancing.</dd><dt>Stub router</dt><dd>An EIGRP router that tells neighbors not to query it and advertises only selected route types.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Router R1 reaches 10.5.0.0/16 via R2 with FD 3000 (RD 1000) and via R3 with FD 5000 (RD 2500). R3's RD of 2500 is less than R1's FD of 3000, so R3 is a feasible successor. With <code>variance 2</code>, R1 installs both paths because 5000 is less than 2 times 3000, sharing traffic roughly in proportion to the metrics.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Feasible successor test: RD of the backup less than FD of the successor, strictly less. Variance only ever uses feasible successors. Stub routing is the main fix for stuck-in-active problems at hub sites.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>A backup path has RD 3000 and the current FD is 3000. Is it a feasible successor?</summary><p>No; the reported distance must be strictly less than the feasible distance.</p></details>
+<details class="sq"><summary>What happens when a successor fails and there is no feasible successor?</summary><p>The route goes active and the router queries its neighbors for an alternative path, waiting for replies before reconverging.</p></details>
+<details class="sq"><summary>Why configure eigrp stub on branch routers?</summary><p>So hubs do not send them queries, reducing query scope and stuck-in-active risk, and so the branch never becomes a transit path.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study ENCOR for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ccnp-encor/">Open the ENCOR study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../eigrp-vs-ospf-algorithms-metrics-path-selection-load-balancing-summari/">← EIGRP vs OSPF: algorithms, metrics, path selection, load bal</a><a href="../ospfv2-and-ospfv3-multi-area-adjacencies-network-types-area-types-stub/">OSPFv2 and OSPFv3: multi-area, adjacencies, network types, a →</a></nav>
+</main>
+</body>
+</html>

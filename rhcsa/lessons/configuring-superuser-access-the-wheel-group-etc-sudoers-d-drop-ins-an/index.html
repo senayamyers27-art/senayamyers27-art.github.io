@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Configuring superuser access: the wheel group… · RHCSA Lesson</title>
+<meta name="description" content="Administrators should not log in as root for daily work. sudo lets approved users run specific commands as root (or another user) using their own password,">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Configuring superuser access: the wheel group… · RHCSA Lesson">
+<meta property="og:description" content="Administrators should not log in as root for daily work. sudo lets approved users run specific commands as root (or another user) using their own password,">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/configuring-superuser-access-the-wheel-group-etc-sudoers-d-drop-ins-an/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/configuring-superuser-access-the-wheel-group-etc-sudoers-d-drop-ins-an/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 9: Manage users and groups</p>
+<h1>Configuring superuser access: the wheel group, /etc/sudoers.d/ drop-ins and visudo</h1>
+<article class="lbody">
+<p>Administrators should not log in as root for daily work. <code>sudo</code> lets approved users run specific commands as root (or another user) using their own password, and it logs what they ran. That gives accountability and lets you grant just the privileges someone needs. Its rules live in <code>/etc/sudoers</code> and in drop-in files under <code>/etc/sudoers.d/</code>.</p>
+<p>RHEL ships with this rule enabled in <code>/etc/sudoers</code>: <code>%wheel ALL=(ALL) ALL</code>. The percent sign means a group. So the quickest way to give a user full administrative rights is to add them to the wheel group with <code>usermod -aG wheel alice</code>. After alice logs in again, <code>sudo -i</code> or <code>sudo command</code> works after she enters her own password.</p>
+<p>A sudoers rule reads: who, on which hosts, as which users, may run which commands. In <code>alice ALL=(ALL) ALL</code>, the first ALL is hosts, <code>(ALL)</code> is the users she may act as, and the final ALL is commands. Adding <code>NOPASSWD:</code> before the command list skips the password prompt. Command lists should use full paths.</p>
+<pre class="code" tabindex="0"><code># /etc/sudoers.d/admins
+%sysadmins   ALL=(ALL)  ALL
+bob          ALL=(root) NOPASSWD: /usr/bin/systemctl restart httpd
+backup       ALL=(root) /usr/bin/rsync, /usr/bin/tar</code></pre>
+<p>Never edit sudoers files with a plain editor. <code>visudo</code> opens the file with locking and checks the syntax before saving; if there is an error it offers to re-edit rather than saving a broken file that could lock everyone out of sudo. Use <code>visudo -f /etc/sudoers.d/admins</code> to create or edit a drop-in, and <code>visudo -c</code> to check every file. Drop-in files keep your changes separate from the vendor file, which package updates may replace.</p>
+<p>Drop-in rules: files in <code>/etc/sudoers.d/</code> must not contain a dot or end in a tilde in their names, or sudo ignores them, so use names like <code>admins</code>, not <code>admins.conf</code>. They should be owned by root with mode 0440, which visudo sets when it creates them.</p>
+<p>Test as the user: <code>sudo -l</code> lists what the current user may run, and <code>sudo -l -U bob</code> run by root shows bob's rights. When a rule does not work, check the file name, group membership (and a fresh login), full command paths and <code>visudo -c</code>. Failures are logged in the journal, which you can search with <code>journalctl -t sudo</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>sudo</dt><dd>Runs a command as root or another user according to sudoers rules, logging the action.</dd><dt>wheel group</dt><dd>The RHEL administrative group granted full sudo rights by the default sudoers rule %wheel ALL=(ALL) ALL.</dd><dt>visudo</dt><dd>Edits sudoers files safely with locking and syntax checking; -f edits a drop-in and -c checks all files.</dd><dt>/etc/sudoers.d/</dt><dd>A directory of drop-in sudoers files that keeps local rules separate from the main file.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Members of sysadmins must run any command as root, and user deploy may only restart httpd without a password. You run visudo -f /etc/sudoers.d/local and add %sysadmins ALL=(ALL) ALL and deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart httpd, then visudo -c reports the files parsed OK.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Always use visudo; a syntax error in a sudoers file can remove everyone's sudo access. And a drop-in file whose name contains a dot is silently ignored.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What is the fastest way to give alice full sudo rights on RHEL?</summary><p>Add her to the wheel group with usermod -aG wheel alice; she gets the rights at her next login.</p></details>
+<details class="sq"><summary>What does %devs ALL=(ALL) NOPASSWD: ALL mean?</summary><p>Members of group devs can run any command as any user on any host without entering a password.</p></details>
+<details class="sq"><summary>Why would /etc/sudoers.d/admins.conf be ignored?</summary><p>sudo skips drop-in files whose names contain a dot or end with a tilde.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../account-databases-etc-passwd-etc-shadow-etc-group-id-and-getent/">← Account databases: /etc/passwd, /etc/shadow, /etc/group; id </a><a href="../locking-and-unlocking-accounts-usermod-l-passwd-l-chage-e-0/">Locking and unlocking accounts (usermod -L, passwd -l, chage →</a></nav>
+</main>
+</body>
+</html>

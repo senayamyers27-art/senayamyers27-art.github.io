@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Storage: partitions (fdisk, gdisk, parted), lsblk, blkid… · Linux+ Lesson</title>
+<meta name="description" content="Before a disk can hold files, it is normally divided into partitions, each of which gets a filesystem and a mount point. Linux+ expects you to identify dis">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Storage: partitions (fdisk, gdisk, parted), lsblk, blkid… · Linux+ Lesson">
+<meta property="og:description" content="Before a disk can hold files, it is normally divided into partitions, each of which gets a filesystem and a mount point. Linux+ expects you to identify dis">
+<link rel="canonical" href="https://senayamyers27-art.github.io/linux-plus/lessons/storage-partitions-fdisk-gdisk-parted-lsblk-blkid-uuids-etc-fstab-opti/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/linux-plus/lessons/storage-partitions-fdisk-gdisk-parted-lsblk-blkid-uuids-etc-fstab-opti/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Linux+</a> / <a href="../">Lessons</a></p>
+<p class="note">CompTIA Linux+ XK0-006 · Domain 1: System management</p>
+<h1>Storage: partitions (fdisk, gdisk, parted), lsblk, blkid, UUIDs, /etc/fstab options (nofail, noexec)</h1>
+<article class="lbody">
+<p>Before a disk can hold files, it is normally divided into partitions, each of which gets a filesystem and a mount point. Linux+ expects you to identify disks, create partitions with the right tool for the partition table type, and mount them reliably at boot.</p>
+<p>There are two partition table formats. MBR (Master Boot Record) is the legacy format: it supports up to four primary partitions (or three plus an extended partition containing logical ones) and disks up to about 2 TiB with common 512-byte sectors. GPT (GUID Partition Table) is the modern format used with UEFI: it supports far larger disks, many partitions (128 by default), and keeps a backup copy of the table at the end of the disk. <code>fdisk</code> is an interactive tool that today handles both MBR and GPT; <code>gdisk</code> is a GPT-focused tool with a similar interface; <code>parted</code> handles both and can also be scripted, as in <code>parted /dev/sdb mklabel gpt</code> and <code>parted /dev/sdb mkpart primary ext4 1MiB 100%</code>. Inside fdisk, <code>n</code> creates, <code>p</code> prints, <code>t</code> changes type, <code>d</code> deletes and <code>w</code> writes; nothing changes on disk until you write. Afterwards, <code>partprobe</code> asks the kernel to reread the table.</p>
+<p><code>lsblk</code> shows block devices as a tree: disks, their partitions, LVM volumes and RAID arrays, with size, type and mount point. <code>lsblk -f</code> adds filesystem type, label and UUID. <code>blkid</code> prints the attributes of each block device, especially its UUID (Universally Unique Identifier) and filesystem TYPE. Device names such as <code>/dev/sdb1</code> can change when disks are added or controllers reorder, but a filesystem's UUID stays the same, which is why you should mount by UUID (or LABEL) rather than by device name.</p>
+<p><code>/etc/fstab</code> lists filesystems to mount at boot. Each line has six fields: device (<code>UUID=...</code>), mount point, filesystem type, options, dump flag (usually 0) and fsck pass order (1 for root, 2 for others, 0 to skip). For example: <code>UUID=3f2a... /data xfs defaults,nofail 0 2</code>.</p>
+<p>Options matter for both reliability and security. <code>defaults</code> means rw, suid, dev, exec, auto, nouser and async. <code>nofail</code> tells the boot process not to fail if the device is missing, which keeps a server booting when an external or network disk is absent; without it, a missing device can drop the system to emergency mode. <code>noexec</code> prevents running binaries from that filesystem, a common hardening step for <code>/tmp</code> or upload directories. <code>nosuid</code> ignores SUID/SGID bits, <code>nodev</code> ignores device files, <code>ro</code> mounts read-only, and <code>_netdev</code> marks network filesystems so they wait for the network.</p>
+<p>Always test fstab edits before rebooting: <code>mount -a</code> tries to mount everything listed, and <code>findmnt --verify</code> checks the file for errors. On systemd systems, run <code>systemctl daemon-reload</code> after editing fstab so the generated mount units are refreshed.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>GPT</dt><dd>GUID Partition Table: modern partition scheme supporting very large disks, many partitions and a backup table.</dd><dt>MBR</dt><dd>Master Boot Record: legacy partition scheme limited to four primary partitions and roughly 2 TiB disks.</dd><dt>UUID</dt><dd>A unique identifier stored in a filesystem, used in /etc/fstab so mounts do not depend on device names.</dd><dt>nofail</dt><dd>An fstab option that lets boot continue if the device is not present.</dd><dt>noexec</dt><dd>An fstab option that prevents executing binaries stored on that filesystem.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>You add a 4 TB disk to a server for backups. You create a GPT label and one partition with parted, format it with mkfs.xfs, get its UUID from blkid, and add UUID=... /backup xfs defaults,nofail,noexec 0 2 to /etc/fstab. Running mount -a mounts it without errors, and nofail ensures that if the disk is ever removed the server still boots.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> If a scenario asks why a server hung in emergency mode after a disk was removed or renamed, suspect an fstab entry by device name without nofail; the fix is to use UUID= and add nofail where appropriate.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which partitioning scheme should you use for a 6 TB disk, and why?</summary><p>GPT, because MBR cannot address disks beyond about 2 TiB with 512-byte sectors.</p></details>
+<details class="sq"><summary>What does the last field in an /etc/fstab line control?</summary><p>The fsck pass order at boot: 1 for the root filesystem, 2 for other filesystems, 0 to skip checking.</p></details>
+<details class="sq"><summary>How do you find the UUID of /dev/sdc1?</summary><p>Run blkid /dev/sdc1 or lsblk -f.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Linux+ for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../linux-plus/">Open the Linux+ study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../files-and-directories-ls-find-cp-mv-hard-vs-symbolic-links-file-stat/">← Files and directories: ls, find, cp, mv, hard vs symbolic li</a><a href="../lvm-pvcreate-vgextend-lvextend-r-and-software-raid-with-mdadm/">LVM (pvcreate, vgextend, lvextend -r) and software RAID with →</a></nav>
+</main>
+</body>
+</html>

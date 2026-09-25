@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Live migration and storage migration between Hyper-V… · AZ-802 Lesson</title>
+<meta name="description" content="Live migration moves a running VM from one Hyper-V host to another with no noticeable downtime. Hyper-V copies the VM's memory to the destination while the">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Live migration and storage migration between Hyper-V… · AZ-802 Lesson">
+<meta property="og:description" content="Live migration moves a running VM from one Hyper-V host to another with no noticeable downtime. Hyper-V copies the VM's memory to the destination while the">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/live-migration-and-storage-migration-between-hyper-v-hosts-kerberos-vs/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/live-migration-and-storage-migration-between-hyper-v-hosts-kerberos-vs/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 3: Manage virtual machines</p>
+<h1>Live migration and storage migration between Hyper-V hosts; Kerberos vs CredSSP authentication</h1>
+<article class="lbody">
+<p>Live migration moves a running VM from one Hyper-V host to another with no noticeable downtime. Hyper-V copies the VM's memory to the destination while the VM keeps running, repeatedly sends pages that changed, then briefly pauses the VM to transfer the final state and resumes it on the destination. Users typically lose at most a packet or two. It is how you patch or replace hosts without outages.</p>
+<p>There are three forms. Live migration within a failover cluster moves the VM's memory and state while its disks stay on shared storage such as a Cluster Shared Volume; you start it in Failover Cluster Manager or with <code>Move-ClusterVirtualMachineRole</code>. Shared-nothing live migration moves a running VM between stand-alone hosts, or between clusters, including its storage, over the network, with no shared storage required; you use <code>Move-VM -DestinationStoragePath</code>. Storage migration moves only a running VM's virtual disks and configuration files to a different location, such as a new volume or SMB share, without changing hosts: <code>Move-VMStorage -VMName APP01 -DestinationStoragePath E:\VMs\APP01</code>.</p>
+<p>For non-clustered live migration, both hosts must have live migration enabled (<code>Enable-VMMigration</code>), be in the same domain or trusted domains, use the same processor manufacturer (Intel to Intel, AMD to AMD), and have networks configured for migration traffic. If processor generations differ, enable processor compatibility mode on the VM while it is off. You can choose performance options: TCP/IP, Compression (the default, which uses spare CPU to reduce data) or SMB, which can use SMB Direct (RDMA) and SMB Multichannel for the fastest transfers on capable networks. You also set how many simultaneous migrations a host allows.</p>
+<p>Authentication is the heart of this topic. With CredSSP (Credential Security Support Provider), the default, no extra configuration is needed, but you must be signed in locally, or by Remote Desktop, to the source host when you start the migration, because your credentials are delegated from that session. Starting a migration from Hyper-V Manager on your workstation will fail. With Kerberos, you can start migrations remotely from any management computer, but you must first configure constrained delegation on each host's computer account in AD, allowing it to present delegated credentials to the other hosts for two services: <code>cifs</code> (for storage) and <code>Microsoft Virtual System Migration Service</code>.</p>
+<pre class="code" tabindex="0"><code>Set-VMHost -VirtualMachineMigrationAuthenticationType Kerberos `
+  -VirtualMachineMigrationPerformanceOption SMB
+```
+In Active Directory Users and Computers, on HV01's Delegation tab, choose Trust this computer for delegation to specified services only and add the cifs and Microsoft Virtual System Migration Service entries for HV02, then do the same in reverse.</code></pre>
+<p>Inside a failover cluster, the cluster service handles authentication for clustered live migration, so this delegation question applies mainly to stand-alone hosts and shared-nothing migrations.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Live migration</dt><dd>Moving a running VM between Hyper-V hosts with no noticeable downtime.</dd><dt>Shared-nothing live migration</dt><dd>Live migration of a VM and its storage between hosts without shared storage.</dd><dt>Storage migration</dt><dd>Moving a running VM's disks and files to new storage on the same host.</dd><dt>CredSSP</dt><dd>Default live migration authentication; requires signing in to the source host to start the move.</dd><dt>Kerberos constrained delegation</dt><dd>AD setting allowing hosts to delegate for cifs and Microsoft Virtual System Migration Service, enabling remote migration starts.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An admin tries to live-migrate a VM from HV01 to HV02 using Hyper-V Manager on his laptop and gets an authentication error. The hosts use CredSSP. He configures constrained delegation for cifs and Microsoft Virtual System Migration Service between the hosts, switches both to Kerberos, and remote migrations now succeed.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Migration fails when started from a remote console: CredSSP is in use; either sign in to the source host or switch to Kerberos with constrained delegation. Moving only disks on the same host is storage migration.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which two services must be added to constrained delegation for Kerberos live migration?</summary><p>cifs and Microsoft Virtual System Migration Service.</p></details>
+<details class="sq"><summary>What limitation does CredSSP authentication impose?</summary><p>You must start the migration while signed in to the source host.</p></details>
+<details class="sq"><summary>How do you move a running VM's VHDX files to a new volume without moving the VM to another host?</summary><p>Use storage migration, for example Move-VMStorage.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../hyper-v-virtual-switches-external-internal-private-and-switch-embedded/">← Hyper-V virtual switches (external, internal, private) and S</a><a href="../hyper-v-replica-primary-and-replica-servers-replication-frequency-reco/">Hyper-V Replica: primary and replica servers, replication fr →</a></nav>
+</main>
+</body>
+</html>

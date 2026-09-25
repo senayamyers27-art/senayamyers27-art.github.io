@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Static Pods and /etc/kubernetes/manifests; kubeadm… · CKA Lesson</title>
+<meta name="description" content="A static Pod is a Pod the kubelet runs directly from a manifest file on disk, without the API server or scheduler being involved. The kubelet watches a dir">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Static Pods and /etc/kubernetes/manifests; kubeadm… · CKA Lesson">
+<meta property="og:description" content="A static Pod is a Pod the kubelet runs directly from a manifest file on disk, without the API server or scheduler being involved. The kubelet watches a dir">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/static-pods-and-etc-kubernetes-manifests-kubeadm-certificates-check-ex/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/static-pods-and-etc-kubernetes-manifests-kubeadm-certificates-check-ex/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 1: Cluster Architecture, Installation and Configuration</p>
+<h1>Static Pods and /etc/kubernetes/manifests; kubeadm certificates (check-expiration, renew) and kubeconfig files</h1>
+<article class="lbody">
+<p>A static Pod is a Pod the kubelet runs directly from a manifest file on disk, without the API server or scheduler being involved. The kubelet watches a directory, <code>/etc/kubernetes/manifests</code> on kubeadm clusters (set by <code>staticPodPath</code> in the kubelet config at <code>/var/lib/kubelet/config.yaml</code>). Put a Pod YAML file there and the kubelet starts it; delete the file and the kubelet stops it.</p>
+<p>kubeadm uses this to run the control plane itself: <code>etcd.yaml</code>, <code>kube-apiserver.yaml</code>, <code>kube-controller-manager.yaml</code> and <code>kube-scheduler.yaml</code> live in that directory. This solves a chicken-and-egg problem, because the API server cannot schedule itself. The kubelet also creates a read-only mirror Pod in the API so you can see static Pods with kubectl; their names end with the node name, like <code>kube-apiserver-cp1</code>. Deleting the mirror Pod with kubectl does nothing lasting, and editing it has no effect. To change a control plane component, edit the file on the node; the kubelet notices and recreates the Pod.</p>
+<p>kubeadm also builds a private PKI (public key infrastructure) under <code>/etc/kubernetes/pki</code>: the cluster CA, the API server serving certificate, the API server's client certificates for talking to the kubelet and etcd, the front-proxy CA, and a separate etcd CA under <code>pki/etcd</code>. Client certificates that kubeadm generates are valid for one year by default, while the CAs last much longer.</p>
+<p>Check expiry with <code>kubeadm certs check-expiration</code>. Renew with <code>kubeadm certs renew all</code> (or a single one, such as <code>kubeadm certs renew apiserver</code>). After renewing, the control plane static Pods must restart to load the new files; a common approach is to move the manifests out of the directory briefly (about 20 seconds, so the kubelet notices) and then back. Restarting the kubelet alone does not restart the running containers. kubeadm also renews certificates automatically during <code>kubeadm upgrade apply</code>, which is one reason clusters upgraded regularly rarely hit expiry.</p>
+<p>Kubeconfig files tie it together. A kubeconfig holds clusters (server URL and CA), users (credentials such as a client certificate) and contexts (a cluster plus a user plus an optional namespace). kubeadm writes <code>admin.conf</code>, <code>super-admin.conf</code> in recent versions, <code>controller-manager.conf</code>, <code>scheduler.conf</code> and <code>kubelet.conf</code> in <code>/etc/kubernetes</code>. Most of these embed client certificates, so they are also renewed by <code>kubeadm certs renew</code>; <code>kubelet.conf</code> is the exception, because it points to the kubelet's own client certificate, which the kubelet rotates automatically. Your own <code>~/.kube/config</code> is usually a copy of admin.conf, so after renewing you may need to copy it again.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Static Pod</dt><dd>A Pod managed directly by a kubelet from a file in its staticPodPath, not by the API server.</dd><dt>Mirror Pod</dt><dd>The read-only API object the kubelet creates so a static Pod is visible to kubectl.</dd><dt>kubeadm certs check-expiration</dt><dd>Lists each kubeadm-managed certificate and when it expires.</dd><dt>Kubeconfig context</dt><dd>A named combination of a cluster, a user and a default namespace.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A task asks you to run an nginx Pod on node01 that survives even if the API server is down. You SSH to node01, confirm <code>staticPodPath</code> in <code>/var/lib/kubelet/config.yaml</code>, write a Pod manifest into that directory, and <code>kubectl get pods</code> shows <code>nginx-node01</code> a few seconds later.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> To change a control plane flag, edit the manifest in /etc/kubernetes/manifests on that node, never the mirror Pod through kubectl. Keep a backup copy of the manifest outside that directory, because every YAML file inside it is treated as a Pod.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How do you find which directory a kubelet reads static Pods from?</summary><p>Look at <code>staticPodPath</code> in the kubelet config file, usually /var/lib/kubelet/config.yaml.</p></details>
+<details class="sq"><summary>What default lifetime do kubeadm-issued client certificates have, and how do you renew them?</summary><p>One year; run <code>kubeadm certs renew all</code> and restart the control plane components.</p></details>
+<details class="sq"><summary>What happens if you <code>kubectl delete</code> a static Pod's mirror Pod?</summary><p>The kubelet recreates the mirror Pod because the manifest file is still on disk.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../kubeadm-init-pod-network-cidr-control-plane-endpoint-installing-a-cni/">← kubeadm init (pod network CIDR, control-plane endpoint), ins</a><a href="../cluster-upgrades-with-kubeadm-one-minor-version-at-a-time-upgrade-plan/">Cluster upgrades with kubeadm: one minor version at a time,  →</a></nav>
+</main>
+</body>
+</html>

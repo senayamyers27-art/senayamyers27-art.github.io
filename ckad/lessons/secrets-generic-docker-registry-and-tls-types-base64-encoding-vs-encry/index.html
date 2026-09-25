@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Secrets: generic, docker-registry and tls types; base64… · CKAD Lesson</title>
+<meta name="description" content="A Secret holds sensitive data such as passwords, API tokens, TLS keys and registry credentials. It is used much like a ConfigMap, but Kubernetes treats it ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Secrets: generic, docker-registry and tls types; base64… · CKAD Lesson">
+<meta property="og:description" content="A Secret holds sensitive data such as passwords, API tokens, TLS keys and registry credentials. It is used much like a ConfigMap, but Kubernetes treats it ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/secrets-generic-docker-registry-and-tls-types-base64-encoding-vs-encry/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/secrets-generic-docker-registry-and-tls-types-base64-encoding-vs-encry/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 4: Application Environment, Configuration and Security</p>
+<h1>Secrets: generic, docker-registry and tls types; base64 encoding vs encryption; secretKeyRef and volume mounts</h1>
+<article class="lbody">
+<p>A Secret holds sensitive data such as passwords, API tokens, TLS keys and registry credentials. It is used much like a ConfigMap, but Kubernetes treats it more carefully: it can be restricted separately with RBAC, kubelets only receive Secrets for Pods scheduled on their node, and Secret volumes are stored in memory (tmpfs) on the node rather than on disk.</p>
+<p>kubectl creates three kinds. <code>kubectl create secret generic</code> makes an Opaque Secret from <code>--from-literal</code>, <code>--from-file</code> or <code>--from-env-file</code>, exactly as for ConfigMaps. <code>kubectl create secret docker-registry regcred --docker-server=... --docker-username=... --docker-password=...</code> makes a <code>kubernetes.io/dockerconfigjson</code> Secret used in a Pod's <code>imagePullSecrets</code> to pull from a private registry. <code>kubectl create secret tls web-tls --cert=tls.crt --key=tls.key</code> makes a <code>kubernetes.io/tls</code> Secret with the keys <code>tls.crt</code> and <code>tls.key</code>, which Ingresses reference for HTTPS.</p>
+<pre class="code" tabindex="0"><code>kubectl create secret generic db-cred --from-literal=username=app --from-literal=password='S3cure!pw'
+kubectl get secret db-cred -o jsonpath='{.data.password}' | base64 -d
+kubectl create secret tls web-tls --cert=tls.crt --key=tls.key</code></pre>
+<p>The single most important fact: values in a Secret's <code>data</code> field are base64-encoded, not encrypted. Base64 is a reversible encoding that lets binary data travel as text; anyone who can read the Secret can decode it with <code>base64 -d</code>. When writing YAML by hand, you either encode values yourself (<code>echo -n 'value' | base64</code>, where <code>-n</code> avoids encoding a trailing newline) or put plain text in <code>stringData</code>, which the API server encodes for you. Real protection comes from other layers: RBAC limiting who may get or list Secrets, encryption at rest configured by the cluster administrator so etcd stores Secrets encrypted, and keeping Secret manifests out of source control.</p>
+<p>Pods use Secrets the same three ways as ConfigMaps. <code>env</code> with <code>valueFrom.secretKeyRef</code> sets one variable; <code>envFrom</code> with <code>secretRef</code> imports all keys; a <code>secret</code> volume (note the <code>secretName</code> field) mounts each key as a file. Files are generally preferred over environment variables for sensitive values, because environment variables are easier to leak through logs, crash dumps or child processes, and mounted files update when the Secret changes.</p>
+<pre class="code" tabindex="0"><code>env:
+- name: DB_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: db-cred
+      key: password
+volumeMounts:
+- name: tls
+  mountPath: /etc/tls
+  readOnly: true
+# pod-level
+volumes:
+- name: tls
+  secret:
+    secretName: web-tls
+    defaultMode: 0400
+imagePullSecrets:
+- name: regcred</code></pre>
+<p>A missing Secret or key produces CreateContainerConfigError, visible in <code>kubectl describe pod</code>. Like ConfigMaps, Secrets are namespaced and must live in the Pod's namespace.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Opaque</dt><dd>Default Secret type for arbitrary user data, created with kubectl create secret generic.</dd><dt>kubernetes.io/dockerconfigjson</dt><dd>Secret type holding registry credentials, used via imagePullSecrets.</dd><dt>kubernetes.io/tls</dt><dd>Secret type holding tls.crt and tls.key for certificates.</dd><dt>Base64</dt><dd>Reversible text encoding used for Secret data; it provides no confidentiality.</dd><dt>secretKeyRef</dt><dd>Sets one environment variable from one key of a Secret.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A developer is asked to read the password in Secret <code>db-cred</code> and save it to a file. <code>kubectl get secret db-cred -o jsonpath='{.data.password}' | base64 -d &gt; /opt/pw.txt</code> decodes it in one step, which also shows why RBAC on Secrets matters: anyone with get permission can do the same.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Base64 is encoding, not encryption. Know the three create types (generic, docker-registry, tls) and that secret volumes use <code>secretName</code>.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Is data in a Secret encrypted by default?</summary><p>No, it is only base64-encoded in the API; encryption at rest must be configured by the administrator, and RBAC controls access.</p></details>
+<details class="sq"><summary>What keys does a tls Secret contain?</summary><p><code>tls.crt</code> and <code>tls.key</code>.</p></details>
+<details class="sq"><summary>How does a Pod use a docker-registry Secret?</summary><p>By listing it under <code>spec.imagePullSecrets</code> so the kubelet can authenticate to the registry.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../configmaps-create-from-literals-files-and-env-files-consume-as-env-env/">← ConfigMaps: create from literals, files and env files; consu</a><a href="../serviceaccounts-serviceaccountname-token-projection-automountserviceac/">ServiceAccounts: serviceAccountName, token projection, autom →</a></nav>
+</main>
+</body>
+</html>

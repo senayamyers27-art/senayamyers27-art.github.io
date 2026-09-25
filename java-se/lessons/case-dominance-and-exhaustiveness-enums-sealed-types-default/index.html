@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Case dominance and exhaustiveness (enums, sealed types… · OCP Java Lesson</title>
+<meta name="description" content="Two compiler checks make pattern-matching switches safe: dominance and exhaustiveness. Dominance makes sure every case can be reached.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Case dominance and exhaustiveness (enums, sealed types… · OCP Java Lesson">
+<meta property="og:description" content="Two compiler checks make pattern-matching switches safe: dominance and exhaustiveness. Dominance makes sure every case can be reached.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/java-se/lessons/case-dominance-and-exhaustiveness-enums-sealed-types-default/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/java-se/lessons/case-dominance-and-exhaustiveness-enums-sealed-types-default/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">OCP Java</a> / <a href="../">Lessons</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25) · Domain 2: Controlling program flow</p>
+<h1>Case dominance and exhaustiveness (enums, sealed types, default)</h1>
+<article class="lbody">
+<p>Two compiler checks make pattern-matching switches safe: dominance and exhaustiveness. Dominance makes sure every case can be reached. Exhaustiveness makes sure every possible value is handled. Both are compile-time errors, so exam questions usually ask whether a switch compiles.</p>
+<p>A case label is dominated when an earlier label matches every value it would match, so it could never run. The main rules are: a type pattern dominates a later pattern of the same type or a subtype (<code>case CharSequence cs</code> before <code>case String s</code> is an error); an unguarded pattern dominates a guarded pattern of the same type (<code>case Integer i</code> before <code>case Integer i when i &gt; 5</code> is an error); and a pattern dominates a later constant label of that type (<code>case Integer i</code> before <code>case 42</code> is an error). The fix is to order cases from most specific to most general. A guarded pattern does not dominate a later pattern, because the compiler cannot know whether the guard is true, but constant labels should still come before any pattern of their type, guarded or not.</p>
+<p><code>default</code> also takes part. In a switch that uses patterns, a pattern label after <code>default</code> is an error, since <code>default</code> would dominate it. The safe habit is to put <code>default</code> last. Also, a switch cannot have both a <code>default</code> and an unconditional pattern such as <code>case Object o</code> when the selector is <code>Object</code>, because both would match everything.</p>
+<p>Exhaustiveness is required for every switch expression and for any switch statement that uses patterns or <code>case null</code>. For an <code>enum</code> selector, listing every constant makes the switch exhaustive. For a sealed type, covering every permitted subtype makes it exhaustive, and no <code>default</code> is needed. Otherwise, add <code>default</code> or an unconditional pattern. A classic switch statement over an <code>int</code>, <code>String</code> or <code>enum</code> with only constant labels is still allowed to skip values.</p>
+<pre class="code" tabindex="0"><code>sealed interface Vehicle permits Car, Truck {}
+final class Car implements Vehicle {}
+final class Truck implements Vehicle {}
+
+int wheels(Vehicle v) {
+    return switch (v) {     // exhaustive without default
+        case Car c -&gt; 4;
+        case Truck t -&gt; 6;
+    };
+}
+
+// Does not compile: second case is dominated
+// switch (obj) { case Number n -&gt; 1; case Integer i -&gt; 2; default -&gt; 0; }</code></pre>
+<p>Relying on exhaustiveness instead of <code>default</code> is a design choice. If someone later adds a permitted subtype or a new enum constant, every switch that lacks <code>default</code> stops compiling, pointing to exactly the code that needs updating. If code compiled against the old version runs with a new subtype or constant it does not know about, the switch throws a <code>MatchException</code> at runtime (for sealed types; older enum switches used <code>IncompatibleClassChangeError</code>).</p>
+<p>When checking an answer, first ask: can any later case ever be reached? Then ask: is there a value no case handles? A switch must pass both questions to compile.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Dominance</dt><dd>A case is dominated when an earlier case matches every value it could match, which makes it unreachable and is a compile error.</dd><dt>Exhaustive switch</dt><dd>A switch whose cases cover every possible selector value, required for switch expressions and pattern switches.</dd><dt>Unconditional pattern</dt><dd>A pattern that matches every value of the selector's type, such as case Object o for an Object selector.</dd><dt>MatchException</dt><dd>The runtime exception an exhaustive switch throws if it meets a value its compiled cases do not cover, such as a newly added subtype.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A tax engine has a sealed interface <code>Income</code> with permitted records <code>Salary</code>, <code>Dividend</code> and <code>Rent</code>. Its switch expressions have no default. When the team adds <code>Royalty</code> to the permits list, the compiler flags every switch that needs a new case, so no tax rule is silently skipped.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Order pattern cases from specific to general: subtypes before supertypes, guarded before unguarded, constants before type patterns, default last.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why does <code>case Integer i -&gt; ...; case Integer i when i &gt; 0 -&gt; ...;</code> fail to compile?</summary><p>The unguarded Integer pattern matches every value the guarded one would, so the second case is dominated.</p></details>
+<details class="sq"><summary>Does a switch expression over a sealed interface need <code>default</code> if every permitted subtype has a case?</summary><p>No. Covering every permitted subtype makes it exhaustive.</p></details>
+<details class="sq"><summary>Does a classic switch statement over an enum with constant labels need to cover every constant?</summary><p>No. Only switch expressions and pattern switches must be exhaustive.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study OCP Java for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../java-se/">Open the OCP Java study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../pattern-matching-in-switch-type-patterns-record-patterns-and-when-guar/">← Pattern matching in switch: type patterns, record patterns a</a><a href="../while-do-while-for-and-enhanced-for-loops/">while, do-while, for and enhanced for loops →</a></nav>
+</main>
+</body>
+</html>

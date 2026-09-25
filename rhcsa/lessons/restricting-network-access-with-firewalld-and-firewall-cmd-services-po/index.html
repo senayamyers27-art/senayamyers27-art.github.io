@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Restricting network access with firewalld and… · RHCSA Lesson</title>
+<meta name="description" content="A host firewall decides which incoming network connections reach services on the machine. RHEL uses firewalld, a service that manages the kernel's packet f">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Restricting network access with firewalld and… · RHCSA Lesson">
+<meta property="og:description" content="A host firewall decides which incoming network connections reach services on the machine. RHEL uses firewalld, a service that manages the kernel's packet f">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/restricting-network-access-with-firewalld-and-firewall-cmd-services-po/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/restricting-network-access-with-firewalld-and-firewall-cmd-services-po/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 8: Manage basic networking</p>
+<h1>Restricting network access with firewalld and firewall-cmd (services, ports, zones, --permanent, --reload)</h1>
+<article class="lbody">
+<p>A host firewall decides which incoming network connections reach services on the machine. RHEL uses firewalld, a service that manages the kernel's packet filtering (nftables) for you. You describe what to allow in terms of zones, services and ports, and firewalld builds the low-level rules. <code>firewall-cmd</code> is the command-line client, and firewalld must be running for it to work (<code>systemctl enable --now firewalld</code>).</p>
+<p>A zone is a trust level with its own set of allowed services. Each network interface belongs to one zone, and the default zone, normally <code>public</code>, applies to interfaces not assigned elsewhere. The <code>public</code> zone allows little besides SSH, DHCPv6 client and, on RHEL, cockpit (the web console) traffic by default. Anything not allowed in the zone is rejected.</p>
+<p>A service is a named definition of ports and protocols, such as <code>http</code> (TCP 80), <code>https</code> (TCP 443), <code>nfs</code> or <code>ssh</code>. List them with <code>firewall-cmd --get-services</code>. When a program uses a port without a service definition, or a non-standard port, open the port itself with the form <code>port/protocol</code>, such as <code>8080/tcp</code>.</p>
+<pre class="code" tabindex="0"><code>firewall-cmd --get-default-zone
+firewall-cmd --list-all                   # rules in the default zone
+firewall-cmd --permanent --add-service=http
+firewall-cmd --permanent --add-port=8080/tcp
+firewall-cmd --permanent --remove-service=cockpit
+firewall-cmd --reload
+firewall-cmd --list-all</code></pre>
+<p>The key idea is runtime versus permanent. Without <code>--permanent</code>, a change affects the running firewall immediately but is lost at reload or reboot. With <code>--permanent</code>, the change is saved to configuration but does not apply until <code>firewall-cmd --reload</code>. The usual exam pattern is to add rules with <code>--permanent</code>, then reload. Alternatively, make runtime changes, test them, and save everything with <code>firewall-cmd --runtime-to-permanent</code>.</p>
+<p>Add <code>--zone=name</code> to work on a zone other than the default. <code>firewall-cmd --get-active-zones</code> shows which zones are in use and by which interfaces. Always finish by checking <code>firewall-cmd --list-all</code> after the reload, because that shows the runtime state, which after a reload equals the permanent state.</p>
+<p>Remember that the firewall is one of several gates. A client may still be blocked by the service not listening, by SELinux or by the service's own access settings. When a service works locally but not remotely, the firewall is the first thing to check.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>firewalld</dt><dd>The RHEL firewall service that manages packet filtering rules through zones, services and ports.</dd><dt>Zone</dt><dd>A named trust level holding allowed services and ports, applied to interfaces or source addresses.</dd><dt>--permanent</dt><dd>Saves a firewall-cmd change to configuration without applying it until a reload.</dd><dt>--reload</dt><dd>Reloads firewalld so the permanent configuration becomes the running configuration, discarding runtime-only changes.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A web server must accept HTTP and a management app on TCP 8443. You run firewall-cmd --permanent --add-service=http and --permanent --add-port=8443/tcp, then firewall-cmd --reload. --list-all shows services including http and ports 8443/tcp, and a browser on another machine can reach both.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> A --permanent change without --reload does nothing yet; a change without --permanent is gone after the next reload or reboot. The exam grader reboots, so permanent plus reload is the safe pattern.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What happens to a rule added without --permanent when firewalld reloads?</summary><p>It is lost, because reload replaces the runtime configuration with the permanent one.</p></details>
+<details class="sq"><summary>How do you open TCP port 8080 permanently in the default zone?</summary><p>firewall-cmd --permanent --add-port=8080/tcp, then firewall-cmd --reload.</p></details>
+<details class="sq"><summary>Which command shows the running rules for the default zone?</summary><p>firewall-cmd --list-all.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../configuring-network-services-to-start-automatically-at-boot/">← Configuring network services to start automatically at boot</a><a href="../using-nmtui-as-a-text-based-alternative-to-nmcli/">Using nmtui as a text-based alternative to nmcli →</a></nav>
+</main>
+</body>
+</html>

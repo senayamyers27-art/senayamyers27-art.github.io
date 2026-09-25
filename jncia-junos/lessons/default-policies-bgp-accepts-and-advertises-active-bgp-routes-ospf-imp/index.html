@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Default policies: BGP accepts and advertises active BGP… · JNCIA-Junos Lesson</title>
+<meta name="description" content="Every routing protocol in Junos has a built-in default policy. It is applied automatically at the end of any policy chain, so it decides what happens to a ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Default policies: BGP accepts and advertises active BGP… · JNCIA-Junos Lesson">
+<meta property="og:description" content="Every routing protocol in Junos has a built-in default policy. It is applied automatically at the end of any policy chain, so it decides what happens to a ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/jncia-junos/lessons/default-policies-bgp-accepts-and-advertises-active-bgp-routes-ospf-imp/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/jncia-junos/lessons/default-policies-bgp-accepts-and-advertises-active-bgp-routes-ospf-imp/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">JNCIA-Junos</a> / <a href="../">Lessons</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106 · Domain 7: Routing policy and firewall filters</p>
+<h1>Default policies: BGP accepts and advertises active BGP routes; OSPF import accepts all and export rejects all; RIP export rejects all</h1>
+<article class="lbody">
+<p>Every routing protocol in Junos has a built-in default policy. It is applied automatically at the end of any policy chain, so it decides what happens to a route that none of your configured policies explicitly accepts or rejects. If you do not configure any policy at all, the default policy is all that applies. Knowing each protocol's default explains a lot of behavior that surprises beginners.</p>
+<p>BGP's default import policy accepts all BGP routes received from neighbors, so they are placed in the routing table (subject to normal checks such as loop detection). BGP's default export policy advertises all active BGP routes to BGP neighbors. There is one important restriction from the protocol itself: routes learned from an IBGP peer are not advertised to other IBGP peers, which is why IBGP normally needs a full mesh or route reflectors. Notice what the default does not do: it does not advertise static, direct, OSPF or aggregate routes into BGP. To announce your own prefixes, you need an export policy.</p>
+<p>OSPF's default import policy accepts all OSPF routes. OSPF's default export policy rejects everything. That sounds alarming until you recall how OSPF works: routers share their own links and neighbors through LSAs, which are generated and flooded by the protocol itself, not by policy. So OSPF still exchanges all internal OSPF information normally; the export default only means that non-OSPF routes, such as statics or a default route, are not injected. When you want to advertise a static default route into OSPF, you write an export policy for it.</p>
+<p>RIP's default import policy accepts RIP routes from neighbors, but its default export policy rejects everything. Unlike OSPF, RIP learns and advertises routes through the routing table, so with the default export policy a Junos router running RIP receives routes but advertises nothing, not even its directly connected networks or routes it learned by RIP. To make RIP work you always need an export policy, typically one that accepts <code>from protocol [ rip direct ]</code>.</p>
+<pre class="code" tabindex="0"><code>set policy-options policy-statement RIP-OUT term 1 from protocol [ rip direct ]
+set policy-options policy-statement RIP-OUT term 1 then accept
+set protocols rip group NEIGHBORS export RIP-OUT
+set protocols rip group NEIGHBORS neighbor ge-0/0/1.0</code></pre>
+<p>Summarizing the defaults in one place: BGP accepts all received BGP routes and advertises active BGP routes; OSPF accepts all and exports nothing extra (while still flooding its own link-state information); RIP accepts received RIP routes and advertises nothing. When a protocol does not behave as you expect, the first question to ask is whether your policy chain ends by falling through to one of these defaults.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Default policy</dt><dd>The built-in, protocol-specific policy evaluated after all configured policies when none has made a final decision.</dd><dt>BGP default export</dt><dd>Advertises active BGP routes to BGP peers, except that IBGP-learned routes are not sent to other IBGP peers.</dd><dt>OSPF default export</dt><dd>Rejects all routes; OSPF's own link-state information is still flooded by the protocol itself.</dd><dt>RIP default export</dt><dd>Rejects all routes, so a RIP router advertises nothing until an export policy is configured.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An engineer enables RIP on two lab routers and sees routes arriving on neither. <code>show route protocol rip</code> is empty on both. Because RIP's default export policy rejects everything, neither router is advertising. Adding an export policy that accepts RIP and direct routes on each router makes the routes appear within seconds.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> The RIP trap is common: RIP needs an export policy even to advertise its own connected networks. For OSPF, 'export rejects all' does not stop normal OSPF operation; it only stops redistribution of other routes.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Without any policy, will a Junos BGP router advertise its static routes to peers?</summary><p>No. The default BGP export advertises only active BGP routes; static routes need an export policy.</p></details>
+<details class="sq"><summary>Why does OSPF still work with a default export policy that rejects all routes?</summary><p>OSPF shares its topology through LSAs flooded by the protocol, not through export policy.</p></details>
+<details class="sq"><summary>What must you add for a Junos router to advertise anything via RIP?</summary><p>An export policy under the RIP group, for example accepting <code>from protocol [ rip direct ]</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study JNCIA-Junos for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../jncia-junos/">Open the JNCIA-Junos study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../routing-policy-uses-import-into-the-routing-table-and-export-out-of-th/">← Routing policy uses: import (into the routing table) and exp</a><a href="../policy-structure-terms-from-match-conditions-then-actions-terminating/">Policy structure: terms, `from` match conditions, `then` act →</a></nav>
+</main>
+</body>
+</html>

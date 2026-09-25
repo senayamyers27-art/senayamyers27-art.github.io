@@ -1,0 +1,421 @@
+/* Teaching diagrams attached to lessons by exact topic text. Checked by tools/check-data.js. */
+// Teaching diagrams (generated). Colors come from the site's CSS classes.
+CertHub.addDiagrams([
+  {
+    "id": "osi-tcpip-models",
+    "title": "OSI and TCP/IP models with example protocols",
+    "alt": "Two stacked models side by side. The seven OSI layers, from 7 Application down to 1 Physical, sit next to the four TCP/IP layers: Application covers OSI layers 7 to 5, Transport matches layer 4, Internet matches layer 3, and Link covers layers 2 and 1. Examples: HTTP, DNS, SSH and TLS at the top layers (data), TCP and UDP at Transport (segments or datagrams), IP and ICMP at Network (packets), Ethernet and Wi-Fi at Data link (frames), and cables or radio at Physical (bits).",
+    "topics": {
+      "isc2-cc": [
+        "OSI and TCP/IP models, IP addressing, common ports (22, 25, 53, 80, 443, 3389)"
+      ],
+      "security-plus": [
+        "OSI layers and where attacks happen"
+      ],
+      "sscp": [
+        "OSI and TCP/IP models, common ports and protocols, IPv4/IPv6"
+      ],
+      "cissp": [
+        "OSI and TCP/IP models and where controls apply"
+      ],
+      "ccst-networking": [
+        "The TCP/IP and OSI models: layer names, what each layer does and where devices and protocols fit"
+      ],
+      "network-plus": [
+        "OSI model layers and the data unit at each layer"
+      ],
+      "jncia-junos": [
+        "OSI and TCP/IP models; TCP vs UDP; well-known ports"
+      ]
+    },
+    "svg": "<svg viewBox=\"0 0 360 300\" xmlns=\"http://www.w3.org/2000/svg\"><defs><marker id=\"ah-osi-tcpip-models\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\"><path class=\"arrow\" d=\"M0,0L10,5L0,10z\"/></marker></defs><text class=\"t b\" x=\"70\" y=\"20\" font-size=\"12\" text-anchor=\"middle\">OSI</text><text class=\"t b\" x=\"183\" y=\"20\" font-size=\"12\" text-anchor=\"middle\">TCP/IP</text><text class=\"t b\" x=\"293\" y=\"20\" font-size=\"12\" text-anchor=\"middle\">Examples · PDU</text><rect class=\"box\" x=\"10\" y=\"30\" width=\"120\" height=\"34\" rx=\"6\"/><text class=\"t\" x=\"20\" y=\"51\" font-size=\"12\" text-anchor=\"start\">7 Application</text><rect class=\"box\" x=\"10\" y=\"68\" width=\"120\" height=\"34\" rx=\"6\"/><text class=\"t\" x=\"20\" y=\"89\" font-size=\"12\" text-anchor=\"start\">6 Presentation</text><rect class=\"box\" x=\"10\" y=\"106\" width=\"120\" height=\"34\" rx=\"6\"/><text class=\"t\" x=\"20\" y=\"127\" font-size=\"12\" text-anchor=\"start\">5 Session</text><rect class=\"box\" x=\"10\" y=\"144\" width=\"120\" height=\"34\" rx=\"6\"/><text class=\"t\" x=\"20\" y=\"165\" font-size=\"12\" text-anchor=\"start\">4 Transport</text><rect class=\"box\" x=\"10\" y=\"182\" width=\"120\" height=\"34\" rx=\"6\"/><text class=\"t\" x=\"20\" y=\"203\" font-size=\"12\" text-anchor=\"start\">3 Network</text><rect class=\"box\" x=\"10\" y=\"220\" width=\"120\" height=\"34\" rx=\"6\"/><text class=\"t\" x=\"20\" y=\"241\" font-size=\"12\" text-anchor=\"start\">2 Data link</text><rect class=\"box\" x=\"10\" y=\"258\" width=\"120\" height=\"34\" rx=\"6\"/><text class=\"t\" x=\"20\" y=\"279\" font-size=\"12\" text-anchor=\"start\">1 Physical</text><rect class=\"box hi\" x=\"138\" y=\"30\" width=\"90\" height=\"110\" rx=\"6\"/><text class=\"t\" x=\"183\" y=\"89\" font-size=\"12\" text-anchor=\"middle\">Application</text><rect class=\"box hi\" x=\"138\" y=\"144\" width=\"90\" height=\"34\" rx=\"6\"/><text class=\"t\" x=\"183\" y=\"165\" font-size=\"12\" text-anchor=\"middle\">Transport</text><rect class=\"box hi\" x=\"138\" y=\"182\" width=\"90\" height=\"34\" rx=\"6\"/><text class=\"t\" x=\"183\" y=\"203\" font-size=\"12\" text-anchor=\"middle\">Internet</text><rect class=\"box hi\" x=\"138\" y=\"220\" width=\"90\" height=\"72\" rx=\"6\"/><text class=\"t\" x=\"183\" y=\"260\" font-size=\"12\" text-anchor=\"middle\">Link</text><rect class=\"box\" x=\"236\" y=\"30\" width=\"116\" height=\"110\" rx=\"6\"/><text class=\"t\" x=\"294\" y=\"83\" font-size=\"11\" text-anchor=\"middle\">HTTP DNS SSH TLS</text><text class=\"t s\" x=\"294\" y=\"97\" font-size=\"11\" text-anchor=\"middle\">data</text><rect class=\"box\" x=\"236\" y=\"144\" width=\"116\" height=\"34\" rx=\"6\"/><text class=\"t\" x=\"294\" y=\"159\" font-size=\"11\" text-anchor=\"middle\">TCP UDP</text><text class=\"t s\" x=\"294\" y=\"173\" font-size=\"11\" text-anchor=\"middle\">segment / datagram</text><rect class=\"box\" x=\"236\" y=\"182\" width=\"116\" height=\"34\" rx=\"6\"/><text class=\"t\" x=\"294\" y=\"197\" font-size=\"11\" text-anchor=\"middle\">IP ICMP</text><text class=\"t s\" x=\"294\" y=\"211\" font-size=\"11\" text-anchor=\"middle\">packet</text><rect class=\"box\" x=\"236\" y=\"220\" width=\"116\" height=\"34\" rx=\"6\"/><text class=\"t\" x=\"294\" y=\"235\" font-size=\"11\" text-anchor=\"middle\">Ethernet 802.11</text><text class=\"t s\" x=\"294\" y=\"249\" font-size=\"11\" text-anchor=\"middle\">frame</text><rect class=\"box\" x=\"236\" y=\"258\" width=\"116\" height=\"34\" rx=\"6\"/><text class=\"t\" x=\"294\" y=\"273\" font-size=\"11\" text-anchor=\"middle\">Cable, fiber, radio</text><text class=\"t s\" x=\"294\" y=\"287\" font-size=\"11\" text-anchor=\"middle\">bits</text></svg>"
+  },
+  {
+    "id": "tcp-handshake",
+    "title": "TCP three-way handshake and FIN teardown",
+    "alt": "A client and a server exchange TCP segments over time, shown top to bottom. Opening: the client sends SYN with sequence number x, the server replies SYN-ACK with its own sequence y and acknowledgment x+1, and the client sends ACK y+1, after which the connection is established and data flows. Closing: the client sends FIN, the server ACKs it, the server sends its own FIN, and the client ACKs it and waits in TIME_WAIT.",
+    "topics": {
+      "ccst-networking": [
+        "TCP vs UDP: connection-oriented vs connectionless, the three-way handshake, when each is used"
+      ],
+      "jncia-junos": [
+        "OSI and TCP/IP models; TCP vs UDP; well-known ports"
+      ],
+      "a-plus-core1": [
+        "TCP vs UDP and common ports: FTP 20/21, SSH 22, Telnet 23, SMTP 25, DNS 53, DHCP 67/68, HTTP 80, POP3 110, IMAP 143, SNMP 161/162, LDAP 389, HTTPS 443, SMB 445, RDP 3389"
+      ],
+      "network-plus": [
+        "Protocol types (TCP, UDP, ICMP, GRE, IPsec) and traffic types (unicast, multicast, anycast, broadcast)"
+      ],
+      "sscp": [
+        "Network attacks: ARP poisoning, DNS poisoning, DoS/DDoS, SYN flood, on-path, spoofing"
+      ]
+    },
+    "svg": "<svg viewBox=\"0 0 360 332\" xmlns=\"http://www.w3.org/2000/svg\"><defs><marker id=\"ah-tcp-handshake\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\"><path class=\"arrow\" d=\"M0,0L10,5L0,10z\"/></marker></defs><rect class=\"box\" x=\"20\" y=\"8\" width=\"80\" height=\"28\" rx=\"6\"/><text class=\"t b\" x=\"60\" y=\"26\" font-size=\"12\" text-anchor=\"middle\">Client</text><rect class=\"box\" x=\"260\" y=\"8\" width=\"80\" height=\"28\" rx=\"6\"/><text class=\"t b\" x=\"300\" y=\"26\" font-size=\"12\" text-anchor=\"middle\">Server</text><line class=\"ln mute\" x1=\"60\" y1=\"36\" x2=\"60\" y2=\"312\"/><line class=\"ln mute\" x1=\"300\" y1=\"36\" x2=\"300\" y2=\"312\"/><line class=\"ln\" x1=\"60\" y1=\"60\" x2=\"298\" y2=\"74\" marker-end=\"url(#ah-tcp-handshake)\"/><text class=\"t\" x=\"180\" y=\"54\" font-size=\"12\" text-anchor=\"middle\">SYN  seq=x</text><line class=\"ln\" x1=\"300\" y1=\"96\" x2=\"62\" y2=\"110\" marker-end=\"url(#ah-tcp-handshake)\"/><text class=\"t\" x=\"180\" y=\"90\" font-size=\"12\" text-anchor=\"middle\">SYN-ACK  seq=y  ack=x+1</text><line class=\"ln\" x1=\"60\" y1=\"132\" x2=\"298\" y2=\"146\" marker-end=\"url(#ah-tcp-handshake)\"/><text class=\"t\" x=\"180\" y=\"126\" font-size=\"12\" text-anchor=\"middle\">ACK  ack=y+1</text><rect class=\"box hi\" x=\"70\" y=\"160\" width=\"220\" height=\"24\" rx=\"6\"/><text class=\"t\" x=\"180\" y=\"176\" font-size=\"11\" text-anchor=\"middle\">Established · data flows</text><line class=\"ln\" x1=\"60\" y1=\"204\" x2=\"298\" y2=\"218\" marker-end=\"url(#ah-tcp-handshake)\"/><text class=\"t\" x=\"180\" y=\"198\" font-size=\"12\" text-anchor=\"middle\">FIN</text><line class=\"ln\" x1=\"300\" y1=\"234\" x2=\"62\" y2=\"248\" marker-end=\"url(#ah-tcp-handshake)\"/><text class=\"t\" x=\"180\" y=\"228\" font-size=\"12\" text-anchor=\"middle\">ACK</text><line class=\"ln\" x1=\"300\" y1=\"264\" x2=\"62\" y2=\"278\" marker-end=\"url(#ah-tcp-handshake)\"/><text class=\"t\" x=\"180\" y=\"258\" font-size=\"12\" text-anchor=\"middle\">FIN</text><line class=\"ln\" x1=\"60\" y1=\"294\" x2=\"298\" y2=\"308\" marker-end=\"url(#ah-tcp-handshake)\"/><text class=\"t\" x=\"180\" y=\"288\" font-size=\"12\" text-anchor=\"middle\">ACK</text><text class=\"t s\" x=\"8\" y=\"100\" font-size=\"11\" text-anchor=\"start\">open</text><text class=\"t s\" x=\"8\" y=\"250\" font-size=\"11\" text-anchor=\"start\">close</text><text class=\"t s\" x=\"60\" y=\"326\" font-size=\"11\" text-anchor=\"middle\">TIME_WAIT</text></svg>"
+  },
+  {
+    "id": "tls13-handshake",
+    "title": "TLS 1.3 handshake (simplified)",
+    "alt": "A client and server complete a TLS 1.3 handshake in one round trip. The client sends ClientHello with supported cipher suites and a key share. The server answers with ServerHello and its key share; both sides now derive the same session keys with ECDHE, so the server's Certificate, CertificateVerify and Finished messages are already encrypted. The client checks the certificate and sends its own Finished, then application data flows encrypted with symmetric keys.",
+    "topics": {
+      "security-plus": [
+        "VPN, IPsec, TLS, SD-WAN, SASE, jump servers, proxies",
+        "Secure vs insecure protocols: SSH/Telnet, SFTP/FTP, LDAPS/LDAP, HTTPS/HTTP, SNMPv3"
+      ],
+      "sscp": [
+        "Secure protocols: TLS, SSH, IPsec, S/MIME, SFTP"
+      ],
+      "cissp": [
+        "IPv4/IPv6, secure protocols (TLS, IPsec, SSH, SNMPv3) and their uses"
+      ],
+      "aws-developer": [
+        "Encryption in transit: TLS, ACM certificates (us-east-1 for CloudFront), enforcing aws:SecureTransport"
+      ],
+      "linux-plus": [
+        "Cryptography: hashing (sha256sum), GPG signatures, TLS certificates, LUKS disk encryption"
+      ]
+    },
+    "svg": "<svg viewBox=\"0 0 360 356\" xmlns=\"http://www.w3.org/2000/svg\"><defs><marker id=\"ah-tls13-handshake\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\"><path class=\"arrow\" d=\"M0,0L10,5L0,10z\"/></marker></defs><rect class=\"box\" x=\"20\" y=\"8\" width=\"80\" height=\"28\" rx=\"6\"/><text class=\"t b\" x=\"60\" y=\"26\" font-size=\"12\" text-anchor=\"middle\">Client</text><rect class=\"box\" x=\"260\" y=\"8\" width=\"80\" height=\"28\" rx=\"6\"/><text class=\"t b\" x=\"300\" y=\"26\" font-size=\"12\" text-anchor=\"middle\">Server</text><line class=\"ln mute\" x1=\"60\" y1=\"36\" x2=\"60\" y2=\"306\"/><line class=\"ln mute\" x1=\"300\" y1=\"36\" x2=\"300\" y2=\"306\"/><line class=\"ln\" x1=\"60\" y1=\"66\" x2=\"298\" y2=\"80\" marker-end=\"url(#ah-tls13-handshake)\"/><text class=\"t\" x=\"180\" y=\"60\" font-size=\"12\" text-anchor=\"middle\">ClientHello</text><text class=\"t s\" x=\"180\" y=\"98\" font-size=\"11\" text-anchor=\"middle\">cipher suites + key share</text><line class=\"ln\" x1=\"300\" y1=\"128\" x2=\"62\" y2=\"142\" marker-end=\"url(#ah-tls13-handshake)\"/><text class=\"t\" x=\"180\" y=\"122\" font-size=\"12\" text-anchor=\"middle\">ServerHello + key share</text><rect class=\"box hi\" x=\"70\" y=\"154\" width=\"220\" height=\"24\" rx=\"6\"/><text class=\"t\" x=\"180\" y=\"170\" font-size=\"11\" text-anchor=\"middle\">Both derive keys (ECDHE)</text><line class=\"acc-ln\" x1=\"300\" y1=\"206\" x2=\"62\" y2=\"220\" marker-end=\"url(#ah-tls13-handshake)\"/><text class=\"t\" x=\"180\" y=\"200\" font-size=\"11\" text-anchor=\"middle\">Certificate, Verify, Finished</text><line class=\"acc-ln\" x1=\"60\" y1=\"250\" x2=\"298\" y2=\"264\" marker-end=\"url(#ah-tls13-handshake)\"/><text class=\"t\" x=\"180\" y=\"244\" font-size=\"11\" text-anchor=\"middle\">Finished</text><line class=\"acc-ln\" x1=\"62\" y1=\"294\" x2=\"298\" y2=\"294\" marker-end=\"url(#ah-tls13-handshake)\" marker-start=\"url(#ah-tls13-handshake)\"/><text class=\"t\" x=\"180\" y=\"286\" font-size=\"11\" text-anchor=\"middle\">Application data (symmetric)</text><text class=\"t s\" x=\"180\" y=\"324\" font-size=\"11\" text-anchor=\"middle\">1 round trip before data</text><line class=\"acc-ln\" x1=\"110\" y1=\"344\" x2=\"134\" y2=\"344\"/><text class=\"t s\" x=\"140\" y=\"348\" font-size=\"11\" text-anchor=\"start\">= encrypted</text></svg>"
+  },
+  {
+    "id": "pki-certificate-chain",
+    "title": "Certificate chain of trust and browser validation",
+    "alt": "Three certificates form a chain. The root CA is self-signed and already sits in the browser's trust store; it signs the intermediate CA, which signs the leaf certificate for www.example.com. The server sends the leaf and intermediate. The browser checks that each signature verifies up to a trusted root, that the dates are valid, that the name matches the SAN, and that nothing is revoked (CRL or OCSP).",
+    "topics": {
+      "security-plus": [
+        "Certificates: CA, CSR, root of trust, self-signed, wildcard, SAN",
+        "Revocation: CRL vs OCSP, OCSP stapling"
+      ],
+      "sscp": [
+        "PKI: CAs, certificates, CSRs, chain of trust, CRL and OCSP"
+      ],
+      "cissp": [
+        "Cryptographic solutions: symmetric, asymmetric, hashing, PKI, key management lifecycle"
+      ],
+      "network-plus": [
+        "Logical security: encryption in transit and at rest, PKI and certificates, IAM, AAA, MFA, SSO, RADIUS, TACACS+, LDAP, SAML"
+      ],
+      "a-plus-core2": [
+        "Browser security issues: random pop-ups, certificate warnings, redirection, degraded browser performance"
+      ],
+      "palo-alto-ngfw": [
+        "Certificate management: CAs, forward trust/untrust, SSL inbound inspection, SSL/TLS service profiles, certificate profiles, OCSP/CRL"
+      ],
+      "fortinet-fortigate": [
+        "SSL/SSH inspection: certificate inspection vs deep inspection, CA trust, exemptions, certificate pinning, untrusted certificate handling"
+      ]
+    },
+    "svg": "<svg viewBox=\"0 0 360 298\" xmlns=\"http://www.w3.org/2000/svg\"><defs><marker id=\"ah-pki-certificate-chain\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\"><path class=\"arrow\" d=\"M0,0L10,5L0,10z\"/></marker></defs><rect class=\"box hi\" x=\"10\" y=\"14\" width=\"170\" height=\"52\" rx=\"6\"/><text class=\"t b\" x=\"95\" y=\"30\" font-size=\"12\" text-anchor=\"middle\">Root CA</text><text class=\"t s\" x=\"95\" y=\"44\" font-size=\"11\" text-anchor=\"middle\">self-signed</text><text class=\"t s\" x=\"95\" y=\"58\" font-size=\"11\" text-anchor=\"middle\">in trust store</text><rect class=\"box\" x=\"10\" y=\"110\" width=\"170\" height=\"44\" rx=\"6\"/><text class=\"t b\" x=\"95\" y=\"129\" font-size=\"12\" text-anchor=\"middle\">Intermediate CA</text><text class=\"t s\" x=\"95\" y=\"143\" font-size=\"11\" text-anchor=\"middle\">signed by root</text><rect class=\"box\" x=\"10\" y=\"198\" width=\"170\" height=\"44\" rx=\"6\"/><text class=\"t b\" x=\"95\" y=\"217\" font-size=\"12\" text-anchor=\"middle\">www.example.com</text><text class=\"t s\" x=\"95\" y=\"231\" font-size=\"11\" text-anchor=\"middle\">leaf, signed by intermediate</text><line class=\"ln\" x1=\"95\" y1=\"66\" x2=\"95\" y2=\"108\" marker-end=\"url(#ah-pki-certificate-chain)\"/><text class=\"t s\" x=\"102\" y=\"92\" font-size=\"11\" text-anchor=\"start\">signs</text><line class=\"ln\" x1=\"95\" y1=\"154\" x2=\"95\" y2=\"196\" marker-end=\"url(#ah-pki-certificate-chain)\"/><text class=\"t s\" x=\"102\" y=\"180\" font-size=\"11\" text-anchor=\"start\">signs</text><text class=\"t b\" x=\"270\" y=\"26\" font-size=\"12\" text-anchor=\"middle\">Browser checks</text><circle class=\"acc\" cx=\"202\" cy=\"46\" r=\"4\"/><text class=\"t\" x=\"212\" y=\"50\" font-size=\"12\" text-anchor=\"start\">Chain ends at a</text><text class=\"t s\" x=\"212\" y=\"64\" font-size=\"12\" text-anchor=\"start\">trusted root</text><circle class=\"acc\" cx=\"202\" cy=\"88\" r=\"4\"/><text class=\"t\" x=\"212\" y=\"92\" font-size=\"12\" text-anchor=\"start\">Each signature</text><text class=\"t s\" x=\"212\" y=\"106\" font-size=\"12\" text-anchor=\"start\">verifies</text><circle class=\"acc\" cx=\"202\" cy=\"130\" r=\"4\"/><text class=\"t\" x=\"212\" y=\"134\" font-size=\"12\" text-anchor=\"start\">Dates valid</text><circle class=\"acc\" cx=\"202\" cy=\"158\" r=\"4\"/><text class=\"t\" x=\"212\" y=\"162\" font-size=\"12\" text-anchor=\"start\">Name matches SAN</text><circle class=\"acc\" cx=\"202\" cy=\"186\" r=\"4\"/><text class=\"t\" x=\"212\" y=\"190\" font-size=\"12\" text-anchor=\"start\">Not revoked</text><text class=\"t s\" x=\"212\" y=\"204\" font-size=\"12\" text-anchor=\"start\">(CRL / OCSP)</text><text class=\"t s\" x=\"180\" y=\"272\" font-size=\"11\" text-anchor=\"middle\">Server sends leaf + intermediate;</text><text class=\"t s\" x=\"180\" y=\"288\" font-size=\"11\" text-anchor=\"middle\">root is already in the browser</text></svg>"
+  },
+  {
+    "id": "subnet-24-into-26",
+    "title": "Subnetting a /24 into four /26 networks",
+    "alt": "The network 192.168.1.0/24 has 256 addresses. Borrowing two host bits gives four /26 subnets with mask 255.255.255.192, each holding 64 addresses and 62 usable hosts. Subnet 192.168.1.0 uses hosts .1 to .62 with broadcast .63; 192.168.1.64 uses .65 to .126 with broadcast .127; 192.168.1.128 uses .129 to .190 with broadcast .191; 192.168.1.192 uses .193 to .254 with broadcast .255.",
+    "topics": {
+      "ccst-networking": [
+        "IPv4 format: dotted decimal, subnet masks and slash (CIDR) notation",
+        "Network address, broadcast address, usable host range and host count for common masks",
+        "Using a subnet calculator and checking whether two hosts are on the same subnet"
+      ],
+      "network-plus": [
+        "IPv4 addressing: public vs private (RFC 1918), APIPA, loopback, classes, subnetting and VLSM, CIDR"
+      ],
+      "ccna": [
+        "IPv4 addressing and subnetting, including VLSM and private (RFC 1918) ranges"
+      ],
+      "jncia-junos": [
+        "IPv4 addressing: classes, private ranges, subnet masks, CIDR prefixes and subnetting math"
+      ]
+    },
+    "svg": "<svg viewBox=\"0 0 360 288\" xmlns=\"http://www.w3.org/2000/svg\"><defs><marker id=\"ah-subnet-24-into-26\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\"><path class=\"arrow\" d=\"M0,0L10,5L0,10z\"/></marker></defs><rect class=\"box hi\" x=\"10\" y=\"10\" width=\"340\" height=\"30\" rx=\"6\"/><text class=\"t b\" x=\"180\" y=\"30\" font-size=\"12\" text-anchor=\"middle\">192.168.1.0/24 · 256 addresses</text><rect class=\"box\" x=\"10\" y=\"48\" width=\"85\" height=\"26\" rx=\"6\"/><text class=\"t\" x=\"52\" y=\"66\" font-size=\"12\" text-anchor=\"middle\">/26</text><rect class=\"box\" x=\"95\" y=\"48\" width=\"85\" height=\"26\" rx=\"6\"/><text class=\"t\" x=\"137\" y=\"66\" font-size=\"12\" text-anchor=\"middle\">/26</text><rect class=\"box\" x=\"180\" y=\"48\" width=\"85\" height=\"26\" rx=\"6\"/><text class=\"t\" x=\"222\" y=\"66\" font-size=\"12\" text-anchor=\"middle\">/26</text><rect class=\"box\" x=\"265\" y=\"48\" width=\"85\" height=\"26\" rx=\"6\"/><text class=\"t\" x=\"307\" y=\"66\" font-size=\"12\" text-anchor=\"middle\">/26</text><text class=\"t s\" x=\"180\" y=\"94\" font-size=\"11\" text-anchor=\"middle\">mask 255.255.255.192 · 62 hosts each</text><text class=\"t b\" x=\"14\" y=\"120\" font-size=\"12\" text-anchor=\"start\">Network</text><text class=\"t b\" x=\"196\" y=\"120\" font-size=\"12\" text-anchor=\"middle\">Hosts</text><text class=\"t b\" x=\"310\" y=\"120\" font-size=\"12\" text-anchor=\"middle\">Broadcast</text><rect class=\"box\" x=\"10\" y=\"130\" width=\"340\" height=\"28\" rx=\"6\"/><text class=\"t\" x=\"18\" y=\"149\" font-size=\"12\" text-anchor=\"start\">192.168.1.0</text><text class=\"t\" x=\"196\" y=\"149\" font-size=\"12\" text-anchor=\"middle\">.1 – .62</text><text class=\"t\" x=\"310\" y=\"149\" font-size=\"12\" text-anchor=\"middle\">.63</text><rect class=\"box\" x=\"10\" y=\"164\" width=\"340\" height=\"28\" rx=\"6\"/><text class=\"t\" x=\"18\" y=\"183\" font-size=\"12\" text-anchor=\"start\">192.168.1.64</text><text class=\"t\" x=\"196\" y=\"183\" font-size=\"12\" text-anchor=\"middle\">.65 – .126</text><text class=\"t\" x=\"310\" y=\"183\" font-size=\"12\" text-anchor=\"middle\">.127</text><rect class=\"box\" x=\"10\" y=\"198\" width=\"340\" height=\"28\" rx=\"6\"/><text class=\"t\" x=\"18\" y=\"217\" font-size=\"12\" text-anchor=\"start\">192.168.1.128</text><text class=\"t\" x=\"196\" y=\"217\" font-size=\"12\" text-anchor=\"middle\">.129 – .190</text><text class=\"t\" x=\"310\" y=\"217\" font-size=\"12\" text-anchor=\"middle\">.191</text><rect class=\"box\" x=\"10\" y=\"232\" width=\"340\" height=\"28\" rx=\"6\"/><text class=\"t\" x=\"18\" y=\"251\" font-size=\"12\" text-anchor=\"start\">192.168.1.192</text><text class=\"t\" x=\"196\" y=\"251\" font-size=\"12\" text-anchor=\"middle\">.193 – .254</text><text class=\"t\" x=\"310\" y=\"251\" font-size=\"12\" text-anchor=\"middle\">.255</text><text class=\"t s\" x=\"180\" y=\"278\" font-size=\"11\" text-anchor=\"middle\">Block size 64: networks at .0 .64 .128 .192</text></svg>"
+  },
+  {
+    "id": "vlan-8021q-trunk",
+    "title": "VLANs across two switches with an 802.1Q trunk",
+    "alt": "Two switches each have access ports in VLAN 10 and VLAN 20, carrying untagged frames to hosts. A single trunk link between the switches carries both VLANs; each frame on the trunk gets a 4-byte 802.1Q tag inserted after the source MAC, holding a VLAN ID from 1 to 4094. Frames in the native VLAN cross the trunk untagged.",
+    "topics": {
+      "network-plus": [
+        "VLANs, VLAN database, SVIs, 802.1Q trunking, native and voice VLANs",
+        "Attacks: DoS/DDoS, VLAN hopping, MAC flooding, ARP and DNS poisoning/spoofing, rogue DHCP and APs, evil twin, on-path"
+      ],
+      "ccna": [
+        "VLANs (normal range) across multiple switches: access ports, data and voice VLANs, default VLAN",
+        "802.1Q trunking: native VLAN, allowed VLAN lists, DTP modes"
+      ],
+      "ccnp-encor": [
+        "Layer 2: static and dynamic 802.1Q trunking (DTP), allowed VLANs and native VLAN"
+      ],
+      "ccst-networking": [
+        "VLANs: separating broadcast domains on one switch; access vs trunk ports"
+      ],
+      "cwna": [
+        "SSID and VLAN design, 802.1Q trunks to APs, SSID overhead"
+      ],
+      "palo-alto-ngfw": [
+        "Interface types: Layer 3, Layer 2, virtual wire, tap, loopback, tunnel, VLAN and aggregate Ethernet (LACP); subinterfaces and 802.1Q tags"
+      ],
+      "server-plus": [
+        "Network services: static vs DHCP addressing, DNS, NTP, NIC teaming/bonding, VLAN tagging, firewall ports, IPv4 and IPv6"
+      ],
+      "isc2-cc": [
+        "Network design: segmentation, VLANs, DMZ, micro-segmentation, defense in depth"
+      ]
+    },
+    "svg": "<svg viewBox=\"0 0 360 272\" xmlns=\"http://www.w3.org/2000/svg\"><defs><marker id=\"ah-vlan-8021q-trunk\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\"><path class=\"arrow\" d=\"M0,0L10,5L0,10z\"/></marker></defs><rect class=\"box hi\" x=\"14\" y=\"14\" width=\"60\" height=\"28\" rx=\"6\"/><text class=\"t\" x=\"44\" y=\"32\" font-size=\"11\" text-anchor=\"middle\">VLAN 10</text><rect class=\"box\" x=\"86\" y=\"14\" width=\"60\" height=\"28\" rx=\"6\"/><text class=\"t\" x=\"116\" y=\"32\" font-size=\"11\" text-anchor=\"middle\">VLAN 20</text><rect class=\"box hi\" x=\"214\" y=\"14\" width=\"60\" height=\"28\" rx=\"6\"/><text class=\"t\" x=\"244\" y=\"32\" font-size=\"11\" text-anchor=\"middle\">VLAN 10</text><rect class=\"box\" x=\"286\" y=\"14\" width=\"60\" height=\"28\" rx=\"6\"/><text class=\"t\" x=\"316\" y=\"32\" font-size=\"11\" text-anchor=\"middle\">VLAN 20</text><line class=\"ln\" x1=\"44\" y1=\"42\" x2=\"44\" y2=\"92\"/><line class=\"ln\" x1=\"116\" y1=\"42\" x2=\"116\" y2=\"92\"/><line class=\"ln\" x1=\"244\" y1=\"42\" x2=\"244\" y2=\"92\"/><line class=\"ln\" x1=\"316\" y1=\"42\" x2=\"316\" y2=\"92\"/><text class=\"t s\" x=\"80\" y=\"72\" font-size=\"11\" text-anchor=\"middle\">access</text><text class=\"t s\" x=\"280\" y=\"72\" font-size=\"11\" text-anchor=\"middle\">access</text><rect class=\"box\" x=\"14\" y=\"92\" width=\"132\" height=\"40\" rx=\"6\"/><text class=\"t b\" x=\"80\" y=\"116\" font-size=\"12\" text-anchor=\"middle\">Switch A</text><rect class=\"box\" x=\"214\" y=\"92\" width=\"132\" height=\"40\" rx=\"6\"/><text class=\"t b\" x=\"280\" y=\"116\" font-size=\"12\" text-anchor=\"middle\">Switch B</text><line class=\"acc-ln\" x1=\"146\" y1=\"112\" x2=\"214\" y2=\"112\"/><text class=\"t\" x=\"180\" y=\"104\" font-size=\"11\" text-anchor=\"middle\">trunk</text><text class=\"t s\" x=\"180\" y=\"128\" font-size=\"11\" text-anchor=\"middle\">10, 20</text><text class=\"t b\" x=\"180\" y=\"164\" font-size=\"12\" text-anchor=\"middle\">Frame on the trunk</text><rect class=\"box\" x=\"14\" y=\"174\" width=\"58\" height=\"30\" rx=\"3\"/><text class=\"t\" x=\"43\" y=\"193\" font-size=\"11\" text-anchor=\"middle\">Dst MAC</text><rect class=\"box\" x=\"72\" y=\"174\" width=\"58\" height=\"30\" rx=\"3\"/><text class=\"t\" x=\"101\" y=\"193\" font-size=\"11\" text-anchor=\"middle\">Src MAC</text><rect class=\"box hi\" x=\"130\" y=\"174\" width=\"50\" height=\"30\" rx=\"3\"/><text class=\"t b\" x=\"155\" y=\"193\" font-size=\"11\" text-anchor=\"middle\">Tag</text><rect class=\"box\" x=\"180\" y=\"174\" width=\"46\" height=\"30\" rx=\"3\"/><text class=\"t\" x=\"203\" y=\"193\" font-size=\"11\" text-anchor=\"middle\">Type</text><rect class=\"box\" x=\"226\" y=\"174\" width=\"80\" height=\"30\" rx=\"3\"/><text class=\"t\" x=\"266\" y=\"193\" font-size=\"11\" text-anchor=\"middle\">Data</text><rect class=\"box\" x=\"306\" y=\"174\" width=\"40\" height=\"30\" rx=\"3\"/><text class=\"t\" x=\"326\" y=\"193\" font-size=\"11\" text-anchor=\"middle\">FCS</text><line class=\"ln mute\" x1=\"147\" y1=\"208\" x2=\"147\" y2=\"224\"/><text class=\"t s\" x=\"147\" y=\"238\" font-size=\"11\" text-anchor=\"middle\">802.1Q · 4 bytes · VLAN ID 1–4094</text><text class=\"t s\" x=\"180\" y=\"262\" font-size=\"11\" text-anchor=\"middle\">Native VLAN crosses untagged</text></svg>"
+  },
+  {
+    "id": "dot1x-port-auth",
+    "title": "802.1X port-based authentication",
+    "alt": "Three roles: the supplicant (a laptop or phone), the authenticator (a switch or access point) and the authentication server (RADIUS). The supplicant sends its identity using EAPOL; the authenticator relays it to RADIUS in an Access-Request. The EAP method, such as EAP-TLS, runs end to end through the authenticator. RADIUS returns Access-Accept, optionally with a VLAN and keys, and only then does the port pass normal traffic; before that it allows only EAPOL.",
+    "topics": {
+      "security-plus": [
+        "802.1X, NAC, port security",
+        "Wireless: WPA3, SAE, RADIUS, EAP"
+      ],
+      "sscp": [
+        "Network access control: 802.1X, RADIUS/TACACS+, NAC posture checks, port security"
+      ],
+      "network-plus": [
+        "Network access control: 802.1X, MAC filtering, key management",
+        "Wireless security: WPA2/WPA3 Personal and Enterprise, PSK vs 802.1X, captive portals; antenna types"
+      ],
+      "ccnp-encor": [
+        "Network access control: 802.1X, MAB and WebAuth"
+      ],
+      "cwna": [
+        "802.1X roles: supplicant, authenticator and authentication server (RADIUS)"
+      ],
+      "ccna": [
+        "Wireless security: WPA2 and WPA3, Personal (PSK/SAE) vs Enterprise (802.1X)"
+      ]
+    },
+    "svg": "<svg viewBox=\"0 0 360 292\" xmlns=\"http://www.w3.org/2000/svg\"><defs><marker id=\"ah-dot1x-port-auth\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\"><path class=\"arrow\" d=\"M0,0L10,5L0,10z\"/></marker></defs><rect class=\"box\" x=\"8\" y=\"10\" width=\"100\" height=\"44\" rx=\"6\"/><text class=\"t b\" x=\"58\" y=\"29\" font-size=\"12\" text-anchor=\"middle\">Supplicant</text><text class=\"t s\" x=\"58\" y=\"43\" font-size=\"11\" text-anchor=\"middle\">laptop, phone</text><rect class=\"box hi\" x=\"130\" y=\"10\" width=\"100\" height=\"44\" rx=\"6\"/><text class=\"t b\" x=\"180\" y=\"29\" font-size=\"12\" text-anchor=\"middle\">Authenticator</text><text class=\"t s\" x=\"180\" y=\"43\" font-size=\"11\" text-anchor=\"middle\">switch or AP</text><rect class=\"box\" x=\"252\" y=\"10\" width=\"100\" height=\"44\" rx=\"6\"/><text class=\"t b\" x=\"302\" y=\"29\" font-size=\"12\" text-anchor=\"middle\">Auth server</text><text class=\"t s\" x=\"302\" y=\"43\" font-size=\"11\" text-anchor=\"middle\">RADIUS</text><line class=\"ln mute\" x1=\"58\" y1=\"54\" x2=\"58\" y2=\"262\"/><line class=\"ln mute\" x1=\"180\" y1=\"54\" x2=\"180\" y2=\"262\"/><line class=\"ln mute\" x1=\"302\" y1=\"54\" x2=\"302\" y2=\"262\"/><line class=\"ln\" x1=\"58\" y1=\"90\" x2=\"178\" y2=\"90\" marker-end=\"url(#ah-dot1x-port-auth)\"/><text class=\"t\" x=\"119\" y=\"84\" font-size=\"11\" text-anchor=\"middle\">EAPOL identity</text><line class=\"ln\" x1=\"180\" y1=\"90\" x2=\"300\" y2=\"90\" marker-end=\"url(#ah-dot1x-port-auth)\"/><text class=\"t\" x=\"241\" y=\"84\" font-size=\"11\" text-anchor=\"middle\">Access-Request</text><line class=\"ln\" x1=\"60\" y1=\"128\" x2=\"300\" y2=\"128\" stroke-dasharray=\"5 4\" marker-end=\"url(#ah-dot1x-port-auth)\" marker-start=\"url(#ah-dot1x-port-auth)\"/><text class=\"t\" x=\"180\" y=\"122\" font-size=\"11\" text-anchor=\"middle\">EAP method (e.g. EAP-TLS)</text><line class=\"ln\" x1=\"302\" y1=\"166\" x2=\"182\" y2=\"166\" marker-end=\"url(#ah-dot1x-port-auth)\"/><text class=\"t\" x=\"241\" y=\"160\" font-size=\"11\" text-anchor=\"middle\">Access-Accept</text><text class=\"t s\" x=\"241\" y=\"180\" font-size=\"11\" text-anchor=\"middle\">+ VLAN, keys</text><rect class=\"box hi\" x=\"128\" y=\"196\" width=\"104\" height=\"26\" rx=\"6\"/><text class=\"t\" x=\"180\" y=\"213\" font-size=\"11\" text-anchor=\"middle\">port authorized</text><line class=\"acc-ln\" x1=\"58\" y1=\"240\" x2=\"178\" y2=\"240\" marker-end=\"url(#ah-dot1x-port-auth)\"/><text class=\"t\" x=\"119\" y=\"234\" font-size=\"11\" text-anchor=\"middle\">traffic</text><text class=\"t s\" x=\"180\" y=\"282\" font-size=\"11\" text-anchor=\"middle\">Until accepted, the port passes only EAPOL</text></svg>"
+  },
+  {
+    "id": "zero-trust-architecture",
+    "title": "Zero trust architecture: policy engine, administrator and PEP",
+    "alt": "In the control plane, the policy engine takes signals such as identity, device health and threat intelligence and decides to grant or deny; the policy administrator acts on that decision. Together they form the policy decision point. In the data plane, a subject (user plus device) reaches a resource only through the policy enforcement point, which the administrator opens or closes per session. Every request is checked; network location grants no implicit trust.",
+    "topics": {
+      "security-plus": [
+        "Zero trust: control plane vs data plane, policy engine, PEP"
+      ],
+      "isc2-cc": [
+        "Zero trust: never trust, always verify"
+      ],
+      "sscp": [
+        "Internetwork trust: extranets, third-party connections, zero trust"
+      ],
+      "cissp": [
+        "Secure design principles: least privilege, defense in depth, secure defaults, fail securely, zero trust, privacy by design, SASE"
+      ],
+      "network-plus": [
+        "Evolving use cases: SDN and SD-WAN, VxLAN, zero trust, SASE/SSE, infrastructure as code"
+      ],
+      "cysa-plus": [
+        "System and network architecture: on-prem, cloud, hybrid, serverless, containers, segmentation, zero trust, SASE"
+      ]
+    },
+    "svg": "<svg viewBox=\"0 0 360 282\" xmlns=\"http://www.w3.org/2000/svg\"><defs><marker id=\"ah-zero-trust-architecture\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\"><path class=\"arrow\" d=\"M0,0L10,5L0,10z\"/></marker></defs><text class=\"t s\" x=\"105\" y=\"16\" font-size=\"11\" text-anchor=\"middle\">identity · device health · threat intel</text><line class=\"ln\" x1=\"105\" y1=\"22\" x2=\"105\" y2=\"44\" marker-end=\"url(#ah-zero-trust-architecture)\"/><rect class=\"box hi\" x=\"40\" y=\"46\" width=\"130\" height=\"48\" rx=\"6\"/><text class=\"t b\" x=\"105\" y=\"67\" font-size=\"12\" text-anchor=\"middle\">Policy engine</text><text class=\"t s\" x=\"105\" y=\"81\" font-size=\"11\" text-anchor=\"middle\">decides grant/deny</text><rect class=\"box hi\" x=\"200\" y=\"46\" width=\"130\" height=\"48\" rx=\"6\"/><text class=\"t b\" x=\"265\" y=\"67\" font-size=\"12\" text-anchor=\"middle\">Policy admin</text><text class=\"t s\" x=\"265\" y=\"81\" font-size=\"11\" text-anchor=\"middle\">sets up session</text><line class=\"ln\" x1=\"170\" y1=\"70\" x2=\"198\" y2=\"70\" marker-end=\"url(#ah-zero-trust-architecture)\"/><text class=\"t s\" x=\"40\" y=\"112\" font-size=\"11\" text-anchor=\"start\">together: policy decision point</text><text class=\"t b\" x=\"8\" y=\"136\" font-size=\"11\" text-anchor=\"start\">Control plane</text><line class=\"ln mute\" x1=\"8\" y1=\"144\" x2=\"352\" y2=\"144\" stroke-dasharray=\"4 4\"/><text class=\"t b\" x=\"8\" y=\"160\" font-size=\"11\" text-anchor=\"start\">Data plane</text><line class=\"ln\" x1=\"265\" y1=\"94\" x2=\"190\" y2=\"176\" marker-end=\"url(#ah-zero-trust-architecture)\"/><text class=\"t s\" x=\"244\" y=\"128\" font-size=\"11\" text-anchor=\"start\">allow / deny</text><rect class=\"box\" x=\"8\" y=\"180\" width=\"92\" height=\"48\" rx=\"6\"/><text class=\"t b\" x=\"54\" y=\"201\" font-size=\"12\" text-anchor=\"middle\">Subject</text><text class=\"t s\" x=\"54\" y=\"215\" font-size=\"11\" text-anchor=\"middle\">user + device</text><rect class=\"box hi\" x=\"134\" y=\"180\" width=\"92\" height=\"48\" rx=\"6\"/><text class=\"t b\" x=\"180\" y=\"201\" font-size=\"12\" text-anchor=\"middle\">PEP</text><text class=\"t s\" x=\"180\" y=\"215\" font-size=\"11\" text-anchor=\"middle\">gateway</text><rect class=\"box\" x=\"260\" y=\"180\" width=\"92\" height=\"48\" rx=\"6\"/><text class=\"t b\" x=\"306\" y=\"201\" font-size=\"12\" text-anchor=\"middle\">Resource</text><text class=\"t s\" x=\"306\" y=\"215\" font-size=\"11\" text-anchor=\"middle\">app, data</text><line class=\"ln\" x1=\"100\" y1=\"204\" x2=\"132\" y2=\"204\" marker-end=\"url(#ah-zero-trust-architecture)\"/><line class=\"ln\" x1=\"226\" y1=\"204\" x2=\"258\" y2=\"204\" marker-end=\"url(#ah-zero-trust-architecture)\"/><text class=\"t s\" x=\"180\" y=\"256\" font-size=\"11\" text-anchor=\"middle\">Every request is checked;</text><text class=\"t s\" x=\"180\" y=\"272\" font-size=\"11\" text-anchor=\"middle\">location grants no trust</text></svg>"
+  },
+  {
+    "id": "incident-response-lifecycle",
+    "title": "Incident response lifecycle (NIST SP 800-61)",
+    "alt": "Four phases form a cycle. 1 Preparation leads to 2 Detection and analysis. Detection and analysis loops back and forth with 3 Containment, eradication and recovery as new evidence appears. That leads to 4 Post-incident activity (lessons learned), which feeds improvements back into Preparation. CompTIA splits the same work into seven steps: preparation, detection, analysis, containment, eradication, recovery and lessons learned.",
+    "topics": {
+      "isc2-cc": [
+        "Incident response lifecycle: preparation, detection and analysis, containment, eradication, recovery, lessons learned"
+      ],
+      "security-plus": [
+        "IR process: preparation, detection, analysis, containment, eradication, recovery, lessons learned"
+      ],
+      "cysa-plus": [
+        "IR lifecycle (NIST SP 800-61): preparation; detection and analysis; containment, eradication and recovery; post-incident activity"
+      ],
+      "sscp": [
+        "Incident lifecycle: preparation, detection & analysis, containment, eradication, recovery, lessons learned"
+      ],
+      "cissp": [
+        "Incident management: detection, response, mitigation, reporting, recovery, remediation, lessons learned"
+      ]
+    },
+    "svg": "<svg viewBox=\"0 0 360 264\" xmlns=\"http://www.w3.org/2000/svg\"><defs><marker id=\"ah-incident-response-lifecycle\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\"><path class=\"arrow\" d=\"M0,0L10,5L0,10z\"/></marker></defs><rect class=\"box\" x=\"14\" y=\"20\" width=\"140\" height=\"64\" rx=\"6\"/><text class=\"t b\" x=\"84\" y=\"49\" font-size=\"12\" text-anchor=\"middle\">1 Preparation</text><text class=\"t s\" x=\"84\" y=\"63\" font-size=\"11\" text-anchor=\"middle\">plans, tools, training</text><rect class=\"box hi\" x=\"206\" y=\"20\" width=\"140\" height=\"64\" rx=\"6\"/><text class=\"t b\" x=\"276\" y=\"49\" font-size=\"12\" text-anchor=\"middle\">2 Detection</text><text class=\"t s\" x=\"276\" y=\"63\" font-size=\"11\" text-anchor=\"middle\">and analysis</text><rect class=\"box hi\" x=\"206\" y=\"146\" width=\"140\" height=\"64\" rx=\"6\"/><text class=\"t b\" x=\"276\" y=\"168\" font-size=\"12\" text-anchor=\"middle\">3 Containment,</text><text class=\"t s\" x=\"276\" y=\"182\" font-size=\"11\" text-anchor=\"middle\">eradication,</text><text class=\"t s\" x=\"276\" y=\"196\" font-size=\"11\" text-anchor=\"middle\">recovery</text><rect class=\"box\" x=\"14\" y=\"146\" width=\"140\" height=\"64\" rx=\"6\"/><text class=\"t b\" x=\"84\" y=\"175\" font-size=\"12\" text-anchor=\"middle\">4 Post-incident</text><text class=\"t s\" x=\"84\" y=\"189\" font-size=\"11\" text-anchor=\"middle\">lessons learned</text><line class=\"ln\" x1=\"154\" y1=\"52\" x2=\"204\" y2=\"52\" marker-end=\"url(#ah-incident-response-lifecycle)\"/><line class=\"ln\" x1=\"256\" y1=\"84\" x2=\"256\" y2=\"144\" marker-end=\"url(#ah-incident-response-lifecycle)\"/><line class=\"ln\" x1=\"296\" y1=\"144\" x2=\"296\" y2=\"86\" marker-end=\"url(#ah-incident-response-lifecycle)\"/><line class=\"ln\" x1=\"206\" y1=\"178\" x2=\"156\" y2=\"178\" marker-end=\"url(#ah-incident-response-lifecycle)\"/><line class=\"ln\" x1=\"84\" y1=\"146\" x2=\"84\" y2=\"86\" marker-end=\"url(#ah-incident-response-lifecycle)\"/><text class=\"t s\" x=\"180\" y=\"236\" font-size=\"11\" text-anchor=\"middle\">2 ⇄ 3 repeat as new evidence appears</text><text class=\"t s\" x=\"180\" y=\"254\" font-size=\"11\" text-anchor=\"middle\">4 feeds improvements back into 1</text></svg>"
+  },
+  {
+    "id": "symmetric-asymmetric-signature",
+    "title": "Symmetric vs asymmetric encryption and digital signatures",
+    "alt": "Three rows. Symmetric: plaintext is encrypted and decrypted with the same shared key, which is fast (AES) but the key must be shared safely. Asymmetric: anyone encrypts with Bob's public key and only Bob's private key decrypts (RSA, ECC). Digital signature: Alice hashes the message and signs the digest with her private key; Bob verifies with Alice's public key and compares digests, proving integrity and origin.",
+    "topics": {
+      "isc2-cc": [
+        "Encryption (symmetric vs asymmetric) and hashing"
+      ],
+      "security-plus": [
+        "Symmetric vs asymmetric encryption, key exchange",
+        "Public/private keys, key escrow",
+        "Digital signatures"
+      ],
+      "sscp": [
+        "Symmetric (AES) vs asymmetric (RSA, ECC) and hybrid key exchange",
+        "Hashing, salting, HMAC and digital signatures"
+      ],
+      "cissp": [
+        "Cryptographic solutions: symmetric, asymmetric, hashing, PKI, key management lifecycle"
+      ]
+    },
+    "svg": "<svg viewBox=\"0 0 360 294\" xmlns=\"http://www.w3.org/2000/svg\"><defs><marker id=\"ah-symmetric-asymmetric-signature\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\"><path class=\"arrow\" d=\"M0,0L10,5L0,10z\"/></marker></defs><text class=\"t b\" x=\"10\" y=\"16\" font-size=\"12\" text-anchor=\"start\">Symmetric (AES)</text><rect class=\"box\" x=\"10\" y=\"26\" width=\"66\" height=\"30\" rx=\"6\"/><text class=\"t\" x=\"43\" y=\"45\" font-size=\"11\" text-anchor=\"middle\">Plaintext</text><rect class=\"box hi\" x=\"147\" y=\"26\" width=\"66\" height=\"30\" rx=\"6\"/><text class=\"t\" x=\"180\" y=\"45\" font-size=\"11\" text-anchor=\"middle\">Ciphertext</text><rect class=\"box\" x=\"284\" y=\"26\" width=\"66\" height=\"30\" rx=\"6\"/><text class=\"t\" x=\"317\" y=\"45\" font-size=\"11\" text-anchor=\"middle\">Plaintext</text><line class=\"ln\" x1=\"76\" y1=\"41\" x2=\"145\" y2=\"41\" marker-end=\"url(#ah-symmetric-asymmetric-signature)\"/><line class=\"ln\" x1=\"213\" y1=\"41\" x2=\"282\" y2=\"41\" marker-end=\"url(#ah-symmetric-asymmetric-signature)\"/><text class=\"t\" x=\"111\" y=\"32\" font-size=\"11\" text-anchor=\"middle\">Key K</text><text class=\"t s\" x=\"111\" y=\"68\" font-size=\"11\" text-anchor=\"middle\">shared</text><text class=\"t\" x=\"248\" y=\"32\" font-size=\"11\" text-anchor=\"middle\">Key K</text><text class=\"t s\" x=\"248\" y=\"68\" font-size=\"11\" text-anchor=\"middle\">same key</text><text class=\"t b\" x=\"10\" y=\"106\" font-size=\"12\" text-anchor=\"start\">Asymmetric (RSA, ECC)</text><rect class=\"box\" x=\"10\" y=\"116\" width=\"66\" height=\"30\" rx=\"6\"/><text class=\"t\" x=\"43\" y=\"135\" font-size=\"11\" text-anchor=\"middle\">Plaintext</text><rect class=\"box hi\" x=\"147\" y=\"116\" width=\"66\" height=\"30\" rx=\"6\"/><text class=\"t\" x=\"180\" y=\"135\" font-size=\"11\" text-anchor=\"middle\">Ciphertext</text><rect class=\"box\" x=\"284\" y=\"116\" width=\"66\" height=\"30\" rx=\"6\"/><text class=\"t\" x=\"317\" y=\"135\" font-size=\"11\" text-anchor=\"middle\">Plaintext</text><line class=\"ln\" x1=\"76\" y1=\"131\" x2=\"145\" y2=\"131\" marker-end=\"url(#ah-symmetric-asymmetric-signature)\"/><line class=\"ln\" x1=\"213\" y1=\"131\" x2=\"282\" y2=\"131\" marker-end=\"url(#ah-symmetric-asymmetric-signature)\"/><text class=\"t\" x=\"111\" y=\"122\" font-size=\"11\" text-anchor=\"middle\">Bob's</text><text class=\"t s\" x=\"111\" y=\"158\" font-size=\"11\" text-anchor=\"middle\">public key</text><text class=\"t\" x=\"248\" y=\"122\" font-size=\"11\" text-anchor=\"middle\">Bob's</text><text class=\"t s\" x=\"248\" y=\"158\" font-size=\"11\" text-anchor=\"middle\">private key</text><text class=\"t b\" x=\"10\" y=\"196\" font-size=\"12\" text-anchor=\"start\">Digital signature</text><rect class=\"box\" x=\"10\" y=\"206\" width=\"66\" height=\"30\" rx=\"6\"/><text class=\"t\" x=\"43\" y=\"225\" font-size=\"11\" text-anchor=\"middle\">Message</text><rect class=\"box\" x=\"147\" y=\"206\" width=\"66\" height=\"30\" rx=\"6\"/><text class=\"t\" x=\"180\" y=\"225\" font-size=\"11\" text-anchor=\"middle\">Digest</text><rect class=\"box\" x=\"284\" y=\"206\" width=\"66\" height=\"30\" rx=\"6\"/><text class=\"t\" x=\"317\" y=\"225\" font-size=\"11\" text-anchor=\"middle\">Signature</text><line class=\"ln\" x1=\"76\" y1=\"221\" x2=\"145\" y2=\"221\" marker-end=\"url(#ah-symmetric-asymmetric-signature)\"/><line class=\"ln\" x1=\"213\" y1=\"221\" x2=\"282\" y2=\"221\" marker-end=\"url(#ah-symmetric-asymmetric-signature)\"/><text class=\"t\" x=\"111\" y=\"212\" font-size=\"11\" text-anchor=\"middle\">hash</text><text class=\"t s\" x=\"111\" y=\"248\" font-size=\"11\" text-anchor=\"middle\">SHA-256</text><text class=\"t\" x=\"248\" y=\"212\" font-size=\"11\" text-anchor=\"middle\">Alice's</text><text class=\"t s\" x=\"248\" y=\"248\" font-size=\"11\" text-anchor=\"middle\">private key</text><text class=\"t s\" x=\"180\" y=\"284\" font-size=\"11\" text-anchor=\"middle\">Bob verifies with Alice's public key</text></svg>"
+  },
+  {
+    "id": "dns-resolution-path",
+    "title": "DNS resolution: client, recursive resolver, root, TLD, authoritative",
+    "alt": "A client's stub resolver sends one recursive query to a recursive resolver (step 1). The resolver works iteratively: it asks a root server, which refers it to the .com TLD servers (steps 2 and 3); the TLD server refers it to the example.com name servers (4 and 5); the authoritative server returns the A record (6 and 7). The resolver caches the answer and returns it to the client (8).",
+    "topics": {
+      "network-plus": [
+        "DNS: record types (A, AAAA, CNAME, MX, TXT, NS, PTR, SOA), zones, recursive vs authoritative, DNSSEC, DoH/DoT, hosts file"
+      ],
+      "ccna": [
+        "DHCP and DNS roles in the network; troubleshoot name resolution and DHCP client issues"
+      ],
+      "security-plus": [
+        "ARP, DNS, DHCP and their attacks"
+      ],
+      "sscp": [
+        "Network attacks: ARP poisoning, DNS poisoning, DoS/DDoS, SYN flood, on-path, spoofing"
+      ],
+      "cissp": [
+        "Network attacks and mitigations: DDoS, spoofing, on-path, DNS attacks"
+      ],
+      "az-802": [
+        "Forwarders, conditional forwarders and root hints; DNS policies and zone scopes"
+      ]
+    },
+    "svg": "<svg viewBox=\"0 0 360 298\" xmlns=\"http://www.w3.org/2000/svg\"><defs><marker id=\"ah-dns-resolution-path\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\"><path class=\"arrow\" d=\"M0,0L10,5L0,10z\"/></marker></defs><rect class=\"box\" x=\"4\" y=\"104\" width=\"56\" height=\"50\" rx=\"6\"/><text class=\"t b\" x=\"32\" y=\"126\" font-size=\"12\" text-anchor=\"middle\">Client</text><text class=\"t s\" x=\"32\" y=\"140\" font-size=\"11\" text-anchor=\"middle\">stub</text><rect class=\"box hi\" x=\"116\" y=\"96\" width=\"92\" height=\"66\" rx=\"6\"/><text class=\"t b\" x=\"162\" y=\"119\" font-size=\"12\" text-anchor=\"middle\">Recursive</text><text class=\"t s\" x=\"162\" y=\"133\" font-size=\"11\" text-anchor=\"middle\">resolver</text><text class=\"t s\" x=\"162\" y=\"147\" font-size=\"11\" text-anchor=\"middle\">caches</text><rect class=\"box\" x=\"252\" y=\"14\" width=\"104\" height=\"50\" rx=\"6\"/><text class=\"t b\" x=\"304\" y=\"36\" font-size=\"12\" text-anchor=\"middle\">Root</text><text class=\"t s\" x=\"304\" y=\"50\" font-size=\"11\" text-anchor=\"middle\">refers to .com</text><rect class=\"box\" x=\"252\" y=\"104\" width=\"104\" height=\"50\" rx=\"6\"/><text class=\"t b\" x=\"304\" y=\"126\" font-size=\"12\" text-anchor=\"middle\">.com TLD</text><text class=\"t s\" x=\"304\" y=\"140\" font-size=\"11\" text-anchor=\"middle\">refers to NS</text><rect class=\"box\" x=\"252\" y=\"194\" width=\"104\" height=\"50\" rx=\"6\"/><text class=\"t b\" x=\"304\" y=\"216\" font-size=\"12\" text-anchor=\"middle\">Authoritative</text><text class=\"t s\" x=\"304\" y=\"230\" font-size=\"11\" text-anchor=\"middle\">example.com A</text><line class=\"ln\" x1=\"60\" y1=\"120\" x2=\"114\" y2=\"120\" marker-end=\"url(#ah-dns-resolution-path)\"/><text class=\"t\" x=\"88\" y=\"112\" font-size=\"11\" text-anchor=\"middle\">1 query</text><line class=\"ln\" x1=\"114\" y1=\"140\" x2=\"62\" y2=\"140\" marker-end=\"url(#ah-dns-resolution-path)\"/><text class=\"t\" x=\"88\" y=\"156\" font-size=\"11\" text-anchor=\"middle\">8 answer</text><line class=\"ln\" x1=\"208\" y1=\"106\" x2=\"250\" y2=\"46\" marker-end=\"url(#ah-dns-resolution-path)\" marker-start=\"url(#ah-dns-resolution-path)\"/><text class=\"t s\" x=\"222\" y=\"66\" font-size=\"11\" text-anchor=\"middle\">2·3</text><line class=\"ln\" x1=\"210\" y1=\"129\" x2=\"250\" y2=\"129\" marker-end=\"url(#ah-dns-resolution-path)\" marker-start=\"url(#ah-dns-resolution-path)\"/><text class=\"t s\" x=\"230\" y=\"122\" font-size=\"11\" text-anchor=\"middle\">4·5</text><line class=\"ln\" x1=\"208\" y1=\"152\" x2=\"250\" y2=\"212\" marker-end=\"url(#ah-dns-resolution-path)\" marker-start=\"url(#ah-dns-resolution-path)\"/><text class=\"t s\" x=\"222\" y=\"204\" font-size=\"11\" text-anchor=\"middle\">6·7</text><text class=\"t s\" x=\"180\" y=\"272\" font-size=\"11\" text-anchor=\"middle\">Client query is recursive;</text><text class=\"t s\" x=\"180\" y=\"288\" font-size=\"11\" text-anchor=\"middle\">resolver asks iteratively</text></svg>"
+  },
+  {
+    "id": "kubernetes-architecture",
+    "title": "Kubernetes cluster architecture",
+    "alt": "The control plane holds kube-apiserver at the center, with etcd storing cluster state, kube-scheduler placing Pods on nodes and kube-controller-manager running reconcile loops; all of them talk only through the API server, which kubectl also calls. Each worker node runs a kubelet that watches the API server and starts Pods through the container runtime (such as containerd), and kube-proxy, which programs Service routing rules.",
+    "topics": {
+      "cka": [
+        "Control plane and node components: kube-apiserver, etcd, kube-scheduler, kube-controller-manager, kubelet, kube-proxy, container runtime",
+        "Control plane problems: static Pod manifests, crictl ps/logs when the API server is down, scheduler and controller-manager symptoms, etcd health with etcdctl",
+        "Node problems: NotReady, kubelet status and journalctl -u kubelet, kubelet config and certificates, container runtime down, node conditions (DiskPressure, MemoryPressure)"
+      ],
+      "linux-plus": [
+        "Container orchestration concepts: Kubernetes pods, deployments, services"
+      ]
+    },
+    "svg": "<svg viewBox=\"0 0 360 330\" xmlns=\"http://www.w3.org/2000/svg\"><defs><marker id=\"ah-kubernetes-architecture\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\"><path class=\"arrow\" d=\"M0,0L10,5L0,10z\"/></marker></defs><rect class=\"box\" x=\"8\" y=\"8\" width=\"256\" height=\"122\" rx=\"6\"/><text class=\"t b\" x=\"18\" y=\"24\" font-size=\"11\" text-anchor=\"start\">Control plane</text><rect class=\"box\" x=\"18\" y=\"34\" width=\"64\" height=\"32\" rx=\"6\"/><text class=\"t\" x=\"50\" y=\"54\" font-size=\"12\" text-anchor=\"middle\">etcd</text><rect class=\"box hi\" x=\"108\" y=\"34\" width=\"146\" height=\"32\" rx=\"6\"/><text class=\"t b\" x=\"181\" y=\"54\" font-size=\"12\" text-anchor=\"middle\">kube-apiserver</text><rect class=\"box\" x=\"18\" y=\"86\" width=\"112\" height=\"32\" rx=\"6\"/><text class=\"t\" x=\"74\" y=\"106\" font-size=\"12\" text-anchor=\"middle\">scheduler</text><rect class=\"box\" x=\"138\" y=\"86\" width=\"116\" height=\"32\" rx=\"6\"/><text class=\"t\" x=\"196\" y=\"106\" font-size=\"12\" text-anchor=\"middle\">controller-mgr</text><line class=\"ln\" x1=\"82\" y1=\"50\" x2=\"106\" y2=\"50\" marker-end=\"url(#ah-kubernetes-architecture)\" marker-start=\"url(#ah-kubernetes-architecture)\"/><line class=\"ln\" x1=\"90\" y1=\"86\" x2=\"130\" y2=\"68\" marker-end=\"url(#ah-kubernetes-architecture)\"/><line class=\"ln\" x1=\"196\" y1=\"86\" x2=\"190\" y2=\"68\" marker-end=\"url(#ah-kubernetes-architecture)\"/><rect class=\"box\" x=\"280\" y=\"34\" width=\"72\" height=\"32\" rx=\"6\"/><text class=\"t\" x=\"316\" y=\"54\" font-size=\"12\" text-anchor=\"middle\">kubectl</text><line class=\"ln\" x1=\"280\" y1=\"50\" x2=\"256\" y2=\"50\" marker-end=\"url(#ah-kubernetes-architecture)\"/><rect class=\"box\" x=\"8\" y=\"162\" width=\"164\" height=\"160\" rx=\"6\"/><text class=\"t b\" x=\"18\" y=\"178\" font-size=\"11\" text-anchor=\"start\">Worker node</text><rect class=\"box hi\" x=\"18\" y=\"186\" width=\"144\" height=\"26\" rx=\"6\"/><text class=\"t\" x=\"90\" y=\"203\" font-size=\"12\" text-anchor=\"middle\">kubelet</text><rect class=\"box\" x=\"18\" y=\"218\" width=\"144\" height=\"26\" rx=\"6\"/><text class=\"t\" x=\"90\" y=\"235\" font-size=\"12\" text-anchor=\"middle\">kube-proxy</text><rect class=\"box\" x=\"18\" y=\"250\" width=\"144\" height=\"26\" rx=\"6\"/><text class=\"t\" x=\"90\" y=\"267\" font-size=\"11\" text-anchor=\"middle\">runtime (containerd)</text><rect class=\"box\" x=\"18\" y=\"284\" width=\"66\" height=\"28\" rx=\"6\"/><text class=\"t\" x=\"51\" y=\"302\" font-size=\"11\" text-anchor=\"middle\">Pod</text><rect class=\"box\" x=\"96\" y=\"284\" width=\"66\" height=\"28\" rx=\"6\"/><text class=\"t\" x=\"129\" y=\"302\" font-size=\"11\" text-anchor=\"middle\">Pod</text><rect class=\"box\" x=\"188\" y=\"162\" width=\"164\" height=\"160\" rx=\"6\"/><text class=\"t b\" x=\"198\" y=\"178\" font-size=\"11\" text-anchor=\"start\">Worker node</text><rect class=\"box hi\" x=\"198\" y=\"186\" width=\"144\" height=\"26\" rx=\"6\"/><text class=\"t\" x=\"270\" y=\"203\" font-size=\"12\" text-anchor=\"middle\">kubelet</text><rect class=\"box\" x=\"198\" y=\"218\" width=\"144\" height=\"26\" rx=\"6\"/><text class=\"t\" x=\"270\" y=\"235\" font-size=\"12\" text-anchor=\"middle\">kube-proxy</text><rect class=\"box\" x=\"198\" y=\"250\" width=\"144\" height=\"26\" rx=\"6\"/><text class=\"t\" x=\"270\" y=\"267\" font-size=\"11\" text-anchor=\"middle\">runtime (containerd)</text><rect class=\"box\" x=\"198\" y=\"284\" width=\"66\" height=\"28\" rx=\"6\"/><text class=\"t\" x=\"231\" y=\"302\" font-size=\"11\" text-anchor=\"middle\">Pod</text><rect class=\"box\" x=\"276\" y=\"284\" width=\"66\" height=\"28\" rx=\"6\"/><text class=\"t\" x=\"309\" y=\"302\" font-size=\"11\" text-anchor=\"middle\">Pod</text><line class=\"ln\" x1=\"130\" y1=\"132\" x2=\"130\" y2=\"184\" marker-end=\"url(#ah-kubernetes-architecture)\" marker-start=\"url(#ah-kubernetes-architecture)\"/><line class=\"ln\" x1=\"240\" y1=\"132\" x2=\"300\" y2=\"184\" marker-end=\"url(#ah-kubernetes-architecture)\" marker-start=\"url(#ah-kubernetes-architecture)\"/><text class=\"t s\" x=\"190\" y=\"152\" font-size=\"11\" text-anchor=\"middle\">kubelet ⇄ API</text></svg>"
+  },
+  {
+    "id": "terraform-workflow",
+    "title": "Terraform workflow: write, init, plan, apply and state",
+    "alt": "Four steps run top to bottom. Write the configuration in HCL .tf files. terraform init downloads providers and modules and configures the backend. terraform plan refreshes and compares the configuration with the state file and real infrastructure, showing what will be created, changed or destroyed. terraform apply makes those changes through provider APIs and writes the results to state. The state file, kept in a local or remote backend, maps configuration to real objects.",
+    "topics": {
+      "terraform": [
+        "The Write → Plan → Apply workflow for individuals and teams",
+        "`terraform init`: backend setup, provider and module download, `-upgrade`, `-migrate-state`, `-reconfigure`, `-backend-config`",
+        "`terraform plan`: refresh, diff and symbols (`+`, `-`, `~`, `-/+`), saved plans with `-out`",
+        "`terraform apply`: interactive approval, `-auto-approve`, applying a saved plan file",
+        "What state is for: mapping configuration to real objects, tracking metadata and dependencies, speeding up plans"
+      ]
+    },
+    "svg": "<svg viewBox=\"0 0 360 292\" xmlns=\"http://www.w3.org/2000/svg\"><defs><marker id=\"ah-terraform-workflow\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\"><path class=\"arrow\" d=\"M0,0L10,5L0,10z\"/></marker></defs><rect class=\"box hi\" x=\"10\" y=\"14\" width=\"116\" height=\"44\" rx=\"6\"/><text class=\"t b\" x=\"68\" y=\"40\" font-size=\"12\" text-anchor=\"middle\">Write</text><text class=\"t\" x=\"136\" y=\"40\" font-size=\"11\" text-anchor=\"start\">HCL in .tf files</text><line class=\"ln\" x1=\"68\" y1=\"58\" x2=\"68\" y2=\"76\" marker-end=\"url(#ah-terraform-workflow)\"/><rect class=\"box\" x=\"10\" y=\"78\" width=\"116\" height=\"44\" rx=\"6\"/><text class=\"t b\" x=\"68\" y=\"104\" font-size=\"12\" text-anchor=\"middle\">terraform init</text><text class=\"t\" x=\"136\" y=\"97\" font-size=\"11\" text-anchor=\"start\">get providers,</text><text class=\"t s\" x=\"136\" y=\"111\" font-size=\"11\" text-anchor=\"start\">modules, backend</text><line class=\"ln\" x1=\"68\" y1=\"122\" x2=\"68\" y2=\"140\" marker-end=\"url(#ah-terraform-workflow)\"/><rect class=\"box\" x=\"10\" y=\"142\" width=\"116\" height=\"44\" rx=\"6\"/><text class=\"t b\" x=\"68\" y=\"168\" font-size=\"12\" text-anchor=\"middle\">terraform plan</text><text class=\"t\" x=\"136\" y=\"161\" font-size=\"11\" text-anchor=\"start\">diff config vs</text><text class=\"t s\" x=\"136\" y=\"175\" font-size=\"11\" text-anchor=\"start\">state + real infra</text><line class=\"ln\" x1=\"68\" y1=\"186\" x2=\"68\" y2=\"204\" marker-end=\"url(#ah-terraform-workflow)\"/><rect class=\"box\" x=\"10\" y=\"206\" width=\"116\" height=\"44\" rx=\"6\"/><text class=\"t b\" x=\"68\" y=\"232\" font-size=\"12\" text-anchor=\"middle\">terraform apply</text><text class=\"t\" x=\"136\" y=\"225\" font-size=\"11\" text-anchor=\"start\">change via</text><text class=\"t s\" x=\"136\" y=\"239\" font-size=\"11\" text-anchor=\"start\">provider APIs</text><rect class=\"box hi\" x=\"280\" y=\"132\" width=\"72\" height=\"110\" rx=\"6\"/><text class=\"t b\" x=\"316\" y=\"177\" font-size=\"12\" text-anchor=\"middle\">State</text><text class=\"t s\" x=\"316\" y=\"191\" font-size=\"11\" text-anchor=\"middle\">tfstate</text><text class=\"t s\" x=\"316\" y=\"205\" font-size=\"11\" text-anchor=\"middle\">backend</text><line class=\"ln\" x1=\"278\" y1=\"158\" x2=\"246\" y2=\"158\" marker-end=\"url(#ah-terraform-workflow)\"/><text class=\"t s\" x=\"262\" y=\"152\" font-size=\"11\" text-anchor=\"middle\">read</text><line class=\"ln\" x1=\"246\" y1=\"222\" x2=\"278\" y2=\"222\" marker-end=\"url(#ah-terraform-workflow)\"/><text class=\"t s\" x=\"262\" y=\"216\" font-size=\"11\" text-anchor=\"middle\">write</text><text class=\"t s\" x=\"180\" y=\"282\" font-size=\"11\" text-anchor=\"middle\">Apply again with no changes: nothing to do</text></svg>"
+  },
+  {
+    "id": "azure-scope-hierarchy",
+    "title": "Azure scope hierarchy and RBAC inheritance",
+    "alt": "Five nested scopes: the root management group contains management groups, which contain subscriptions, which contain resource groups, which contain resources such as VMs and storage accounts. Role assignments and Azure Policy assigned at any scope are inherited by every scope below it; for example, Contributor assigned on a subscription applies to all its resource groups and resources.",
+    "topics": {
+      "az-104": [
+        "Subscriptions and management groups: hierarchy, inheritance of policy and RBAC",
+        "Azure RBAC: built-in roles (Owner, Contributor, Reader, User Access Administrator), assigning roles at different scopes and interpreting access",
+        "Azure Policy: definitions, initiatives, assignments, scopes and exclusions, effects (Deny, Audit, Modify, DeployIfNotExists) and remediation tasks"
+      ],
+      "sc-500": [
+        "Microsoft Entra built-in roles vs Azure RBAC roles, scopes (management group, subscription, resource group, resource) and least privilege",
+        "Resource locks (CanNotDelete, ReadOnly), management group hierarchy and governance at scale"
+      ]
+    },
+    "svg": "<svg viewBox=\"0 0 360 280\" xmlns=\"http://www.w3.org/2000/svg\"><defs><marker id=\"ah-azure-scope-hierarchy\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\"><path class=\"arrow\" d=\"M0,0L10,5L0,10z\"/></marker></defs><rect class=\"box\" x=\"10\" y=\"12\" width=\"214\" height=\"40\" rx=\"6\"/><text class=\"t\" x=\"117\" y=\"36\" font-size=\"12\" text-anchor=\"middle\">Root management group</text><path class=\"ln\" d=\"M20,52 V86 H26\" marker-end=\"url(#ah-azure-scope-hierarchy)\"/><rect class=\"box\" x=\"28\" y=\"66\" width=\"196\" height=\"40\" rx=\"6\"/><text class=\"t\" x=\"126\" y=\"90\" font-size=\"12\" text-anchor=\"middle\">Management group</text><path class=\"ln\" d=\"M38,106 V140 H44\" marker-end=\"url(#ah-azure-scope-hierarchy)\"/><rect class=\"box hi\" x=\"46\" y=\"120\" width=\"178\" height=\"40\" rx=\"6\"/><text class=\"t b\" x=\"135\" y=\"137\" font-size=\"12\" text-anchor=\"middle\">Subscription</text><text class=\"t s\" x=\"135\" y=\"151\" font-size=\"11\" text-anchor=\"middle\">Contributor assigned</text><path class=\"ln\" d=\"M56,160 V194 H62\" marker-end=\"url(#ah-azure-scope-hierarchy)\"/><rect class=\"box\" x=\"64\" y=\"174\" width=\"160\" height=\"40\" rx=\"6\"/><text class=\"t\" x=\"144\" y=\"191\" font-size=\"12\" text-anchor=\"middle\">Resource group</text><text class=\"t s\" x=\"144\" y=\"205\" font-size=\"11\" text-anchor=\"middle\">inherits</text><path class=\"ln\" d=\"M74,214 V248 H80\" marker-end=\"url(#ah-azure-scope-hierarchy)\"/><rect class=\"box\" x=\"82\" y=\"228\" width=\"142\" height=\"40\" rx=\"6\"/><text class=\"t\" x=\"153\" y=\"245\" font-size=\"12\" text-anchor=\"middle\">Resource</text><text class=\"t s\" x=\"153\" y=\"259\" font-size=\"11\" text-anchor=\"middle\">VM, storage · inherits</text><line class=\"acc-ln\" x1=\"262\" y1=\"20\" x2=\"262\" y2=\"262\" marker-end=\"url(#ah-azure-scope-hierarchy)\"/><text class=\"t\" x=\"274\" y=\"110\" font-size=\"11\" text-anchor=\"start\">Roles and</text><text class=\"t\" x=\"274\" y=\"126\" font-size=\"11\" text-anchor=\"start\">policy</text><text class=\"t\" x=\"274\" y=\"142\" font-size=\"11\" text-anchor=\"start\">inherit</text><text class=\"t\" x=\"274\" y=\"158\" font-size=\"11\" text-anchor=\"start\">downward</text></svg>"
+  },
+  {
+    "id": "linux-file-permissions",
+    "title": "Linux file permissions: rwx bits and octal",
+    "alt": "The ls -l string -rwxr-x--- starts with a file type character, then three sets of rwx bits for user (owner), group and other. Read is 4, write 2 and execute 1, so each set adds up to one octal digit: user rwx is 4+2+1 = 7, group r-x is 4+0+1 = 5, other --- is 0. The whole mode is 750, set with chmod 750 file.",
+    "topics": {
+      "linux-plus": [
+        "Permissions: chmod symbolic and octal, chown, umask"
+      ],
+      "rhcsa": [
+        "Listing, setting and changing standard ugo/rwx permissions in numeric and symbolic form",
+        "Diagnosing and correcting file permission problems (ls -l, namei -l, chmod, chown)",
+        "Managing default file permissions with umask (shell and /etc/login.defs, ~/.bashrc)"
+      ],
+      "a-plus-core2": [
+        "Linux: file and permission commands (ls, cp, mv, rm, chmod, chown, sudo, su), package managers (apt, dnf), ip, df, top, ps, grep, find, man, key files (/etc/passwd, /etc/shadow, /etc/hosts, /etc/fstab, /etc/resolv.conf)"
+      ]
+    },
+    "svg": "<svg viewBox=\"0 0 360 208\" xmlns=\"http://www.w3.org/2000/svg\"><defs><marker id=\"ah-linux-file-permissions\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\"><path class=\"arrow\" d=\"M0,0L10,5L0,10z\"/></marker></defs><text class=\"t s\" x=\"10\" y=\"18\" font-size=\"11\" text-anchor=\"start\">ls -l shows</text><rect class=\"box\" x=\"10\" y=\"28\" width=\"28\" height=\"34\" rx=\"4\"/><text class=\"t b\" x=\"24\" y=\"51\" font-size=\"16\" text-anchor=\"middle\">-</text><rect class=\"box hi\" x=\"46\" y=\"28\" width=\"28\" height=\"34\" rx=\"4\"/><text class=\"t b\" x=\"60\" y=\"51\" font-size=\"16\" text-anchor=\"middle\">r</text><rect class=\"box hi\" x=\"76\" y=\"28\" width=\"28\" height=\"34\" rx=\"4\"/><text class=\"t b\" x=\"90\" y=\"51\" font-size=\"16\" text-anchor=\"middle\">w</text><rect class=\"box hi\" x=\"106\" y=\"28\" width=\"28\" height=\"34\" rx=\"4\"/><text class=\"t b\" x=\"120\" y=\"51\" font-size=\"16\" text-anchor=\"middle\">x</text><line class=\"ln mute\" x1=\"46\" y1=\"72\" x2=\"134\" y2=\"72\"/><text class=\"t b\" x=\"90\" y=\"90\" font-size=\"12\" text-anchor=\"middle\">user</text><text class=\"t\" x=\"90\" y=\"120\" font-size=\"12\" text-anchor=\"middle\">4+2+1 = 7</text><rect class=\"box hi\" x=\"144\" y=\"28\" width=\"28\" height=\"34\" rx=\"4\"/><text class=\"t b\" x=\"158\" y=\"51\" font-size=\"16\" text-anchor=\"middle\">r</text><rect class=\"box\" x=\"174\" y=\"28\" width=\"28\" height=\"34\" rx=\"4\"/><text class=\"t b\" x=\"188\" y=\"51\" font-size=\"16\" text-anchor=\"middle\">-</text><rect class=\"box hi\" x=\"204\" y=\"28\" width=\"28\" height=\"34\" rx=\"4\"/><text class=\"t b\" x=\"218\" y=\"51\" font-size=\"16\" text-anchor=\"middle\">x</text><line class=\"ln mute\" x1=\"144\" y1=\"72\" x2=\"232\" y2=\"72\"/><text class=\"t b\" x=\"188\" y=\"90\" font-size=\"12\" text-anchor=\"middle\">group</text><text class=\"t\" x=\"188\" y=\"120\" font-size=\"12\" text-anchor=\"middle\">4+0+1 = 5</text><rect class=\"box\" x=\"242\" y=\"28\" width=\"28\" height=\"34\" rx=\"4\"/><text class=\"t b\" x=\"256\" y=\"51\" font-size=\"16\" text-anchor=\"middle\">-</text><rect class=\"box\" x=\"272\" y=\"28\" width=\"28\" height=\"34\" rx=\"4\"/><text class=\"t b\" x=\"286\" y=\"51\" font-size=\"16\" text-anchor=\"middle\">-</text><rect class=\"box\" x=\"302\" y=\"28\" width=\"28\" height=\"34\" rx=\"4\"/><text class=\"t b\" x=\"316\" y=\"51\" font-size=\"16\" text-anchor=\"middle\">-</text><line class=\"ln mute\" x1=\"242\" y1=\"72\" x2=\"330\" y2=\"72\"/><text class=\"t b\" x=\"286\" y=\"90\" font-size=\"12\" text-anchor=\"middle\">other</text><text class=\"t\" x=\"286\" y=\"120\" font-size=\"12\" text-anchor=\"middle\">0+0+0 = 0</text><text class=\"t s\" x=\"24\" y=\"90\" font-size=\"11\" text-anchor=\"middle\">type</text><rect class=\"box hi\" x=\"100\" y=\"140\" width=\"160\" height=\"30\" rx=\"6\"/><text class=\"t b\" x=\"180\" y=\"160\" font-size=\"12\" text-anchor=\"middle\">chmod 750 file</text><text class=\"t s\" x=\"180\" y=\"196\" font-size=\"11\" text-anchor=\"middle\">r = 4 read · w = 2 write · x = 1 execute</text></svg>"
+  },
+  {
+    "id": "raid-levels",
+    "title": "RAID 0, 1, 5 and 10 compared",
+    "alt": "Four panels. RAID 0 stripes blocks across two or more disks with no redundancy: full capacity, but one disk failure loses everything. RAID 1 mirrors the same blocks on two disks: 50 percent capacity, survives one failure. RAID 5 stripes data with parity rotated across three or more disks: capacity of n minus 1 disks, survives one failure. RAID 10 stripes across mirrored pairs on four or more disks: 50 percent capacity, survives one failure per mirror pair.",
+    "topics": {
+      "server-plus": [
+        "RAID levels 0, 1, 5, 6, 10: fault tolerance, usable capacity, write penalty; hardware vs software RAID; JBOD",
+        "Storage problems: degraded or failed RAID arrays, controller battery/cache issues, disk full, slow I/O, mount failures, boot device not found, corrupted file systems"
+      ],
+      "a-plus-core1": [
+        "Storage: HDD speeds and form factors, SSD interfaces (SATA, NVMe, M.2 keys), flash drives and cards, RAID 0, 1, 5, 6 and 10"
+      ],
+      "security-plus": [
+        "Resilience: HA, clustering, load balancing, RAID"
+      ],
+      "linux-plus": [
+        "LVM (pvcreate, vgextend, lvextend -r) and software RAID with mdadm"
+      ]
+    },
+    "svg": "<svg viewBox=\"0 0 360 310\" xmlns=\"http://www.w3.org/2000/svg\"><defs><marker id=\"ah-raid-levels\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\"><path class=\"arrow\" d=\"M0,0L10,5L0,10z\"/></marker></defs><rect class=\"box\" x=\"6\" y=\"6\" width=\"172\" height=\"146\" rx=\"8\"/><text class=\"t b\" x=\"92\" y=\"26\" font-size=\"12\" text-anchor=\"middle\">RAID 0 · stripe</text><rect class=\"box\" x=\"32\" y=\"36\" width=\"50\" height=\"70\" rx=\"4\"/><text class=\"t\" x=\"57\" y=\"54\" font-size=\"11\" text-anchor=\"middle\">A1</text><text class=\"t\" x=\"57\" y=\"74\" font-size=\"11\" text-anchor=\"middle\">A3</text><rect class=\"box\" x=\"102\" y=\"36\" width=\"50\" height=\"70\" rx=\"4\"/><text class=\"t\" x=\"127\" y=\"54\" font-size=\"11\" text-anchor=\"middle\">A2</text><text class=\"t\" x=\"127\" y=\"74\" font-size=\"11\" text-anchor=\"middle\">A4</text><text class=\"t\" x=\"92\" y=\"124\" font-size=\"11\" text-anchor=\"middle\">2+ disks · 100%</text><text class=\"t s\" x=\"92\" y=\"140\" font-size=\"11\" text-anchor=\"middle\">one failure: all lost</text><rect class=\"box\" x=\"182\" y=\"6\" width=\"172\" height=\"146\" rx=\"8\"/><text class=\"t b\" x=\"268\" y=\"26\" font-size=\"12\" text-anchor=\"middle\">RAID 1 · mirror</text><rect class=\"box\" x=\"208\" y=\"36\" width=\"50\" height=\"70\" rx=\"4\"/><text class=\"t\" x=\"233\" y=\"54\" font-size=\"11\" text-anchor=\"middle\">A1</text><text class=\"t\" x=\"233\" y=\"74\" font-size=\"11\" text-anchor=\"middle\">A2</text><rect class=\"box\" x=\"278\" y=\"36\" width=\"50\" height=\"70\" rx=\"4\"/><text class=\"t\" x=\"303\" y=\"54\" font-size=\"11\" text-anchor=\"middle\">A1</text><text class=\"t\" x=\"303\" y=\"74\" font-size=\"11\" text-anchor=\"middle\">A2</text><text class=\"t\" x=\"268\" y=\"124\" font-size=\"11\" text-anchor=\"middle\">2 disks · 50%</text><text class=\"t s\" x=\"268\" y=\"140\" font-size=\"11\" text-anchor=\"middle\">survives 1 failure</text><rect class=\"box\" x=\"6\" y=\"158\" width=\"172\" height=\"146\" rx=\"8\"/><text class=\"t b\" x=\"92\" y=\"178\" font-size=\"12\" text-anchor=\"middle\">RAID 5 · parity</text><rect class=\"box\" x=\"20\" y=\"188\" width=\"40\" height=\"70\" rx=\"4\"/><text class=\"t\" x=\"40\" y=\"206\" font-size=\"11\" text-anchor=\"middle\">A1</text><text class=\"t\" x=\"40\" y=\"226\" font-size=\"11\" text-anchor=\"middle\">B1</text><rect class=\"box hi\" x=\"24\" y=\"234\" width=\"32\" height=\"16\" rx=\"3\"/><text class=\"t b\" x=\"40\" y=\"246\" font-size=\"11\" text-anchor=\"middle\">Cp</text><rect class=\"box\" x=\"72\" y=\"188\" width=\"40\" height=\"70\" rx=\"4\"/><text class=\"t\" x=\"92\" y=\"206\" font-size=\"11\" text-anchor=\"middle\">A2</text><rect class=\"box hi\" x=\"76\" y=\"214\" width=\"32\" height=\"16\" rx=\"3\"/><text class=\"t b\" x=\"92\" y=\"226\" font-size=\"11\" text-anchor=\"middle\">Bp</text><text class=\"t\" x=\"92\" y=\"246\" font-size=\"11\" text-anchor=\"middle\">C1</text><rect class=\"box\" x=\"124\" y=\"188\" width=\"40\" height=\"70\" rx=\"4\"/><rect class=\"box hi\" x=\"128\" y=\"194\" width=\"32\" height=\"16\" rx=\"3\"/><text class=\"t b\" x=\"144\" y=\"206\" font-size=\"11\" text-anchor=\"middle\">Ap</text><text class=\"t\" x=\"144\" y=\"226\" font-size=\"11\" text-anchor=\"middle\">B2</text><text class=\"t\" x=\"144\" y=\"246\" font-size=\"11\" text-anchor=\"middle\">C2</text><text class=\"t\" x=\"92\" y=\"276\" font-size=\"11\" text-anchor=\"middle\">3+ disks · n−1</text><text class=\"t s\" x=\"92\" y=\"292\" font-size=\"11\" text-anchor=\"middle\">survives 1 failure</text><rect class=\"box\" x=\"182\" y=\"158\" width=\"172\" height=\"146\" rx=\"8\"/><text class=\"t b\" x=\"268\" y=\"178\" font-size=\"12\" text-anchor=\"middle\">RAID 10</text><rect class=\"box\" x=\"192\" y=\"188\" width=\"32\" height=\"70\" rx=\"4\"/><text class=\"t\" x=\"208\" y=\"206\" font-size=\"11\" text-anchor=\"middle\">A1</text><text class=\"t\" x=\"208\" y=\"226\" font-size=\"11\" text-anchor=\"middle\">A3</text><rect class=\"box\" x=\"232\" y=\"188\" width=\"32\" height=\"70\" rx=\"4\"/><text class=\"t\" x=\"248\" y=\"206\" font-size=\"11\" text-anchor=\"middle\">A1</text><text class=\"t\" x=\"248\" y=\"226\" font-size=\"11\" text-anchor=\"middle\">A3</text><rect class=\"box\" x=\"272\" y=\"188\" width=\"32\" height=\"70\" rx=\"4\"/><text class=\"t\" x=\"288\" y=\"206\" font-size=\"11\" text-anchor=\"middle\">A2</text><text class=\"t\" x=\"288\" y=\"226\" font-size=\"11\" text-anchor=\"middle\">A4</text><rect class=\"box\" x=\"312\" y=\"188\" width=\"32\" height=\"70\" rx=\"4\"/><text class=\"t\" x=\"328\" y=\"206\" font-size=\"11\" text-anchor=\"middle\">A2</text><text class=\"t\" x=\"328\" y=\"226\" font-size=\"11\" text-anchor=\"middle\">A4</text><text class=\"t\" x=\"268\" y=\"276\" font-size=\"11\" text-anchor=\"middle\">4+ disks · 50%</text><text class=\"t s\" x=\"268\" y=\"292\" font-size=\"11\" text-anchor=\"middle\">1 failure per pair</text></svg>"
+  },
+  {
+    "id": "oauth-authorization-code-flow",
+    "title": "OAuth 2.0 authorization code flow",
+    "alt": "Four parties: the user's browser, the client app, the authorization server and the API (resource server). 1 The app redirects the browser to the authorization server. 2 The user logs in and consents there, never giving the password to the app. 3 The authorization server redirects back with a one-time code, 4 which reaches the app. 5 The app exchanges the code, plus its PKCE verifier or client secret, over a back channel. 6 It receives an access token, 7 calls the API with it, and 8 gets the data.",
+    "topics": {
+      "security-plus": [
+        "IAM: provisioning, SSO, SAML, OAuth, OpenID Connect, LDAP"
+      ],
+      "sscp": [
+        "Federation and trust: SAML, OAuth 2.0, OpenID Connect, one-way/two-way and transitive trusts"
+      ],
+      "cissp": [
+        "Federated identity with third parties: SAML, OAuth 2.0, OIDC"
+      ],
+      "sc-300": [
+        "Enterprise application single sign-on: SAML (Identifier, Reply URL, signing certificate) and OpenID Connect"
+      ],
+      "aws-developer": [
+        "Amazon Cognito: user pools (sign-up, sign-in, ID/access/refresh tokens) vs identity pools (temporary AWS credentials)"
+      ]
+    },
+    "svg": "<svg viewBox=\"0 0 360 316\" xmlns=\"http://www.w3.org/2000/svg\"><defs><marker id=\"ah-oauth-authorization-code-flow\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\"><path class=\"arrow\" d=\"M0,0L10,5L0,10z\"/></marker></defs><rect class=\"box\" x=\"4\" y=\"8\" width=\"82\" height=\"38\" rx=\"6\"/><text class=\"t b\" x=\"45\" y=\"24\" font-size=\"12\" text-anchor=\"middle\">Browser</text><text class=\"t s\" x=\"45\" y=\"38\" font-size=\"11\" text-anchor=\"middle\">user</text><rect class=\"box\" x=\"94\" y=\"8\" width=\"82\" height=\"38\" rx=\"6\"/><text class=\"t b\" x=\"135\" y=\"24\" font-size=\"12\" text-anchor=\"middle\">Client</text><text class=\"t s\" x=\"135\" y=\"38\" font-size=\"11\" text-anchor=\"middle\">app</text><rect class=\"box hi\" x=\"184\" y=\"8\" width=\"82\" height=\"38\" rx=\"6\"/><text class=\"t b\" x=\"225\" y=\"24\" font-size=\"12\" text-anchor=\"middle\">Auth</text><text class=\"t s\" x=\"225\" y=\"38\" font-size=\"11\" text-anchor=\"middle\">server</text><rect class=\"box\" x=\"274\" y=\"8\" width=\"82\" height=\"38\" rx=\"6\"/><text class=\"t b\" x=\"315\" y=\"24\" font-size=\"12\" text-anchor=\"middle\">API</text><text class=\"t s\" x=\"315\" y=\"38\" font-size=\"11\" text-anchor=\"middle\">resource</text><line class=\"ln mute\" x1=\"45\" y1=\"46\" x2=\"45\" y2=\"310\"/><line class=\"ln mute\" x1=\"135\" y1=\"46\" x2=\"135\" y2=\"310\"/><line class=\"ln mute\" x1=\"225\" y1=\"46\" x2=\"225\" y2=\"310\"/><line class=\"ln mute\" x1=\"315\" y1=\"46\" x2=\"315\" y2=\"310\"/><line class=\"ln\" x1=\"133\" y1=\"72\" x2=\"47\" y2=\"72\" marker-end=\"url(#ah-oauth-authorization-code-flow)\"/><text class=\"t\" x=\"90\" y=\"66\" font-size=\"11\" text-anchor=\"middle\">1 redirect</text><line class=\"ln\" x1=\"45\" y1=\"102\" x2=\"223\" y2=\"102\" marker-end=\"url(#ah-oauth-authorization-code-flow)\"/><text class=\"t\" x=\"135\" y=\"96\" font-size=\"11\" text-anchor=\"middle\">2 login + consent</text><line class=\"ln\" x1=\"223\" y1=\"132\" x2=\"47\" y2=\"132\" marker-end=\"url(#ah-oauth-authorization-code-flow)\"/><text class=\"t\" x=\"135\" y=\"126\" font-size=\"11\" text-anchor=\"middle\">3 redirect + code</text><line class=\"ln\" x1=\"45\" y1=\"162\" x2=\"133\" y2=\"162\" marker-end=\"url(#ah-oauth-authorization-code-flow)\"/><text class=\"t\" x=\"90\" y=\"156\" font-size=\"11\" text-anchor=\"middle\">4 code</text><line class=\"acc-ln\" x1=\"135\" y1=\"196\" x2=\"223\" y2=\"196\" marker-end=\"url(#ah-oauth-authorization-code-flow)\"/><text class=\"t\" x=\"180\" y=\"190\" font-size=\"11\" text-anchor=\"middle\">5 code + PKCE</text><text class=\"t s\" x=\"180\" y=\"210\" font-size=\"11\" text-anchor=\"middle\">back channel</text><line class=\"acc-ln\" x1=\"223\" y1=\"246\" x2=\"137\" y2=\"246\" marker-end=\"url(#ah-oauth-authorization-code-flow)\"/><text class=\"t\" x=\"180\" y=\"240\" font-size=\"11\" text-anchor=\"middle\">6 access token</text><line class=\"ln\" x1=\"135\" y1=\"276\" x2=\"313\" y2=\"276\" marker-end=\"url(#ah-oauth-authorization-code-flow)\"/><text class=\"t\" x=\"225\" y=\"270\" font-size=\"11\" text-anchor=\"middle\">7 call with token</text><line class=\"ln\" x1=\"313\" y1=\"304\" x2=\"137\" y2=\"304\" marker-end=\"url(#ah-oauth-authorization-code-flow)\"/><text class=\"t\" x=\"225\" y=\"298\" font-size=\"11\" text-anchor=\"middle\">8 data</text></svg>"
+  },
+  {
+    "id": "wifi-4way-handshake",
+    "title": "Wi-Fi WPA2/WPA3 4-way handshake",
+    "alt": "Before the handshake, the client (supplicant) and access point share a PMK, from the passphrase or from 802.1X. Message 1: the AP sends its ANonce. The client derives the PTK from the PMK, both nonces and both MAC addresses, then message 2 returns its SNonce with a MIC. The AP derives the same PTK; message 3 delivers the encrypted group key (GTK) with a MIC, and message 4 acknowledges. Both sides install the keys and traffic is encrypted.",
+    "topics": {
+      "cwna": [
+        "The 4-way handshake: PMK, PTK and GTK",
+        "Joining a BSS: passive and active scanning, open system authentication, association and the 4-way handshake"
+      ],
+      "network-plus": [
+        "Wireless security: WPA2/WPA3 Personal and Enterprise, PSK vs 802.1X, captive portals; antenna types"
+      ],
+      "ccna": [
+        "Wireless security: WPA2 and WPA3, Personal (PSK/SAE) vs Enterprise (802.1X)"
+      ]
+    },
+    "svg": "<svg viewBox=\"0 0 360 348\" xmlns=\"http://www.w3.org/2000/svg\"><defs><marker id=\"ah-wifi-4way-handshake\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"7\" markerHeight=\"7\" orient=\"auto-start-reverse\"><path class=\"arrow\" d=\"M0,0L10,5L0,10z\"/></marker></defs><rect class=\"box\" x=\"10\" y=\"8\" width=\"100\" height=\"28\" rx=\"6\"/><text class=\"t b\" x=\"60\" y=\"26\" font-size=\"12\" text-anchor=\"middle\">Client (STA)</text><rect class=\"box\" x=\"250\" y=\"8\" width=\"100\" height=\"28\" rx=\"6\"/><text class=\"t b\" x=\"300\" y=\"26\" font-size=\"12\" text-anchor=\"middle\">AP</text><line class=\"ln mute\" x1=\"60\" y1=\"36\" x2=\"60\" y2=\"290\"/><line class=\"ln mute\" x1=\"300\" y1=\"36\" x2=\"300\" y2=\"290\"/><rect class=\"box hi\" x=\"50\" y=\"46\" width=\"260\" height=\"24\" rx=\"6\"/><text class=\"t\" x=\"180\" y=\"62\" font-size=\"11\" text-anchor=\"middle\">Both hold PMK (PSK or 802.1X)</text><line class=\"ln\" x1=\"300\" y1=\"94\" x2=\"62\" y2=\"108\" marker-end=\"url(#ah-wifi-4way-handshake)\"/><text class=\"t\" x=\"180\" y=\"88\" font-size=\"12\" text-anchor=\"middle\">1 ANonce</text><text class=\"t s\" x=\"180\" y=\"130\" font-size=\"11\" text-anchor=\"middle\">client derives PTK</text><line class=\"ln\" x1=\"60\" y1=\"156\" x2=\"298\" y2=\"170\" marker-end=\"url(#ah-wifi-4way-handshake)\"/><text class=\"t\" x=\"180\" y=\"150\" font-size=\"12\" text-anchor=\"middle\">2 SNonce + MIC</text><text class=\"t s\" x=\"180\" y=\"192\" font-size=\"11\" text-anchor=\"middle\">AP derives PTK</text><line class=\"ln\" x1=\"300\" y1=\"218\" x2=\"62\" y2=\"232\" marker-end=\"url(#ah-wifi-4way-handshake)\"/><text class=\"t\" x=\"180\" y=\"212\" font-size=\"12\" text-anchor=\"middle\">3 GTK (encrypted) + MIC</text><line class=\"ln\" x1=\"60\" y1=\"262\" x2=\"298\" y2=\"276\" marker-end=\"url(#ah-wifi-4way-handshake)\"/><text class=\"t\" x=\"180\" y=\"256\" font-size=\"12\" text-anchor=\"middle\">4 ACK + MIC</text><rect class=\"box hi\" x=\"50\" y=\"290\" width=\"260\" height=\"24\" rx=\"6\"/><text class=\"t\" x=\"180\" y=\"306\" font-size=\"11\" text-anchor=\"middle\">Keys installed · traffic encrypted</text><text class=\"t s\" x=\"180\" y=\"338\" font-size=\"11\" text-anchor=\"middle\">PTK = PMK + ANonce + SNonce + MACs</text></svg>"
+  }
+]);

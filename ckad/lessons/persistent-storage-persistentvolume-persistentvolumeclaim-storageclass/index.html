@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Persistent storage: PersistentVolume… · CKAD Lesson</title>
+<meta name="description" content="Some data must outlive any single Pod: database files, uploads, anything you cannot lose on a restart. Kubernetes separates the storage itself from the req">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Persistent storage: PersistentVolume… · CKAD Lesson">
+<meta property="og:description" content="Some data must outlive any single Pod: database files, uploads, anything you cannot lose on a restart. Kubernetes separates the storage itself from the req">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/persistent-storage-persistentvolume-persistentvolumeclaim-storageclass/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/persistent-storage-persistentvolume-persistentvolumeclaim-storageclass/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 1: Application Design and Build</p>
+<h1>Persistent storage: PersistentVolume, PersistentVolumeClaim, StorageClass, access modes, dynamic provisioning</h1>
+<article class="lbody">
+<p>Some data must outlive any single Pod: database files, uploads, anything you cannot lose on a restart. Kubernetes separates the storage itself from the request for storage, so developers can ask for space without knowing the details of the disk behind it.</p>
+<p>A PersistentVolume (PV) is a piece of storage in the cluster, such as a cloud disk, an NFS export or a local path, represented as a cluster-scoped object. A PersistentVolumeClaim (PVC) is a namespaced request: &quot;I need 5Gi with ReadWriteOnce access&quot;. Kubernetes binds a claim to a PV that satisfies its size, access mode and storage class; the binding is one-to-one. The Pod then references the claim by name, never the PV directly.</p>
+<pre class="code" tabindex="0"><code>apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data
+spec:
+  accessModes: [&quot;ReadWriteOnce&quot;]
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard
+---
+# in the Pod spec
+volumes:
+- name: data
+  persistentVolumeClaim:
+    claimName: data</code></pre>
+<p>Access modes describe how the volume can be mounted. ReadWriteOnce (RWO) allows read-write by a single node (several Pods on that node can share it). ReadOnlyMany (ROX) allows read-only by many nodes. ReadWriteMany (RWX) allows read-write by many nodes and needs storage that supports it, such as NFS. ReadWriteOncePod (RWOP) restricts read-write access to a single Pod. A claim only binds to a PV that offers the requested mode.</p>
+<p>A StorageClass describes a kind of storage, with a <code>provisioner</code> that knows how to create it and <code>parameters</code> such as disk type. With dynamic provisioning, you create a PVC that names a StorageClass, and the provisioner automatically creates a matching PV. If the PVC omits <code>storageClassName</code>, the cluster's default StorageClass is used (marked with <code>(default)</code> in <code>kubectl get storageclass</code>). Setting <code>storageClassName: &quot;&quot;</code> explicitly asks for no class, so only a pre-created PV without a class can bind. Static provisioning means an administrator creates PVs by hand in advance.</p>
+<p>The <code>reclaimPolicy</code> says what happens to the PV when its claim is deleted: <code>Delete</code> removes the underlying storage (the usual default for dynamically provisioned volumes), and <code>Retain</code> keeps it for manual recovery. Some classes use <code>volumeBindingMode: WaitForFirstConsumer</code>, which delays provisioning until a Pod uses the claim so the volume is created in the right zone; until then the PVC shows Pending, which is normal.</p>
+<p>Troubleshoot with <code>kubectl get pv,pvc</code> and look at STATUS: Bound is good, Pending means no matching PV or provisioner. <code>kubectl describe pvc data</code> explains why. A common exam mistake is a mismatch in storage class, size or access mode between a hand-written PV and PVC.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>PersistentVolume (PV)</dt><dd>A cluster-scoped object representing a piece of real storage.</dd><dt>PersistentVolumeClaim (PVC)</dt><dd>A namespaced request for storage that binds to a matching PV.</dd><dt>StorageClass</dt><dd>A named type of storage with a provisioner used for dynamic provisioning.</dd><dt>Access mode</dt><dd>RWO, ROX, RWX or RWOP: how many nodes or Pods may mount the volume and whether they can write.</dd><dt>Reclaim policy</dt><dd>Delete or Retain: what happens to a PV's storage after its claim is released.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>In minikube, a developer creates a 1Gi RWO PVC with no storageClassName. The default StorageClass provisions a PV automatically, the claim shows Bound, and after deleting and recreating the Pod the files written to the mount are still there.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Pods reference PVCs, not PVs. For a static PV and PVC to bind, storageClassName, access mode and capacity (PV at least as large as the request) must all be compatible.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which object is namespaced: PV or PVC?</summary><p>The PVC is namespaced; the PV is cluster-scoped.</p></details>
+<details class="sq"><summary>What does ReadWriteOnce actually restrict?</summary><p>Read-write mounting to a single node; Pods on that same node can share it. ReadWriteOncePod restricts it to one Pod.</p></details>
+<details class="sq"><summary>A PVC is Pending and its StorageClass uses WaitForFirstConsumer. Is something broken?</summary><p>Not necessarily; provisioning waits until a Pod that uses the claim is scheduled.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../ephemeral-volumes-emptydir-including-medium-memory-configmap-secret-pr/">← Ephemeral volumes: emptyDir (including medium: Memory), conf</a><a href="../mounting-volumes-with-volumemounts-mountpath-subpath-and-readonly/">Mounting volumes with volumeMounts, mountPath, subPath and r →</a></nav>
+</main>
+</body>
+</html>

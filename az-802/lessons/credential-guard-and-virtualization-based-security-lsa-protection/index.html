@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Credential Guard and virtualization-based security; LSA… · AZ-802 Lesson</title>
+<meta name="description" content="Attackers who get administrator rights on a server often dump credentials from the memory of the Local Security Authority Subsystem Service (LSASS), then r">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Credential Guard and virtualization-based security; LSA… · AZ-802 Lesson">
+<meta property="og:description" content="Attackers who get administrator rights on a server often dump credentials from the memory of the Local Security Authority Subsystem Service (LSASS), then r">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/credential-guard-and-virtualization-based-security-lsa-protection/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/credential-guard-and-virtualization-based-security-lsa-protection/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 6: Secure Windows Server infrastructure</p>
+<h1>Credential Guard and virtualization-based security; LSA protection</h1>
+<article class="lbody">
+<p>Attackers who get administrator rights on a server often dump credentials from the memory of the Local Security Authority Subsystem Service (LSASS), then reuse NTLM hashes or Kerberos tickets to move to other machines, known as pass-the-hash and pass-the-ticket. Windows Server has two defenses that protect LSASS: Credential Guard, built on virtualization-based security, and LSA protection.</p>
+<p>Virtualization-based security (VBS) uses the Hyper-V hypervisor to create an isolated region of memory, called Virtual Secure Mode, that even the normal Windows kernel cannot read. Security-critical code runs there. Features built on VBS include Credential Guard and memory integrity, also called hypervisor-protected code integrity (HVCI), which checks kernel code before it runs. VBS requires a 64-bit CPU with virtualization extensions and second-level address translation, UEFI firmware with Secure Boot, and ideally a TPM (Trusted Platform Module) to protect its keys. Check status in <code>msinfo32</code> under Virtualization-based security.</p>
+<p>Credential Guard moves the secrets LSASS protects, such as NTLM password hashes and Kerberos ticket-granting tickets, into an isolated process called LSAIso inside Virtual Secure Mode. LSASS talks to it by remote procedure call but never holds the raw secrets, so tools that dump LSASS memory get nothing reusable. You enable it with Group Policy (Computer Configuration, Administrative Templates, System, Device Guard, Turn On Virtualization Based Security) or via registry and management tools, choosing whether to use a UEFI lock that prevents remote disabling. Limitations the exam likes: Credential Guard is not supported on domain controllers, because it cannot protect the AD database; it blocks NTLMv1, unconstrained Kerberos delegation and saved credentials delegation for protected accounts, which can break old apps; and it doesn't stop keyloggers or attacks on credentials typed into other apps.</p>
+<p>LSA protection runs LSASS itself as a Protected Process Light (PPL). Only code signed appropriately can then load into LSASS or open its memory, so non-protected processes, even running as administrator, cannot inject code or read memory. You enable it by setting the registry value <code>RunAsPPL</code> under <code>HKLM\SYSTEM\CurrentControlSet\Control\Lsa</code> (1 with a UEFI variable lock, 2 without), or with Group Policy on newer versions, then restarting. Before enforcing, you can audit which plug-ins and drivers would fail to load; related events appear in the CodeIntegrity log. Unlike Credential Guard, LSA protection doesn't need VBS and can be used on domain controllers.</p>
+<p>The two stack well: LSA protection hardens the LSASS process, and Credential Guard removes the most valuable secrets from it altogether. Neither replaces good privileged access practices such as tiered administration and not logging on to servers with domain admin accounts.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Virtualization-based security</dt><dd>Hyper-V-backed isolation that creates a secure memory region the normal OS kernel cannot access.</dd><dt>Credential Guard</dt><dd>A VBS feature that stores NTLM hashes and Kerberos TGTs in the isolated LSAIso process to defeat credential dumping.</dd><dt>LSA protection</dt><dd>Running LSASS as a Protected Process Light so unsigned or non-protected code cannot read its memory or inject into it.</dd><dt>HVCI (memory integrity)</dt><dd>A VBS feature that validates kernel-mode code integrity inside the secure environment before it runs.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>After a phishing incident, a security team enables Credential Guard on all member servers and LSA protection on all servers including domain controllers. In a later red team exercise, an attacker with local admin on an app server dumps LSASS memory but finds no reusable NTLM hashes or TGTs, so lateral movement fails.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Credential Guard needs VBS (UEFI, Secure Boot, virtualization extensions) and is not supported on DCs; LSA protection (RunAsPPL) works on DCs and doesn't need VBS.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Where do NTLM hashes and Kerberos TGTs live when Credential Guard is enabled?</summary><p>In the LSAIso process inside Virtual Secure Mode, isolated from the normal OS and LSASS.</p></details>
+<details class="sq"><summary>You want to protect LSASS on domain controllers. Which feature can you use?</summary><p>LSA protection (RunAsPPL), because Credential Guard is not supported on domain controllers.</p></details>
+<details class="sq"><summary>Name two platform requirements for VBS.</summary><p>Any two of: 64-bit CPU with virtualization extensions and SLAT, UEFI with Secure Boot, and ideally a TPM.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../security-baselines-osconfig-on-windows-server-2025-microsoft-security/">← Security baselines: OSConfig on Windows Server 2025, Microso</a><a href="../app-control-for-business-wdac-policies-and-audit-mode-applocker-differ/">App Control for Business (WDAC) policies and audit mode; App →</a></nav>
+</main>
+</body>
+</html>

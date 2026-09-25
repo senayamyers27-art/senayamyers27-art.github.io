@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sensitive data: `sensitive` values, ephemeral variables… · Terraform Associate Lesson</title>
+<meta name="description" content="Infrastructure code constantly handles secrets: database passwords, API tokens, private keys. Terraform offers several tools for them, and the exam expects">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Sensitive data: `sensitive` values, ephemeral variables… · Terraform Associate Lesson">
+<meta property="og:description" content="Infrastructure code constantly handles secrets: database passwords, API tokens, private keys. Terraform offers several tools for them, and the exam expects">
+<link rel="canonical" href="https://senayamyers27-art.github.io/terraform/lessons/sensitive-data-sensitive-values-ephemeral-variables-and-resources-writ/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/terraform/lessons/sensitive-data-sensitive-values-ephemeral-variables-and-resources-writ/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Terraform Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004) · Domain 4: Terraform configuration</p>
+<h1>Sensitive data: `sensitive` values, ephemeral variables and resources, write-only arguments, secrets in state</h1>
+<article class="lbody">
+<p>Infrastructure code constantly handles secrets: database passwords, API tokens, private keys. Terraform offers several tools for them, and the exam expects you to know exactly what each one protects and what it does not. The oldest and most misunderstood is the <code>sensitive</code> flag.</p>
+<p>Setting <code>sensitive = true</code> on a variable or output tells Terraform to redact that value in plan and apply output, showing <code>(sensitive value)</code> instead. Sensitivity propagates: any expression built from a sensitive value is also treated as sensitive, and a root module output that uses one must itself be marked sensitive. Providers can also mark resource attributes as sensitive. But redaction is only about display. The real value is still written to the state file in plain text, and <code>terraform output -json</code> or <code>terraform output -raw NAME</code> will show it to anyone who can run the command.</p>
+<p>Ephemeral values close that gap. A variable declared with <code>ephemeral = true</code> can be used during a run but is never saved in the plan file or the state. Ephemeral resources, declared with an <code>ephemeral</code> block instead of a <code>resource</code> block, fetch or generate something temporary each run, such as a secret read from a secrets manager or a short-lived token, and Terraform does not persist them. Ephemeral values can only be used in places that do not persist them: provider configuration blocks, other ephemeral contexts, provisioner and connection blocks, and write-only arguments. Child modules can also mark outputs as ephemeral to pass them along.</p>
+<p>Write-only arguments are the matching piece on the resource side. A provider can offer an argument, often ending in <code>_wo</code>, that accepts a value (including an ephemeral one) and sends it to the API but never records it in the plan or state. Because Terraform cannot compare a value it never stored, these arguments usually come with a companion version argument; you increase the version number when you want Terraform to send a new value.</p>
+<pre class="code" tabindex="0"><code>ephemeral &quot;random_password&quot; &quot;db&quot; {
+  length = 20
+}
+
+resource &quot;aws_db_instance&quot; &quot;main&quot; {
+  # ...other arguments...
+  password_wo         = ephemeral.random_password.db.result
+  password_wo_version = 1
+}</code></pre>
+<p>Even with these features, treat every state file as sensitive. Older providers, data sources and ordinary resource attributes still store secrets in state. Protect state with an encrypted remote backend, strict access control and no commits to version control. Keep secrets out of <code>.tf</code> and <code>.tfvars</code> files that go into Git, and prefer environment variables (<code>TF_VAR_name</code>), a secrets manager or ephemeral resources for supplying them.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>sensitive = true</dt><dd>Marks a variable or output so its value is redacted in CLI output; the value is still stored in state.</dd><dt>Ephemeral variable</dt><dd>A variable declared with ephemeral = true whose value is available during a run but never written to plan or state.</dd><dt>Ephemeral resource</dt><dd>An ephemeral block that obtains a temporary value (such as a secret or token) each run without persisting it.</dd><dt>Write-only argument</dt><dd>A resource argument that accepts a value and passes it to the provider but never stores it in plan or state, usually paired with a version argument.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A team marked its database password variable sensitive and assumed it was safe, until an auditor opened terraform.tfstate and found the password in plain text. They switched to an ephemeral resource that reads the password from their secrets manager and passes it through the provider's write-only password argument, so the state no longer contains it.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> The exam's favorite trap: sensitive only hides values from CLI output. It does not encrypt them or keep them out of the state file.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Does marking an output sensitive keep it out of terraform.tfstate?</summary><p>No. It only redacts the value in plan, apply and default output display; the value is still stored in state in plain text.</p></details>
+<details class="sq"><summary>Why do write-only arguments usually have a companion version argument?</summary><p>Terraform never stores the write-only value, so it cannot detect a change; bumping the version tells Terraform to send the new value.</p></details>
+<details class="sq"><summary>Name two places where an ephemeral value may be used.</summary><p>Examples include a provider configuration block, a write-only argument, another ephemeral resource or variable, and provisioner or connection blocks.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Terraform Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../terraform/">Open the Terraform Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../custom-conditions-variable-validation-precondition-and-postcondition-a/">← Custom conditions: variable `validation`, `precondition` and</a><a href="../secrets-management-with-hashicorp-vault-and-the-vault-provider/">Secrets management with HashiCorp Vault and the Vault provid →</a></nav>
+</main>
+</body>
+</html>

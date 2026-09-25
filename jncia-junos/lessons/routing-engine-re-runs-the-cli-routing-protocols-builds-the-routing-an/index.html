@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Routing Engine (RE): runs the CLI, routing protocols… · JNCIA-Junos Lesson</title>
+<meta name="description" content="The Routing Engine is the brain of a Junos device. It is a general-purpose computer, with its own CPU, memory and storage, that runs the Junos kernel and a">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Routing Engine (RE): runs the CLI, routing protocols… · JNCIA-Junos Lesson">
+<meta property="og:description" content="The Routing Engine is the brain of a Junos device. It is a general-purpose computer, with its own CPU, memory and storage, that runs the Junos kernel and a">
+<link rel="canonical" href="https://senayamyers27-art.github.io/jncia-junos/lessons/routing-engine-re-runs-the-cli-routing-protocols-builds-the-routing-an/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/jncia-junos/lessons/routing-engine-re-runs-the-cli-routing-protocols-builds-the-routing-an/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">JNCIA-Junos</a> / <a href="../">Lessons</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106 · Domain 2: Junos OS fundamentals</p>
+<h1>Routing Engine (RE): runs the CLI, routing protocols, builds the routing and forwarding tables</h1>
+<article class="lbody">
+<p>The Routing Engine is the brain of a Junos device. It is a general-purpose computer, with its own CPU, memory and storage, that runs the Junos kernel and all the daemons. When you log in, type commands, change the configuration or watch OSPF form an adjacency, you are interacting with the RE.</p>
+<p>Its responsibilities fall into a few groups. Management: it runs the CLI, J-Web, SSH, NETCONF, SNMP and syslog, stores the configuration and its rollback history, and keeps the system clock through NTP. Routing: it runs routing protocols such as OSPF, IS-IS and BGP through the routing protocol daemon, rpd, and it holds static routes and directly connected routes. Chassis control: it monitors hardware, power, fans and temperature and raises alarms. Table building: it turns everything it learns into a forwarding table for the PFE.</p>
+<p>That last job is worth understanding step by step. Each source of routes (direct interfaces, local addresses, static routes, OSPF, BGP) contributes candidate routes to the routing table, also called the RIB (routing information base). On Junos, IPv4 unicast routes live in <code>inet.0</code> and IPv6 in <code>inet6.0</code>. When several sources offer the same prefix, the RE picks the active route using route preference, where the lowest number wins: direct is 0, static is 5, OSPF internal is 10, BGP is 170. The active routes are then used to build the forwarding table, or FIB (forwarding information base), which lists each prefix with its resolved next hop and outgoing interface. The RE pushes the FIB to every PFE.</p>
+<p>You can see each stage from the CLI. <code>show route</code> lists the routing table; an asterisk marks the active route for each prefix. <code>show route protocol static</code> narrows it to one source. <code>show route forwarding-table destination 10.1.1.0/24</code> shows the entry the PFE actually uses. <code>show chassis routing-engine</code> reports CPU, memory, uptime and, on dual-RE systems, which RE is primary.</p>
+<p>Larger platforms often have two Routing Engines for redundancy. One is primary (also called master in older documentation) and the other is backup. Features like graceful Routing Engine switchover can move control to the backup RE while the PFEs keep forwarding. On dual-RE systems you use <code>commit synchronize</code> so both REs have the same configuration.</p>
+<p>Because the RE is a normal computer with limited CPU compared to the PFE's forwarding capacity, it must be protected. Heavy traffic aimed at the router itself could starve routing protocols of CPU time. That is why Junos rate-limits exception traffic and why you should put a firewall filter on the loopback interface, as later lessons explain.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Routing table (RIB)</dt><dd>The RE's table of all known routes from every source; inet.0 holds IPv4 unicast routes.</dd><dt>Forwarding table (FIB)</dt><dd>The table of active routes with resolved next hops that the RE pushes to the PFE.</dd><dt>Route preference</dt><dd>Junos's value for choosing between sources for the same prefix; lower wins (direct 0, static 5, OSPF 10, BGP 170).</dd><dt>Active route</dt><dd>The route the RE chooses for a prefix and installs in the forwarding table, marked with * in <code>show route</code>.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A router learns 10.50.0.0/24 from both OSPF and a static route. <code>show route 10.50.0.0/24</code> shows the static route with an asterisk because its preference of 5 beats OSPF's 10. <code>show route forwarding-table destination 10.50.0.0/24</code> confirms the static next hop is what the PFE uses.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> The RE builds both tables but does not forward transit traffic. If an answer says the RE forwards packets between interfaces, it is describing the wrong component.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What is the difference between the routing table and the forwarding table?</summary><p>The routing table holds all learned routes from every source; the forwarding table holds only the active routes with resolved next hops and is copied to the PFE.</p></details>
+<details class="sq"><summary>Which daemon on the RE runs routing protocols?</summary><p>rpd, the routing protocol daemon.</p></details>
+<details class="sq"><summary>Which command shows RE CPU and memory usage?</summary><p><code>show chassis routing-engine</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study JNCIA-Junos for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../jncia-junos/">Open the JNCIA-Junos study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../separation-of-control-plane-and-forwarding-plane/">← Separation of control plane and forwarding plane</a><a href="../packet-forwarding-engine-pfe-forwards-transit-traffic-using-the-forwar/">Packet Forwarding Engine (PFE): forwards transit traffic usi →</a></nav>
+</main>
+</body>
+</html>

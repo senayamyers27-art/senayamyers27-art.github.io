@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cosmos DB for NoSQL with the Python SDK (azure-cosmos)… · AI-200 Lesson</title>
+<meta name="description" content="Azure Cosmos DB for NoSQL is a globally distributed database that stores JSON documents called items. Items live in containers, containers live in database">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Cosmos DB for NoSQL with the Python SDK (azure-cosmos)… · AI-200 Lesson">
+<meta property="og:description" content="Azure Cosmos DB for NoSQL is a globally distributed database that stores JSON documents called items. Items live in containers, containers live in database">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/cosmos-db-for-nosql-with-the-python-sdk-azure-cosmos-cosmosclient-crea/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/cosmos-db-for-nosql-with-the-python-sdk-azure-cosmos-cosmosclient-crea/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 2: Develop AI solutions by using Azure data management services</p>
+<h1>Cosmos DB for NoSQL with the Python SDK (azure-cosmos): CosmosClient, create/upsert/read/delete items, parameterized queries</h1>
+<article class="lbody">
+<p>Azure Cosmos DB for NoSQL is a globally distributed database that stores JSON documents called items. Items live in containers, containers live in databases, and databases live in an account. Every item has an <code>id</code> and a value for the container's partition key; together they uniquely identify the item. The Python SDK is the <code>azure-cosmos</code> package.</p>
+<p>Everything starts with <code>CosmosClient</code>. Create one per application and reuse it, because it maintains connections and caches metadata; creating a client per request is a common performance mistake. Authenticate with Microsoft Entra ID by passing a credential such as <code>DefaultAzureCredential()</code>, which works with a managed identity in Azure and your developer sign-in locally. Account keys also work but are secrets you would have to protect.</p>
+<pre class="code" tabindex="0"><code>from azure.cosmos import CosmosClient
+from azure.identity import DefaultAzureCredential
+
+client = CosmosClient(ACCOUNT_ENDPOINT, credential=DefaultAzureCredential())
+container = client.get_database_client(&quot;shop&quot;).get_container_client(&quot;orders&quot;)
+
+order = {&quot;id&quot;: &quot;o-1001&quot;, &quot;customerId&quot;: &quot;c-42&quot;, &quot;total&quot;: 59.90, &quot;status&quot;: &quot;new&quot;}
+container.create_item(order)          # fails with 409 Conflict if id+pk exists
+order[&quot;status&quot;] = &quot;paid&quot;
+container.upsert_item(order)          # insert or replace
+item = container.read_item(item=&quot;o-1001&quot;, partition_key=&quot;c-42&quot;)
+container.delete_item(item=&quot;o-1001&quot;, partition_key=&quot;c-42&quot;)</code></pre>
+<p>Know the difference between the write methods. <code>create_item</code> inserts and raises a conflict error (HTTP 409) if an item with the same id already exists in that partition. <code>replace_item</code> overwrites an existing item and fails with not found (404) if it does not exist. <code>upsert_item</code> does either, which is convenient for idempotent processing. <code>patch_item</code> changes specific fields without sending the whole document. <code>read_item</code> needs both the id and the partition key value, and it is the cheapest operation in Cosmos DB: a point read.</p>
+<p>Queries use a SQL-like language over JSON. Always pass user input as parameters rather than building strings; parameters prevent injection and let the service reuse query plans. Each parameter has a name starting with <code>@</code> and a value.</p>
+<pre class="code" tabindex="0"><code>items = container.query_items(
+    query=&quot;SELECT c.id, c.total FROM c WHERE c.customerId = @cust AND c.total &gt; @min&quot;,
+    parameters=[{&quot;name&quot;: &quot;@cust&quot;, &quot;value&quot;: &quot;c-42&quot;}, {&quot;name&quot;: &quot;@min&quot;, &quot;value&quot;: 20}],
+    partition_key=&quot;c-42&quot;)
+for row in items:
+    print(row[&quot;id&quot;], row[&quot;total&quot;])</code></pre>
+<p>Supplying <code>partition_key</code> keeps the query in one partition. Without it, you pass <code>enable_cross_partition_query=True</code> and the query fans out to every partition, costing more Request Units. Errors surface as <code>CosmosHttpResponseError</code> with a status code, such as 404, 409, or 429 when you exceed provisioned throughput; the SDK retries 429s automatically a limited number of times. The async client in <code>azure.cosmos.aio</code> offers the same operations for asyncio apps.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>CosmosClient</dt><dd>The azure-cosmos entry point that connects to an account; create one and reuse it for the app's lifetime.</dd><dt>Upsert</dt><dd>An operation that inserts an item if it does not exist or replaces it if it does.</dd><dt>Point read</dt><dd>Reading one item by id and partition key with read_item, the cheapest Cosmos DB operation.</dd><dt>Parameterized query</dt><dd>A query whose values are passed separately as @name parameters instead of string concatenation.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An order service calls create_item for each incoming order and occasionally receives the same message twice from its queue, which raises 409 Conflict. The team switches to upsert_item, making processing idempotent, and replaces a string-built query with a parameterized one that includes the customer's partition key, cutting RU cost and closing an injection risk.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> read_item always needs both item id and partition key; create_item fails on duplicates while upsert_item does not, and cross-partition queries need enable_cross_partition_query=True.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which method should you use for idempotent writes where a message might be processed twice?</summary><p>upsert_item, because it inserts or replaces without failing when the item already exists.</p></details>
+<details class="sq"><summary>Why use parameters in query_items instead of f-strings?</summary><p>Parameters prevent query injection and let the service treat values safely and consistently.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../aks-basics-for-developers-deployment-and-service-manifests-kubectl-app/">← AKS basics for developers: Deployment and Service manifests,</a><a href="../partition-key-design-high-cardinality-even-spread-point-reads-hierarch/">Partition key design: high cardinality, even spread, point r →</a></nav>
+</main>
+</body>
+</html>

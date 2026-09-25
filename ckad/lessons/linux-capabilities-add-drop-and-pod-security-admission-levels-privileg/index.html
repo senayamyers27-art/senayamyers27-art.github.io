@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Linux capabilities (add/drop) and Pod Security Admission… · CKAD Lesson</title>
+<meta name="description" content="Traditionally on Linux, root could do everything and other users almost nothing. Capabilities split root's power into smaller named privileges, such as NET">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Linux capabilities (add/drop) and Pod Security Admission… · CKAD Lesson">
+<meta property="og:description" content="Traditionally on Linux, root could do everything and other users almost nothing. Capabilities split root's power into smaller named privileges, such as NET">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/linux-capabilities-add-drop-and-pod-security-admission-levels-privileg/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/linux-capabilities-add-drop-and-pod-security-admission-levels-privileg/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 4: Application Environment, Configuration and Security</p>
+<h1>Linux capabilities (add/drop) and Pod Security Admission levels (privileged, baseline, restricted)</h1>
+<article class="lbody">
+<p>Traditionally on Linux, root could do everything and other users almost nothing. Capabilities split root's power into smaller named privileges, such as <code>NET_BIND_SERVICE</code> (bind to ports below 1024), <code>NET_ADMIN</code> (change network settings), <code>CHOWN</code> (change file ownership) and <code>SYS_ADMIN</code> (a very broad set of administrative actions). Container runtimes give containers a default subset of capabilities, and you can adjust it per container.</p>
+<p>In <code>securityContext.capabilities</code> (container level only) you list capabilities to <code>add</code> and <code>drop</code>, written without the <code>CAP_</code> prefix. The recommended pattern is to drop everything and add back only what is needed. A web server that must listen on port 80 as a non-root user needs only <code>NET_BIND_SERVICE</code>. Avoid <code>privileged: true</code>, which grants all capabilities and access to host devices, and be very cautious with broad capabilities such as <code>SYS_ADMIN</code>.</p>
+<pre class="code" tabindex="0"><code>securityContext:
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: [&quot;ALL&quot;]
+    add: [&quot;NET_BIND_SERVICE&quot;]
+  seccompProfile:
+    type: RuntimeDefault</code></pre>
+<p>Pod Security Admission (PSA) is the built-in admission controller that enforces the Pod Security Standards per namespace. There are three levels. Privileged is unrestricted, for trusted system workloads. Baseline blocks known privilege escalations while staying easy to adopt: no privileged containers, no host namespaces (hostNetwork, hostPID, hostIPC), no hostPath volumes, and no added capabilities beyond a default-like set. Restricted follows hardening best practice: everything in baseline plus <code>runAsNonRoot: true</code>, <code>allowPrivilegeEscalation: false</code>, capabilities dropping <code>ALL</code> (only <code>NET_BIND_SERVICE</code> may be added), a seccomp profile of <code>RuntimeDefault</code> or <code>Localhost</code>, and only a limited list of volume types.</p>
+<p>You apply levels with namespace labels, one per mode. <code>enforce</code> rejects violating Pods. <code>audit</code> allows them but records the violation in the audit log. <code>warn</code> allows them but returns a warning to the user. An optional <code>-version</code> label pins the standard to a Kubernetes version, or <code>latest</code>.</p>
+<pre class="code" tabindex="0"><code>kubectl label namespace shop \
+  pod-security.kubernetes.io/enforce=baseline \
+  pod-security.kubernetes.io/warn=restricted</code></pre>
+<p>Enforcement applies to Pods, not to Deployments. If a Deployment's Pod template violates an enforced level, the Deployment is created but its ReplicaSet cannot create Pods; the error, such as 'violates PodSecurity &quot;restricted:latest&quot;: allowPrivilegeEscalation != false', appears in <code>kubectl describe rs</code> and events. The warn and audit modes also check workload templates, so you get an early warning when applying the Deployment. Labelling a namespace does not remove Pods that already run; it warns about existing violations and blocks new ones. The fix is always in the Pod's securityContext, and the error message lists each field to correct.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Capability</dt><dd>A named slice of root privilege, such as NET_BIND_SERVICE, that can be added to or dropped from a container.</dd><dt>Pod Security Admission</dt><dd>Built-in admission controller enforcing Pod Security Standards through namespace labels.</dd><dt>Baseline</dt><dd>Pod Security level that blocks known privilege escalations such as privileged containers and host namespaces.</dd><dt>Restricted</dt><dd>Strictest Pod Security level requiring non-root, no privilege escalation, dropped capabilities and a seccomp profile.</dd><dt>enforce / audit / warn</dt><dd>PSA modes that reject, log or warn about violating Pods.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>The <code>payments</code> namespace is labelled <code>pod-security.kubernetes.io/enforce=restricted</code>. A new Deployment shows 0 ready Pods; <code>kubectl describe rs</code> lists missing runAsNonRoot, allowPrivilegeEscalation and seccompProfile settings. Adding them plus <code>capabilities: drop: [&quot;ALL&quot;]</code> lets the ReplicaSet create Pods.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Capabilities are container-level only and written without CAP_. PSA errors for Deployments appear on the ReplicaSet, and restricted requires drop ALL, runAsNonRoot, allowPrivilegeEscalation false and a RuntimeDefault or Localhost seccomp profile.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which capability lets a non-root process bind to port 80?</summary><p>NET_BIND_SERVICE.</p></details>
+<details class="sq"><summary>What label makes a namespace reject Pods that fail the baseline level?</summary><p><code>pod-security.kubernetes.io/enforce=baseline</code>.</p></details>
+<details class="sq"><summary>What is the difference between PSA's warn and enforce modes?</summary><p>Warn admits violating Pods but returns a warning; enforce rejects them.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../securitycontext-at-pod-and-container-level-runasuser-runasnonroot-fsgr/">← SecurityContext at Pod and container level: runAsUser, runAs</a><a href="../service-types-clusterip-nodeport-loadbalancer-externalname-and-headles/">Service types: ClusterIP, NodePort, LoadBalancer, ExternalNa →</a></nav>
+</main>
+</body>
+</html>

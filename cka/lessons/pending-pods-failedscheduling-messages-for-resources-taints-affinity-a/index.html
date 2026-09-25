@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pending Pods: FailedScheduling messages for resources… · CKA Lesson</title>
+<meta name="description" content="A Pod in Pending has not been placed on a node, or has been placed but not yet started. When the scheduler cannot place it, it records a FailedScheduling e">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Pending Pods: FailedScheduling messages for resources… · CKA Lesson">
+<meta property="og:description" content="A Pod in Pending has not been placed on a node, or has been placed but not yet started. When the scheduler cannot place it, it records a FailedScheduling e">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/pending-pods-failedscheduling-messages-for-resources-taints-affinity-a/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/pending-pods-failedscheduling-messages-for-resources-taints-affinity-a/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 5: Troubleshooting</p>
+<h1>Pending Pods: FailedScheduling messages for resources, taints, affinity and unbound PVCs</h1>
+<article class="lbody">
+<p>A Pod in <code>Pending</code> has not been placed on a node, or has been placed but not yet started. When the scheduler cannot place it, it records a <code>FailedScheduling</code> event, and reading that message carefully usually tells you the exact fix. Run <code>kubectl describe pod &lt;name&gt;</code> and look at the Events at the bottom.</p>
+<p>The message summarises every node. It looks like: <code>0/4 nodes are available: 1 node(s) had untolerated taint {node-role.kubernetes.io/control-plane: }, 2 Insufficient cpu, 1 node(s) didn't match Pod's node affinity/selector.</code> Each phrase is a filter that ruled nodes out, and the counts add up to the total. It may add a note about whether preemption could help.</p>
+<p><code>Insufficient cpu</code> or <code>Insufficient memory</code> means the Pod's requests do not fit in any node's remaining allocatable capacity. Remember that requests, not actual usage, count. Compare the Pod's requests with <code>kubectl describe node</code> (Allocated resources). Fixes: lower the requests if they are unrealistic, free capacity by scaling something down, or add nodes. A ResourceQuota problem looks different: the Pod is never created at all.</p>
+<p><code>had untolerated taint {key: value}</code> means the node's taint is not tolerated. Either add a toleration (if the Pod belongs there) or remove the taint with <code>kubectl taint node &lt;node&gt; key=value:Effect-</code> (if it should not be there). <code>node(s) were unschedulable</code> means the node is cordoned; uncordon it if maintenance is done.</p>
+<p><code>didn't match Pod's node affinity/selector</code> means no node has the labels the Pod requires; check <code>kubectl get nodes --show-labels</code> against the Pod's nodeSelector or required node affinity, and fix whichever is wrong. <code>didn't match pod affinity rules</code> or <code>didn't match pod anti-affinity rules</code> means inter-Pod rules cannot be satisfied, for example more replicas than nodes with one-per-node anti-affinity. <code>didn't match pod topology spread constraints</code> is the equivalent for spread rules.</p>
+<p>Storage problems show as <code>pod has unbound immediate PersistentVolumeClaims</code> (the PVC is Pending, so describe the PVC to see why: no matching PV, wrong class, provisioner failing) or <code>node(s) had volume node affinity conflict</code> (the bound volume can only be used on nodes the Pod cannot run on).</p>
+<pre class="code" tabindex="0"><code>kubectl get pods --field-selector=status.phase=Pending -A
+kubectl describe pod web-7d9 | sed -n '/Events/,$p'
+kubectl get events -n app --field-selector reason=FailedScheduling</code></pre>
+<p>If a Pending Pod has no events at all, the scheduler is probably not running or the Pod names a nonexistent schedulerName. If the Pod has a node assigned but is still Pending, scheduling succeeded and the problem is on the node: image pulls, volume mounts or the CNI, visible in the same events list.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>FailedScheduling</dt><dd>Event reason recorded when the scheduler cannot find a suitable node.</dd><dt>Insufficient cpu/memory</dt><dd>Scheduler message meaning the Pod's requests exceed every node's free allocatable capacity.</dd><dt>Untolerated taint</dt><dd>Scheduler message meaning a node's taint has no matching toleration on the Pod.</dd><dt>Unbound immediate PersistentVolumeClaims</dt><dd>Scheduler message meaning a PVC the Pod needs is not bound.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A Pod is Pending with '0/3 nodes are available: 1 node(s) had untolerated taint {node-role.kubernetes.io/control-plane: }, 2 Insufficient memory.' The Pod requests 8Gi but workers have 4Gi allocatable. Reducing the request to a realistic 1Gi lets it schedule on a worker.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Read the whole FailedScheduling message: the counts tell you why each group of nodes was rejected, and the fix differs for each. Remember the scheduler uses requests, not live usage.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What does 'node(s) were unschedulable' mean in a FailedScheduling event?</summary><p>Those nodes are cordoned (spec.unschedulable true).</p></details>
+<details class="sq"><summary>A Pod is Pending with 'pod has unbound immediate PersistentVolumeClaims'. What do you check next?</summary><p>Describe the PVC to see why it is not binding: class, access mode, size or provisioner problems.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../control-plane-problems-static-pod-manifests-crictl-ps-logs-when-the-ap/">← Control plane problems: static Pod manifests, crictl ps/logs</a><a href="../resource-monitoring-metrics-server-kubectl-top-nodes-pods-sort-by-desc/">Resource monitoring: metrics-server, kubectl top nodes/pods  →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Helm (repo add/update, upgrade --install, --version… · CKA Lesson</title>
+<meta name="description" content="Many cluster components, such as ingress controllers, metrics-server, CNI plugins and operators, are distributed as Helm charts or Kustomize bases. The CKA">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Helm (repo add/update, upgrade --install, --version… · CKA Lesson">
+<meta property="og:description" content="Many cluster components, such as ingress controllers, metrics-server, CNI plugins and operators, are distributed as Helm charts or Kustomize bases. The CKA">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/helm-repo-add-update-upgrade-install-version-values-and-kustomize-kube/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/helm-repo-add-update-upgrade-install-version-values-and-kustomize-kube/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 1: Cluster Architecture, Installation and Configuration</p>
+<h1>Helm (repo add/update, upgrade --install, --version, values) and Kustomize (kubectl apply -k) for installing cluster components</h1>
+<article class="lbody">
+<p>Many cluster components, such as ingress controllers, metrics-server, CNI plugins and operators, are distributed as Helm charts or Kustomize bases. The CKA expects you to install and configure them with both tools.</p>
+<p>Helm is a package manager for Kubernetes. A chart is a templated bundle of manifests with a <code>values.yaml</code> file of defaults. Installing a chart creates a release, a named instance tracked by Helm in the target namespace. First register a chart repository and refresh the local index: <code>helm repo add &lt;name&gt; &lt;repo-url&gt;</code> and <code>helm repo update</code>. <code>helm search repo &lt;keyword&gt;</code> finds charts, and <code>helm search repo &lt;chart&gt; --versions</code> lists chart versions.</p>
+<p>The most useful single command is <code>helm upgrade --install</code>: it installs the release if it does not exist and upgrades it if it does, which makes scripts and exam answers idempotent. <code>--version</code> pins the chart version (this is the chart's version, which may differ from the application's version). <code>-n</code> picks the namespace and <code>--create-namespace</code> creates it if missing. Override values with <code>-f my-values.yaml</code> or <code>--set key=value</code>; later sources win over earlier ones.</p>
+<pre class="code" tabindex="0"><code>helm show values ingress-nginx/ingress-nginx &gt; defaults.yaml
+helm upgrade --install ingress ingress-nginx/ingress-nginx \
+  -n ingress --create-namespace --version &lt;chart-version&gt; \
+  --set controller.replicaCount=2
+helm list -A
+helm get values ingress -n ingress
+helm history ingress -n ingress &amp;&amp; helm rollback ingress 1 -n ingress</code></pre>
+<p>Kustomize takes a different approach: no templates, just plain YAML plus a <code>kustomization.yaml</code> that lists <code>resources</code> and applies transformations, such as setting a <code>namespace</code>, adding a <code>namePrefix</code>, adding labels, changing <code>images</code> tags, applying <code>patches</code> or generating ConfigMaps and Secrets. It is built into kubectl. <code>kubectl kustomize &lt;dir&gt;</code> prints the rendered result and <code>kubectl apply -k &lt;dir&gt;</code> applies it. Overlays (for example <code>overlays/prod</code>) reference a shared <code>base</code> and patch only what differs per environment.</p>
+<pre class="code" tabindex="0"><code># kustomization.yaml
+resources:
+  - deployment.yaml
+  - service.yaml
+namespace: monitoring
+images:
+  - name: metrics-app
+    newTag: &quot;2.1&quot;</code></pre>
+<p>Choose Helm when a vendor ships a chart and you mainly need to set values; choose Kustomize when you have plain manifests and need repeatable edits. They can be combined, but for the exam just be fluent with each: inspect values before installing, pin versions, and verify with <code>helm list</code> or <code>kubectl get</code> afterwards.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Chart</dt><dd>A Helm package of templated Kubernetes manifests with default values.</dd><dt>Release</dt><dd>A named, installed instance of a chart in a namespace, with its own revision history.</dd><dt>helm upgrade --install</dt><dd>Installs a release if absent or upgrades it if present.</dd><dt>kustomization.yaml</dt><dd>The Kustomize file listing resources and transformations; applied with kubectl apply -k.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A task asks you to install a chart at chart version 4.x into namespace <code>ingress</code> with two controller replicas. You run <code>helm repo update</code>, confirm the exact version with <code>helm search repo --versions</code>, then <code>helm upgrade --install</code> with --version, -n, --create-namespace and --set. <code>helm list -n ingress</code> shows the release deployed.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Helm releases are namespaced: <code>helm list</code> shows only the current namespace, so use <code>helm list -A</code> when a release seems missing. And --version refers to the chart version, not the app version.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why prefer <code>helm upgrade --install</code> over <code>helm install</code> in automation?</summary><p>It succeeds whether or not the release already exists.</p></details>
+<details class="sq"><summary>How do you preview what a Kustomize directory will produce without applying it?</summary><p>Run <code>kubectl kustomize &lt;dir&gt;</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../node-maintenance-cordon-drain-uncordon-and-poddisruptionbudgets/">← Node maintenance: cordon, drain, uncordon and PodDisruptionB</a><a href="../extension-interfaces-cri-containerd-cri-o-crictl-cni-calico-cilium-fla/">Extension interfaces: CRI (containerd, CRI-O, crictl), CNI ( →</a></nav>
+</main>
+</body>
+</html>

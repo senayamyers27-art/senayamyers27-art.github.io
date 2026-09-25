@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Locking and unlocking accounts (usermod -L, passwd -l… · RHCSA Lesson</title>
+<meta name="description" content="Sometimes an account must stop working without being deleted: an employee is on leave, a contractor's work is paused, or you suspect a password was exposed">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Locking and unlocking accounts (usermod -L, passwd -l… · RHCSA Lesson">
+<meta property="og:description" content="Sometimes an account must stop working without being deleted: an employee is on leave, a contractor's work is paused, or you suspect a password was exposed">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/locking-and-unlocking-accounts-usermod-l-passwd-l-chage-e-0/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/locking-and-unlocking-accounts-usermod-l-passwd-l-chage-e-0/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 9: Manage users and groups</p>
+<h1>Locking and unlocking accounts (usermod -L, passwd -l, chage -E 0)</h1>
+<article class="lbody">
+<p>Sometimes an account must stop working without being deleted: an employee is on leave, a contractor's work is paused, or you suspect a password was exposed. Locking keeps the account, its files and its UID intact so you can restore access later. RHEL offers two different mechanisms, and understanding what each actually blocks is the key point.</p>
+<p>The first is locking the password. <code>usermod -L alice</code> or <code>passwd -l alice</code> puts an exclamation mark in front of the hash in <code>/etc/shadow</code>. The hash no longer matches any password, so password logins fail. <code>usermod -U</code> or <code>passwd -u</code> removes the mark and restores the old password. <code>passwd -S alice</code> shows status, with <code>LK</code> or a similar note for a locked password.</p>
+<pre class="code" tabindex="0"><code>usermod -L alice
+getent shadow alice | cut -d: -f2 | cut -c1-5   # starts with !
+passwd -S alice
+usermod -U alice</code></pre>
+<p>The weakness: a password lock does not block logins that do not use the password. A user with an SSH key in <code>~/.ssh/authorized_keys</code> can still log in, and other authentication methods may still work. So a password lock is not enough to disable an account completely.</p>
+<p>The second mechanism is account expiry. <code>chage -E 0 alice</code> sets the expiration date to day zero, 1 January 1970, which is in the past, so the account is expired. PAM (Pluggable Authentication Modules) checks account expiry for every login method, including SSH keys, so the account cannot be used at all. To undo it, run <code>chage -E -1 alice</code>, which removes the expiry date. <code>usermod -e</code> sets the same field. You can also combine both locks: <code>usermod -L -e 1 alice</code>.</p>
+<pre class="code" tabindex="0"><code>chage -E 0 alice      # expire: blocks all logins
+chage -l alice        # Account expires: Jan 01, 1970
+chage -E -1 alice     # remove expiry</code></pre>
+<p>Changing the shell to <code>/sbin/nologin</code> is a third, different tool: it stops interactive shells but not authentication itself. For a complete disable, the usual combination is expiring the account and locking the password. Also check for running processes and scheduled jobs belonging to the user, since locking does not stop existing sessions; <code>loginctl terminate-user alice</code> or <code>pkill -u alice</code> ends them.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Password lock</dt><dd>An exclamation mark prefixed to the shadow hash by usermod -L or passwd -l, which blocks password authentication only.</dd><dt>Account expiry</dt><dd>The shadow expiration date; chage -E 0 sets it in the past so every login method is refused.</dd><dt>passwd -S</dt><dd>Shows the password status of an account, including whether it is locked.</dd><dt>chage -E -1</dt><dd>Removes an account's expiration date, reversing chage -E 0.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A developer goes on leave but uses SSH keys. After usermod -L the developer can still log in with a key, so you also run chage -E 0 dev1. The next SSH attempt is refused because the account is expired. On return, chage -E -1 dev1 and usermod -U dev1 restore access.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> usermod -L and passwd -l block only password logins; chage -E 0 blocks every login method, including SSH keys. Choose based on what the task says must be prevented.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What does usermod -L change in /etc/shadow?</summary><p>It puts an exclamation mark at the start of the password hash so it cannot match.</p></details>
+<details class="sq"><summary>Why can a locked user still log in over SSH?</summary><p>Password locking does not affect key-based authentication; expire the account with chage -E 0 to block all logins.</p></details>
+<details class="sq"><summary>How do you remove an expiration date set with chage -E 0?</summary><p>Run chage -E -1 username.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../configuring-superuser-access-the-wheel-group-etc-sudoers-d-drop-ins-an/">← Configuring superuser access: the wheel group, /etc/sudoers.</a><a href="../configuring-firewall-settings-with-firewall-cmd-zones-services-ports-s/">Configuring firewall settings with firewall-cmd: zones, serv →</a></nav>
+</main>
+</body>
+</html>

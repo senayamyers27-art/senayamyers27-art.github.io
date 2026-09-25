@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CloudWatch alarms with SNS notifications; structured… · Developer Associate Lesson</title>
+<meta name="description" content="Monitoring only helps if someone finds out when something goes wrong. CloudWatch alarms watch metrics and act when they cross a threshold, and good logging">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="CloudWatch alarms with SNS notifications; structured… · Developer Associate Lesson">
+<meta property="og:description" content="Monitoring only helps if someone finds out when something goes wrong. CloudWatch alarms watch metrics and act when they cross a threshold, and good logging">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/cloudwatch-alarms-with-sns-notifications-structured-logging-and-correl/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/cloudwatch-alarms-with-sns-notifications-structured-logging-and-correl/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 4: Troubleshooting and Optimization</p>
+<h1>CloudWatch alarms with SNS notifications; structured logging and correlation IDs</h1>
+<article class="lbody">
+<p>Monitoring only helps if someone finds out when something goes wrong. CloudWatch alarms watch metrics and act when they cross a threshold, and good logging practices make the follow-up investigation fast.</p>
+<p>A metric alarm watches one metric (or a metric math expression) and has three states: <code>OK</code>, <code>ALARM</code> and <code>INSUFFICIENT_DATA</code>. You configure the statistic (such as Average, Sum or p99), the period, the threshold and comparison operator, and how many periods must breach: evaluation periods and datapoints to alarm let you require, for example, 3 of 5 one-minute periods above the threshold, which avoids alerts on single blips. You also decide how missing data is treated (as breaching, not breaching, ignored, or missing), which matters for metrics like Lambda <code>Errors</code> that simply have no data when nothing happens. Anomaly detection alarms use a band learned from the metric's history instead of a fixed threshold. Composite alarms combine several alarms with AND, OR and NOT rules to reduce noise, for example alerting only when both error rate and latency are high.</p>
+<p>Alarm actions run on state changes. The most common action is publishing to an Amazon SNS topic, which then delivers to email, SMS, a Lambda function, an HTTPS endpoint or chat integrations. Email subscribers must confirm the subscription before they receive messages, which is a common reason alerts 'never arrive'. If the SNS topic is encrypted with a customer managed KMS key, the key policy must let CloudWatch use it. Other actions include EC2 actions (stop, terminate, reboot, recover), Auto Scaling policies and Systems Manager OpsItems or incidents. Alarms also drive automated rollbacks in CodeDeploy and AppConfig.</p>
+<pre class="code" tabindex="0"><code>aws cloudwatch put-metric-alarm --alarm-name checkout-errors \
+  --namespace AWS/Lambda --metric-name Errors \
+  --dimensions Name=FunctionName,Value=checkout \
+  --statistic Sum --period 60 --evaluation-periods 5 --datapoints-to-alarm 3 \
+  --threshold 5 --comparison-operator GreaterThanThreshold \
+  --treat-missing-data notBreaching \
+  --alarm-actions arn:aws:sns:us-east-1:111122223333:oncall</code></pre>
+<p>Structured logging means writing each log entry as a JSON object with consistent fields (timestamp, level, service, message, request ID and relevant business IDs) instead of free-form text. JSON logs can be queried by field in Logs Insights, filtered precisely with metric filters, and parsed by other tools. Lambda can emit its own system logs in JSON and filter by log level through its logging configuration, and libraries such as Powertools for AWS Lambda Logger add context like the request ID and cold start flag automatically.</p>
+<p>A correlation ID ties together all log entries for one business request across services. Generate it at the edge (or reuse an incoming one, such as a request header or the API Gateway request ID), include it in every log line, and pass it downstream: in HTTP headers, SQS or SNS message attributes, EventBridge event detail and Step Functions input. Then one Logs Insights query filtering on that ID across several log groups shows the whole story. X-Ray trace IDs serve a similar purpose for traces, and logging the trace ID connects logs and traces.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Metric alarm</dt><dd>A CloudWatch alarm that changes state when a metric or expression crosses a threshold for a set number of periods.</dd><dt>Datapoints to alarm</dt><dd>The number of breaching data points within the evaluation periods required to trigger ALARM (M out of N).</dd><dt>Composite alarm</dt><dd>An alarm whose state is computed from a rule combining other alarms' states.</dd><dt>Structured logging</dt><dd>Writing log entries as consistent machine-readable fields, usually JSON.</dd><dt>Correlation ID</dt><dd>A unique identifier propagated through all services handling a request so their logs can be linked.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An order passes from API Gateway to a Lambda function, then through SQS to a fulfillment function. The first function logs JSON with correlationId set to the API request ID and adds it as an SQS message attribute; the second logs the same ID. When a customer complains, one Logs Insights query across both log groups for that ID shows exactly where the order stalled.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> An alarm that should notify people publishes to an SNS topic; if emails never arrive, check the subscription is confirmed. To avoid alerts on one-off spikes, use M out of N datapoints to alarm rather than a single period.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What are the three states of a CloudWatch alarm?</summary><p>OK, ALARM and INSUFFICIENT_DATA.</p></details>
+<details class="sq"><summary>How should an alarm on Lambda Errors usually treat missing data, and why?</summary><p>As not breaching, because no data simply means no errors (or no invocations) in that period.</p></details>
+<details class="sq"><summary>How do you carry a correlation ID through an SQS queue?</summary><p>Put it in a message attribute (or the body) when sending, and have the consumer read and log it.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../custom-metrics-putmetricdata-cloudwatch-embedded-metric-format-high-re/">← Custom metrics: PutMetricData, CloudWatch embedded metric fo</a><a href="../lambda-performance-memory-cpu-tuning-cold-starts-provisioned-concurren/">Lambda performance: memory/CPU tuning, cold starts, provisio →</a></nav>
+</main>
+</body>
+</html>

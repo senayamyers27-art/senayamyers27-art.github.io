@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DNS problems: CoreDNS Pods and logs, loop detection with… · CKA Lesson</title>
+<meta name="description" content="When applications report errors like 'could not resolve host' or 'no such host', the cause is usually one of a small set: CoreDNS is not running, its Servi">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="DNS problems: CoreDNS Pods and logs, loop detection with… · CKA Lesson">
+<meta property="og:description" content="When applications report errors like 'could not resolve host' or 'no such host', the cause is usually one of a small set: CoreDNS is not running, its Servi">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/dns-problems-coredns-pods-and-logs-loop-detection-with-systemd-resolve/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/dns-problems-coredns-pods-and-logs-loop-detection-with-systemd-resolve/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 5: Troubleshooting</p>
+<h1>DNS problems: CoreDNS Pods and logs, loop detection with systemd-resolved, testing with a temporary Pod</h1>
+<article class="lbody">
+<p>When applications report errors like 'could not resolve host' or 'no such host', the cause is usually one of a small set: CoreDNS is not running, its Service has no endpoints, its configuration is wrong, a NetworkPolicy blocks port 53, or the Pod's own DNS settings are unusual. Work through them in order.</p>
+<p>First reproduce the problem from a temporary Pod. <code>kubectl run dns --rm -it --restart=Never --image=busybox -- nslookup kubernetes.default</code> should return the <code>kubernetes</code> Service's ClusterIP. Then try the failing name, both short and fully qualified (<code>api.shop.svc.cluster.local</code>), and an external name. Also inspect the Pod's <code>/etc/resolv.conf</code> with <code>cat</code>: it should list the kube-dns Service IP as nameserver, the cluster search domains and <code>options ndots:5</code>.</p>
+<p>Next check CoreDNS itself. Its Pods carry the label <code>k8s-app=kube-dns</code> in kube-system.</p>
+<pre class="code" tabindex="0"><code>kubectl get pods -n kube-system -l k8s-app=kube-dns -o wide
+kubectl logs -n kube-system -l k8s-app=kube-dns --tail=30
+kubectl get svc kube-dns -n kube-system
+kubectl get endpointslices -n kube-system -l kubernetes.io/service-name=kube-dns
+kubectl get cm coredns -n kube-system -o yaml</code></pre>
+<p>If the Pods are Pending right after cluster creation, the CNI is missing. If they are Running but the Service has no endpoints, look at readiness. If the logs show errors, read the Corefile; a typo or a bad <code>forward</code> target is common after edits. After fixing the ConfigMap, CoreDNS reloads automatically, or you can restart the Deployment.</p>
+<p>A well-known failure is a forwarding loop. CoreDNS's <code>loop</code> plugin sends a probe query at startup; if the query comes back to CoreDNS itself, it logs a message that a loop was detected and exits, so the Pods go into CrashLoopBackOff. The typical cause is systemd-resolved on the node: the node's <code>/etc/resolv.conf</code> points to the local stub resolver at 127.0.0.53, the kubelet passes that file to CoreDNS, and <code>forward . /etc/resolv.conf</code> then sends queries to 127.0.0.53 inside the CoreDNS Pod, which is CoreDNS itself.</p>
+<p>The fix is to give the kubelet the real upstream resolver list instead of the stub. On systemd-resolved hosts that file is usually <code>/run/systemd/resolve/resolv.conf</code>; set <code>resolvConf</code> to it in <code>/var/lib/kubelet/config.yaml</code> and restart the kubelet, then restart CoreDNS. kubeadm usually detects systemd-resolved and sets this for you, so the problem appears mostly when someone changed it. An alternative is to point <code>forward</code> at explicit upstream IPs. Removing the loop plugin only hides the problem.</p>
+<p>Two other checks finish the list. If a namespace has an egress NetworkPolicy, it must allow UDP and TCP port 53 to the CoreDNS Pods. And a Pod with <code>dnsPolicy: Default</code> or <code>hostNetwork: true</code> without <code>ClusterFirstWithHostNet</code> will not resolve cluster names by design.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>loop plugin</dt><dd>CoreDNS plugin that detects forwarding loops and stops CoreDNS if one is found.</dd><dt>systemd-resolved stub</dt><dd>A local resolver at 127.0.0.53 that causes loops if CoreDNS forwards to it.</dd><dt>resolvConf</dt><dd>Kubelet setting naming the resolv.conf file passed to Pods using the Default policy and to CoreDNS.</dd><dt>k8s-app=kube-dns</dt><dd>The label selecting CoreDNS Pods and the kube-dns Service's backends.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>After a node rebuild, CoreDNS Pods on that node crash, and their logs report a loop detected for the root zone. The kubelet config's resolvConf had been changed to /etc/resolv.conf, which points at 127.0.0.53. Setting it back to /run/systemd/resolve/resolv.conf, restarting the kubelet and deleting the CoreDNS Pods fixes resolution.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> CoreDNS in CrashLoopBackOff with a 'Loop detected' log line is the systemd-resolved stub problem; fix the kubelet's resolvConf or the forward target, not the loop plugin.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What label finds the CoreDNS Pods?</summary><p>k8s-app=kube-dns in the kube-system namespace.</p></details>
+<details class="sq"><summary>Why does forwarding to 127.0.0.53 cause a loop inside CoreDNS?</summary><p>Inside the CoreDNS Pod, 127.0.0.53 is local to the Pod, so queries go back to CoreDNS itself instead of the node's resolver.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../service-and-networking-problems-selectors-readiness-and-endpointslices/">← Service and networking problems: selectors, readiness and En</a><a href="../cluster-access-problems-kubeconfig-contexts-expired-certificates-conne/">Cluster access problems: kubeconfig contexts, expired certif →</a></nav>
+</main>
+</body>
+</html>

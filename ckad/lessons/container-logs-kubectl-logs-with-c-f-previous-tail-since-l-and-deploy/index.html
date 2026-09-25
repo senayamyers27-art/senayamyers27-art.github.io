@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Container logs: kubectl logs with -c, -f, --previous… · CKAD Lesson</title>
+<meta name="description" content="Containers are expected to write logs to standard output and standard error. The container runtime captures those streams into files on the node, and kubec">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Container logs: kubectl logs with -c, -f, --previous… · CKAD Lesson">
+<meta property="og:description" content="Containers are expected to write logs to standard output and standard error. The container runtime captures those streams into files on the node, and kubec">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/container-logs-kubectl-logs-with-c-f-previous-tail-since-l-and-deploy/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/container-logs-kubectl-logs-with-c-f-previous-tail-since-l-and-deploy/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 3: Application Observability and Maintenance</p>
+<h1>Container logs: kubectl logs with -c, -f, --previous, --tail, --since, -l and deploy/&lt;name&gt;</h1>
+<article class="lbody">
+<p>Containers are expected to write logs to standard output and standard error. The container runtime captures those streams into files on the node, and <code>kubectl logs</code> reads them through the kubelet. If an application writes only to a file inside the container, <code>kubectl logs</code> shows nothing; that is one reason for the sidecar pattern that tails such files to stdout.</p>
+<p>The basic form is <code>kubectl logs &lt;pod&gt;</code>. If the Pod has more than one container, you must say which with <code>-c &lt;container&gt;</code>, otherwise kubectl picks the default container (set by the <code>kubectl.kubernetes.io/default-container</code> annotation) or asks you to choose. <code>--all-containers</code> prints every container's logs, including init containers. Init container logs are reached the same way: <code>kubectl logs mypod -c init-db</code>.</p>
+<p><code>-f</code> (follow) streams new lines as they arrive until you press Ctrl-C, like <code>tail -f</code>. <code>--tail=50</code> shows only the last 50 lines, which is useful for chatty apps. <code>--since=10m</code> or <code>--since=1h</code> limits output to a recent time window, and <code>--timestamps</code> prefixes each line with its time. These can be combined: <code>kubectl logs web-5d8f7 --since=5m -f</code>.</p>
+<p><code>--previous</code> (or <code>-p</code>) shows the logs of the previous instance of a container, the one that crashed or was restarted. This is essential for CrashLoopBackOff: the current container may have just started and have no useful output, while the crash reason, such as a stack trace or 'config file not found', is in the previous instance. Only the most recent terminated instance is kept.</p>
+<pre class="code" tabindex="0"><code>kubectl logs web-5d8f7 -c app --tail=100
+kubectl logs web-5d8f7 -c app --previous
+kubectl logs -f deploy/web
+kubectl logs -l app=web --all-containers --prefix --since=15m
+kubectl logs job/migrate</code></pre>
+<p>You can name a controller instead of a Pod: <code>kubectl logs deploy/web</code> or <code>kubectl logs job/migrate</code> picks one Pod belonging to it, which saves you from looking up generated names. It shows only one Pod, though. To read logs from many Pods at once, use a label selector: <code>kubectl logs -l app=web</code>. With <code>-l</code>, kubectl shows a limited number of recent lines per Pod by default and follows a limited number of Pods concurrently (<code>--max-log-requests</code>); <code>--prefix</code> labels each line with its Pod and container name.</p>
+<p>Logs live on the node and disappear when the Pod is deleted or the node rotates them, so <code>kubectl logs</code> is for recent troubleshooting, not long-term storage; clusters use a log collector (often a DaemonSet) for that. On the exam, you may be asked to save logs to a file: <code>kubectl logs mypod -c app &gt; /opt/logs/app.log</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>-c</dt><dd>Selects which container's logs to show in a multi-container Pod.</dd><dt>--previous</dt><dd>Shows logs from the last terminated instance of the container.</dd><dt>-f</dt><dd>Follows the log stream as new lines are written.</dd><dt>-l</dt><dd>Selects Pods by label to show logs from several Pods at once.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A Pod is in CrashLoopBackOff and <code>kubectl logs api-7c9</code> prints only a start-up banner. Running <code>kubectl logs api-7c9 --previous</code> shows the real error from the crashed instance: 'DATABASE_URL is not set', pointing to a missing environment variable.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> For crashing containers, reach for <code>--previous</code> first. For multi-container Pods, <code>-c</code> is required to get the right container.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How do you see why the last instance of a container crashed?</summary><p><code>kubectl logs &lt;pod&gt; -c &lt;container&gt; --previous</code>.</p></details>
+<details class="sq"><summary>What does <code>kubectl logs deploy/web</code> show?</summary><p>Logs from one Pod belonging to the Deployment, not all of them.</p></details>
+<details class="sq"><summary>How do you show only log lines from the last 30 minutes?</summary><p>Add <code>--since=30m</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../kubectl-get-describe-get-events-top-pod-node-metrics-server-for-monito/">← kubectl get, describe, get events, top pod/node (metrics-ser</a><a href="../reading-pod-status-pending-imagepullbackoff-crashloopbackoff-oomkilled/">Reading Pod status: Pending, ImagePullBackOff, CrashLoopBack →</a></nav>
+</main>
+</body>
+</html>

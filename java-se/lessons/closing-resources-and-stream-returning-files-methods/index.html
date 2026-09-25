@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Closing resources and stream-returning Files methods · OCP Java Lesson</title>
+<meta name="description" content="Files, sockets, database connections and many streams hold operating system resources that the garbage collector does not release promptly. If you forget t">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Closing resources and stream-returning Files methods · OCP Java Lesson">
+<meta property="og:description" content="Files, sockets, database connections and many streams hold operating system resources that the garbage collector does not release promptly. If you forget t">
+<link rel="canonical" href="https://senayamyers27-art.github.io/java-se/lessons/closing-resources-and-stream-returning-files-methods/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/java-se/lessons/closing-resources-and-stream-returning-files-methods/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">OCP Java</a> / <a href="../">Lessons</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25) · Domain 9: Using the Java I/O API</p>
+<h1>Closing resources and stream-returning Files methods</h1>
+<article class="lbody">
+<p>Files, sockets, database connections and many streams hold operating system resources that the garbage collector does not release promptly. If you forget to close them you can run out of file handles, leave files locked on Windows, or lose buffered output. The try-with-resources statement is the standard way to guarantee closing.</p>
+<p>Any object that implements <code>AutoCloseable</code> can be declared in the parentheses after <code>try</code>. When the block finishes, normally or by exception, its <code>close()</code> method is called automatically. <code>Closeable</code>, used by I/O classes, extends AutoCloseable and narrows <code>close()</code> to throw IOException; AutoCloseable's <code>close()</code> throws Exception, so the compiler makes you handle whatever the declared close method can throw. A resource variable is implicitly final. Since Java 9 you can also list an existing variable that is final or effectively final: <code>try (reader) { ... }</code>.</p>
+<p>Order is precise. Resources are closed in the reverse order of declaration, and they are closed before any <code>catch</code> or <code>finally</code> block runs. If the try block throws and then <code>close()</code> also throws, the close exception does not replace the original. It is attached as a suppressed exception, retrievable with <code>getSuppressed()</code>, and the original exception propagates. If only close throws, that exception propagates.</p>
+<pre class="code" tabindex="0"><code>try (var a = new Res(&quot;A&quot;); var b = new Res(&quot;B&quot;)) {
+    System.out.println(&quot;body&quot;);
+} finally {
+    System.out.println(&quot;finally&quot;);
+}
+// body, close B, close A, finally</code></pre>
+<p>The Stream API interacts with this. <code>BaseStream</code>, the parent of Stream, implements AutoCloseable, but most streams, such as those from collections, hold no resources and need no closing. The exception is streams returned by I/O methods: <code>Files.lines</code>, <code>Files.list</code>, <code>Files.walk</code> and <code>Files.find</code>. Their Javadoc says to use try-with-resources, because the stream keeps a file or directory handle open until it is closed, and a terminal operation does not close it for you.</p>
+<pre class="code" tabindex="0"><code>try (Stream&lt;Path&gt; entries = Files.list(Path.of(&quot;logs&quot;))) {
+    entries.filter(p -&gt; p.toString().endsWith(&quot;.gz&quot;)).forEach(System.out::println);
+}
+// By contrast, readAllLines, readString, write and writeString open and close internally.</code></pre>
+<p>Methods that return a Reader, Writer or stream object, like <code>Files.newBufferedReader</code>, <code>Files.newInputStream</code> and <code>Files.newBufferedWriter</code>, likewise hand responsibility for closing to you. Methods that do the whole job in one call, like <code>readAllLines</code>, <code>readString</code>, <code>write</code>, <code>writeString</code>, <code>copy</code> and <code>size</code>, close whatever they open. When wrapping streams, closing the outermost wrapper closes the inner ones, so declare the wrapper as the resource. A stream can register cleanup actions with <code>onClose(Runnable)</code>, which run when <code>close()</code> is called.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>try-with-resources</dt><dd>A try statement that declares AutoCloseable resources and closes them automatically in reverse order.</dd><dt>AutoCloseable</dt><dd>An interface with close() throws Exception, required for resources in try-with-resources.</dd><dt>Closeable</dt><dd>An I/O interface that extends AutoCloseable with close() throws IOException.</dd><dt>Suppressed exception</dt><dd>An exception thrown while closing a resource after the body already threw, attached to the original via addSuppressed.</dd><dt>Resource-backed stream</dt><dd>A Stream such as those from Files.lines, list, walk or find that holds an open handle and must be closed.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A monitoring service lists a directory every few seconds with Files.list but never closes the stream. After a day it fails with a too-many-open-files error. Wrapping the call in try-with-resources releases each directory handle as soon as the listing finishes.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Resources close in reverse order, before catch and finally. An exception from close after a body exception is suppressed, not thrown. Files.lines, list, walk and find return streams you must close; readAllLines and writeString do not need it.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>In try (var x = ...; var y = ...), which resource is closed first?</summary><p>y, because resources are closed in the reverse order they were declared.</p></details>
+<details class="sq"><summary>The try body throws IOException and close() throws IllegalStateException. Which propagates?</summary><p>The IOException; the IllegalStateException is added as a suppressed exception.</p></details>
+<details class="sq"><summary>Does calling count() on the stream from Files.lines close the file?</summary><p>No. A terminal operation does not close the stream; use try-with-resources.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study OCP Java for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../java-se/">Open the OCP Java study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../serialization-serializable-transient-fields-serialversionuid/">← Serialization: Serializable, transient fields, serialVersion</a><a href="../locale-objects-language-country-locale-of-and-locale-getdefault/">Locale objects: language, country, Locale.of and Locale.getD →</a></nav>
+</main>
+</body>
+</html>

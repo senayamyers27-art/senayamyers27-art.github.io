@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Windows LAPS: backing up local admin passwords to AD DS… · AZ-802 Lesson</title>
+<meta name="description" content="If every server shares the same local Administrator password, one compromised server gives an attacker the key to all of them. Windows Local Administrator ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Windows LAPS: backing up local admin passwords to AD DS… · AZ-802 Lesson">
+<meta property="og:description" content="If every server shares the same local Administrator password, one compromised server gives an attacker the key to all of them. Windows Local Administrator ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/windows-laps-backing-up-local-admin-passwords-to-ad-ds-or-entra-id-rot/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/windows-laps-backing-up-local-admin-passwords-to-ad-ds-or-entra-id-rot/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 6: Secure Windows Server infrastructure</p>
+<h1>Windows LAPS: backing up local admin passwords to AD DS or Entra ID, rotation and retrieval permissions</h1>
+<article class="lbody">
+<p>If every server shares the same local Administrator password, one compromised server gives an attacker the key to all of them. Windows Local Administrator Password Solution (Windows LAPS) fixes this by giving every device a unique, random, regularly rotated local admin password and storing it securely in a directory where authorized people can retrieve it. Windows LAPS is built into supported Windows and Windows Server versions through updates; you don't install an agent. It replaces the older, separately installed legacy Microsoft LAPS, and uses different AD attributes.</p>
+<p>Each device backs up its password to one directory, chosen by policy: Active Directory Domain Services or Microsoft Entra ID, not both at once. Entra ID backup suits Entra-joined and hybrid-joined devices, and is typically configured with Intune. AD DS backup suits domain-joined servers and is typically configured with Group Policy under Computer Configuration, Administrative Templates, System, LAPS. On domain controllers, Windows LAPS can also back up the Directory Services Restore Mode (DSRM) password, but only to AD DS.</p>
+<p>Setting up AD DS backup takes a few steps. First, extend the schema with <code>Update-LapsADSchema</code>, which adds the new msLAPS attributes to computer objects. Second, give computers permission to write their own password with <code>Set-LapsADComputerSelfPermission -Identity &quot;OU=Servers,DC=contoso,DC=com&quot;</code>. Third, configure the policy: the backup directory, the managed account name if not the built-in Administrator, password complexity and length, and the password age after which it rotates. You can also enable password encryption, which encrypts the password in AD so only a chosen group (Domain Admins by default) can decrypt it; this requires a domain functional level of Windows Server 2016 or higher. Encryption also allows keeping a password history.</p>
+<p>Retrieval permissions are separate from write permissions. In AD, you grant a group the right to read passwords on an OU with <code>Set-LapsADReadPasswordPermission -Identity &lt;OU&gt; -AllowedPrincipals CONTOSO\HelpDesk</code>, and if encryption is on, that group must also be an authorized decryptor. Retrieve with <code>Get-LapsADPassword -Identity SRV01 -AsPlainText</code> or the LAPS tab on the computer object in Active Directory Users and Computers. In Entra ID, retrieval is governed by Entra roles or custom roles with the local credential read permission, and passwords appear on the device in the Entra admin center or Intune.</p>
+<p>Rotation happens automatically when the password reaches its maximum age. You can force it early: run <code>Reset-LapsPassword</code> on the device, or set the expiration time in AD with <code>Set-LapsADPasswordExpirationTime</code> so the device rotates at its next policy processing. Post-authentication actions can automatically reset the password, and optionally sign out or restart, after the managed account is used and a grace period expires, so a retrieved password is not usable for long. Troubleshoot with the Microsoft-Windows-LAPS/Operational event log and <code>Invoke-LapsPolicyProcessing</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Windows LAPS</dt><dd>A built-in Windows feature that sets unique, rotated local admin passwords and backs them up to AD DS or Entra ID.</dd><dt>Update-LapsADSchema</dt><dd>The cmdlet that extends the AD schema with the Windows LAPS attributes.</dd><dt>Set-LapsADComputerSelfPermission</dt><dd>Grants computers in an OU permission to write their own LAPS password to AD.</dd><dt>Password encryption</dt><dd>An AD backup option that encrypts stored passwords so only authorized decryptors can read them; needs Windows Server 2016 DFL.</dd><dt>Post-authentication actions</dt><dd>Automatic reset, sign-out or restart after the managed account is used and a grace period passes.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A help desk technician needs local admin on a server that lost its domain trust. Because the HelpDesk group was granted read permission on the Servers OU, the technician runs Get-LapsADPassword -Identity SRV07 -AsPlainText, signs in locally and repairs the trust. Two hours later, the post-authentication action resets the password automatically.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> A device backs up to AD DS or Entra ID, never both. Remember the three AD setup cmdlets in order: schema, computer self permission, read permission. DSRM password backup is AD only.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which cmdlet lets the help desk group read LAPS passwords for computers in an OU?</summary><p>Set-LapsADReadPasswordPermission with the OU as -Identity and the group as -AllowedPrincipals.</p></details>
+<details class="sq"><summary>Can Windows LAPS back up a DC's DSRM password to Microsoft Entra ID?</summary><p>No. DSRM password backup is supported only to AD DS.</p></details>
+<details class="sq"><summary>How can you make a server rotate its LAPS password right away?</summary><p>Run Reset-LapsPassword on the server, or set its expiration time in AD with Set-LapsADPasswordExpirationTime and trigger policy processing.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../app-control-for-business-wdac-policies-and-audit-mode-applocker-differ/">← App Control for Business (WDAC) policies and audit mode; App</a><a href="../hardening-domain-controllers-tiered-administration-protected-users-pri/">Hardening domain controllers: tiered administration, Protect →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NetworkPolicy basics: podSelector, policyTypes, ingress… · CKAD Lesson</title>
+<meta name="description" content="By default, every Pod in a Kubernetes cluster can talk to every other Pod, in every namespace. That makes things easy but means a single compromised Pod ca">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="NetworkPolicy basics: podSelector, policyTypes, ingress… · CKAD Lesson">
+<meta property="og:description" content="By default, every Pod in a Kubernetes cluster can talk to every other Pod, in every namespace. That makes things easy but means a single compromised Pod ca">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/networkpolicy-basics-podselector-policytypes-ingress-and-egress-rules/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/networkpolicy-basics-podselector-policytypes-ingress-and-egress-rules/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 5: Services and Networking</p>
+<h1>NetworkPolicy basics: podSelector, policyTypes, ingress and egress rules, default deny</h1>
+<article class="lbody">
+<p>By default, every Pod in a Kubernetes cluster can talk to every other Pod, in every namespace. That makes things easy but means a single compromised Pod can reach databases and internal APIs it has no business touching. A NetworkPolicy is a namespaced object that restricts which traffic is allowed to and from selected Pods, acting like a firewall defined by labels.</p>
+<p><code>spec.podSelector</code> chooses the Pods in the policy's namespace that the policy applies to. An empty selector, <code>podSelector: {}</code>, selects every Pod in the namespace. <code>policyTypes</code> lists <code>Ingress</code> (incoming traffic), <code>Egress</code> (outgoing traffic) or both. <code>ingress</code> rules list allowed sources (<code>from</code>) and ports; <code>egress</code> rules list allowed destinations (<code>to</code>) and ports.</p>
+<p>The key idea is isolation. A Pod not selected by any policy is non-isolated and accepts everything. As soon as a policy with <code>Ingress</code> in policyTypes selects a Pod, that Pod becomes isolated for ingress, and only traffic that some policy's ingress rules allow gets in. Egress works the same way. Policies are additive: there are no deny rules, and if several policies select the same Pod, the allowed traffic is the union of all of them. Replies to allowed connections are permitted automatically, so you do not write rules for return traffic.</p>
+<p>A default deny policy selects all Pods and allows nothing. With <code>policyTypes: [Ingress]</code> and no ingress rules, all incoming traffic to Pods in the namespace is blocked. Adding <code>Egress</code> blocks outgoing traffic too. You then add narrow allow policies on top. This is the recommended starting point for a namespace that needs protection.</p>
+<pre class="code" tabindex="0"><code>apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: shop
+spec:
+  podSelector: {}
+  policyTypes: [&quot;Ingress&quot;, &quot;Egress&quot;]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-from-frontend
+  namespace: shop
+spec:
+  podSelector:
+    matchLabels:
+      app: api
+  policyTypes: [&quot;Ingress&quot;]
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: frontend
+    ports:
+    - protocol: TCP
+      port: 8080</code></pre>
+<p>Watch the difference between an empty rule list and a rule that is empty. <code>ingress: []</code> or no ingress field (with Ingress in policyTypes) allows nothing. <code>ingress: [{}]</code>, a single rule with no <code>from</code> and no <code>ports</code>, allows everything. If you omit <code>policyTypes</code>, Ingress is always assumed, and Egress is added only if the policy has an egress section.</p>
+<p>Ports in rules are the Pod's ports (the targetPort), not the Service port, because policies act on Pod traffic after Service translation. You can use named ports too. Test with temporary Pods carrying the right labels: <code>kubectl run t --image=busybox --rm -it --restart=Never -l app=frontend -n shop -- wget -qO- -T 2 api:8080</code>. Remember that an egress default deny also blocks DNS, which is covered next.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>NetworkPolicy</dt><dd>Namespaced object that restricts traffic to and from selected Pods.</dd><dt>podSelector</dt><dd>Chooses the Pods a policy applies to; {} selects all Pods in the namespace.</dd><dt>policyTypes</dt><dd>Ingress, Egress or both: which directions the policy isolates.</dd><dt>Isolated Pod</dt><dd>A Pod selected by a policy for a direction, which then only allows traffic explicitly permitted.</dd><dt>Default deny</dt><dd>A policy selecting all Pods with no allow rules, blocking all traffic in the listed directions.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A team applies a default-deny ingress policy to <code>shop</code>, then an allow policy letting Pods labelled <code>app: frontend</code> reach <code>app: api</code> on TCP 8080, and another letting <code>app: api</code> reach <code>app: db</code> on 5432. A test Pod without the frontend label now times out when calling the API.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Policies only add allowances; being selected is what isolates. <code>podSelector: {}</code> means all Pods, while <code>ingress: [{}]</code> means allow all, the opposite of no rules.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What happens to a Pod that no NetworkPolicy selects?</summary><p>It is non-isolated and accepts all traffic.</p></details>
+<details class="sq"><summary>Write the spec for a default deny of all ingress in a namespace.</summary><p><code>podSelector: {}</code> with <code>policyTypes: [Ingress]</code> and no ingress rules.</p></details>
+<details class="sq"><summary>Two policies select the same Pod, each allowing a different source. What is allowed?</summary><p>Both sources; policies are additive and their allowances are combined.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../kubectl-expose-kubectl-create-service-and-kubectl-port-forward/">← kubectl expose, kubectl create service and kubectl port-forw</a><a href="../networkpolicy-peers-podselector-namespaceselector-ipblock-and-vs-or-ru/">NetworkPolicy peers: podSelector, namespaceSelector, ipBlock →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Event Grid delivery: retry policy, event time-to-live… · AI-200 Lesson</title>
+<meta name="description" content="Event Grid delivers each event to each matching subscription at least once. If the handler does not acknowledge success, Event Grid retries.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Event Grid delivery: retry policy, event time-to-live… · AI-200 Lesson">
+<meta property="og:description" content="Event Grid delivers each event to each matching subscription at least once. If the handler does not acknowledge success, Event Grid retries.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/event-grid-delivery-retry-policy-event-time-to-live-dead-lettering-to/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/event-grid-delivery-retry-policy-event-time-to-live-dead-lettering-to/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 3: Connect to and consume Azure services</p>
+<h1>Event Grid delivery: retry policy, event time-to-live, dead-lettering to Blob Storage, webhook validation, CloudEvents schema</h1>
+<article class="lbody">
+<p>Event Grid delivers each event to each matching subscription at least once. If the handler does not acknowledge success, Event Grid retries. Understanding how delivery works helps you build handlers that neither lose events nor break under retries.</p>
+<p>A handler acknowledges success by returning an HTTP success status (such as 200 OK or 202 Accepted). Failures and timeouts trigger the retry policy: Event Grid waits and retries on an exponential backoff schedule with some randomization, over a longer and longer interval. Some errors that retrying cannot fix, such as certain 400 Bad Request or 413 Request Entity Too Large responses, are not retried. Because an event may arrive more than once, handlers should be idempotent, for example by tracking the event <code>id</code>.</p>
+<p>Each subscription's retry policy has two limits: maximum delivery attempts and event time-to-live in minutes. By default Event Grid tries up to 30 times and keeps trying for up to 1,440 minutes (24 hours), whichever limit is reached first. You can lower either, for example when stale events are worthless after a few minutes.</p>
+<p>When the limits are reached, the event is dropped unless you configured dead-lettering. Dead-lettering sends undelivered events to a Blob Storage container you specify, as JSON files, so you can inspect and replay them. Event Grid needs permission to write to that container, typically through a managed identity on the topic.</p>
+<pre class="code" tabindex="0"><code>az eventgrid event-subscription create --name orders-hook \
+  --source-resource-id $TOPIC_ID --endpoint $WEBHOOK_URL \
+  --max-delivery-attempts 10 --event-ttl 120 \
+  --deadletter-endpoint $STORAGE_ID/blobServices/default/containers/eg-deadletter</code></pre>
+<p>Before delivering to a webhook, Event Grid validates that you own the endpoint, so nobody can point events at someone else's service. With the Event Grid schema, it sends a <code>Microsoft.EventGrid.SubscriptionValidationEvent</code> whose data contains a <code>validationCode</code>. Your endpoint proves ownership either synchronously, by returning the code in the response body as <code>validationResponse</code>, or manually, by sending a GET request to the <code>validationUrl</code> included in the event within a limited time. With the CloudEvents schema, validation instead uses the CloudEvents webhook abuse-protection handshake: an HTTP OPTIONS request with a <code>WebHook-Request-Origin</code> header, answered with a <code>WebHook-Allowed-Origin</code> header. Azure Functions, Logic Apps and other Azure handlers complete validation for you.</p>
+<p>Event Grid supports two event schemas. The Event Grid schema uses fields such as <code>id</code>, <code>topic</code>, <code>subject</code>, <code>eventType</code>, <code>eventTime</code>, <code>data</code> and <code>dataVersion</code>. CloudEvents v1.0 is an open, vendor-neutral specification from the CNCF (Cloud Native Computing Foundation), with fields such as <code>id</code>, <code>source</code>, <code>type</code>, <code>subject</code>, <code>time</code>, <code>specversion</code> and <code>data</code>. Choose CloudEvents for interoperability across clouds and tools. You set the input schema on a custom topic and the delivery schema on a subscription.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Retry policy</dt><dd>Per-subscription limits on delivery attempts and event time-to-live that govern Event Grid retries.</dd><dt>Event time-to-live</dt><dd>The number of minutes Event Grid keeps retrying an event before giving up; default 1,440.</dd><dt>Dead-letter destination</dt><dd>A Blob Storage container where Event Grid writes events it could not deliver.</dd><dt>Validation handshake</dt><dd>The process by which a webhook proves it owns the endpoint before Event Grid delivers events.</dd><dt>CloudEvents</dt><dd>An open specification for describing event data in a common format across services and clouds.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A partner's webhook was down for two days. Events older than 24 hours were lost because the subscription had no dead-letter destination. The team configured dead-lettering to a storage container, reduced max delivery attempts for faster failure detection, and wrote a small replay tool that reads the dead-lettered JSON blobs and republishes them when the partner recovers.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Defaults to remember: 30 delivery attempts and 1,440 minutes TTL; undelivered events are dropped unless dead-lettering to Blob Storage is configured. A custom webhook must echo validationCode as validationResponse (or call validationUrl).</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What happens to an event that exhausts its retries when no dead-letter destination is set?</summary><p>It is dropped; configure dead-lettering to a Blob Storage container to keep undelivered events.</p></details>
+<details class="sq"><summary>How does a custom webhook complete Event Grid schema validation synchronously?</summary><p>It responds to the SubscriptionValidationEvent with the validationCode returned as validationResponse in the body.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../event-grid-system-and-custom-topics-event-subscriptions-filters-event/">← Event Grid: system and custom topics, event subscriptions, f</a><a href="../picking-service-bus-event-grid-or-event-hubs-for-a-scenario/">Picking Service Bus, Event Grid or Event Hubs for a scenario →</a></nav>
+</main>
+</body>
+</html>

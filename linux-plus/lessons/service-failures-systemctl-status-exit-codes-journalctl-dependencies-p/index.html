@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Service failures: systemctl status exit codes… · Linux+ Lesson</title>
+<meta name="description" content="When a service will not start or keeps dying, the answer is almost always in its status and logs. A consistent routine, status then logs then configuration">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Service failures: systemctl status exit codes… · Linux+ Lesson">
+<meta property="og:description" content="When a service will not start or keeps dying, the answer is almost always in its status and logs. A consistent routine, status then logs then configuration">
+<link rel="canonical" href="https://senayamyers27-art.github.io/linux-plus/lessons/service-failures-systemctl-status-exit-codes-journalctl-dependencies-p/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/linux-plus/lessons/service-failures-systemctl-status-exit-codes-journalctl-dependencies-p/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Linux+</a> / <a href="../">Lessons</a></p>
+<p class="note">CompTIA Linux+ XK0-006 · Domain 5: Troubleshooting</p>
+<h1>Service failures: systemctl status exit codes, journalctl, dependencies, port conflicts</h1>
+<article class="lbody">
+<p>When a service will not start or keeps dying, the answer is almost always in its status and logs. A consistent routine, status then logs then configuration then dependencies and environment, resolves most failures quickly.</p>
+<p><code>systemctl status name</code> is step one. The Active line shows states such as <code>active (running)</code>, <code>inactive (dead)</code>, <code>activating (auto-restart)</code> or <code>failed</code>, with a <code>Result:</code> such as <code>exit-code</code>, <code>signal</code>, <code>timeout</code> or <code>start-limit-hit</code>. The process line shows how the main process ended, for example <code>code=exited, status=1/FAILURE</code>. Exit statuses from 200 upward are set by systemd itself and point to setup problems before the program even ran: <code>203/EXEC</code> means the executable in <code>ExecStart=</code> was missing, not executable or had a bad interpreter; <code>217/USER</code> means the <code>User=</code> account does not exist; <code>200/CHDIR</code> a bad working directory; <code>226/NAMESPACE</code> a problem setting up sandboxing paths. A status of 1 or 2 is usually the application reporting its own error, and <code>signal=SEGV</code> or <code>KILL</code> means the process was killed by a signal, possibly the OOM killer. <code>start-limit-hit</code> means systemd stopped retrying after too many restarts in a short time; fix the cause, then <code>systemctl reset-failed name</code>.</p>
+<p>Next, read the logs. <code>journalctl -u name -b</code> shows the unit's messages from this boot, <code>-e</code> jumps to the end, <code>-x</code> adds explanations and <code>-f</code> follows while you restart it in another terminal. Many applications also write their own logs under <code>/var/log/&lt;app&gt;/</code>. Configuration syntax errors are the most frequent cause, so use the application's own checker before restarting: <code>nginx -t</code>, <code>apachectl configtest</code>, <code>sshd -t</code>, <code>named-checkconf</code>, <code>postfix check</code> and similar.</p>
+<p>Dependencies matter because units start in an order defined by <code>Requires=</code>, <code>Wants=</code>, <code>After=</code> and <code>Before=</code>. If a required unit fails, the dependent unit fails too, with a message like 'Dependency failed'. <code>systemctl list-dependencies name</code> shows the tree and <code>systemctl list-dependencies --reverse name</code> shows what depends on it. A common case is a service that needs the network or a mount: it should declare <code>After=network-online.target</code> and <code>Wants=network-online.target</code>, or <code>RequiresMountsFor=/data</code>. A masked unit reports that it is masked and cannot start until unmasked.</p>
+<p>Port conflicts cause errors such as 'Address already in use' or 'bind() failed'. Only one process can listen on a given address and port. <code>ss -tlpn 'sport = :80'</code> or <code>ss -tlpn | grep :80</code> identifies which process holds the port; <code>lsof -i :80</code> also works. Resolve it by stopping or disabling the other service, or moving one to a different port. On SELinux systems a non-standard port also needs a label with <code>semanage port</code>, or the bind is denied even when nothing else is listening; check <code>ausearch -m avc</code> if the error is 'Permission denied'.</p>
+<p>Also check permissions and resources: the service user must be able to read its config and write its data, log and PID directories; the disk must not be full; and required environment files must exist. After fixing unit files, remember <code>systemctl daemon-reload</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>203/EXEC</dt><dd>systemd exit status meaning the ExecStart program could not be executed (missing, not executable or bad interpreter).</dd><dt>start-limit-hit</dt><dd>A failure result meaning the unit restarted too often in a short interval; cleared with systemctl reset-failed.</dd><dt>Requires= / After=</dt><dd>Unit dependency settings: Requires sets a hard dependency; After sets start ordering only.</dd><dt>Address already in use</dt><dd>A bind error indicating another process is already listening on that port.</dd><dt>Config test</dt><dd>An application's own syntax check, such as nginx -t or sshd -t, run before restarting a service.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>After an upgrade, httpd fails with 'Address already in use: AH00072: make_sock: could not bind to address [::]:80'. ss -tlpn | grep :80 shows nginx, installed as a dependency of a monitoring tool, listening on port 80. You disable and stop nginx with systemctl disable --now nginx, then start httpd successfully.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Exit codes in the 200s come from systemd before the program runs, so check the unit file (paths, User=, directories); small codes like 1 usually mean the application itself reported an error in its logs.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>A unit fails with status=203/EXEC. What should you check first?</summary><p>The ExecStart path: that the file exists, is executable, and has a valid shebang or interpreter.</p></details>
+<details class="sq"><summary>How do you find which process is already using TCP port 443?</summary><p>ss -tlpn | grep :443 (or lsof -i :443).</p></details>
+<details class="sq"><summary>What is the difference between Requires= and After=?</summary><p>Requires= pulls in another unit as a hard dependency (combined with After=, the unit will not start if that one fails); After= only orders startup and does not pull anything in by itself.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Linux+ for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../linux-plus/">Open the Linux+ study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../boot-problems-grub-menu-previous-kernels-emergency-and-rescue-targets/">← Boot problems: GRUB menu, previous kernels, emergency and re</a><a href="../security-issues-selinux-denials-file-permissions-ssh-key-permissions-l/">Security issues: SELinux denials, file permissions, SSH key  →</a></nav>
+</main>
+</body>
+</html>

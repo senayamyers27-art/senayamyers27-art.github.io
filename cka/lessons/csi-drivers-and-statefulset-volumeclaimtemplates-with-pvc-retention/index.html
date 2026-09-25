@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CSI drivers and StatefulSet volumeClaimTemplates with PVC… · CKA Lesson</title>
+<meta name="description" content="The Container Storage Interface (CSI) is how modern Kubernetes storage works: vendors ship drivers that the cluster installs like any other workload. As an">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="CSI drivers and StatefulSet volumeClaimTemplates with PVC… · CKA Lesson">
+<meta property="og:description" content="The Container Storage Interface (CSI) is how modern Kubernetes storage works: vendors ship drivers that the cluster installs like any other workload. As an">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/csi-drivers-and-statefulset-volumeclaimtemplates-with-pvc-retention/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/csi-drivers-and-statefulset-volumeclaimtemplates-with-pvc-retention/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 4: Storage</p>
+<h1>CSI drivers and StatefulSet volumeClaimTemplates with PVC retention</h1>
+<article class="lbody">
+<p>The Container Storage Interface (CSI) is how modern Kubernetes storage works: vendors ship drivers that the cluster installs like any other workload. As an administrator you should be able to recognize a driver's parts and see how StatefulSets use the storage it provides.</p>
+<p>A CSI driver usually has a controller component, a Deployment or StatefulSet running the driver plus sidecars such as external-provisioner (creates volumes for PVCs), external-attacher (attaches volumes to nodes), external-resizer (expansion) and external-snapshotter, and a node component, a DaemonSet with the driver and a node-driver-registrar sidecar that registers it with each kubelet and performs the actual mounts. Inspect it with <code>kubectl get csidrivers</code>, <code>kubectl get csinodes</code> and <code>kubectl get volumeattachments</code>. A StorageClass refers to the driver by its name in <code>provisioner</code>. Volume snapshots use <code>VolumeSnapshot</code>, <code>VolumeSnapshotContent</code> and <code>VolumeSnapshotClass</code> CRDs plus a snapshot controller, which must be installed separately.</p>
+<p>StatefulSets use this through <code>volumeClaimTemplates</code>. Instead of one PVC shared by all replicas, each Pod gets its own PVC created from the template, named <code>&lt;template-name&gt;-&lt;statefulset-name&gt;-&lt;ordinal&gt;</code>, such as <code>data-db-0</code>. When <code>db-1</code> is rescheduled to another node, it reattaches <code>data-db-1</code>, keeping its identity and data together.</p>
+<pre class="code" tabindex="0"><code>apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: db}
+spec:
+  serviceName: db
+  replicas: 3
+  selector: {matchLabels: {app: db}}
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Delete
+  template:
+    metadata: {labels: {app: db}}
+    spec:
+      containers:
+      - name: db
+        image: postgres:16
+        volumeMounts: [{name: data, mountPath: /var/lib/postgresql/data}]
+  volumeClaimTemplates:
+  - metadata: {name: data}
+    spec:
+      accessModes: [ReadWriteOnce]
+      storageClassName: fast
+      resources: {requests: {storage: 10Gi}}</code></pre>
+<p>By default, PVCs created from volumeClaimTemplates are never deleted automatically, whether you scale down or delete the StatefulSet. This protects data but leaves claims, and storage costs, behind. The <code>persistentVolumeClaimRetentionPolicy</code> field changes that with two settings. <code>whenDeleted</code> applies when the StatefulSet itself is deleted; <code>whenScaled</code> applies to Pods removed by scaling down. Each can be <code>Retain</code> (the default) or <code>Delete</code>. With Delete, the PVCs are removed, and then the PV follows its reclaim policy, which for dynamic volumes is usually Delete too.</p>
+<p>Keep in mind that volumeClaimTemplates are largely fixed after creation; changing the template's size does not resize existing PVCs. To grow them, expand each PVC individually. And a StatefulSet Pod stuck Pending often points to its PVC: check <code>kubectl get pvc</code> for that ordinal and describe it for provisioner or topology errors.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>CSI driver</dt><dd>A vendor storage plugin, split into controller and per-node components, that implements CSI.</dd><dt>volumeClaimTemplates</dt><dd>StatefulSet field that creates one PVC per Pod ordinal.</dd><dt>persistentVolumeClaimRetentionPolicy</dt><dd>StatefulSet setting controlling whether PVCs are deleted when the set is deleted or scaled down.</dd><dt>VolumeAttachment</dt><dd>An object recording that a CSI volume is attached to a particular node.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>After scaling a test StatefulSet from 5 to 2 replicas, <code>kubectl get pvc</code> still lists data-web-2 to data-web-4, consuming storage. Setting <code>whenScaled: Delete</code> in the retention policy means future scale-downs clean up claims automatically, and the three leftover PVCs are deleted manually after confirming the data is not needed.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Default retention is Retain for both whenDeleted and whenScaled, so deleting a StatefulSet does not delete its data. PVC names follow template-statefulset-ordinal.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What is the PVC name for Pod cache-2 of StatefulSet cache with template name store?</summary><p>store-cache-2.</p></details>
+<details class="sq"><summary>Which CSI component runs on every node and performs mounts?</summary><p>The node plugin, typically a DaemonSet with the driver and node-driver-registrar.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../static-pvs-hostpath-for-labs-local-volumes-with-nodeaffinity-nfs/">← Static PVs: hostPath for labs, local volumes with nodeAffini</a><a href="../node-problems-notready-kubelet-status-and-journalctl-u-kubelet-kubelet/">Node problems: NotReady, kubelet status and journalctl -u ku →</a></nav>
+</main>
+</body>
+</html>

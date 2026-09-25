@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Logging: journalctl filters, rsyslog, logrotate · Linux+ Lesson</title>
+<meta name="description" content="Logs are your record of what happened on a system, and they are the first place to look when something breaks or looks suspicious. Modern Linux distributio">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Logging: journalctl filters, rsyslog, logrotate · Linux+ Lesson">
+<meta property="og:description" content="Logs are your record of what happened on a system, and they are the first place to look when something breaks or looks suspicious. Modern Linux distributio">
+<link rel="canonical" href="https://senayamyers27-art.github.io/linux-plus/lessons/logging-journalctl-filters-rsyslog-logrotate/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/linux-plus/lessons/logging-journalctl-filters-rsyslog-logrotate/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Linux+</a> / <a href="../">Lessons</a></p>
+<p class="note">CompTIA Linux+ XK0-006 · Domain 2: Services and user management</p>
+<h1>Logging: journalctl filters, rsyslog, logrotate</h1>
+<article class="lbody">
+<p>Logs are your record of what happened on a system, and they are the first place to look when something breaks or looks suspicious. Modern Linux distributions use two logging systems side by side: the systemd journal and rsyslog, with logrotate keeping file-based logs under control.</p>
+<p>systemd-journald collects messages from the kernel, early boot, services' stdout and stderr, and the syslog interface, storing them in a structured binary journal. On many distributions the journal is kept only in memory under <code>/run/log/journal</code> unless <code>/var/log/journal</code> exists or <code>Storage=persistent</code> is set in <code>/etc/systemd/journald.conf</code>. Without persistence, logs from before the last reboot are gone. <code>journalctl --disk-usage</code> shows its size and <code>journalctl --vacuum-size=500M</code> trims it.</p>
+<p><code>journalctl</code> reads the journal, and its filters are heavily tested. <code>-u sshd</code> shows one unit, <code>-b</code> the current boot (<code>-b -1</code> the previous boot, <code>--list-boots</code> lists them), <code>-p err</code> messages of priority err and more severe, <code>-k</code> kernel messages only, <code>-f</code> follows new entries like <code>tail -f</code>, <code>-e</code> jumps to the end, <code>-n 50</code> shows the last 50 lines, and <code>--since '2026-09-24 10:00' --until '1 hour ago'</code> selects a time window. <code>_PID=1234</code> or <code>_UID=1001</code> filter by field, <code>-o json-pretty</code> shows all fields, and <code>-x</code> adds explanatory text. Filters combine, so <code>journalctl -u nginx -p warning --since today</code> is typical.</p>
+<p>rsyslog is the traditional syslog daemon, writing plain text files under <code>/var/log</code>, such as <code>/var/log/messages</code> or <code>/var/log/syslog</code> for general messages and <code>/var/log/secure</code> or <code>/var/log/auth.log</code> for authentication, depending on the distribution. Its rules in <code>/etc/rsyslog.conf</code> and <code>/etc/rsyslog.d/*.conf</code> use a selector of facility.priority followed by an action. Facilities include <code>auth</code>, <code>authpriv</code>, <code>cron</code>, <code>daemon</code>, <code>kern</code>, <code>mail</code> and <code>local0</code> to <code>local7</code>; priorities from lowest to highest severity are debug, info, notice, warning, err, crit, alert and emerg. <code>authpriv.* /var/log/secure</code> logs all authpriv messages, and <code>*.err</code> means err and above. To forward logs to a central server, use <code>*.* @server:514</code> for UDP (User Datagram Protocol) or <code>@@server:514</code> for TCP (Transmission Control Protocol). Central logging is an important security control because attackers who compromise a host often try to erase local logs. Test with the <code>logger</code> command, for example <code>logger -p local0.warning 'test message'</code>.</p>
+<p>logrotate prevents text logs from filling the disk. It runs daily from cron or a systemd timer and reads <code>/etc/logrotate.conf</code> plus per-application files in <code>/etc/logrotate.d/</code>. Common directives: <code>daily</code> or <code>weekly</code>, <code>rotate 7</code> (keep seven old copies), <code>compress</code> and <code>delaycompress</code>, <code>missingok</code>, <code>notifempty</code>, <code>size 100M</code>, <code>create 0640 root adm</code> for the new file's mode, and a <code>postrotate</code> script that signals the service to reopen its log. <code>copytruncate</code> copies then truncates the original for programs that cannot reopen files. Test a config with <code>logrotate -d</code> (debug, no changes) or force a rotation with <code>logrotate -f</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>systemd-journald</dt><dd>The systemd logging service that stores structured log data queried with journalctl.</dd><dt>rsyslog</dt><dd>A syslog daemon that routes messages by facility and priority to files or remote servers.</dd><dt>Facility and priority</dt><dd>Syslog categories for the message source (auth, cron, kern, local0...) and severity (debug through emerg).</dd><dt>logrotate</dt><dd>A utility that rotates, compresses and prunes log files according to rules in /etc/logrotate.d.</dd><dt>Persistent journal</dt><dd>Journal storage under /var/log/journal that survives reboots.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A service crashed overnight and the server rebooted. journalctl -u payments -b -1 -p err shows errors from the previous boot, but only because you earlier created /var/log/journal to make the journal persistent. You also confirm that rsyslog forwarded the same messages to the central log server with @@logs.example.com:514.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> In rsyslog forwarding, one @ means UDP and two @@ mean TCP; and in journalctl, -b -1 means the previous boot.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which journalctl command follows new messages from the sshd unit in real time?</summary><p>journalctl -u sshd -f.</p></details>
+<details class="sq"><summary>Why might journalctl -b -1 return nothing on a fresh install?</summary><p>The journal may be stored only in memory (/run/log/journal); without persistent storage, logs from previous boots are lost.</p></details>
+<details class="sq"><summary>What does rotate 4 combined with weekly do in a logrotate stanza?</summary><p>Rotates the log once a week and keeps four old copies, deleting older ones.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Linux+ for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../linux-plus/">Open the Linux+ study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../container-orchestration-concepts-kubernetes-pods-deployments-services/">← Container orchestration concepts: Kubernetes pods, deploymen</a><a href="../permissions-chmod-symbolic-and-octal-chown-umask/">Permissions: chmod symbolic and octal, chown, umask →</a></nav>
+</main>
+</body>
+</html>

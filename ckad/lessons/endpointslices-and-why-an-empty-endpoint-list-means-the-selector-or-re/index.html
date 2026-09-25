@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>EndpointSlices and why an empty endpoint list means the… · CKAD Lesson</title>
+<meta name="description" content="A Service is only a description. The actual list of Pod addresses behind it is kept in separate objects called EndpointSlices, maintained by a controller i">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="EndpointSlices and why an empty endpoint list means the… · CKAD Lesson">
+<meta property="og:description" content="A Service is only a description. The actual list of Pod addresses behind it is kept in separate objects called EndpointSlices, maintained by a controller i">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/endpointslices-and-why-an-empty-endpoint-list-means-the-selector-or-re/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/endpointslices-and-why-an-empty-endpoint-list-means-the-selector-or-re/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 5: Services and Networking</p>
+<h1>EndpointSlices and why an empty endpoint list means the selector or readiness is wrong</h1>
+<article class="lbody">
+<p>A Service is only a description. The actual list of Pod addresses behind it is kept in separate objects called EndpointSlices, maintained by a controller in the control plane. kube-proxy and other components on every node watch EndpointSlices to know where to forward traffic. When a Service 'does not work', looking at its EndpointSlices is the fastest way to find out why.</p>
+<p>For every Service with a selector, the EndpointSlice controller finds the Pods in the same namespace whose labels match, and records each Pod's IP, the target port and conditions such as <code>ready</code>. Each slice is labelled <code>kubernetes.io/service-name=&lt;service&gt;</code>. Large Services are split across several slices, which is why they replaced the older single Endpoints object; you may still see Endpoints listed, but EndpointSlices are the current mechanism.</p>
+<pre class="code" tabindex="0"><code>kubectl get endpointslices -l kubernetes.io/service-name=web
+kubectl describe endpointslice web-abc12
+kubectl describe svc web          # Endpoints: line
+kubectl get pods -l app=web -o wide --show-labels</code></pre>
+<p>Only ready Pods receive traffic. A Pod that matches the selector but fails its readiness probe, or is still starting, is listed with <code>ready: false</code> and traffic is not sent to it. So if the Service shows no ready endpoints, there are only two families of cause.</p>
+<p>First, the selector matches nothing. The Service's selector has a typo, uses a different label value (<code>app: Web</code> versus <code>app: web</code>), includes an extra label the Pods do not have, or the Pods are in another namespace. Compare <code>kubectl describe svc web</code> with <code>kubectl get pods --show-labels</code>, and test the selector directly: <code>kubectl get pods -l app=web</code>. If that returns nothing, the selector is wrong or the Pods are mislabelled.</p>
+<p>Second, the Pods match but are not ready. <code>kubectl get pods</code> shows <code>0/1</code> in READY; <code>kubectl describe pod</code> shows readiness probe failures, or the Pods are crashing or Pending. Fix the probe or the application, and the endpoints fill in automatically.</p>
+<p>A Service without a selector never gets automatic endpoints; you or another controller must create EndpointSlices by hand, which is how Services can point at databases outside the cluster. ExternalName Services have no endpoints at all by design.</p>
+<p>If endpoints exist and look right but connections still fail, the problem is elsewhere: a wrong targetPort, the app listening only on 127.0.0.1 instead of all interfaces, or a NetworkPolicy blocking traffic. The endpoint check therefore splits the problem space in half with one command.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>EndpointSlice</dt><dd>An object listing the addresses, ports and readiness of Pods backing a Service.</dd><dt>kubernetes.io/service-name</dt><dd>Label linking an EndpointSlice to its Service.</dd><dt>Ready condition</dt><dd>Endpoint flag showing whether a backend Pod should receive traffic.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>After a relabel, <code>curl orders</code> from a test Pod hangs. <code>kubectl describe svc orders</code> shows <code>Endpoints: &lt;none&gt;</code>. The Pods now carry <code>app: order-svc</code> while the Service still selects <code>app: orders</code>. Updating the Service selector restores three endpoints and the requests succeed.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Empty endpoints means one of two things: no Pod matches the selector, or matching Pods are not ready. Check <code>kubectl get pods -l &lt;selector&gt;</code> and the READY column.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How do you list the EndpointSlices for Service <code>web</code>?</summary><p><code>kubectl get endpointslices -l kubernetes.io/service-name=web</code>.</p></details>
+<details class="sq"><summary>Pods match the selector but the Service has no ready endpoints. What is likely wrong?</summary><p>The Pods are not ready: failing readiness probes, crashing or still starting.</p></details>
+<details class="sq"><summary>Endpoints look correct but connections still fail. Name one likely cause.</summary><p>A wrong targetPort, the app listening only on localhost, or a NetworkPolicy blocking traffic.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../selectors-port-vs-targetport-vs-nodeport-named-ports/">← Selectors, port vs targetPort vs nodePort, named ports</a><a href="../cluster-dns-names-service-namespace-svc-cluster-local/">Cluster DNS names: &lt;service&gt;.&lt;namespace&gt;.svc.cluster.local →</a></nav>
+</main>
+</body>
+</html>

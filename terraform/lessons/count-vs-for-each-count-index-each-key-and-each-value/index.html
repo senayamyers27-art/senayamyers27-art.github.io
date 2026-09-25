@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>`count` vs `for_each`, `count.index`, `each.key` and… · Terraform Associate Lesson</title>
+<meta name="description" content="Both count and for_each are meta-arguments that create several instances of a resource, data source or module from one block. They look similar but identif">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="`count` vs `for_each`, `count.index`, `each.key` and… · Terraform Associate Lesson">
+<meta property="og:description" content="Both count and for_each are meta-arguments that create several instances of a resource, data source or module from one block. They look similar but identif">
+<link rel="canonical" href="https://senayamyers27-art.github.io/terraform/lessons/count-vs-for-each-count-index-each-key-and-each-value/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/terraform/lessons/count-vs-for-each-count-index-each-key-and-each-value/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Terraform Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004) · Domain 4: Terraform configuration</p>
+<h1>`count` vs `for_each`, `count.index`, `each.key` and `each.value`</h1>
+<article class="lbody">
+<p>Both <code>count</code> and <code>for_each</code> are meta-arguments that create several instances of a resource, data source or module from one block. They look similar but identify instances differently, and that difference decides which one you should use.</p>
+<p><code>count</code> takes a whole number. Terraform creates that many instances, addressed by index: <code>aws_instance.web[0]</code>, <code>aws_instance.web[1]</code> and so on. Inside the block, <code>count.index</code> gives the current index, starting at zero.</p>
+<pre class="code" tabindex="0"><code>resource &quot;aws_instance&quot; &quot;web&quot; {
+  count         = 3
+  ami           = var.ami_id
+  instance_type = &quot;t3.micro&quot;
+  tags = { Name = &quot;web-${count.index}&quot; }
+}</code></pre>
+<p><code>for_each</code> takes a map or a set of strings. Terraform creates one instance per element, addressed by key: <code>aws_iam_user.dev[&quot;alice&quot;]</code>. Inside the block, <code>each.key</code> is the map key or set element and <code>each.value</code> is the map value; for a set, <code>each.value</code> is the same as <code>each.key</code>. A list is not accepted directly, so wrap it in <code>toset()</code>.</p>
+<pre class="code" tabindex="0"><code>resource &quot;aws_iam_user&quot; &quot;dev&quot; {
+  for_each = toset([&quot;alice&quot;, &quot;bob&quot;, &quot;carol&quot;])
+  name     = each.key
+}
+
+resource &quot;aws_s3_bucket&quot; &quot;b&quot; {
+  for_each = { logs = &quot;private&quot;, site = &quot;public&quot; }
+  bucket   = &quot;acme-${each.key}&quot;
+  tags     = { Access = each.value }
+}</code></pre>
+<p>The key difference shows up when the collection changes. Suppose you used <code>count</code> with a list of three user names and remove the first one. Every remaining name shifts down one index, so Terraform sees index 0 and 1 as changed and index 2 as removed. That can mean renaming or replacing objects you did not intend to touch. With <code>for_each</code>, each instance is tied to a stable key; removing <code>alice</code> destroys only <code>[&quot;alice&quot;]</code> and leaves bob and carol alone.</p>
+<p>So the general rule: use <code>count</code> when the instances are nearly identical and interchangeable, or when you want a simple on/off switch with <code>count = var.enabled ? 1 : 0</code>. Use <code>for_each</code> when each instance has a distinct identity or distinct settings. A block cannot use both <code>count</code> and <code>for_each</code> at once. For both, the number of instances, or the keys for <code>for_each</code>, must be known at plan time; you cannot base them on attributes only known after apply, such as IDs of resources being created in the same run.</p>
+<p>Referencing works differently too. A <code>count</code> resource is a list, so <code>aws_instance.web[*].id</code> gets all IDs. A <code>for_each</code> resource is a map, so you use <code>aws_s3_bucket.b[&quot;logs&quot;].arn</code> for one, or <code>values(aws_s3_bucket.b)[*].arn</code> or a <code>for</code> expression for all.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>count</dt><dd>Meta-argument that creates a number of instances addressed by integer index.</dd><dt>count.index</dt><dd>The zero-based index of the current instance in a <code>count</code> block.</dd><dt>for_each</dt><dd>Meta-argument that creates one instance per element of a map or set, addressed by key.</dd><dt>each.key / each.value</dt><dd>In a <code>for_each</code> block, the current element's key and value; identical for sets.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A team manages developer accounts with <code>count</code> over a list of names. When one developer leaves and is removed from the start of the list, the plan wants to rename two other accounts. They switch to <code>for_each = toset(var.developers)</code>, moving existing state entries to the new keys with <code>moved</code> blocks, and future removals affect only the departing person.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> <code>for_each</code> accepts maps and sets of strings, not lists, and gives stable keys. <code>count</code> indexes shift when items are removed from the middle. You cannot use both on one block.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why is <code>for_each</code> usually safer than <code>count</code> for a list of named users?</summary><p>Instances are keyed by name, so removing one user affects only that instance; with <code>count</code>, removing an item shifts indexes and changes other instances.</p></details>
+<details class="sq"><summary>In a <code>for_each</code> over <code>toset([&quot;a&quot;, &quot;b&quot;])</code>, what are <code>each.key</code> and <code>each.value</code> for the first element?</summary><p>Both are <code>&quot;a&quot;</code>, because for a set the key and value are the same.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Terraform Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../terraform/">Open the Terraform Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../built-in-functions-and-testing-them-in-terraform-console/">← Built-in functions and testing them in `terraform console`</a><a href="../explicit-dependencies-with-depends-on-lifecycle-rules-create-before-de/">Explicit dependencies with `depends_on`; `lifecycle` rules:  →</a></nav>
+</main>
+</body>
+</html>

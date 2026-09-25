@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Restoring default file contexts (restorecon -Rv) and… · RHCSA Lesson</title>
+<meta name="description" content="SELinux keeps a policy database of which label each path should have, written as regular expressions such as /var/www(/.*)? mapped to httpd_sys_content_t.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Restoring default file contexts (restorecon -Rv) and… · RHCSA Lesson">
+<meta property="og:description" content="SELinux keeps a policy database of which label each path should have, written as regular expressions such as /var/www(/.*)? mapped to httpd_sys_content_t.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/restoring-default-file-contexts-restorecon-rv-and-adding-rules-with-se/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/restoring-default-file-contexts-restorecon-rv-and-adding-rules-with-se/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 10: Manage security</p>
+<h1>Restoring default file contexts (restorecon -Rv) and adding rules with semanage fcontext</h1>
+<article class="lbody">
+<p>SELinux keeps a policy database of which label each path should have, written as regular expressions such as <code>/var/www(/.*)?</code> mapped to <code>httpd_sys_content_t</code>. The actual label is stored on each file. When the two disagree, the fix is to reset the file to what the policy says. When the policy itself has no rule for your custom path, you first add one.</p>
+<p><code>restorecon</code> sets files back to the label the policy expects. <code>-R</code> recurses and <code>-v</code> prints each change, so you can see what was wrong. <code>restorecon -Rv /var/www/html</code> fixes files moved there from home directories. It is safe to run repeatedly, since it only changes labels that differ from policy. <code>restorecon -Rnv</code> shows what would change without changing anything.</p>
+<pre class="code" tabindex="0"><code>restorecon -Rv /var/www/html
+# Relabeled /var/www/html/page.html from ...admin_home_t:s0 to ...httpd_sys_content_t:s0</code></pre>
+<p>Custom locations need a rule. If you serve web content from <code>/web</code>, the policy's default label for that path is <code>default_t</code>, which httpd may not read, and restorecon would just put <code>default_t</code> back. Add a rule with <code>semanage fcontext -a -t type 'regex'</code>, then apply it with restorecon. The regular expression <code>'/web(/.*)?'</code> matches the directory and everything inside it; quote it so the shell does not expand it.</p>
+<pre class="code" tabindex="0"><code>semanage fcontext -a -t httpd_sys_content_t '/web(/.*)?'
+restorecon -Rv /web
+ls -dZ /web
+semanage fcontext -l -C        # list local customizations</code></pre>
+<p><code>semanage fcontext -l</code> lists all rules, and you can grep it for a similar existing path to find the right type, for example <code>semanage fcontext -l | grep '/var/www'</code>. <code>-d</code> deletes a local rule and <code>-m</code> modifies one. semanage comes from the policycoreutils-python-utils package, which you may need to install. Because the rule is stored in the policy, it survives reboots and full relabels.</p>
+<p>Contrast with <code>chcon</code>, which changes a file's label directly, for example <code>chcon -t httpd_sys_content_t /web/index.html</code>. It works immediately but is temporary in the sense that restorecon or a relabel will undo it, since the policy still says otherwise. On the exam, use semanage fcontext plus restorecon for anything that must persist.</p>
+<p>Two related tricks: <code>touch /.autorelabel</code> and a reboot relabels the entire file system, and <code>restorecon</code> is the right fix after copying SSH keys or configuration files into place with <code>mv</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>restorecon</dt><dd>Resets file SELinux labels to the values defined in policy; -R recurses and -v reports changes.</dd><dt>semanage fcontext</dt><dd>Adds, modifies, deletes or lists the policy rules mapping path patterns to file types.</dd><dt>chcon</dt><dd>Changes a file's label directly; the change is lost on restorecon or relabel.</dd><dt>(/.*)?</dt><dd>The regular expression suffix that matches a directory and everything beneath it in fcontext rules.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Apache must serve content from /srv/site. You run semanage fcontext -a -t httpd_sys_content_t '/srv/site(/.*)?', then restorecon -Rv /srv/site, which relabels every file. After a full relabel test with touch /.autorelabel and reboot, ls -Z still shows httpd_sys_content_t because the rule is in policy.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> semanage fcontext only records the rule; it does not change any file. Always follow it with restorecon -Rv on the path, and prefer this pair over chcon for persistence.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>You added a semanage fcontext rule but ls -Z shows the old label. What did you forget?</summary><p>Running restorecon -Rv on the path to apply the rule to existing files.</p></details>
+<details class="sq"><summary>Why is chcon not a persistent fix?</summary><p>It changes the label on the file only; restorecon or a relabel resets it to what the policy says.</p></details>
+<details class="sq"><summary>What does the pattern '/data(/.*)?' match?</summary><p>The /data directory itself and everything beneath it.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../listing-and-identifying-selinux-file-and-process-contexts-ls-z-ps-ez-i/">← Listing and identifying SELinux file and process contexts (l</a><a href="../managing-selinux-port-labels-semanage-port-a-t-http-port-t-p-tcp/">Managing SELinux port labels (semanage port -a -t http_port_ →</a></nav>
+</main>
+</body>
+</html>

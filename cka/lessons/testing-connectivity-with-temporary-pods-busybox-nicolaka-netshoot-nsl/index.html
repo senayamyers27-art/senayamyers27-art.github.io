@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Testing connectivity with temporary Pods (busybox… · CKA Lesson</title>
+<meta name="description" content="Many CKA tasks end with 'verify that ...', and many troubleshooting tasks start with 'Pod A cannot reach B'. The fastest tool is a throwaway Pod inside the">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Testing connectivity with temporary Pods (busybox… · CKA Lesson">
+<meta property="og:description" content="Many CKA tasks end with 'verify that ...', and many troubleshooting tasks start with 'Pod A cannot reach B'. The fastest tool is a throwaway Pod inside the">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/testing-connectivity-with-temporary-pods-busybox-nicolaka-netshoot-nsl/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/testing-connectivity-with-temporary-pods-busybox-nicolaka-netshoot-nsl/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 3: Services and Networking</p>
+<h1>Testing connectivity with temporary Pods (busybox, nicolaka/netshoot), nslookup, curl and nc</h1>
+<article class="lbody">
+<p>Many CKA tasks end with 'verify that ...', and many troubleshooting tasks start with 'Pod A cannot reach B'. The fastest tool is a throwaway Pod inside the cluster, because it sees the network exactly as your workloads do, including DNS and NetworkPolicies.</p>
+<p><code>kubectl run</code> with <code>--rm -it --restart=Never</code> creates a Pod, attaches your terminal and deletes it when you exit. Put it in the right namespace with <code>-n</code>, and give it labels with <code>-l</code> if a NetworkPolicy decides access by label. You can also run a single command instead of a shell.</p>
+<pre class="code" tabindex="0"><code>kubectl run tmp --rm -it --restart=Never --image=busybox -- sh
+kubectl run tmp --rm -it --restart=Never --image=busybox -n frontend -l app=web -- \
+  wget -qO- -T 3 api.backend:8080/health
+kubectl run dns --rm -it --restart=Never --image=busybox -- nslookup kubernetes.default
+kubectl run net --rm -it --restart=Never --image=nicolaka/netshoot -- bash</code></pre>
+<p>busybox is tiny and quick to pull. It includes <code>nslookup</code>, <code>wget</code>, <code>nc</code> and <code>ping</code>, but not <code>curl</code>, so use <code>wget -qO- &lt;url&gt;</code> for HTTP. nicolaka/netshoot is a larger image packed with network tools: <code>curl</code>, <code>dig</code>, <code>nslookup</code>, <code>nc</code>, <code>tcpdump</code>, <code>ip</code>, <code>ss</code>, <code>traceroute</code> and more. Use it when you need detail. Some exam environments may restrict which images can be pulled, so be comfortable with whatever a task provides.</p>
+<p>Test in layers, so a failure tells you something. First DNS: <code>nslookup api.backend.svc.cluster.local</code> should return the ClusterIP; if it fails, go to DNS troubleshooting. Then the Service: <code>nc -zv -w 3 api.backend 8080</code> or <code>curl -m 3 api.backend:8080</code> tests the port through kube-proxy. Then a Pod directly by its IP from <code>kubectl get pods -o wide</code>, which bypasses the Service. If the Pod IP works but the Service does not, look at selectors, targetPort and EndpointSlices. If neither works, suspect the application, a NetworkPolicy or the CNI.</p>
+<p>Use explicit timeouts (<code>-T</code> for busybox wget, <code>-m</code> for curl, <code>-w</code> for nc) so a blocked connection fails in seconds instead of hanging, which saves real exam time. A timeout usually indicates a policy drop or routing problem, while 'connection refused' means a host answered but nothing listens on that port.</p>
+<p>You can also test from an existing Pod with <code>kubectl exec -it &lt;pod&gt; -- sh</code>, if its image has tools, or attach a debug container with <code>kubectl debug -it &lt;pod&gt; --image=busybox --target=&lt;container&gt;</code>. The debug container shares the Pod's network namespace, and <code>--target</code> also lets it see that container's processes. Remember to clean up anything you created without <code>--rm</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>kubectl run --rm -it</dt><dd>Creates an interactive temporary Pod that is deleted when the session ends.</dd><dt>busybox</dt><dd>A minimal image with basic tools such as nslookup, wget and nc, but no curl.</dd><dt>nicolaka/netshoot</dt><dd>A troubleshooting image containing many networking tools including curl, dig and tcpdump.</dd><dt>Connection refused vs timeout</dt><dd>Refused means nothing listens on the port; timeout usually means traffic is dropped or unroutable.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Pods in namespace frontend cannot reach Service api in backend. From a temporary busybox Pod labelled like the frontend, nslookup resolves the name, but <code>nc -zv -w 3 api.backend 8080</code> times out, while the same test to the Pod IP also times out. Checking NetworkPolicies in backend reveals a default deny with no rule for the frontend namespace.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Always test from a Pod with the same namespace and labels as the real client, or NetworkPolicy results will mislead you. And busybox has wget, not curl.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What flag combination creates a temporary interactive Pod that is removed on exit?</summary><p><code>kubectl run &lt;name&gt; --rm -it --restart=Never --image=&lt;image&gt; -- &lt;cmd&gt;</code>.</p></details>
+<details class="sq"><summary>If a Pod IP responds but its Service does not, where should you look?</summary><p>At the Service's selector, port and targetPort, and its EndpointSlices.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../coredns-the-coredns-configmap-and-corefile-forwarding-and-stub-zones-s/">← CoreDNS: the coredns ConfigMap and Corefile, forwarding and </a><a href="../volumes-vs-persistentvolumes-pv-and-pvc-lifecycle-available-bound-rele/">Volumes vs PersistentVolumes; PV and PVC lifecycle (Availabl →</a></nav>
+</main>
+</body>
+</html>

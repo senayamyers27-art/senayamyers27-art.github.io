@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Container problems: logs, port conflicts, image pulls… · Linux+ Lesson</title>
+<meta name="description" content="Containers fail in characteristic ways: the application inside crashes, the port cannot be published, the image cannot be pulled, or storage is missing, fu">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Container problems: logs, port conflicts, image pulls… · Linux+ Lesson">
+<meta property="og:description" content="Containers fail in characteristic ways: the application inside crashes, the port cannot be published, the image cannot be pulled, or storage is missing, fu">
+<link rel="canonical" href="https://senayamyers27-art.github.io/linux-plus/lessons/container-problems-logs-port-conflicts-image-pulls-storage/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/linux-plus/lessons/container-problems-logs-port-conflicts-image-pulls-storage/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Linux+</a> / <a href="../">Lessons</a></p>
+<p class="note">CompTIA Linux+ XK0-006 · Domain 5: Troubleshooting</p>
+<h1>Container problems: logs, port conflicts, image pulls, storage</h1>
+<article class="lbody">
+<p>Containers fail in characteristic ways: the application inside crashes, the port cannot be published, the image cannot be pulled, or storage is missing, full or inaccessible. The commands from the containers lesson become your troubleshooting toolkit, and the process mirrors ordinary service troubleshooting.</p>
+<p>Start by finding the container's state. <code>podman ps -a</code> (or <code>docker ps -a</code>) includes stopped containers and shows their status, such as <code>Exited (1) 2 minutes ago</code> or a restart loop. <code>podman logs name</code> shows what the application printed before it stopped, which is usually the answer: a missing environment variable, a configuration error, a failed database connection. <code>podman inspect name</code> shows the exit code, the OOMKilled flag, the command, environment, mounts and restart policy; an exit code of 137 means the process was killed with SIGKILL (128 + 9), often by the OOM killer or a memory limit, while 139 indicates a segmentation fault. <code>podman events</code> shows lifecycle events, and <code>podman exec -it name sh</code> lets you look inside a running container. If the container exits immediately, try running the image interactively with a shell to inspect it, or check that the main command does not simply finish and exit.</p>
+<p>Port conflicts show up as errors like 'address already in use' when you publish with <code>-p</code>. Only one process can bind a host port, so check with <code>ss -tlpn | grep :8080</code> for host services and <code>podman ps</code> for other containers already publishing it, then choose another host port or stop the conflicting service. If the container runs but is unreachable, check <code>podman port name</code> to confirm the mapping, confirm the application inside listens on 0.0.0.0 rather than 127.0.0.1 within the container, and check the host firewall. Rootless Podman cannot bind host ports below 1024 by default, which produces a permission error rather than a conflict.</p>
+<p>Image pull failures come from several causes. 'manifest unknown' or 'not found' means a wrong image name or tag; 'unauthorized' or 'denied' means you need to log in with <code>podman login registry</code> or lack access to a private repository; 'toomanyrequests' indicates a registry rate limit; and timeouts, DNS failures or TLS certificate errors point to network, proxy or clock problems. Short names without a registry may be resolved against a list in <code>/etc/containers/registries.conf</code>, so use fully qualified names like <code>registry.example.com/team/app:1.4</code> to be explicit and avoid pulling a lookalike image. Pinning a specific tag or digest instead of <code>latest</code> also prevents surprises.</p>
+<p>Storage problems come in two forms. Space: images, stopped containers, volumes and build cache consume disk under <code>/var/lib/containers</code> (Podman as root), <code>~/.local/share/containers</code> (rootless Podman) or <code>/var/lib/docker</code>. <code>podman system df</code> summarizes usage, and <code>podman image prune</code>, <code>podman container prune</code>, <code>podman volume prune</code> and <code>podman system prune</code> reclaim it; be careful, because pruning volumes deletes data. Access: a bind mount that gives 'Permission denied' inside the container usually means SELinux labels (add <code>:Z</code> or <code>:z</code> to the <code>-v</code> option) or UID mismatches, especially in rootless mode where container UIDs are mapped to subordinate UIDs on the host; <code>podman unshare</code> helps adjust ownership. Remember too that data written inside a container without a volume vanishes when the container is removed, which is a common cause of lost data after an image update.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Exit code 137</dt><dd>A container process killed by SIGKILL (128 + 9), frequently due to memory limits or the OOM killer.</dd><dt>podman ps -a</dt><dd>Lists all containers including stopped ones, with status and exit information.</dd><dt>registries.conf</dt><dd>Configuration that controls registries, including how short image names are resolved.</dd><dt>podman system df</dt><dd>Summarizes disk use by images, containers and volumes.</dd><dt>:Z volume option</dt><dd>Relabels a bind-mounted host directory with a private SELinux label so the container can access it.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A containerized API keeps restarting. podman ps -a shows Exited (137), and podman inspect shows OOMKilled true. The container had --memory 256m but the new release needs more. Raising the limit to 512m and redeploying stops the restarts, and podman logs now shows the service starting normally.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Check logs first, then inspect: podman logs explains most application crashes, and podman inspect reveals exit codes, OOM kills, mounts and port mappings.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>A container exits with code 137. What is the most likely cause?</summary><p>It was killed with SIGKILL, often because it exceeded its memory limit or was chosen by the OOM killer.</p></details>
+<details class="sq"><summary>podman run -p 80:8080 fails as a regular user with a permission error. Why?</summary><p>Rootless containers cannot bind host ports below 1024 by default; use a higher host port or adjust the system setting.</p></details>
+<details class="sq"><summary>A bind-mounted directory gives Permission denied inside a container on a RHEL host. What is a common fix?</summary><p>Add :Z (or :z) to the volume option so the directory is relabeled for container access under SELinux.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Linux+ for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../linux-plus/">Open the Linux+ study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../package-problems-broken-dependencies-repository-errors-held-packages/">← Package problems: broken dependencies, repository errors, he</a></nav>
+</main>
+</body>
+</html>

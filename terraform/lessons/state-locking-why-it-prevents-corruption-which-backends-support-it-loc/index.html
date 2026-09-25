@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>State locking: why it prevents corruption, which backends… · Terraform Associate Lesson</title>
+<meta name="description" content="Imagine two engineers running terraform apply against the same state at the same moment. Both read the same starting state, both make changes in the cloud ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="State locking: why it prevents corruption, which backends… · Terraform Associate Lesson">
+<meta property="og:description" content="Imagine two engineers running terraform apply against the same state at the same moment. Both read the same starting state, both make changes in the cloud ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/terraform/lessons/state-locking-why-it-prevents-corruption-which-backends-support-it-loc/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/terraform/lessons/state-locking-why-it-prevents-corruption-which-backends-support-it-loc/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Terraform Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004) · Domain 6: Terraform state management</p>
+<h1>State locking: why it prevents corruption, which backends support it, `-lock-timeout` and `terraform force-unlock`</h1>
+<article class="lbody">
+<p>Imagine two engineers running <code>terraform apply</code> against the same state at the same moment. Both read the same starting state, both make changes in the cloud and both try to write a new state. Whichever writes second overwrites the first, and the state no longer matches reality. State locking prevents this by letting only one operation that could write state run at a time.</p>
+<p>When a backend supports locking, Terraform acquires the lock automatically before any operation that might write state, such as <code>plan</code>, <code>apply</code>, <code>destroy</code>, <code>import</code> and the state-changing <code>state</code> subcommands, and releases it at the end. If someone else holds the lock, your command fails with an error showing the lock ID, who holds it, the operation and when it was taken. You do not have to do anything to enable locking beyond choosing a backend that supports it.</p>
+<p>Not every backend supports locking. The local backend locks using the operating system's file locking. Among remote backends, azurerm uses blob leases, gcs uses a lock file in the bucket, consul and pg (PostgreSQL) support locking natively, and HCP Terraform locks workspaces during runs. The s3 backend historically needed a separate DynamoDB table for locking; newer Terraform versions can instead use a lock file in the S3 bucket itself with <code>use_lockfile = true</code>, and the DynamoDB approach is being phased out. Always check the backend's documentation, because a backend without locking leaves you exposed.</p>
+<p>Two flags control lock behavior. <code>-lock-timeout=DURATION</code>, such as <code>-lock-timeout=5m</code>, tells Terraform to keep retrying for that long before giving up, which is useful in CI where jobs might briefly overlap. The default is to fail immediately. <code>-lock=false</code> disables locking for a command; it is dangerous and should be avoided except in unusual recovery situations.</p>
+<pre class="code" tabindex="0"><code>$ terraform force-unlock 6f1c2a3b-9d4e-4a7b-8c21-0e5f7d9a1b22
+Do you really want to force-unlock?
+  Only 'yes' will be accepted to confirm.</code></pre>
+<p>Sometimes a lock is left behind, for example if a CI job was killed or a laptop lost its network mid-apply. <code>terraform force-unlock LOCK_ID</code> removes it. It takes the lock ID shown in the error message and only unlocks state for the current configuration. Use it only when you are sure no other operation is actually running; force-unlocking an active run invites exactly the corruption locking was meant to prevent.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>State locking</dt><dd>A backend feature that allows only one state-writing Terraform operation at a time to prevent corruption.</dd><dt>-lock-timeout</dt><dd>A flag that makes Terraform retry acquiring a held lock for a given duration before failing.</dd><dt>terraform force-unlock</dt><dd>Manually removes a stale lock using its lock ID; for use only when no operation is running.</dd><dt>Lock ID</dt><dd>The identifier shown in a lock error that force-unlock needs to release that specific lock.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A CI job applying networking changes is cancelled halfway, leaving the S3 backend locked. The next pipeline fails with a lock error. After confirming in the CI system that no job is still running, an engineer runs terraform force-unlock with the lock ID from the error, then re-runs the pipeline.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Locking is automatic on supporting backends. force-unlock needs the lock ID and is a last resort; -lock-timeout waits for a lock instead of failing immediately.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What argument does terraform force-unlock require?</summary><p>The lock ID of the lock to remove, shown in the lock error message.</p></details>
+<details class="sq"><summary>Your pipeline sometimes fails because another job briefly holds the lock. Which flag helps?</summary><p>-lock-timeout, for example -lock-timeout=5m, so Terraform retries instead of failing immediately.</p></details>
+<details class="sq"><summary>Do you need to enable locking manually on a backend that supports it?</summary><p>No. Terraform acquires and releases locks automatically for operations that could write state.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Terraform Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../terraform/">Open the Terraform Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../the-default-local-backend-and-the-terraform-tfstate-file-terraform-tfs/">← The default local backend and the `terraform.tfstate` file, </a><a href="../the-backend-block-inside-terraform-remote-backends-such-as-s3-azurerm/">The `backend` block inside `terraform {}`: remote backends s →</a></nav>
+</main>
+</body>
+</html>

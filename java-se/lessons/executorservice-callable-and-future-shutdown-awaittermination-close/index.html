@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ExecutorService, Callable and Future; shutdown… · OCP Java Lesson</title>
+<meta name="description" content="An ExecutorService separates submitting tasks from deciding which threads run them. You create one with factory methods in Executors: newSingleThreadExecut">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="ExecutorService, Callable and Future; shutdown… · OCP Java Lesson">
+<meta property="og:description" content="An ExecutorService separates submitting tasks from deciding which threads run them. You create one with factory methods in Executors: newSingleThreadExecut">
+<link rel="canonical" href="https://senayamyers27-art.github.io/java-se/lessons/executorservice-callable-and-future-shutdown-awaittermination-close/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/java-se/lessons/executorservice-callable-and-future-shutdown-awaittermination-close/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">OCP Java</a> / <a href="../">Lessons</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25) · Domain 8: Managing concurrent code execution</p>
+<h1>ExecutorService, Callable and Future; shutdown, awaitTermination, close()</h1>
+<article class="lbody">
+<p>An <code>ExecutorService</code> separates submitting tasks from deciding which threads run them. You create one with factory methods in <code>Executors</code>: <code>newSingleThreadExecutor()</code> runs tasks one at a time in order, <code>newFixedThreadPool(n)</code> uses n reusable threads, <code>newCachedThreadPool()</code> grows and shrinks as needed, <code>newScheduledThreadPool(n)</code> runs tasks after a delay or periodically, and <code>newVirtualThreadPerTaskExecutor()</code> uses a new virtual thread per task.</p>
+<p>Tasks come in two shapes. A <code>Runnable</code> has <code>void run()</code> and cannot throw checked exceptions. A <code>Callable&lt;V&gt;</code> has <code>V call() throws Exception</code>, so it can return a result and throw checked exceptions. <code>execute(Runnable)</code> is fire-and-forget and returns void. <code>submit</code> accepts either a Runnable or a Callable and returns a <code>Future</code>. <code>invokeAll(collection)</code> runs many Callables and returns a list of Futures once all are done, and <code>invokeAny(collection)</code> returns the result of one that completed successfully and cancels the rest.</p>
+<p>A <code>Future&lt;V&gt;</code> represents a result that may not be ready yet. <code>get()</code> blocks until the task finishes and returns the value; for a submitted Runnable the value is null. <code>get(timeout, unit)</code> waits at most that long and throws <code>TimeoutException</code> if the result is not ready. If the task threw an exception, <code>get()</code> throws <code>ExecutionException</code> with the original exception as its cause. <code>get()</code> also throws the checked <code>InterruptedException</code>. <code>isDone()</code> checks without blocking, and <code>cancel(true)</code> attempts to stop the task by interrupting it.</p>
+<pre class="code" tabindex="0"><code>ExecutorService ex = Executors.newFixedThreadPool(2);
+try {
+    Future&lt;Integer&gt; f = ex.submit(() -&gt; 6 * 7);   // Callable&lt;Integer&gt;
+    Future&lt;?&gt; r = ex.submit(() -&gt; System.out.println(&quot;hi&quot;)); // Runnable
+    System.out.println(f.get());                 // 42 (blocks until done)
+} finally {
+    ex.shutdown();
+    if (!ex.awaitTermination(5, TimeUnit.SECONDS)) ex.shutdownNow();
+}</code></pre>
+<p>An executor's threads keep the JVM running until you shut it down. <code>shutdown()</code> stops accepting new tasks but lets already submitted tasks finish; it does not wait. Submitting after that throws <code>RejectedExecutionException</code>. <code>shutdownNow()</code> also attempts to stop running tasks by interrupting them and returns the list of tasks that never started. <code>awaitTermination(timeout, unit)</code> blocks until all tasks finish after a shutdown, or until the timeout, and returns true if it terminated. <code>isShutdown()</code> becomes true after shutdown is called; <code>isTerminated()</code> becomes true only when all tasks have completed.</p>
+<p>Since Java 19 ExecutorService implements <code>AutoCloseable</code>, so you can use try-with-resources. Its <code>close()</code> method calls shutdown and then waits for all tasks to finish, so leaving the block guarantees the work is done. This is the idiomatic pattern with virtual-thread executors. Be careful not to confuse <code>close()</code>, which waits, with <code>shutdown()</code>, which does not.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Callable&lt;V&gt;</dt><dd>A task interface with V call() throws Exception, returning a result and allowed to throw checked exceptions.</dd><dt>Future&lt;V&gt;</dt><dd>A handle to a pending result, with get, get with timeout, isDone and cancel.</dd><dt>ExecutionException</dt><dd>The checked exception thrown by Future.get when the task itself threw; the original exception is its cause.</dd><dt>shutdown</dt><dd>Stops an executor accepting new tasks while letting submitted tasks complete, without waiting.</dd><dt>awaitTermination</dt><dd>Blocks until all tasks complete after shutdown or a timeout expires, returning whether it terminated.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A price aggregator submits a Callable per supplier to a fixed pool, then calls future.get(2, TimeUnit.SECONDS) on each so one slow supplier cannot stall the page, and catches TimeoutException to show that supplier as unavailable.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> execute returns void and takes only a Runnable; submit returns a Future. shutdown does not wait, awaitTermination waits, and close() does both. Exceptions inside a task reach you wrapped in ExecutionException from get().</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What does Future.get() return for a submitted Runnable?</summary><p>null, once the task has completed.</p></details>
+<details class="sq"><summary>After shutdown(), what happens when you submit another task?</summary><p>It is rejected with a RejectedExecutionException.</p></details>
+<details class="sq"><summary>What is the difference between isShutdown() and isTerminated()?</summary><p>isShutdown is true once shutdown was requested; isTerminated is true only after all tasks have finished following shutdown.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study OCP Java for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../java-se/">Open the OCP Java study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../platform-threads-vs-virtual-threads-executors-newvirtualthreadpertaske/">← Platform threads vs virtual threads; Executors.newVirtualThr</a><a href="../thread-lifecycle-and-start-vs-run/">Thread lifecycle and start() vs run() →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SMB security: encryption, signing, SMB over QUIC… · AZ-802 Lesson</title>
+<meta name="description" content="Server Message Block (SMB) is the protocol behind Windows file shares, and it carries sensitive data and credentials. Attackers target it to read traffic, ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="SMB security: encryption, signing, SMB over QUIC… · AZ-802 Lesson">
+<meta property="og:description" content="Server Message Block (SMB) is the protocol behind Windows file shares, and it carries sensitive data and credentials. Attackers target it to read traffic, ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/smb-security-encryption-signing-smb-over-quic-removing-smbv1/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/smb-security-encryption-signing-smb-over-quic-removing-smbv1/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 5: Manage storage and file services</p>
+<h1>SMB security: encryption, signing, SMB over QUIC, removing SMBv1</h1>
+<article class="lbody">
+<p>Server Message Block (SMB) is the protocol behind Windows file shares, and it carries sensitive data and credentials. Attackers target it to read traffic, tamper with it, relay authentication and exploit old protocol versions. Windows Server gives you four main controls: encryption, signing, SMB over QUIC and removing SMB version 1.</p>
+<p>SMB encryption, available in SMB 3.0 and later, encrypts data end to end between client and server using AES (Advanced Encryption Standard) modes such as AES-128-GCM and, on newer versions, AES-256. You can enable it per share with <code>Set-SmbShare -Name Finance -EncryptData $true</code> or for the whole server with <code>Set-SmbServerConfiguration -EncryptData $true</code>. By default, an encrypted share rejects clients that cannot encrypt (older SMB 2 clients); the <code>RejectUnencryptedAccess</code> setting controls that. Encryption protects confidentiality on untrusted networks without deploying IPsec or special hardware.</p>
+<p>SMB signing adds a cryptographic signature to each message so the receiver can detect tampering and so a man-in-the-middle cannot relay a session. Signing does not hide the data, it proves integrity and authenticity. You require it with Group Policy settings such as Microsoft network server: Digitally sign communications (always), or <code>Set-SmbServerConfiguration -RequireSecuritySignature $true</code>. Domain controllers have long required signing for SYSVOL and NETLOGON, and recent Windows versions, including Windows Server 2025, require signing more broadly by default. If a connection is encrypted, signing is not also needed, since encryption already provides integrity.</p>
+<p>SMB over QUIC lets clients reach file shares over the internet without a VPN. QUIC is a transport that runs over UDP port 443 and always uses TLS 1.3, so the whole SMB session, including authentication, is encrypted. The server needs a certificate that clients trust, mapped with <code>New-SmbServerCertificateMapping</code>, and you can restrict which clients may connect with client access control. In Windows Server 2022 this was limited to the Azure Edition; Windows Server 2025 brings it to its regular editions. It is a good fit for mobile users and branch devices where TCP port 445 is blocked, which it often is on public networks.</p>
+<p>SMB version 1 is decades old, lacks modern protections and was abused by worms such as WannaCry. It is not installed by default on current Windows Server versions, but upgraded or older systems may still have it. First audit who uses it with <code>Set-SmbServerConfiguration -AuditSmb1Access $true</code> and read the Microsoft-Windows-SMBServer/Audit log. Then disable it with <code>Set-SmbServerConfiguration -EnableSMB1Protocol $false</code> and remove the feature with <code>Uninstall-WindowsFeature FS-SMB1</code>. Anything that still needs SMBv1, such as an old scanner, should be upgraded or isolated.</p>
+<p>Use <code>Get-SmbConnection</code> on a client to see the dialect in use and <code>Get-SmbSession</code> on a server to see connected clients.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>SMB encryption</dt><dd>An SMB 3.x feature that encrypts file traffic end to end, enabled per share or server-wide.</dd><dt>SMB signing</dt><dd>Cryptographic signing of SMB messages that detects tampering and blocks relay attacks, without hiding content.</dd><dt>SMB over QUIC</dt><dd>SMB carried over QUIC on UDP 443 with TLS 1.3, allowing secure file access over the internet without a VPN.</dd><dt>SMBv1</dt><dd>The original SMB dialect, insecure and deprecated, which should be audited, disabled and removed.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A legal firm enables encryption on its Contracts share so traffic crossing a shared branch link is unreadable, requires signing domain-wide via Group Policy, and turns on SMBv1 auditing for two weeks. The audit log shows one old copier using SMBv1; after replacing it, the admin runs Uninstall-WindowsFeature FS-SMB1 on every file server.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Signing equals integrity and anti-relay; encryption equals confidentiality plus integrity. SMB over QUIC means UDP 443, TLS 1.3 and a certificate. Audit SMBv1 before removing it.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What port and protocol does SMB over QUIC use?</summary><p>UDP port 443, using QUIC with TLS 1.3 encryption.</p></details>
+<details class="sq"><summary>Does SMB signing prevent someone sniffing the network from reading file contents?</summary><p>No. Signing only proves integrity and authenticity; you need SMB encryption to hide the content.</p></details>
+<details class="sq"><summary>How can you find out which clients still use SMBv1 before disabling it?</summary><p>Enable SMB1 access auditing with Set-SmbServerConfiguration -AuditSmb1Access $true and review the Microsoft-Windows-SMBServer/Audit event log.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../azure-files-with-ad-ds-authentication-share-level-rbac-vs-ntfs-permiss/">← Azure Files with AD DS authentication; share-level RBAC vs N</a><a href="../file-server-resource-manager-quotas-and-file-screens-dfs-namespaces-an/">File Server Resource Manager quotas and file screens; DFS Na →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SSH hardening: key-based auth, ssh-copy-id, sshd_config… · Linux+ Lesson</title>
+<meta name="description" content="SSH (Secure Shell) is how you administer almost every Linux server, which makes it one of the most attacked services on the internet. Automated bots consta">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="SSH hardening: key-based auth, ssh-copy-id, sshd_config… · Linux+ Lesson">
+<meta property="og:description" content="SSH (Secure Shell) is how you administer almost every Linux server, which makes it one of the most attacked services on the internet. Automated bots consta">
+<link rel="canonical" href="https://senayamyers27-art.github.io/linux-plus/lessons/ssh-hardening-key-based-auth-ssh-copy-id-sshd-config-permitrootlogin-p/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/linux-plus/lessons/ssh-hardening-key-based-auth-ssh-copy-id-sshd-config-permitrootlogin-p/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Linux+</a> / <a href="../">Lessons</a></p>
+<p class="note">CompTIA Linux+ XK0-006 · Domain 3: Security</p>
+<h1>SSH hardening: key-based auth, ssh-copy-id, sshd_config (PermitRootLogin, PasswordAuthentication)</h1>
+<article class="lbody">
+<p>SSH (Secure Shell) is how you administer almost every Linux server, which makes it one of the most attacked services on the internet. Automated bots constantly try common usernames and passwords. Hardening SSH means replacing passwords with keys, restricting who can log in, and keeping the configuration tight.</p>
+<p>Key-based authentication uses a key pair. The private key stays on your workstation, ideally protected by a passphrase; the public key is placed on the server in <code>~/.ssh/authorized_keys</code> of the account you log into. During login, the server challenges the client to prove it holds the private key, which is never sent over the network. Keys are far harder to guess than passwords and cannot be phished in the same way. Generate a pair with <code>ssh-keygen -t ed25519</code> (Ed25519 is the modern default; RSA with a large key size is also common), which creates <code>~/.ssh/id_ed25519</code> and <code>~/.ssh/id_ed25519.pub</code>.</p>
+<p><code>ssh-copy-id user@server</code> appends your public key to the server's authorized_keys and sets sensible permissions, using your password one last time. Permissions matter: sshd refuses keys if <code>~/.ssh</code> is writable by others; use 700 for <code>~/.ssh</code> and 600 for <code>authorized_keys</code> and private keys. <code>ssh-agent</code> with <code>ssh-add</code> holds a decrypted key in memory so you type the passphrase once per session. Client-side settings such as host aliases, users and key files go in <code>~/.ssh/config</code>.</p>
+<p>The server daemon is configured in <code>/etc/ssh/sshd_config</code>, and many distributions also read drop-in files from <code>/etc/ssh/sshd_config.d/</code>. Key hardening settings: <code>PermitRootLogin no</code> stops direct root logins so admins log in as themselves and use sudo, which also improves accountability; <code>prohibit-password</code> allows root only with keys. <code>PasswordAuthentication no</code> disables passwords entirely once keys work, stopping brute-force attacks; related keyboard-interactive settings may also need disabling. <code>PubkeyAuthentication yes</code> keeps keys enabled. <code>AllowUsers</code> or <code>AllowGroups</code> restrict logins to named accounts, <code>MaxAuthTries</code> limits attempts per connection, <code>LoginGraceTime</code> shortens the login window, and <code>X11Forwarding no</code> disables unneeded features. Changing <code>Port</code> reduces log noise but is not real security; on SELinux systems a new port also needs <code>semanage port -a -t ssh_port_t -p tcp &lt;port&gt;</code>, plus a firewall rule.</p>
+<p>Apply changes safely. First run <code>sshd -t</code> to test the syntax, then <code>systemctl reload sshd</code> (the unit is <code>ssh</code> on Debian-family systems). Keep your current session open and test a new login in a second terminal before logging out; if something is wrong, you can still fix it.</p>
+<p>Add complementary controls: fail2ban can ban IPs that repeatedly fail authentication by watching logs, firewall rules can restrict SSH to management networks, and MFA can be added through PAM. Review <code>/var/log/secure</code> or <code>/var/log/auth.log</code>, or <code>journalctl -u sshd</code>, for failed logins. Finally, verify server host keys when you first connect; the fingerprint prompt protects you against man-in-the-middle attacks, and <code>~/.ssh/known_hosts</code> records trusted keys.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Key-based authentication</dt><dd>Login using a private/public key pair, where the server holds the public key in authorized_keys.</dd><dt>ssh-copy-id</dt><dd>Copies a public key into a remote account's authorized_keys with correct permissions.</dd><dt>PermitRootLogin</dt><dd>sshd_config setting controlling whether root may log in directly (no, prohibit-password, yes).</dd><dt>PasswordAuthentication</dt><dd>sshd_config setting that enables or disables password logins.</dd><dt>sshd -t</dt><dd>Tests the SSH daemon configuration for errors before reloading.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A new cloud VM shows thousands of failed root password attempts in its auth log. You create a key with ssh-keygen -t ed25519, run ssh-copy-id admin@vm, confirm key login works in a second terminal, then set PermitRootLogin no and PasswordAuthentication no in a file under /etc/ssh/sshd_config.d/, run sshd -t and reload sshd. The brute-force attempts now fail immediately.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Order matters in hardening: confirm key-based login works before disabling PasswordAuthentication, and keep an existing session open while testing.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Key login fails and the server log mentions bad ownership or modes. What should you check?</summary><p>That ~/.ssh is 700, authorized_keys is 600, and the home directory is not writable by group or others, all owned by the user.</p></details>
+<details class="sq"><summary>Why is PermitRootLogin no considered good practice?</summary><p>It removes root as a direct target for attackers and forces admins to log in as individuals and elevate with sudo, which is logged and accountable.</p></details>
+<details class="sq"><summary>Which command checks sshd_config syntax before reloading?</summary><p>sshd -t.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Linux+ for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../linux-plus/">Open the Linux+ study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../firewalls-firewalld-zones-and-permanent-ufw-nftables-iptables-basics/">← Firewalls: firewalld zones and --permanent, ufw, nftables/ip</a><a href="../privilege-escalation-sudo-visudo-etc-sudoers-d-su-polkit/">Privilege escalation: sudo, visudo, /etc/sudoers.d, su, polk →</a></nav>
+</main>
+</body>
+</html>

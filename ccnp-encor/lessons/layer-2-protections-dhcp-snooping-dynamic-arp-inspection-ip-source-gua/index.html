@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Layer 2 protections: DHCP snooping, dynamic ARP… · ENCOR Lesson</title>
+<meta name="description" content="Layer 2 protocols such as DHCP and ARP were designed for trusted networks and have no authentication. An attacker on an access port can exploit that: a rog">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Layer 2 protections: DHCP snooping, dynamic ARP… · ENCOR Lesson">
+<meta property="og:description" content="Layer 2 protocols such as DHCP and ARP were designed for trusted networks and have no authentication. An attacker on an access port can exploit that: a rog">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ccnp-encor/lessons/layer-2-protections-dhcp-snooping-dynamic-arp-inspection-ip-source-gua/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ccnp-encor/lessons/layer-2-protections-dhcp-snooping-dynamic-arp-inspection-ip-source-gua/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">ENCOR</a> / <a href="../">Lessons</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2 · Domain 5: Security</p>
+<h1>Layer 2 protections: DHCP snooping, dynamic ARP inspection, IP source guard</h1>
+<article class="lbody">
+<p>Layer 2 protocols such as DHCP and ARP were designed for trusted networks and have no authentication. An attacker on an access port can exploit that: a rogue DHCP server can hand out itself as the default gateway to intercept traffic, ARP spoofing can redirect traffic through the attacker (a man-in-the-middle), and IP spoofing can make an attacker's traffic appear to come from another host. Cisco switches provide three features that build on each other to stop these attacks.</p>
+<p>DHCP snooping acts as a firewall for DHCP. You mark ports as trusted or untrusted. Trusted ports are uplinks toward legitimate DHCP servers; all others are untrusted by default. On untrusted ports, the switch drops DHCP server messages (offers and acknowledgments), so a rogue server on a user port cannot answer clients. It can also rate-limit DHCP messages on untrusted ports to prevent starvation attacks that exhaust the address pool. As clients successfully obtain addresses, the switch builds the DHCP snooping binding table, recording each client's MAC address, IP address, VLAN, port and lease time. This table is what the other two features rely on.</p>
+<pre class="code" tabindex="0"><code>ip dhcp snooping
+ip dhcp snooping vlan 10,20
+interface GigabitEthernet1/0/48
+ ip dhcp snooping trust
+interface range GigabitEthernet1/0/1 - 24
+ ip dhcp snooping limit rate 15</code></pre>
+<p>Dynamic ARP inspection (DAI) validates ARP packets on untrusted ports. For each ARP request or reply, the switch checks the sender's IP-to-MAC pairing against the DHCP snooping binding table and drops packets that do not match, blocking ARP spoofing and poisoning. Devices with static addresses, which are not in the binding table, need ARP ACLs to be permitted. Uplinks between switches are usually marked trusted with <code>ip arp inspection trust</code>. Enable DAI per VLAN with <code>ip arp inspection vlan 10,20</code>. Optional validation (<code>ip arp inspection validate src-mac dst-mac ip</code>) adds checks that addresses in the ARP body match the Ethernet header.</p>
+<p>IP source guard (IPSG) filters ordinary IP traffic on untrusted access ports. With <code>ip verify source</code> on an interface, the switch permits only traffic whose source IP (or both source IP and MAC, with <code>ip verify source port-security</code>) matches a binding for that port, taken from the DHCP snooping table or static bindings. Everything else is dropped, preventing a host from spoofing another address.</p>
+<p>The dependency chain is important: DAI and IP source guard both need the DHCP snooping binding table, so DHCP snooping must be enabled on the relevant VLANs first. A common lab problem is that DHCP stops working after enabling snooping because the uplink toward the server was not marked trusted, or because the switch inserts DHCP option 82 and the server or relay rejects it (fix with <code>no ip dhcp snooping information option</code> where appropriate). Verify with <code>show ip dhcp snooping</code>, <code>show ip dhcp snooping binding</code>, <code>show ip arp inspection</code> and <code>show ip verify source</code>. Violations are logged and, for rate-limit violations, the port can be err-disabled.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>DHCP snooping</dt><dd>Blocks DHCP server messages on untrusted ports and builds a binding table of legitimate leases.</dd><dt>Binding table</dt><dd>The DHCP snooping record of MAC, IP, VLAN and port for each client lease.</dd><dt>Dynamic ARP inspection</dt><dd>Drops ARP packets on untrusted ports whose IP-to-MAC mapping does not match the binding table.</dd><dt>IP source guard</dt><dd>Filters traffic on access ports so only sources matching the port's binding are allowed.</dd><dt>Trusted port</dt><dd>A port, usually an uplink or server port, exempt from DHCP snooping and DAI checks.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A user plugs a home router into an office port and its DHCP server starts handing out 192.168.1.x addresses. With DHCP snooping enabled, the switch drops its offers on the untrusted port. Later, a tool on another machine sends forged ARP replies claiming the gateway's IP; DAI drops them because the MAC does not match the binding table, and a log message identifies the port.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> DHCP snooping comes first because DAI and IP source guard both use its binding table. Mark uplinks toward DHCP servers and other switches as trusted, or DHCP and ARP will break.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What happens to a DHCP offer received on an untrusted port with DHCP snooping enabled?</summary><p>The switch drops it, because server messages are allowed only on trusted ports.</p></details>
+<details class="sq"><summary>Which feature stops ARP poisoning, and what does it check against?</summary><p>Dynamic ARP inspection, which validates ARP IP-to-MAC pairs against the DHCP snooping binding table (or ARP ACLs for static hosts).</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study ENCOR for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ccnp-encor/">Open the ENCOR study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../network-access-control-802-1x-mab-and-webauth/">← Network access control: 802.1X, MAB and WebAuth</a><a href="../python-basics-variables-loops-functions-dictionaries-the-requests-libr/">Python basics: variables, loops, functions, dictionaries, th →</a></nav>
+</main>
+</body>
+</html>

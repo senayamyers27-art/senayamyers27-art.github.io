@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Creating and removing physical volumes (pvcreate… · RHCSA Lesson</title>
+<meta name="description" content="LVM (Logical Volume Manager) adds a flexible layer between disks and file systems. Instead of formatting a partition directly, you pool storage from one or">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Creating and removing physical volumes (pvcreate… · RHCSA Lesson">
+<meta property="og:description" content="LVM (Logical Volume Manager) adds a flexible layer between disks and file systems. Instead of formatting a partition directly, you pool storage from one or">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/creating-and-removing-physical-volumes-pvcreate-pvremove-pvs/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/creating-and-removing-physical-volumes-pvcreate-pvremove-pvs/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 5: Configure local storage</p>
+<h1>Creating and removing physical volumes (pvcreate, pvremove, pvs)</h1>
+<article class="lbody">
+<p>LVM (Logical Volume Manager) adds a flexible layer between disks and file systems. Instead of formatting a partition directly, you pool storage from one or more devices and carve volumes out of the pool, which can later be grown, moved or spread across disks. LVM has three layers: physical volumes (PVs) at the bottom, volume groups (VGs) that pool them, and logical volumes (LVs) that you format and mount. This lesson covers the first layer.</p>
+<p>A physical volume is a block device that has been initialised for LVM use. It can be a whole disk (<code>/dev/vdb</code>), a partition (<code>/dev/vdb1</code>, ideally with its type set to Linux LVM) or other block devices such as a RAID array. Initialising writes a small LVM label and metadata area onto the device, which identifies it as belonging to LVM and later records which volume group it belongs to. Its space is divided into physical extents, the units a volume group hands out; their size is set when the device joins a volume group.</p>
+<pre class="code" tabindex="0"><code>lsblk /dev/vdb                  # confirm the right, unused device
+pvcreate /dev/vdb1 /dev/vdc1    # initialise two partitions
+pvs                             # brief list
+pvdisplay /dev/vdb1             # detailed view
+pvremove /dev/vdc1              # wipe the LVM label</code></pre>
+<p><code>pvcreate DEVICE...</code> initialises one or more devices. If the device already contains a file system or another signature, pvcreate warns and asks before wiping it, which is your last chance to notice you picked the wrong device. The device must not be mounted or otherwise in use.</p>
+<p><code>pvs</code> gives a one-line summary per PV: its name, the VG it belongs to (empty if none yet), format (lvm2), attributes, total size (PSize) and free space (PFree). <code>pvdisplay</code> shows more detail, including the extent size and the number of total, free and allocated physical extents once the PV belongs to a VG. <code>lsblk</code> and <code>blkid</code> also recognise PVs, showing them with type LVM2_member.</p>
+<p><code>pvremove DEVICE</code> erases the LVM label so the device is no longer a PV and can be reused for something else. It only works if the PV does not belong to a volume group. If it does, you first remove it from the group with <code>vgreduce VG DEVICE</code> (after moving any data off it with <code>pvmove</code> if it holds allocated extents) or remove the whole volume group. The logical order for dismantling is always top down: unmount and remove LVs, then remove or reduce the VG, then remove the PV, and finally delete the partition if you want the space back.</p>
+<p>Initialising a PV is not something you see persisted in <code>/etc/fstab</code> or any config file; the label on the device itself is what LVM scans for at boot, so there is nothing else to configure for it to survive a reboot.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>LVM</dt><dd>Logical Volume Manager: pools block devices into volume groups and allocates flexible logical volumes.</dd><dt>Physical volume (PV)</dt><dd>A disk or partition initialised with an LVM label so it can join a volume group.</dd><dt>pvcreate</dt><dd>Initialises devices as physical volumes.</dd><dt>pvs / pvdisplay</dt><dd>Show physical volumes in brief (pvs) or detailed (pvdisplay) form.</dd><dt>pvremove</dt><dd>Removes the LVM label from a device that is not in any volume group.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>To prepare storage for a new volume group, you create /dev/vdb1 with type Linux LVM, then run <code>pvcreate /dev/vdb1</code>. <code>pvs</code> shows /dev/vdb1 with a size of about 2g, an empty VG column and PFree equal to its size, ready for vgcreate.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Build LVM bottom up (partition, pvcreate, vgcreate, lvcreate, mkfs, mount) and dismantle it top down. pvremove fails while a PV still belongs to a volume group.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What must happen before you can pvremove a PV that is part of a VG?</summary><p>It must be removed from the VG with vgreduce (after moving data off with pvmove if needed), or the VG removed.</p></details>
+<details class="sq"><summary>Which column in pvs shows whether a PV belongs to a volume group?</summary><p>The VG column; it is empty for an unassigned PV.</p></details>
+<details class="sq"><summary>Can a whole disk without partitions be a physical volume?</summary><p>Yes, pvcreate works on whole disks as well as partitions.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../creating-and-deleting-gpt-partitions-with-parted-gdisk-or-fdisk-settin/">← Creating and deleting GPT partitions with parted, gdisk or f</a><a href="../creating-volume-groups-and-assigning-physical-volumes-vgcreate-s-vgext/">Creating volume groups and assigning physical volumes (vgcre →</a></nav>
+</main>
+</body>
+</html>

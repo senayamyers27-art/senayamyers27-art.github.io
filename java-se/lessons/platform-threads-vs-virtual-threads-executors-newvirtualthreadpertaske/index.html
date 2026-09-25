@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Platform threads vs virtual threads… · OCP Java Lesson</title>
+<meta name="description" content="A platform thread is a thin wrapper around an operating system thread. It holds that OS thread for its whole life, including while it waits for a database ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Platform threads vs virtual threads… · OCP Java Lesson">
+<meta property="og:description" content="A platform thread is a thin wrapper around an operating system thread. It holds that OS thread for its whole life, including while it waits for a database ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/java-se/lessons/platform-threads-vs-virtual-threads-executors-newvirtualthreadpertaske/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/java-se/lessons/platform-threads-vs-virtual-threads-executors-newvirtualthreadpertaske/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">OCP Java</a> / <a href="../">Lessons</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25) · Domain 8: Managing concurrent code execution</p>
+<h1>Platform threads vs virtual threads; Executors.newVirtualThreadPerTaskExecutor()</h1>
+<article class="lbody">
+<p>A platform thread is a thin wrapper around an operating system thread. It holds that OS thread for its whole life, including while it waits for a database or network reply. OS threads are relatively expensive: each reserves memory for a stack and the OS can schedule only so many efficiently, so applications traditionally used fixed-size thread pools and shared a limited number of threads among many tasks.</p>
+<p>A virtual thread, final since Java 21, is a lightweight thread managed by the JVM rather than the OS. The JVM runs virtual threads on a small pool of platform threads called carrier threads. When a virtual thread performs a blocking operation such as reading from a socket or sleeping, the JVM unmounts it from its carrier, parking its stack in heap memory, and the carrier is free to run another virtual thread. When the operation completes, the virtual thread is mounted again, possibly on a different carrier.</p>
+<p>The result is that you can have very large numbers of virtual threads, even millions, and write simple blocking code in a thread-per-request style while still scaling. Virtual threads help with throughput of I/O-bound work: many tasks spending most of their time waiting. They do not make CPU-bound code faster, because the number of carrier threads, and therefore of CPU cores in use, stays the same.</p>
+<pre class="code" tabindex="0"><code>try (ExecutorService ex = Executors.newVirtualThreadPerTaskExecutor()) {
+    for (int i = 0; i &lt; 10_000; i++) {
+        int id = i;
+        ex.submit(() -&gt; fetchOrder(id));   // each task gets its own new virtual thread
+    }
+}   // close() waits for all submitted tasks to finish</code></pre>
+<p><code>Executors.newVirtualThreadPerTaskExecutor()</code> returns an ExecutorService that starts a new virtual thread for every submitted task. There is no pool, because virtual threads are cheap to create; you should not pool virtual threads, and you should not reuse them. If you need to limit concurrent access to a scarce resource, such as a database with ten connections, use a <code>Semaphore</code> rather than a small pool. Other ways to create virtual threads are <code>Thread.ofVirtual().start(r)</code>, <code>Thread.startVirtualThread(r)</code> and <code>Thread.ofVirtual().factory()</code>.</p>
+<p>Some properties differ from platform threads. Virtual threads are always daemon threads, and calling <code>setDaemon(false)</code> on one throws <code>IllegalArgumentException</code>. Their priority is fixed at normal, and <code>setPriority</code> has no effect. <code>isVirtual()</code> tells you which kind a thread is. Thread-local variables work but, with millions of threads, heavy per-thread caches in ThreadLocal waste memory, which is one reason scoped values were introduced.</p>
+<p>A virtual thread can be pinned to its carrier, meaning it cannot unmount while blocked; historically this happened when blocking inside a <code>synchronized</code> block, and still happens during native method calls. Java 24 removed the synchronized case, but long pinning should still be avoided. For the exam, focus on the model: many cheap virtual threads for blocking I/O, a few platform threads for CPU work, and one virtual thread per task with no pooling.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Platform thread</dt><dd>A Java thread backed one to one by an operating system thread for its whole lifetime.</dd><dt>Virtual thread</dt><dd>A lightweight JVM-managed thread that unmounts from its carrier while blocked so the carrier can run other work.</dd><dt>Carrier thread</dt><dd>A platform thread on which the JVM mounts virtual threads to execute them.</dd><dt>newVirtualThreadPerTaskExecutor</dt><dd>An Executors factory method returning an ExecutorService that starts a new virtual thread for each task.</dd><dt>Pinning</dt><dd>A state where a blocked virtual thread cannot unmount from its carrier, reducing scalability.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A web service that calls three slow downstream APIs per request switches from a 200-thread fixed pool to a virtual-thread-per-task executor. Under load it handles far more concurrent requests with the same hardware, because waiting requests no longer tie up operating system threads.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Virtual threads improve scalability for blocking, I/O-heavy tasks, not raw CPU speed. Do not pool them; limit access to scarce resources with a Semaphore instead. They are always daemon threads.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Will switching a CPU-bound image-resizing job to virtual threads make it finish faster?</summary><p>Generally no. Virtual threads help when tasks wait on I/O; CPU-bound work is limited by the number of cores.</p></details>
+<details class="sq"><summary>What happens when a virtual thread blocks on a network read?</summary><p>The JVM unmounts it from its carrier thread, which can then run other virtual threads until the read completes.</p></details>
+<details class="sq"><summary>Why should you not create a fixed pool of 10 virtual threads to limit database calls?</summary><p>Virtual threads are meant to be created per task and not pooled; use a Semaphore to limit concurrency.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study OCP Java for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../java-se/">Open the OCP Java study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../creating-threads-with-runnable-thread-and-the-thread-builder-api/">← Creating threads with Runnable, Thread, and the Thread.Build</a><a href="../executorservice-callable-and-future-shutdown-awaittermination-close/">ExecutorService, Callable and Future; shutdown, awaitTermina →</a></nav>
+</main>
+</body>
+</html>

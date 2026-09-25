@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hyper-V virtual switches (external, internal, private)… · AZ-802 Lesson</title>
+<meta name="description" content="A Hyper-V virtual switch is a software layer 2 switch inside the host that connects VMs' virtual network adapters to each other and, optionally, to the out">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Hyper-V virtual switches (external, internal, private)… · AZ-802 Lesson">
+<meta property="og:description" content="A Hyper-V virtual switch is a software layer 2 switch inside the host that connects VMs' virtual network adapters to each other and, optionally, to the out">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/hyper-v-virtual-switches-external-internal-private-and-switch-embedded/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/hyper-v-virtual-switches-external-internal-private-and-switch-embedded/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 3: Manage virtual machines</p>
+<h1>Hyper-V virtual switches (external, internal, private) and Switch Embedded Teaming</h1>
+<article class="lbody">
+<p>A Hyper-V virtual switch is a software layer 2 switch inside the host that connects VMs' virtual network adapters to each other and, optionally, to the outside world. You create switches in Hyper-V Manager's Virtual Switch Manager or with <code>New-VMSwitch</code>. There are three types, and choosing the right one is a common exam question.</p>
+<p>An external switch is bound to a physical network adapter, so VMs can reach the physical network and beyond. When you create it, the option Allow management operating system to share this network adapter creates a host virtual NIC on the switch, so the host keeps network access through the same physical port. If you clear that option, the physical NIC is dedicated to VM traffic. An internal switch connects VMs to each other and to the host, but not to the physical network. It is useful for host-to-VM communication and, combined with <code>New-NetNat</code>, for giving VMs outbound NAT through the host. A private switch connects VMs only to each other; even the host cannot talk on it. It suits isolated labs and test networks, such as a malware analysis segment or an isolated test failover network.</p>
+<p>VM network adapters also carry settings: VLAN ID (<code>Set-VMNetworkAdapterVlan -VMName APP01 -Access -VlanId 20</code>), bandwidth management, DHCP guard and router guard (which drop rogue DHCP or router advertisement messages from a VM), MAC address spoofing, port mirroring and, on generation 2 VMs, PXE boot with the standard adapter.</p>
+<p>Hosts need redundancy and bandwidth, which traditionally came from NIC teaming (LBFO, load balancing and failover) configured in Windows, with a virtual switch built on the team. Switch Embedded Teaming (SET), introduced in Windows Server 2016, builds teaming directly into the Hyper-V virtual switch instead. SET is the recommended approach for Hyper-V hosts and is required for software-defined networking features and for converged designs using RDMA (Remote Direct Memory Access) for storage and live migration traffic. Building a new virtual switch on an LBFO team is deprecated and blocked by default on recent Windows Server versions, so use SET.</p>
+<p>SET has specific rules. It supports up to eight physical adapters, and they should be identical: same manufacturer, model, firmware and driver. It works only in switch-independent mode, so the physical switches need no special configuration such as LACP. It offers two load-balancing modes, Hyper-V Port (each VM's traffic is tied to one team member) and Dynamic (outbound traffic is balanced by flows).</p>
+<pre class="code" tabindex="0"><code>New-VMSwitch -Name SETswitch -NetAdapterName 'NIC1','NIC2' -EnableEmbeddedTeaming $true -AllowManagementOS $true
+Set-VMSwitchTeam -Name SETswitch -LoadBalancingAlgorithm HyperVPort
+Add-VMNetworkAdapter -ManagementOS -Name LiveMigration -SwitchName SETswitch
+```
+The last line adds a host virtual NIC for live migration traffic on the same converged team.</code></pre>
+<h2>Key terms</h2>
+<dl class="terms"><dt>External switch</dt><dd>A virtual switch bound to a physical NIC so VMs can reach the physical network.</dd><dt>Internal switch</dt><dd>A virtual switch connecting VMs and the host, with no physical network access.</dd><dt>Private switch</dt><dd>A virtual switch connecting only VMs to each other; the host is excluded.</dd><dt>Switch Embedded Teaming</dt><dd>NIC teaming built into the Hyper-V virtual switch, up to eight identical adapters, switch-independent.</dd><dt>DHCP guard</dt><dd>A VM adapter setting that blocks DHCP server messages from unauthorized VMs.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A lab needs three VMs that can talk to each other but must never reach the host or corporate network. The admin creates a private switch and connects all three to it. Later, for production hosts with two 25 GbE RDMA NICs, the team builds a SET switch with host vNICs for management, storage and live migration.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Host access but no physical network means internal; VMs only means private. For teaming on modern Hyper-V hosts, choose SET, which uses switch-independent mode and needs identical NICs, not LBFO.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which virtual switch type lets VMs talk to the host but not the physical network?</summary><p>Internal.</p></details>
+<details class="sq"><summary>What teaming mode does SET support?</summary><p>Switch-independent only; no LACP or static teaming.</p></details>
+<details class="sq"><summary>What is the maximum number of physical adapters in a SET team?</summary><p>Eight, and they should be identical.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../checkpoints-production-vs-standard-why-checkpoints-are-not-backups/">← Checkpoints: production vs standard; why checkpoints are not</a><a href="../live-migration-and-storage-migration-between-hyper-v-hosts-kerberos-vs/">Live migration and storage migration between Hyper-V hosts;  →</a></nav>
+</main>
+</body>
+</html>

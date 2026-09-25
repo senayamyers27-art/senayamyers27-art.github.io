@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Common triggers: HTTP (auth levels), timer (six-field… · AI-200 Lesson</title>
+<meta name="description" content="The HTTP trigger turns a function into a web endpoint at a route under /api/ by default. Its authorization level controls whether a key is required.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Common triggers: HTTP (auth levels), timer (six-field… · AI-200 Lesson">
+<meta property="og:description" content="The HTTP trigger turns a function into a web endpoint at a route under /api/ by default. Its authorization level controls whether a key is required.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/common-triggers-http-auth-levels-timer-six-field-ncrontab-service-bus/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/common-triggers-http-auth-levels-timer-six-field-ncrontab-service-bus/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 3: Connect to and consume Azure services</p>
+<h1>Common triggers: HTTP (auth levels), timer (six-field NCRONTAB), Service Bus, Cosmos DB, Blob, Event Grid</h1>
+<article class="lbody">
+<p>The HTTP trigger turns a function into a web endpoint at a route under <code>/api/</code> by default. Its authorization level controls whether a key is required. <code>ANONYMOUS</code> needs no key. <code>FUNCTION</code> requires a function-specific key or a host key, passed in the <code>x-functions-key</code> header or the <code>code</code> query parameter. <code>ADMIN</code> requires the master key. Keys are not user authentication; for real users, put App Service Authentication (Easy Auth), API Management or your own token validation in front. Locally, keys are not enforced.</p>
+<p>The timer trigger runs on a schedule written in NCRONTAB, a six-field cron format: <code>{second} {minute} {hour} {day} {month} {day-of-week}</code>. The extra leading seconds field is the main difference from five-field Unix cron, and it is the favorite exam detail. <code>0 */5 * * * *</code> runs every five minutes; <code>0 30 9 * * 1-5</code> runs at 9:30 on weekdays. Times are UTC by default. A timer function can set <code>run_on_startup</code> (avoid in production, since restarts trigger extra runs) and uses a singleton lock so only one instance runs each occurrence.</p>
+<pre class="code" tabindex="0"><code>@app.timer_trigger(schedule=&quot;0 0 2 * * *&quot;, arg_name=&quot;timer&quot;, run_on_startup=False)
+def nightly(timer: func.TimerRequest):
+    if timer.past_due:
+        logging.warning(&quot;Running late&quot;)
+
+@app.service_bus_queue_trigger(arg_name=&quot;msg&quot;, queue_name=&quot;orders&quot;, connection=&quot;ServiceBusConn&quot;)
+def handle_order(msg: func.ServiceBusMessage):
+    logging.info(msg.get_body().decode())
+
+@app.event_grid_trigger(arg_name=&quot;event&quot;)
+def on_event(event: func.EventGridEvent):
+    logging.info(&quot;%s %s&quot;, event.event_type, event.subject)</code></pre>
+<p>The Service Bus trigger (<code>service_bus_queue_trigger</code> or <code>service_bus_topic_trigger</code> with a subscription name) receives messages in peek-lock mode. If the function succeeds, the runtime completes the message; if it throws, the message is abandoned and retried until max delivery count sends it to the dead-letter queue. The runtime renews locks during long executions, and host.json controls concurrency.</p>
+<p>The Cosmos DB trigger runs on the container's change feed, as covered earlier. It needs a lease container, delivers batches of changed documents, and does not see deletes in latest version mode.</p>
+<p>The Blob trigger fires when a blob is added or updated in a container path. The classic implementation polls the container and can take time to notice new blobs on consumption-style plans and with large containers. The recommended approach for low latency and reliability is the Event Grid-based blob trigger (<code>source=&quot;EventGrid&quot;</code> in the v2 decorator, backed by an Event Grid subscription), and the Flex Consumption plan supports only this event-based form. Blob receipts stored in the host storage account prevent processing the same blob twice.</p>
+<p>The Event Grid trigger receives events pushed by an Event Grid subscription that targets the function. The runtime handles the webhook validation handshake automatically, and you can filter at the subscription level so the function only runs for relevant events. Choose it to react to Azure resource events or custom topic events.</p>
+<p>When choosing: request/response means HTTP, schedule means timer, reliable business messages means Service Bus, database changes means Cosmos DB, new files mean Blob (Event Grid source preferred), and Azure resource events mean Event Grid.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Authorization level</dt><dd>HTTP trigger setting (anonymous, function or admin) that decides which key, if any, a caller must supply.</dd><dt>NCRONTAB</dt><dd>The six-field cron format used by timer triggers, starting with a seconds field.</dd><dt>Past due</dt><dd>A timer flag indicating the scheduled run happened later than planned, for example after downtime.</dd><dt>Event Grid-based blob trigger</dt><dd>A blob trigger that uses Event Grid notifications instead of polling for lower latency.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A nightly cleanup meant to run once at 2:00 ran sixty times each night because a developer wrote * 0 2 * * *, where the * in the leading seconds field means every second of the 2:00 minute. Rewriting it as 0 0 2 * * * fixed the schedule. The same team moved a slow polling blob trigger to the Event Grid source and saw processing start within seconds of upload.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Timer schedules have six fields with seconds first (0 */5 * * * * is every five minutes). FUNCTION auth needs a key in x-functions-key or code; it is not user authentication.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Write an NCRONTAB expression for every day at 06:15 UTC.</summary><p>0 15 6 * * *, with fields second, minute, hour, day, month and day-of-week.</p></details>
+<details class="sq"><summary>What happens to a Service Bus-triggered message when the function throws an exception?</summary><p>The message is abandoned and retried; after exceeding max delivery count it is moved to the dead-letter queue.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../azure-functions-python-v2-model-function-app-py-decorators-triggers-an/">← Azure Functions Python v2 model: function_app.py, decorators</a><a href="../hosting-plans-flex-consumption-premium-and-dedicated-cold-starts-scale/">Hosting plans: Flex Consumption, Premium and Dedicated; cold →</a></nav>
+</main>
+</body>
+</html>

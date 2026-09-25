@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Intermediate operations and lazy evaluation: filter, map… · OCP Java Lesson</title>
+<meta name="description" content="Intermediate operations transform a stream into another stream. They are lazy: calling filter or map only records a step in the pipeline.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Intermediate operations and lazy evaluation: filter, map… · OCP Java Lesson">
+<meta property="og:description" content="Intermediate operations transform a stream into another stream. They are lazy: calling filter or map only records a step in the pipeline.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/java-se/lessons/intermediate-operations-and-lazy-evaluation-filter-map-flatmap-peek-so/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/java-se/lessons/intermediate-operations-and-lazy-evaluation-filter-map-flatmap-peek-so/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">OCP Java</a> / <a href="../">Lessons</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25) · Domain 6: Working with streams and lambda expressions</p>
+<h1>Intermediate operations and lazy evaluation: filter, map, flatMap, peek, sorted, distinct, limit</h1>
+<article class="lbody">
+<p>Intermediate operations transform a stream into another stream. They are lazy: calling <code>filter</code> or <code>map</code> only records a step in the pipeline. No element is processed until a terminal operation runs. If a pipeline has no terminal operation, none of its lambdas are ever executed, which is why a question with only <code>peek(System.out::println)</code> and no terminal operation prints nothing.</p>
+<p><code>filter(Predicate)</code> keeps the elements for which the predicate returns true. <code>map(Function)</code> converts each element into exactly one new element, possibly of a different type. <code>flatMap(Function)</code> converts each element into a stream and then flattens all those streams into one, so a <code>Stream&lt;List&lt;String&gt;&gt;</code> becomes a <code>Stream&lt;String&gt;</code> with <code>flatMap(List::stream)</code>. <code>mapToInt</code>, <code>mapToObj</code> and similar switch between object and primitive streams.</p>
+<p><code>distinct()</code> removes duplicates using <code>equals</code> (and <code>hashCode</code>). <code>sorted()</code> sorts by natural order and requires elements to be Comparable, otherwise a <code>ClassCastException</code> occurs when the terminal operation runs; <code>sorted(Comparator)</code> uses the supplied order. <code>limit(n)</code> passes on at most n elements and <code>skip(n)</code> discards the first n. <code>peek(Consumer)</code> runs an action on each element as it passes and returns the same elements; it is meant for debugging, not for changing state.</p>
+<p>Laziness has a visible effect on order. Elements flow through the pipeline one at a time, vertically, rather than each operation finishing all elements before the next starts. With <code>limit</code>, processing stops as soon as enough elements have passed, so earlier steps may run on only a few elements. This is also what lets infinite streams work.</p>
+<pre class="code" tabindex="0"><code>Stream.of(&quot;b&quot;, &quot;a&quot;, &quot;c&quot;, &quot;d&quot;)
+      .peek(s -&gt; System.out.print(&quot;p&quot; + s + &quot; &quot;))
+      .filter(s -&gt; !s.equals(&quot;a&quot;))
+      .map(String::toUpperCase)
+      .limit(2)
+      .forEach(s -&gt; System.out.print(s + &quot; &quot;));
+// prints: pb B pa pc C
+// &quot;d&quot; is never peeked: limit(2) was already satisfied</code></pre>
+<p><code>sorted</code> and <code>distinct</code> are stateful: they must remember elements they have seen. <code>sorted</code> in particular has to see every element before it can emit the first one, so in a pipeline with <code>sorted</code> all earlier steps run on all elements first, and <code>sorted</code> on an infinite stream never finishes even if a <code>limit</code> comes after it. Put <code>limit</code> before <code>sorted</code> when you want to sort only the first few elements of an infinite source.</p>
+<p>Intermediate operations never modify the source collection. <code>list.stream().map(String::toUpperCase)</code> leaves the list unchanged; you must collect the result into a new collection if you want to keep it.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Lazy evaluation</dt><dd>Intermediate operations run only when a terminal operation pulls elements through the pipeline.</dd><dt>flatMap</dt><dd>Maps each element to a stream and concatenates the resulting streams into a single stream.</dd><dt>Stateful operation</dt><dd>An intermediate operation such as sorted or distinct that must track elements it has already seen.</dd><dt>Short-circuiting operation</dt><dd>An operation such as limit that can finish without processing every element.</dd><dt>peek</dt><dd>An intermediate operation that performs an action on each element as it passes, mainly for debugging.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A log analyzer reads millions of lines but only needs the first five error lines. Because streams are lazy, lines().filter(l -&gt; l.contains(&quot;ERROR&quot;)).limit(5) stops reading as soon as five matches are found instead of scanning the whole file.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Trace output questions element by element, not operation by operation, and check whether there is a terminal operation at all. Also watch for sorted on an infinite stream, which hangs even with a later limit.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What does Stream.of(1, 2, 3).peek(System.out::println); print?</summary><p>Nothing. There is no terminal operation, so the lazy pipeline never runs.</p></details>
+<details class="sq"><summary>How do you turn a List&lt;List&lt;Integer&gt;&gt; into a Stream&lt;Integer&gt;?</summary><p>listOfLists.stream().flatMap(List::stream).</p></details>
+<details class="sq"><summary>Why does Stream.iterate(1, n -&gt; n + 1).sorted().limit(3).toList() never finish?</summary><p>sorted must see all elements before emitting any, and the source is infinite.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study OCP Java for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../java-se/">Open the OCP Java study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../creating-streams-collections-stream-of-intstream-range-rangeclosed-str/">← Creating streams: collections, Stream.of, IntStream.range/ra</a><a href="../terminal-operations-foreach-reduce-collect-count-findfirst-anymatch-to/">Terminal operations: forEach, reduce, collect, count, findFi →</a></nav>
+</main>
+</body>
+</html>

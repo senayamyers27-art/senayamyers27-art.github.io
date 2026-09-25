@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The dependency lock file `.terraform.lock.hcl`: what it… · Terraform Associate Lesson</title>
+<meta name="description" content="Version constraints say which provider versions are acceptable. They do not guarantee that everyone uses the same version.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="The dependency lock file `.terraform.lock.hcl`: what it… · Terraform Associate Lesson">
+<meta property="og:description" content="Version constraints say which provider versions are acceptable. They do not guarantee that everyone uses the same version.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/terraform/lessons/the-dependency-lock-file-terraform-lock-hcl-what-it-records-and-why-it/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/terraform/lessons/the-dependency-lock-file-terraform-lock-hcl-what-it-records-and-why-it/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Terraform Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004) · Domain 2: Terraform fundamentals</p>
+<h1>The dependency lock file `.terraform.lock.hcl`: what it records and why it is committed</h1>
+<article class="lbody">
+<p>Version constraints say which provider versions are acceptable. They do not guarantee that everyone uses the same version. If your constraint is <code>~&gt; 5.0</code> and a new 5.x release comes out tomorrow, a teammate who initializes a fresh clone could get a different version from you. The dependency lock file, <code>.terraform.lock.hcl</code>, solves this.</p>
+<p>When <code>terraform init</code> installs providers, it writes or updates <code>.terraform.lock.hcl</code> in the root module directory. For each provider it records the full source address, the exact version selected, the constraints that were in effect, and a set of checksums (hashes) of the provider packages. On later runs of <code>init</code>, Terraform reuses the recorded version rather than picking the newest allowed one, and verifies that downloaded packages match the recorded hashes.</p>
+<pre class="code" tabindex="0"><code>provider &quot;registry.terraform.io/hashicorp/random&quot; {
+  version     = &quot;3.6.2&quot;
+  constraints = &quot;~&gt; 3.5&quot;
+  hashes = [
+    &quot;h1:...&quot;,
+    &quot;zh:...&quot;,
+  ]
+}</code></pre>
+<p>Commit this file to version control. That way your laptop, your teammates' laptops, the CI pipeline and HCP Terraform all use exactly the same provider versions, and a change of provider version appears as a visible diff in a pull request. The hashes also add a supply-chain safeguard: if a downloaded package does not match a recorded checksum, init fails instead of running an unexpected binary.</p>
+<p>To move to a newer provider version within your constraints, run <code>terraform init -upgrade</code>. Terraform ignores the locked versions, selects the newest allowed versions, and rewrites the lock file, which you then review and commit. If you changed a constraint so that the locked version no longer satisfies it, init reports an error and tells you to use <code>-upgrade</code>.</p>
+<p>Hashes are platform-specific. If developers use macOS but the pipeline runs Linux, a lock file created on a Mac may only contain hashes for the Mac package. The <code>terraform providers lock</code> command can pre-populate hashes for several platforms, for example with <code>-platform=linux_amd64 -platform=darwin_arm64</code>.</p>
+<p>Two details are commonly tested. The lock file tracks providers only; it does not lock module versions, which you pin with the module block's <code>version</code> argument. And it is different from the <code>.terraform</code> directory, which holds the downloaded plugins and modules and should not be committed; add <code>.terraform/</code> to <code>.gitignore</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Dependency lock file</dt><dd><code>.terraform.lock.hcl</code>, which records the exact provider versions and package checksums selected by <code>terraform init</code>.</dd><dt>terraform init -upgrade</dt><dd>Re-selects the newest provider (and module) versions allowed by constraints and updates the lock file.</dd><dt>Checksum (hash)</dt><dd>A fingerprint of a provider package used to verify that the downloaded file is the expected one.</dd><dt>.terraform directory</dt><dd>Local working directory where init stores downloaded providers and modules; not committed.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A pipeline suddenly fails after a provider's new minor release changed a default. The team had not committed the lock file, so CI picked the newest version. After committing <code>.terraform.lock.hcl</code>, CI uses the same version as the developers until someone deliberately runs <code>terraform init -upgrade</code>.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Lock file: commit it. <code>.terraform/</code> directory: do not commit it. And the lock file covers providers, not modules.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What command updates the provider versions recorded in <code>.terraform.lock.hcl</code>?</summary><p><code>terraform init -upgrade</code>, which selects the newest versions allowed by the constraints and rewrites the file.</p></details>
+<details class="sq"><summary>Does the dependency lock file pin module versions?</summary><p>No. It only tracks providers; module versions are constrained with the <code>version</code> argument in module blocks.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Terraform Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../terraform/">Open the Terraform Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../version-constraint-operators-and-the-pessimistic/">← Version constraint operators: `=`, `!=`, `&gt;=`, `&lt;=`, and the</a><a href="../how-providers-work-plugins-that-call-apis-downloaded-by-terraform-init/">How providers work: plugins that call APIs, downloaded by `t →</a></nav>
+</main>
+</body>
+</html>

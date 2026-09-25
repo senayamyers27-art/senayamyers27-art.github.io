@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Architectural patterns: event-driven, microservices… · Developer Associate Lesson</title>
+<meta name="description" content="Most DVA-C02 scenarios describe an application built from small pieces that talk to each other, and ask which design keeps it reliable and easy to change. ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Architectural patterns: event-driven, microservices… · Developer Associate Lesson">
+<meta property="og:description" content="Most DVA-C02 scenarios describe an application built from small pieces that talk to each other, and ask which design keeps it reliable and easy to change. ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/architectural-patterns-event-driven-microservices-fan-out-choreography/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/architectural-patterns-event-driven-microservices-fan-out-choreography/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 1: Development with AWS Services</p>
+<h1>Architectural patterns: event-driven, microservices, fan-out, choreography vs orchestration, loosely coupled and stateless designs</h1>
+<article class="lbody">
+<p>Most DVA-C02 scenarios describe an application built from small pieces that talk to each other, and ask which design keeps it reliable and easy to change. The underlying idea is coupling: how much one component needs to know about, and wait for, another. A tightly coupled system breaks as a whole when one part is slow or down. A loosely coupled system puts something in between (a queue, a topic, an event bus or an API contract) so each part can fail, scale and be deployed on its own.</p>
+<p>In an event-driven architecture, components announce that something happened (an order was placed, a file was uploaded) instead of calling each other directly. The producer emits an event and moves on; any number of consumers react to it. On AWS the usual carriers are Amazon Simple Queue Service (SQS) for work queues, Amazon Simple Notification Service (SNS) for publish/subscribe, Amazon EventBridge for routing events by content, and Amazon Kinesis Data Streams for ordered, high-volume streams. Many AWS services, such as Amazon S3 and Amazon DynamoDB, can emit events that trigger AWS Lambda functions directly.</p>
+<p>Microservices apply the same thinking to the whole application: split it into small services, each owning one business capability and its own data store, deployed independently and reached only through its API or its events. The benefit is independent scaling and release; the cost is more network calls, more things to monitor and the need to handle partial failure. A common exam distractor is a design where two services share one database table, which quietly couples them again.</p>
+<p>Fan-out means one message is delivered to many consumers in parallel. The classic AWS pattern is SNS to multiple SQS queues: a producer publishes once to a topic, and each subscribed queue gets its own copy, so an email service, an analytics service and an inventory service each process at their own pace, and a slow consumer never blocks the others. EventBridge rules with several targets achieve a similar result with content-based filtering.</p>
+<p>Choreography and orchestration are two ways to coordinate a multi-step business process. In choreography, there is no central controller: each service listens for events and emits new ones, like dancers who each know their part. It is very loosely coupled but the overall flow is hard to see and debug. In orchestration, one coordinator, typically AWS Step Functions, calls each step, tracks state, and handles retries and compensation. Choose orchestration when you need visibility, ordering, error handling or human approval steps; choose choreography when services should evolve independently and simply react to events.</p>
+<p>Stateless design is what lets all of this scale. A stateless compute unit keeps no session or user data in its own memory or local disk between requests, so any instance or Lambda execution environment can serve any request and can be replaced at any moment. State lives in an external store such as DynamoDB, Amazon ElastiCache or S3. Sticky sessions and data kept only in <code>/tmp</code> are signs of a stateful design that will not scale out cleanly.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Loose coupling</dt><dd>Designing components so they interact through an intermediary or stable contract, letting each fail, scale and deploy independently.</dd><dt>Fan-out</dt><dd>Delivering one published message to many subscribers in parallel, for example an SNS topic with several SQS queue subscriptions.</dd><dt>Choreography</dt><dd>Coordination where each service reacts to events and emits new ones with no central controller.</dd><dt>Orchestration</dt><dd>Coordination where a central workflow engine, such as Step Functions, invokes each step and manages state and errors.</dd><dt>Stateless service</dt><dd>A service that keeps no client state between requests, storing it externally so any instance can handle any request.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An online shop's checkout Lambda function publishes an OrderPlaced message to an SNS topic. Three SQS queues subscribe: one feeds the payment service, one the warehouse service and one the email service. When the email provider has an outage, messages simply wait in its queue while payments and shipping continue normally.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> When a question says one event must trigger several independent processes and a slow consumer must not affect the others, look for SNS fan-out to SQS queues (or EventBridge with multiple targets). When it stresses a visible, ordered workflow with error handling, pick Step Functions orchestration.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why is SNS publishing to several SQS queues more resilient than SNS invoking several services directly?</summary><p>Each queue buffers messages for its consumer, so a slow or failed consumer can catch up later without losing messages or delaying other consumers.</p></details>
+<details class="sq"><summary>When would you choose orchestration over choreography?</summary><p>When the process needs a central view of state, strict ordering, retries or compensation for failed steps, or human approval, which a Step Functions state machine provides.</p></details>
+<details class="sq"><summary>What makes a web tier stateless?</summary><p>It stores session and user data in an external store such as DynamoDB or ElastiCache instead of instance memory or local disk, so any instance can serve any request.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><span></span><a href="../resilient-code-retries-with-exponential-backoff-and-jitter-idempotency/">Resilient code: retries with exponential backoff and jitter, →</a></nav>
+</main>
+</body>
+</html>

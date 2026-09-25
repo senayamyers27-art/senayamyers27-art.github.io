@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Volume expansion with allowVolumeExpansion · CKA Lesson</title>
+<meta name="description" content="Applications grow, and their volumes eventually fill up. Kubernetes lets you enlarge a PersistentVolumeClaim in place, without copying data to a new volume">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Volume expansion with allowVolumeExpansion · CKA Lesson">
+<meta property="og:description" content="Applications grow, and their volumes eventually fill up. Kubernetes lets you enlarge a PersistentVolumeClaim in place, without copying data to a new volume">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/volume-expansion-with-allowvolumeexpansion/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/volume-expansion-with-allowvolumeexpansion/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 4: Storage</p>
+<h1>Volume expansion with allowVolumeExpansion</h1>
+<article class="lbody">
+<p>Applications grow, and their volumes eventually fill up. Kubernetes lets you enlarge a PersistentVolumeClaim in place, without copying data to a new volume, as long as the storage supports it and the administrator has allowed it.</p>
+<p>Permission comes from the StorageClass: <code>allowVolumeExpansion: true</code>. Unlike most StorageClass fields, this one can be changed on an existing class, for example with <code>kubectl patch sc fast -p '{&quot;allowVolumeExpansion&quot;: true}'</code>. If it is false or missing, the API server rejects any attempt to increase a PVC's size with an error saying the claim can only be expanded if its StorageClass allows it. The underlying driver must also support expansion; the flag does not add capability that the storage does not have.</p>
+<p>To expand, edit the claim, not the PV. Increase <code>spec.resources.requests.storage</code> on the PVC with <code>kubectl edit pvc data</code> or a patch. The resize controller and the CSI driver then enlarge the backend volume, update the PV's capacity, and finally the filesystem on it is grown by the kubelet on the node where it is mounted.</p>
+<pre class="code" tabindex="0"><code>kubectl get sc fast -o jsonpath='{.allowVolumeExpansion}'
+kubectl patch pvc data -n app -p '{&quot;spec&quot;:{&quot;resources&quot;:{&quot;requests&quot;:{&quot;storage&quot;:&quot;20Gi&quot;}}}}'
+kubectl get pvc data -n app -w           # CAPACITY updates when done
+kubectl describe pvc data -n app          # conditions and events</code></pre>
+<p>Expansion happens in two stages, and you may see them in the PVC's conditions. First the controller resizes the volume itself (a <code>Resizing</code> condition). Then the filesystem must be grown. Many CSI drivers support online expansion, growing the filesystem while the Pod keeps running. With drivers that only support offline expansion, the PVC shows a <code>FileSystemResizePending</code> condition and the filesystem is resized the next time a Pod mounts the volume, so you restart the Pod. The PVC's <code>status.capacity</code> only reflects the new size once the whole process completes, while <code>spec</code> shows what you asked for.</p>
+<p>Shrinking is not supported. Decreasing the requested size is rejected. If you accidentally request a much larger size than intended, check your Kubernetes version's documentation about recovering from expansion failures rather than trying to shrink.</p>
+<p>Some limits to remember: statically created PVs with no StorageClass cannot be expanded through this mechanism, and a volume can only grow as far as its backend allows. hostPath volumes have no real size enforcement at all and do not support expansion; their capacity is only a label.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>allowVolumeExpansion</dt><dd>StorageClass flag permitting PVCs of that class to be enlarged.</dd><dt>Online expansion</dt><dd>Growing a volume's filesystem while the Pod using it keeps running.</dd><dt>FileSystemResizePending</dt><dd>A PVC condition indicating the filesystem will be resized when a Pod next mounts it.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A database PVC of 10Gi is 95 percent full. The class already has allowVolumeExpansion true, so you patch the PVC to 20Gi. <code>kubectl describe pvc</code> shows Resizing and then the CAPACITY column shows 20Gi, and <code>df -h</code> inside the Pod confirms the larger filesystem without a restart because the driver supports online expansion.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Expand the PVC, never the PV, and only upwards. If the edit is rejected, check allowVolumeExpansion on the claim's StorageClass first.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which object do you edit to grow a volume?</summary><p>The PersistentVolumeClaim, by raising spec.resources.requests.storage.</p></details>
+<details class="sq"><summary>Can you reduce a PVC's size after expanding it?</summary><p>No, shrinking PVCs is not supported.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../volumebindingmode-immediate-vs-waitforfirstconsumer/">← volumeBindingMode Immediate vs WaitForFirstConsumer</a><a href="../static-pvs-hostpath-for-labs-local-volumes-with-nodeaffinity-nfs/">Static PVs: hostPath for labs, local volumes with nodeAffini →</a></nav>
+</main>
+</body>
+</html>

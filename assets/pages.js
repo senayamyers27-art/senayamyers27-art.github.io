@@ -9,6 +9,7 @@
 
   // Accounts exist only when site.config.json sets apiOrigin; the policies describe whichever is true.
   const accounts = () => !!(CertHub.site && CertHub.site.apiUrl);
+  const counts = () => !!(CertHub.site && CertHub.site.analytics);
 
   function accountPrivacy() {
     return `<h2>Optional accounts</h2>
@@ -28,8 +29,8 @@
     return `<h1>Privacy Policy</h1>
     <p class="meta">Effective ${EFFECTIVE}</p>
     <div class="status notice"><strong>Short version:</strong> ${accounts()
-      ? `${SITE} has no analytics, no ads and no tracking. Without an account your study progress and lab notes stay in your own browser. Accounts are optional; if you create one, we store your email and a synced copy of your progress, and nothing else about you.`
-      : `${SITE} has no accounts, no cookies, no analytics, no ads and no tracking. Your study progress and lab notes stay in your own browser. We never receive them.`}</div>
+      ? `${SITE} has no ads and no tracking${counts() ? ", and counts page views without cookies or personal data" : " and no analytics"}. Without an account your study progress and lab notes stay in your own browser. Accounts are optional; if you create one, we store your email and a synced copy of your progress, and nothing else about you.`
+      : `${SITE} has no accounts, no cookies, no ads and no tracking${counts() ? ". It counts page views without cookies or personal data" : ", and no analytics"}. Your study progress and lab notes stay in your own browser. We never receive them.`}</div>
     <div class="prose">
     <h2>What this policy covers</h2>
     <p>This policy explains what information ${SITE} (“the site”, “we”) handles when you use the study plans, quizzes, labs and portfolio pages.</p>
@@ -56,9 +57,11 @@
       ${accounts() ? `<li>No passwords, names or profiles; an email address only if you create an account</li>
       <li>No cookies except the sign-in cookie for people who create an account</li>` : `<li>No accounts, names, email addresses or passwords</li>
       <li>No cookies</li>`}
-      <li>No analytics, advertising, social media or tracking scripts, and no fingerprinting</li>
-      <li>No requests to other websites: fonts and all other files are served from this site${accounts() ? " (signed-in accounts also talk to the site's own account service)" : ""}</li>
+      <li>No advertising, social media or tracking scripts, and no fingerprinting${counts() ? "" : ", and no analytics"}</li>
+      <li>No requests to other websites: fonts and all other files are served from this site${accounts() ? " (signed-in accounts also talk to the site's own account service)" : ""}${counts() ? ", apart from the page counter below" : ""}</li>
     </ul>
+    ${counts() ? `<h2>Page counts</h2>
+    <p>To learn which study plans and lessons people use, the site tells GoatCounter, a privacy-friendly counter, which page was opened, its title and the site that linked to it. GoatCounter sets no cookies, doesn't track you across sites and doesn't store your IP address. It isn't told anything about your answers or progress. If your browser sends "Do Not Track" or Global Privacy Control, nothing is counted.</p>` : ""}
 
     <h2>Hosting and server logs</h2>
     <p>The site is hosted on Cloudflare Pages. Like any web host, Cloudflare processes technical request data such as IP address, browser user agent, the page requested and time, to deliver the site and protect it from abuse. We don't use this data to identify or profile visitors. Cloudflare's handling is described in the <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">Cloudflare Privacy Policy</a>.</p>
@@ -144,7 +147,7 @@
     <h2>In the browser</h2>
     <div class="scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)"><table class="sectable"><tbody>
       ${row("Content Security Policy", "Scripts, styles, fonts and connections are allowed only from the site itself. No inline scripts, <code>eval</code> or third-party code. Plugins (<code>object-src</code>) are blocked.")}
-      ${row("No third parties", "Fonts are self-hosted and there are no analytics, ads or CDNs, so no outside service sees your visits. An automated test fails if any page requests another site.")}
+      ${row("No third parties", counts() ? "Fonts are self-hosted and there are no ads or CDNs. The only outside service is a cookie-free page counter (see the Privacy Policy). An automated check fails if any page loads code from another site." : "Fonts are self-hosted and there are no analytics, ads or CDNs, so no outside service sees your visits. An automated test fails if any page requests another site.")}
       ${row("Output escaping", "All content is escaped before it's placed on the page, which prevents injected HTML or script (XSS). A lint check blocks unescaped values.")}
       ${row("Clickjacking protection", "<code>frame-ancestors 'none'</code> and <code>X-Frame-Options: DENY</code> stop other sites from framing the pages.")}
       ${row("Isolation headers", "<code>Cross-Origin-Opener-Policy</code> and <code>Cross-Origin-Resource-Policy: same-origin</code>, <code>X-Content-Type-Options: nosniff</code>, a strict <code>Referrer-Policy</code>, and a <code>Permissions-Policy</code> that turns off camera, microphone, location, payment and USB access.")}

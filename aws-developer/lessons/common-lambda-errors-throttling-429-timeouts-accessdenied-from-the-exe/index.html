@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Common Lambda errors: throttling (429), timeouts… · Developer Associate Lesson</title>
+<meta name="description" content="Many troubleshooting questions describe a symptom and an error code. Knowing what each common Lambda and API Gateway error means, and its fix, turns these ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Common Lambda errors: throttling (429), timeouts… · Developer Associate Lesson">
+<meta property="og:description" content="Many troubleshooting questions describe a symptom and an error code. Knowing what each common Lambda and API Gateway error means, and its fix, turns these ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/common-lambda-errors-throttling-429-timeouts-accessdenied-from-the-exe/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/common-lambda-errors-throttling-429-timeouts-accessdenied-from-the-exe/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 4: Troubleshooting and Optimization</p>
+<h1>Common Lambda errors: throttling (429), timeouts, AccessDenied from the execution role, malformed proxy responses (502), API Gateway 504 integration timeouts</h1>
+<article class="lbody">
+<p>Many troubleshooting questions describe a symptom and an error code. Knowing what each common Lambda and API Gateway error means, and its fix, turns these into easy points.</p>
+<p>Throttling happens when invocations exceed available concurrency: the account's Regional concurrency quota, or a function's reserved concurrency. Synchronous callers receive <code>TooManyRequestsException</code> with HTTP status 429 (API Gateway may return 429 or a 5xx to clients depending on the setup), and the <code>Throttles</code> metric rises. Asynchronous invocations are retried automatically for up to six hours by default, and event source mappings slow their polling. Fixes: request a higher account concurrency quota, raise or set reserved concurrency for the function, reduce concurrency needed by making the function faster, check that another function is not consuming the shared pool (reserve concurrency for critical functions), and have clients retry with exponential backoff. API Gateway also returns 429 when its own stage, method or usage plan throttling limits are exceeded, which is separate from Lambda throttling.</p>
+<p>Timeouts occur when a function runs longer than its configured timeout; the log shows <code>Task timed out after N seconds</code>. The default is only 3 seconds. Look at what the function waits on: a slow downstream API, a database connection that cannot be established (often a VPC function without a route to the database or to the internet), or too little memory (and hence CPU). Fixes: raise the timeout (up to 15 minutes), raise memory, set shorter client timeouts so the function fails fast with a clear error, reuse connections, or move long work to asynchronous processing.</p>
+<p>AccessDenied errors (<code>AccessDeniedException</code>, or messages like 'User: arn:aws:sts::...:assumed-role/my-fn-role/my-fn is not authorized to perform: dynamodb:PutItem on resource ...') mean the execution role lacks a permission. The message tells you exactly which action and resource to add. Also check resource policies (bucket or KMS key policies), explicit denies from permission boundaries or SCPs, and whether KMS permissions are needed for encrypted resources. If the function cannot even write logs and nothing appears in CloudWatch, the role is missing the basic logging permissions.</p>
+<p>A 502 Bad Gateway from a Lambda proxy integration most often means a malformed proxy response: the function returned something that is not an object with <code>statusCode</code> and a string <code>body</code>, or the function threw an unhandled error. The API Gateway execution logs show 'Malformed Lambda proxy response'. Fix the return shape (serialize the body with <code>JSON.stringify</code> or <code>json.dumps</code>) and catch errors to return proper 4xx or 5xx responses. A 500 with an invalid permissions message means API Gateway is not allowed to invoke the function.</p>
+<p>A 504 Gateway Timeout from API Gateway is an integration timeout: the backend did not respond within API Gateway's integration timeout, 29 seconds by default. Even if the Lambda function's timeout is 5 minutes, the client gets 504 after the API's limit while the function keeps running. Fixes: make the backend faster, or change the design to be asynchronous: accept the request, queue work in SQS or start a Step Functions execution, return 202 with a job ID, and let the client poll or receive a callback. Regional and private REST APIs can request a longer integration timeout, but asynchronous design is the answer the exam usually wants.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>TooManyRequestsException (429)</dt><dd>The error returned when a Lambda invocation is throttled because no concurrency is available.</dd><dt>Task timed out</dt><dd>The log message Lambda writes when an invocation exceeds its configured timeout.</dd><dt>Malformed Lambda proxy response</dt><dd>An API Gateway error (returned to clients as 502) when a proxy integration's function output has the wrong format.</dd><dt>Integration timeout</dt><dd>The maximum time API Gateway waits for a backend response, 29 seconds by default, after which it returns 504.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A report endpoint returns 504 errors after about 30 seconds, although the Lambda function eventually finishes after 90 seconds. The team changes the API to put a request on an SQS queue and return 202 with a report ID; a worker function builds the report, and the client polls a status endpoint.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Map codes to causes: 429 is throttling, 502 is a bad proxy response or function error, 504 is the backend exceeding API Gateway's integration timeout, and AccessDenied naming the assumed role is a missing execution role permission.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>An API returns 502 and the logs show 'Malformed Lambda proxy response'. What is the likely fix?</summary><p>Return an object with a numeric statusCode, optional headers, and body as a string, and handle exceptions so the function always returns that shape.</p></details>
+<details class="sq"><summary>Why does raising the Lambda timeout not fix a 504 from API Gateway?</summary><p>API Gateway's integration timeout (29 seconds by default) is reached first, regardless of the function's own timeout.</p></details>
+<details class="sq"><summary>Name two ways to resolve Lambda throttling.</summary><p>Request a higher account concurrency quota, set or raise reserved concurrency, speed up the function, or have clients retry with backoff.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../root-cause-analysis-with-cloudwatch-logs-logs-insights-queries-metrics/">← Root cause analysis with CloudWatch Logs, Logs Insights quer</a><a href="../aws-x-ray-segments-subsegments-annotations-vs-metadata-sampling-active/">AWS X-Ray: segments, subsegments, annotations vs metadata, s →</a></nav>
+</main>
+</body>
+</html>

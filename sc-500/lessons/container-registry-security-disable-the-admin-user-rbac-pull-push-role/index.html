@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Container registry security: disable the admin user, RBAC… · SC-500 Lesson</title>
+<meta name="description" content="Azure Container Registry (ACR) stores the container images that AKS, App Service, Container Apps and other services run. If an attacker can push to your re">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Container registry security: disable the admin user, RBAC… · SC-500 Lesson">
+<meta property="og:description" content="Azure Container Registry (ACR) stores the container images that AKS, App Service, Container Apps and other services run. If an attacker can push to your re">
+<link rel="canonical" href="https://senayamyers27-art.github.io/sc-500/lessons/container-registry-security-disable-the-admin-user-rbac-pull-push-role/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/sc-500/lessons/container-registry-security-disable-the-admin-user-rbac-pull-push-role/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">SC-500</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Cloud and AI Security Engineer Associate (replaces Azure Security Engineer Associate / AZ-500) SC-500 · Domain 3: Secure compute</p>
+<h1>Container registry security: disable the admin user, RBAC pull/push roles, private endpoints, image vulnerability scanning</h1>
+<article class="lbody">
+<p>Azure Container Registry (ACR) stores the container images that AKS, App Service, Container Apps and other services run. If an attacker can push to your registry, they can plant a malicious image that your clusters will happily deploy; if they can pull, they may find secrets or proprietary code inside images. So registry security is part of the software supply chain.</p>
+<p>Every registry has an optional admin user: a single username (the registry name) with two passwords that grant full push and pull rights. It is shared, not tied to any person and cannot be scoped, so logs cannot show who acted. It is disabled by default and should stay disabled; Azure Policy can audit or deny registries with it enabled. Use Entra identities instead: individuals sign in with <code>az acr login</code>, and services use managed identities or service principals.</p>
+<p>Authorization uses Azure RBAC. The key built-in roles are AcrPull (pull images), AcrPush (pull and push), and AcrDelete (delete images), plus AcrImageSigner in older content trust setups. Registries can use the newer ABAC-enabled permissions mode, in which roles such as Container Registry Repository Reader, Writer and Contributor can be scoped to specific repositories with conditions; either way the principle is the same. For example, grant the AKS kubelet managed identity AcrPull only (<code>az aks update --attach-acr</code> does this), and give the CI/CD pipeline's identity AcrPush. Repository-scoped tokens with scope maps exist for fine-grained, non-Entra access to specific repositories, such as for IoT devices.</p>
+<p>Network restrictions come in the Premium SKU. You can create private endpoints so the registry is reached through private IPs in your virtual networks, with a private DNS zone <code>privatelink.azurecr.io</code>, and then disable public network access. Premium also supports IP firewall rules and, where needed, the trusted services exception for services such as Microsoft Defender for Cloud and ACR Tasks. Note that registries have both a login endpoint and data endpoints, and the private endpoint covers both.</p>
+<p>Image vulnerability scanning is provided by Microsoft Defender for Containers (and by the Defender CSPM plan for agentless container posture). Images are scanned when pushed, when recently pulled and on a schedule, using Microsoft Defender Vulnerability Management. Findings appear as recommendations, such as 'Azure registry container images should have vulnerabilities resolved', with CVEs and fix versions, and can be correlated with running containers so you prioritize images that are actually deployed.</p>
+<p>Additional supply-chain measures: sign images (for example with Notation and keys in Key Vault) and verify signatures at deployment, restrict AKS to pull only from approved registries with Azure Policy, use ACR Tasks to rebuild images when base images are patched, and enable soft delete or retention policies to manage untagged manifests.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Admin user</dt><dd>A shared registry credential with full push and pull rights that should remain disabled.</dd><dt>AcrPull</dt><dd>An Azure role that allows pulling images from a registry.</dd><dt>AcrPush</dt><dd>An Azure role that allows pushing and pulling images.</dd><dt>Scope map and token</dt><dd>Registry features granting repository-specific permissions to non-Entra clients.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An audit finds the AKS cluster pulls images using the registry admin password stored in a Kubernetes secret. You attach the registry to the cluster so the kubelet identity gets AcrPull, give the pipeline's service principal AcrPush, disable the admin user, add a private endpoint with public access disabled on the Premium registry, and enable Defender for Containers scanning.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Least-privilege runtime access is AcrPull; pipelines need AcrPush. Private endpoints and firewall rules require the Premium SKU. Image CVE scanning comes from Defender for Containers, not from ACR by itself.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why disable the ACR admin user?</summary><p>It is a shared credential with full rights that cannot be scoped or attributed to an individual.</p></details>
+<details class="sq"><summary>Which role should an AKS cluster's kubelet identity have on the registry?</summary><p>AcrPull.</p></details>
+<details class="sq"><summary>Which ACR SKU supports private endpoints?</summary><p>Premium.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study SC-500 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../sc-500/">Open the SC-500 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../aks-security-entra-id-integration-azure-rbac-for-kubernetes-private-cl/">← AKS security: Entra ID integration, Azure RBAC for Kubernete</a><a href="../app-service-functions-and-logic-apps-managed-identities-key-vault-refe/">App Service, Functions and Logic Apps: managed identities, K →</a></nav>
+</main>
+</body>
+</html>

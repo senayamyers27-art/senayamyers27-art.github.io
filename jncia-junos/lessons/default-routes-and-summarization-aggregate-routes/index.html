@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Default routes and summarization (aggregate routes) · JNCIA-Junos Lesson</title>
+<meta name="description" content="A default route, written 0.0.0.0/0 for IPv4 and ::/0 for IPv6, matches every destination because its prefix length is zero. Thanks to longest-prefix match,">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Default routes and summarization (aggregate routes) · JNCIA-Junos Lesson">
+<meta property="og:description" content="A default route, written 0.0.0.0/0 for IPv4 and ::/0 for IPv6, matches every destination because its prefix length is zero. Thanks to longest-prefix match,">
+<link rel="canonical" href="https://senayamyers27-art.github.io/jncia-junos/lessons/default-routes-and-summarization-aggregate-routes/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/jncia-junos/lessons/default-routes-and-summarization-aggregate-routes/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">JNCIA-Junos</a> / <a href="../">Lessons</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106 · Domain 6: Routing fundamentals</p>
+<h1>Default routes and summarization (aggregate routes)</h1>
+<article class="lbody">
+<p>A default route, written 0.0.0.0/0 for IPv4 and ::/0 for IPv6, matches every destination because its prefix length is zero. Thanks to longest-prefix match, it is used only when no more specific route exists. That makes it the classic way to send all unknown traffic toward an internet provider or a core router. You can create it as a static route (<code>set routing-options static route 0.0.0.0/0 next-hop 203.0.113.1</code>), learn it from a routing protocol, or advertise it into OSPF with an export policy so other routers learn it.</p>
+<p>Summarization is the opposite idea: instead of sending many specific routes, you advertise one broader prefix that covers them. If a site uses 10.20.0.0/24 through 10.20.255.0/24, you can advertise just 10.20.0.0/16. Summarization makes routing tables smaller, reduces the work routers do when a single subnet flaps (because the summary stays stable) and hides internal detail from neighbors.</p>
+<p>In Junos, a summary is created with an aggregate route under <code>routing-options aggregate</code>:</p>
+<pre class="code" tabindex="0"><code>set routing-options aggregate route 10.20.0.0/16
+user@R1&gt; show route 10.20.0.0/16 exact detail</code></pre>
+<p>An aggregate route becomes active only when at least one contributing route exists. A contributing route is any active route that is more specific than the aggregate and falls inside it, such as 10.20.5.0/24. If all contributing routes disappear, the aggregate goes away too, so you do not advertise a summary for networks that are not reachable. <code>show route 10.20.0.0/16 exact detail</code> lists the contributing routes.</p>
+<p>The next hop of an aggregate route is reject by default. That can seem odd at first, but it makes sense. The router forwards packets for a specific subnet using the more specific contributing route, thanks to longest match. Packets that match only the aggregate are for unused parts of the range, and dropping them prevents routing loops, for example between you and a neighbor that has a default route pointing back at you. You can change the action to <code>discard</code> for silent drops. Aggregate routes have a default preference of 130.</p>
+<p>Creating an aggregate does not advertise it. You still need a routing policy that exports it into OSPF or BGP, for example a term matching <code>from protocol aggregate</code> and <code>route-filter 10.20.0.0/16 exact</code> with <code>then accept</code>. You often also want to stop the specific routes from being advertised, so only the summary goes out.</p>
+<p>Junos also has generated routes, configured under <code>routing-options generate</code>. They also depend on contributing routes and have preference 130, but instead of reject they take the next hop of the primary contributing route. Generated routes are often used to create a conditional default route that exists only while certain upstream routes are present.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Default route</dt><dd>The route 0.0.0.0/0 (or ::/0) that matches any destination not covered by a more specific route.</dd><dt>Aggregate route</dt><dd>A summary route under <code>routing-options aggregate</code>, active only when a contributing route exists, with a reject next hop by default.</dd><dt>Contributing route</dt><dd>An active, more specific route that falls within an aggregate or generated route and keeps it active.</dd><dt>Generated route</dt><dd>A summary-like route that takes the next hop of its primary contributing route instead of reject.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A regional office owns 10.20.0.0/16, split into dozens of /24 subnets. Its edge router creates an aggregate for 10.20.0.0/16 and exports only that into BGP toward the core. The core table holds one route instead of dozens, and when a single /24 flaps at the office, the core does not notice.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> An aggregate needs at least one contributing route to be active, uses preference 130, has reject as its default next hop and is not advertised until an export policy sends it out.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What must exist for an aggregate route to become active?</summary><p>At least one active, more specific contributing route within the aggregate's range.</p></details>
+<details class="sq"><summary>What happens to a packet that matches only the aggregate route and no contributing route?</summary><p>It is rejected (dropped with ICMP unreachable) by default, or silently discarded if configured with discard.</p></details>
+<details class="sq"><summary>How does a generated route differ from an aggregate route?</summary><p>A generated route uses the next hop of its primary contributing route instead of reject.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study JNCIA-Junos for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../jncia-junos/">Open the JNCIA-Junos study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../static-routes-routing-options-static-next-hop-qualified-next-hop-with/">← Static routes: `routing-options static`, next-hop, qualified</a><a href="../dynamic-routing-concepts-why-igps-and-egps-exist-ospf-and-bgp-at-a-hig/">Dynamic routing concepts: why IGPs and EGPs exist, OSPF and  →</a></nav>
+</main>
+</body>
+</html>

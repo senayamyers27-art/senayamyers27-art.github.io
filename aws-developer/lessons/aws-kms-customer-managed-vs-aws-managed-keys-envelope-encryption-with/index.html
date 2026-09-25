@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AWS KMS: customer managed vs AWS managed keys, envelope… · Developer Associate Lesson</title>
+<meta name="description" content="AWS Key Management Service (KMS) creates and controls cryptographic keys whose key material never leaves KMS unencrypted. Services such as S3, DynamoDB, La">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="AWS KMS: customer managed vs AWS managed keys, envelope… · Developer Associate Lesson">
+<meta property="og:description" content="AWS Key Management Service (KMS) creates and controls cryptographic keys whose key material never leaves KMS unencrypted. Services such as S3, DynamoDB, La">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/aws-kms-customer-managed-vs-aws-managed-keys-envelope-encryption-with/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/aws-kms-customer-managed-vs-aws-managed-keys-envelope-encryption-with/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 2: Security</p>
+<h1>AWS KMS: customer managed vs AWS managed keys, envelope encryption with GenerateDataKey, 4 KB Encrypt limit, cross-account key use</h1>
+<article class="lbody">
+<p>AWS Key Management Service (KMS) creates and controls cryptographic keys whose key material never leaves KMS unencrypted. Services such as S3, DynamoDB, Lambda and Secrets Manager call KMS for you, and your own code can call it directly.</p>
+<p>There are different kinds of KMS keys by who manages them. AWS managed keys (aliases like <code>aws/s3</code> or <code>aws/lambda</code>) are created automatically when you use a service's default encryption; you can view them and see their use in CloudTrail, but you cannot change their key policy, and they rotate automatically every year. Customer managed keys are ones you create; you control the key policy, grants, enabling and disabling, deletion (with a 7 to 30 day waiting period), tags and aliases, and you can turn on automatic rotation. Only customer managed keys can be shared with other accounts or given fine-grained policies, so requirements like 'control who can use the key' or 'cross-account' point to them. (AWS owned keys, used internally by services in AWS accounts you cannot see, are a third category.)</p>
+<p>The <code>Encrypt</code> API can encrypt at most 4 KB of plaintext directly. That is fine for a password or a small secret, but not for a file. For larger data, use envelope encryption: encrypt the data with a data key, and encrypt the data key with the KMS key. Call <code>GenerateDataKey</code> with your KMS key ID; KMS returns the data key in two forms, plaintext and encrypted under the KMS key. Your code encrypts the data locally with the plaintext data key (for example with AES-GCM), discards the plaintext key from memory, and stores the encrypted data key next to the ciphertext. To decrypt, call <code>Decrypt</code> on the encrypted data key to get the plaintext key back, then decrypt the data locally. <code>GenerateDataKeyWithoutPlaintext</code> returns only the encrypted copy, useful when a component will encrypt later.</p>
+<p>Envelope encryption is faster (large data never travels to KMS), cheaper (one KMS call per data key, not per byte) and avoids the 4 KB limit. The AWS Encryption SDK and S3 SSE-KMS both use it internally.</p>
+<p>An encryption context is a set of non-secret key-value pairs you pass with Encrypt or GenerateDataKey; the same pairs must be supplied to decrypt. It adds integrity checks and shows up in CloudTrail, making audits clearer. When requests fail with <code>ThrottlingException</code>, you have hit KMS request quotas; answers include caching data keys (the Encryption SDK supports this), using S3 Bucket Keys, retrying with backoff, or requesting a quota increase.</p>
+<p>For cross-account use, two things are required: the key policy in the key's account must allow the other account (or a specific role in it) to use the key, and in the other account an IAM policy must grant the user or role the KMS actions on that key's ARN. AWS managed keys cannot be used this way because their key policies cannot be edited. Keys are Regional; multi-Region keys let you decrypt in another Region without re-encrypting.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Customer managed key</dt><dd>A KMS key you create and control, including its key policy, rotation and cross-account access.</dd><dt>AWS managed key</dt><dd>A KMS key created by an AWS service for your account, with a fixed key policy you cannot change.</dd><dt>Envelope encryption</dt><dd>Encrypting data with a data key and then encrypting that data key with a KMS key.</dd><dt>GenerateDataKey</dt><dd>A KMS API that returns a data key in plaintext and encrypted forms for local encryption.</dd><dt>Encryption context</dt><dd>Non-secret key-value pairs bound to a KMS encryption operation that must match on decryption.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An application must encrypt 50 MB log archives before storing them. Calling Encrypt fails because it only accepts 4 KB. Instead the code calls GenerateDataKey, encrypts the archive locally with the plaintext data key, discards that key, and stores the encrypted data key as object metadata alongside the file.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Any question with data larger than 4 KB and KMS points to envelope encryption with GenerateDataKey. Cross-account or custom key policy requirements rule out AWS managed keys.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What does GenerateDataKey return?</summary><p>A plaintext data key for immediate local encryption and a copy of the same key encrypted under the KMS key for storage.</p></details>
+<details class="sq"><summary>Why can't you share an AWS managed key with another account?</summary><p>Its key policy is controlled by AWS and cannot be edited, so it cannot grant access to other accounts.</p></details>
+<details class="sq"><summary>Name two ways to reduce KMS throttling.</summary><p>Cache data keys (for example with the Encryption SDK) and enable S3 Bucket Keys; also retry with backoff or request a quota increase.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../encryption-at-rest-sse-s3-sse-kms-sse-c-s3-bucket-keys-client-side-enc/">← Encryption at rest: SSE-S3, SSE-KMS, SSE-C, S3 Bucket Keys, </a><a href="../encryption-in-transit-tls-acm-certificates-us-east-1-for-cloudfront-en/">Encryption in transit: TLS, ACM certificates (us-east-1 for  →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SecurityContext at Pod and container level: runAsUser… · CKAD Lesson</title>
+<meta name="description" content="Containers are processes on a shared Linux kernel, so how much privilege they run with matters. If an attacker exploits a bug in your app, a container runn">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="SecurityContext at Pod and container level: runAsUser… · CKAD Lesson">
+<meta property="og:description" content="Containers are processes on a shared Linux kernel, so how much privilege they run with matters. If an attacker exploits a bug in your app, a container runn">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/securitycontext-at-pod-and-container-level-runasuser-runasnonroot-fsgr/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/securitycontext-at-pod-and-container-level-runasuser-runasnonroot-fsgr/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 4: Application Environment, Configuration and Security</p>
+<h1>SecurityContext at Pod and container level: runAsUser, runAsNonRoot, fsGroup, readOnlyRootFilesystem, allowPrivilegeEscalation</h1>
+<article class="lbody">
+<p>Containers are processes on a shared Linux kernel, so how much privilege they run with matters. If an attacker exploits a bug in your app, a container running as root with a writable filesystem gives them far more to work with than one running as an unprivileged user with a read-only filesystem. The <code>securityContext</code> field lets you set these privileges declaratively.</p>
+<p>There are two levels. <code>spec.securityContext</code> on the Pod applies to all containers and also holds Pod-only settings. <code>spec.containers[].securityContext</code> applies to one container and overrides Pod-level values where both set the same field. Some fields exist only at one level, which the exam likes to test.</p>
+<p><code>runAsUser</code> sets the numeric user ID (UID) the container's processes run as, and <code>runAsGroup</code> the primary group ID. <code>runAsNonRoot: true</code> tells the kubelet to verify that the container will not run as UID 0; if the image's user is root and no <code>runAsUser</code> overrides it, the container is refused with an error such as 'container has runAsNonRoot and image will run as root' (status CreateContainerConfigError). If the image specifies a user by name rather than number, the kubelet cannot verify it and also refuses, so set a numeric <code>runAsUser</code>. These three can be set at either level.</p>
+<p><code>fsGroup</code> is Pod-level only. It sets a supplementary group ID for all containers, and supported volumes are made group-owned by that ID when mounted, so a non-root process can write to them. It is the usual fix when a non-root container gets 'permission denied' on a PVC or emptyDir.</p>
+<p><code>readOnlyRootFilesystem: true</code> (container-level only) makes the container's own filesystem read-only. Malware or an attacker cannot modify binaries or drop tools, and the app cannot accidentally write where it should not. Apps that need scratch space get an emptyDir mounted at, for example, <code>/tmp</code>. <code>allowPrivilegeEscalation: false</code> (container-level only) prevents a process from gaining more privileges than its parent, for example through setuid binaries; it sets the Linux no_new_privs flag.</p>
+<pre class="code" tabindex="0"><code>spec:
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 3000
+    fsGroup: 2000
+    runAsNonRoot: true
+  containers:
+  - name: app
+    image: app:1.0
+    securityContext:
+      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false
+    volumeMounts:
+    - {name: tmp, mountPath: /tmp}
+  volumes:
+  - name: tmp
+    emptyDir: {}</code></pre>
+<p>Verify inside the container: <code>kubectl exec app -- id</code> should show <code>uid=1000 gid=3000</code> with 2000 among the groups, and <code>kubectl exec app -- touch /test</code> should fail with 'Read-only file system'. Other container fields you will meet are <code>privileged</code> (full host access; avoid), <code>capabilities</code> and <code>seccompProfile</code>, covered with Pod Security Admission.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>runAsUser</dt><dd>Numeric UID the container processes run as.</dd><dt>runAsNonRoot</dt><dd>Makes the kubelet refuse to start a container that would run as UID 0.</dd><dt>fsGroup</dt><dd>Pod-level supplementary group applied to containers and to ownership of supported volumes.</dd><dt>readOnlyRootFilesystem</dt><dd>Container-level setting that makes the container's root filesystem read-only.</dd><dt>allowPrivilegeEscalation</dt><dd>Container-level setting that, when false, stops processes gaining more privileges than their parent.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A task asks for a Pod that runs as user 1000, writes only to /data on a PVC, and cannot modify its own filesystem. You set runAsUser 1000 and fsGroup 1000 at Pod level, readOnlyRootFilesystem true and allowPrivilegeEscalation false on the container, and confirm with <code>kubectl exec -- id</code> and a failed <code>touch /x</code>.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> fsGroup is Pod-level only; readOnlyRootFilesystem, allowPrivilegeEscalation, capabilities and privileged are container-level only. Container values override Pod values.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>A Pod sets runAsUser 1000 and one container sets runAsUser 2000. What UID does that container use?</summary><p>2000, because container-level settings override Pod-level ones.</p></details>
+<details class="sq"><summary>Why does a container with runAsNonRoot: true fail with CreateContainerConfigError?</summary><p>Its image runs as root (or a non-numeric user) and no numeric runAsUser overrides it, so the kubelet refuses to start it.</p></details>
+<details class="sq"><summary>Where do you set fsGroup?</summary><p>Only in the Pod-level securityContext.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../serviceaccounts-serviceaccountname-token-projection-automountserviceac/">← ServiceAccounts: serviceAccountName, token projection, autom</a><a href="../linux-capabilities-add-drop-and-pod-security-admission-levels-privileg/">Linux capabilities (add/drop) and Pod Security Admission lev →</a></nav>
+</main>
+</body>
+</html>

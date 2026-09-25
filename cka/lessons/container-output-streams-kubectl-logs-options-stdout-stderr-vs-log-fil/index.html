@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Container output streams: kubectl logs options… · CKA Lesson</title>
+<meta name="description" content="Kubernetes logging starts from one convention: containers should write logs to standard output (stdout) and standard error (stderr). The container runtime ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Container output streams: kubectl logs options… · CKA Lesson">
+<meta property="og:description" content="Kubernetes logging starts from one convention: containers should write logs to standard output (stdout) and standard error (stderr). The container runtime ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/container-output-streams-kubectl-logs-options-stdout-stderr-vs-log-fil/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/container-output-streams-kubectl-logs-options-stdout-stderr-vs-log-fil/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 5: Troubleshooting</p>
+<h1>Container output streams: kubectl logs options, stdout/stderr vs log files, /var/log/pods and /var/log/containers, sidecar log streaming</h1>
+<article class="lbody">
+<p>Kubernetes logging starts from one convention: containers should write logs to standard output (stdout) and standard error (stderr). The container runtime captures both streams and writes them to files on the node, and <code>kubectl logs</code> reads those files through the kubelet. Anything an application writes to a file inside its own container filesystem is invisible to kubectl logs.</p>
+<p><code>kubectl logs</code> has options you should know without looking them up. <code>-c &lt;container&gt;</code> picks a container in a multi-container Pod (without it, kubectl uses the default container or asks you to choose), and <code>--all-containers</code> shows them all. <code>-p</code> or <code>--previous</code> shows the logs of the previous, crashed instance of a container, which is essential for CrashLoopBackOff because the current instance may have printed nothing yet. <code>-f</code> follows, <code>--tail=50</code> limits lines, <code>--since=15m</code> limits time and <code>--timestamps</code> adds times. <code>-l app=web</code> reads from Pods matching a label, and <code>deploy/web</code> reads from one Pod of a Deployment.</p>
+<pre class="code" tabindex="0"><code>kubectl logs web-6c9 -c app --tail=100
+kubectl logs web-6c9 --previous
+kubectl logs -l app=web --all-containers --since=1h
+kubectl logs deploy/web -f
+kubectl logs web-6c9 -c app &gt; /opt/answers/web.log</code></pre>
+<p>On the node, the kubelet and runtime store logs under <code>/var/log/pods/&lt;namespace&gt;_&lt;pod&gt;_&lt;uid&gt;/&lt;container&gt;/</code>, with numbered files such as <code>0.log</code> per container restart. <code>/var/log/containers/</code> holds symlinks named <code>&lt;pod&gt;_&lt;namespace&gt;_&lt;container&gt;-&lt;container-id&gt;.log</code> pointing to those files; node-level log collectors often tail this directory. These files are rotated by the kubelet by size and count, so very old output is lost, and they disappear when the Pod is deleted. When the API server is down, reading these files or using <code>crictl logs</code> is how you see control plane logs.</p>
+<p>Some applications can only write to files. The sidecar pattern handles that: add a second container that shares an <code>emptyDir</code> volume with the application and streams the file to its own stdout, so kubectl logs and cluster log collectors can see it. Kubernetes also supports native sidecars, declared as init containers with <code>restartPolicy: Always</code>, which start before and keep running alongside the main containers.</p>
+<pre class="code" tabindex="0"><code>volumes:
+- name: logs
+  emptyDir: {}
+containers:
+- name: app
+  image: legacy-app:1.0
+  volumeMounts: [{name: logs, mountPath: /var/log/app}]
+- name: log-streamer
+  image: busybox
+  args: [/bin/sh, -c, 'tail -n+1 -F /var/log/app/app.log']
+  volumeMounts: [{name: logs, mountPath: /var/log/app}]</code></pre>
+<p>Then <code>kubectl logs &lt;pod&gt; -c log-streamer</code> shows the application's file log. Using a separate streamer per log file also keeps different streams separate, for example access and error logs.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>kubectl logs --previous</dt><dd>Shows logs from the last terminated instance of a container.</dd><dt>/var/log/pods</dt><dd>Node directory holding container log files organized by namespace, Pod name and UID.</dd><dt>/var/log/containers</dt><dd>Node directory of symlinks to container log files, commonly tailed by log agents.</dd><dt>Streaming sidecar</dt><dd>A helper container that reads an application's log file from a shared volume and writes it to stdout.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A legacy app writes only to /var/log/app/app.log, so <code>kubectl logs</code> shows nothing. You add a busybox sidecar sharing an emptyDir at that path and running <code>tail -F</code> on the file. <code>kubectl logs legacy -c log-streamer</code> now shows the application's messages.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> For a CrashLoopBackOff, the useful output is almost always in <code>kubectl logs &lt;pod&gt; --previous</code>. For multi-container Pods, always specify -c.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why can't kubectl logs show a log file an app writes inside its container?</summary><p>kubectl logs only returns what the container writes to stdout and stderr, which the runtime captures.</p></details>
+<details class="sq"><summary>How can you make such a file visible to kubectl logs without changing the app?</summary><p>Add a sidecar that shares the log directory through a volume and tails the file to its own stdout.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../resource-monitoring-metrics-server-kubectl-top-nodes-pods-sort-by-desc/">← Resource monitoring: metrics-server, kubectl top nodes/pods </a><a href="../events-kubectl-get-events-with-field-selectors-and-sorting/">Events: kubectl get events with field selectors and sorting →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>App Service custom containers on Linux: WEBSITES_PORT… · AI-200 Lesson</title>
+<meta name="description" content="Azure App Service (Web Apps) can run your own container image on Linux instead of a built-in language runtime. You get App Service's managed features, such">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="App Service custom containers on Linux: WEBSITES_PORT… · AI-200 Lesson">
+<meta property="og:description" content="Azure App Service (Web Apps) can run your own container image on Linux instead of a built-in language runtime. You get App Service's managed features, such">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/app-service-custom-containers-on-linux-websites-port-continuous-deploy/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/app-service-custom-containers-on-linux-websites-port-continuous-deploy/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 1: Develop containerized solutions on Azure</p>
+<h1>App Service custom containers on Linux: WEBSITES_PORT, continuous deployment and deployment slots</h1>
+<article class="lbody">
+<p>Azure App Service (Web Apps) can run your own container image on Linux instead of a built-in language runtime. You get App Service's managed features, such as custom domains, TLS certificates, autoscale, authentication and deployment slots, while controlling the whole runtime through your Dockerfile. You create one by choosing a container as the publish option and pointing it at an image, for example <code>az webapp create --plan myplan --name orders-web -g rg --container-image-name myregistry.azurecr.io/orders-api:20260914.3</code>.</p>
+<p>App Service's front end receives traffic on ports 80 and 443 and forwards it to your container. It needs to know which port your app listens on inside the container. It tries to detect common ports, but the reliable way is the app setting <code>WEBSITES_PORT</code>. If your gunicorn process binds to 8000, set <code>WEBSITES_PORT=8000</code>. A mismatch is one of the most common causes of a container that starts but never passes the startup probe, shown in logs as the container not responding to HTTP pings. Related settings include <code>WEBSITES_CONTAINER_START_TIME_LIMIT</code>, which gives slow-starting containers more time, and <code>WEBSITES_ENABLE_APP_SERVICE_STORAGE</code>, which controls whether the shared <code>/home</code> storage is mounted.</p>
+<pre class="code" tabindex="0"><code>az webapp config appsettings set -g rg -n orders-web --settings WEBSITES_PORT=8000
+az webapp log tail -g rg -n orders-web</code></pre>
+<p>Continuous deployment for containers means App Service pulls and restarts automatically when a new image is pushed. In the Deployment Center you turn on continuous deployment, and App Service exposes a webhook URL; with ACR, the portal can create a registry webhook for you, so a push to the configured repository and tag makes App Service pull the new image. Because the trigger is a push to a specific tag, this pattern typically uses a stable tag per environment. Alternatively, a CI/CD pipeline (GitHub Actions or Azure Pipelines) can push a unique tag and then update the app's image reference, which gives clearer history.</p>
+<p>Deployment slots are live apps with their own host names, such as <code>orders-web-staging</code>, that share the App Service plan. They require the Standard tier or higher. You deploy a new image to the staging slot, warm it up and test it, then swap. A swap exchanges the slots' content and most settings, and App Service warms the source slot before routing production traffic, so users see no downtime. If something is wrong, swap back. Settings marked as deployment slot settings (sticky) stay with the slot, which is how staging keeps its own database connection string. You can also route a percentage of production traffic to a slot for testing in production.</p>
+<p>Pull authentication follows the previous lesson: prefer a managed identity with AcrPull, and remember each slot is its own resource with its own identity and settings.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>WEBSITES_PORT</dt><dd>An App Service app setting that tells the platform which port the custom container listens on.</dd><dt>Continuous deployment (containers)</dt><dd>A setting that makes App Service pull and restart when a registry webhook reports a new image for the configured tag.</dd><dt>Deployment slot</dt><dd>A separate live instance of an app with its own host name that can be swapped with production.</dd><dt>Slot setting</dt><dd>An app setting or connection string marked sticky so it stays with its slot during a swap.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A Flask image works locally on port 5000, but on App Service the log shows the site failing to respond to pings and restarting. Setting WEBSITES_PORT=5000 fixes it. The team then adds a staging slot, enables continuous deployment on it from the registry's staging tag, tests each new image there, and swaps into production when checks pass.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> If a custom container starts but App Service reports it is not responding on the expected port, the fix is the WEBSITES_PORT app setting, not a Dockerfile EXPOSE change.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Your container listens on 8080 and App Service keeps restarting it. What should you set?</summary><p>The app setting WEBSITES_PORT=8080 so the front end forwards traffic to the port the app actually listens on.</p></details>
+<details class="sq"><summary>What minimum tier do deployment slots need, and how do you keep a staging-only connection string from moving during a swap?</summary><p>Standard or higher; mark the connection string as a deployment slot setting so it sticks to its slot.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../pull-images-without-passwords-managed-identity-with-the-acrpull-role-i/">← Pull images without passwords: managed identity with the Acr</a><a href="../azure-container-apps-environments-ingress-external-vs-internal-secrets/">Azure Container Apps: environments, ingress (external vs int →</a></nav>
+</main>
+</body>
+</html>

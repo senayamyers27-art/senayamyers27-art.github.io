@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Deployments and ReplicaSets as self-healing primitives… · CKA Lesson</title>
+<meta name="description" content="You rarely create bare Pods in production, because a bare Pod that dies or whose node fails is simply gone. Instead you create a Deployment, which manages ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Deployments and ReplicaSets as self-healing primitives… · CKA Lesson">
+<meta property="og:description" content="You rarely create bare Pods in production, because a bare Pod that dies or whose node fails is simply gone. Instead you create a Deployment, which manages ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/deployments-and-replicasets-as-self-healing-primitives-rolling-updates/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/deployments-and-replicasets-as-self-healing-primitives-rolling-updates/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 2: Workloads and Scheduling</p>
+<h1>Deployments and ReplicaSets as self-healing primitives; rolling updates, rollout status, history, undo and restart</h1>
+<article class="lbody">
+<p>You rarely create bare Pods in production, because a bare Pod that dies or whose node fails is simply gone. Instead you create a Deployment, which manages ReplicaSets, which manage Pods. This layering gives you self-healing and controlled updates.</p>
+<p>A ReplicaSet keeps a set number of Pods matching a label selector running. If a Pod is deleted, crashes out of existence or is lost with its node, the ReplicaSet controller notices the count is short and creates a replacement from its Pod template. A Deployment sits above that: each time you change the Deployment's Pod template (image, env, resources), it creates a new ReplicaSet and shifts Pods from the old one to the new one. Old ReplicaSets are kept at zero replicas as history, up to <code>revisionHistoryLimit</code>.</p>
+<p>The default strategy is RollingUpdate, controlled by <code>maxSurge</code> (how many extra Pods may exist above the desired count) and <code>maxUnavailable</code> (how many may be missing), both defaulting to 25 percent. New Pods must become Ready, according to their readiness probe, before old ones are removed, so a broken image stalls the rollout rather than taking the whole app down. The alternative strategy, Recreate, deletes all old Pods before creating new ones, which causes downtime but guarantees two versions never run together.</p>
+<pre class="code" tabindex="0"><code>kubectl create deployment web --image=nginx:1.27 --replicas=3
+kubectl set image deployment/web nginx=nginx:1.28
+kubectl rollout status deployment/web
+kubectl rollout history deployment/web
+kubectl rollout history deployment/web --revision=2
+kubectl rollout undo deployment/web            # back to previous
+kubectl rollout undo deployment/web --to-revision=1
+kubectl rollout restart deployment/web
+kubectl scale deployment/web --replicas=5</code></pre>
+<p><code>rollout status</code> waits and reports progress, which is useful for confirming a task is finished. <code>rollout history</code> lists revisions; the CHANGE-CAUSE column is filled from the <code>kubernetes.io/change-cause</code> annotation, which you can set with <code>kubectl annotate</code>. <code>rollout undo</code> rolls back to the previous or a specific revision, which really means scaling an older ReplicaSet back up. <code>rollout restart</code> adds a timestamp annotation to the Pod template, triggering a fresh rolling replacement of every Pod without changing anything else. It is the standard way to make Pods pick up a changed ConfigMap consumed as environment variables.</p>
+<p>You can also <code>kubectl rollout pause</code> a Deployment, make several changes, then <code>rollout resume</code> so they roll out as one revision. If a rollout cannot make progress within <code>progressDeadlineSeconds</code>, the Deployment's Progressing condition becomes False, which <code>kubectl describe</code> shows.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>ReplicaSet</dt><dd>A controller that keeps a specified number of identical Pods running.</dd><dt>Deployment</dt><dd>A controller that manages ReplicaSets to provide declarative rolling updates and rollbacks.</dd><dt>maxSurge / maxUnavailable</dt><dd>RollingUpdate settings for extra Pods allowed and Pods allowed to be missing during an update.</dd><dt>kubectl rollout restart</dt><dd>Triggers a rolling replacement of all Pods by changing an annotation on the Pod template.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>After <code>kubectl set image deployment/api api=api:2.0</code>, <code>rollout status</code> hangs with one new Pod in ImagePullBackOff because the tag does not exist. Because RollingUpdate waits for readiness, the old Pods still serve traffic. <code>kubectl rollout undo deployment/api</code> returns to the previous ReplicaSet and the failed Pod is removed.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Editing a Deployment's replica count does not create a new revision; only changes to the Pod template do. And never edit a ReplicaSet owned by a Deployment directly, because the Deployment will overwrite it.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What does kubectl rollout undo actually do under the hood?</summary><p>It sets the Deployment's Pod template back to an older revision, scaling that ReplicaSet up and the current one down.</p></details>
+<details class="sq"><summary>How do you force every Pod of a Deployment to be recreated without changing its spec meaningfully?</summary><p><code>kubectl rollout restart deployment/&lt;name&gt;</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../customresourcedefinitions-custom-resources-and-operators-crd-plus-cont/">← CustomResourceDefinitions, custom resources and operators (C</a><a href="../daemonsets-and-statefulsets-from-an-operator-s-point-of-view-including/">DaemonSets and StatefulSets from an operator's point of view →</a></nav>
+</main>
+</body>
+</html>

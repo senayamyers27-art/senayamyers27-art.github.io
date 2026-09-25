@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Resilient code: retries with exponential backoff and… · Developer Associate Lesson</title>
+<meta name="description" content="Distributed systems fail in small ways all the time: a request is throttled, a network call times out, a downstream service briefly returns an error. Resil">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Resilient code: retries with exponential backoff and… · Developer Associate Lesson">
+<meta property="og:description" content="Distributed systems fail in small ways all the time: a request is throttled, a network call times out, a downstream service briefly returns an error. Resil">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/resilient-code-retries-with-exponential-backoff-and-jitter-idempotency/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/resilient-code-retries-with-exponential-backoff-and-jitter-idempotency/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 1: Development with AWS Services</p>
+<h1>Resilient code: retries with exponential backoff and jitter, idempotency, timeouts, handling partial failures and dead-letter queues</h1>
+<article class="lbody">
+<p>Distributed systems fail in small ways all the time: a request is throttled, a network call times out, a downstream service briefly returns an error. Resilient code expects this. The DVA-C02 exam tests whether you know the standard techniques and which failures they fix.</p>
+<p>Retries are the first tool, but only for transient errors such as throttling (<code>ThrottlingException</code>, HTTP 429), HTTP 5xx server errors and network timeouts. Retrying a validation error or an <code>AccessDenied</code> just repeats the failure. Retrying immediately in a tight loop is harmful, because every client hammers the struggling service at once. Exponential backoff waits longer after each failed attempt, for example 100 ms, 200 ms, 400 ms, 800 ms, up to a cap and a maximum number of attempts. Jitter adds randomness to each wait so that thousands of clients that failed at the same moment do not all retry at the same moment. The AWS SDKs already implement retries with backoff and jitter for AWS API calls; you configure the retry mode and maximum attempts rather than writing it yourself, but you add it yourself for calls to your own or third-party services.</p>
+<p>Idempotency makes retries safe. An operation is idempotent if performing it twice has the same effect as performing it once. Because retries, at-least-once message delivery in SQS standard queues and asynchronous Lambda retries can all deliver the same request more than once, your code should detect duplicates. Common techniques are an idempotency key supplied by the client (for example an order ID), a DynamoDB conditional write such as <code>attribute_not_exists(orderId)</code> that fails if the item was already processed, and natural idempotency (setting a value rather than incrementing it).</p>
+<p>Timeouts stop one slow dependency from consuming all your resources. Set explicit connect and read timeouts on HTTP and SDK clients that are shorter than your function or request timeout, so your code can log, retry or fail gracefully instead of being killed mid-operation. A Lambda function behind API Gateway, for instance, should give up on a slow downstream call well before API Gateway's own integration timeout.</p>
+<p>Partial failure happens when a batch contains good and bad items. If one record in a batch of ten fails and you throw an error, the whole batch is retried, including the nine that succeeded. Batch APIs such as DynamoDB <code>BatchWriteItem</code> return <code>UnprocessedItems</code> and SQS <code>SendMessageBatch</code> returns per-entry failures; your code must retry only those. For Lambda reading from SQS or streams, partial batch responses let you report just the failed items.</p>
+<p>A dead-letter queue (DLQ) is where messages go after they have failed a set number of times, so a poison message (one that can never be processed) stops blocking the queue and wasting compute. SQS uses a redrive policy with <code>maxReceiveCount</code>; asynchronous Lambda invocations can send failed events to an SQS queue or SNS topic DLQ, or to an on-failure destination. A DLQ is only useful if you alarm on its depth and investigate what lands there.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Exponential backoff</dt><dd>A retry strategy where the wait between attempts grows multiplicatively, reducing pressure on a struggling service.</dd><dt>Jitter</dt><dd>Random variation added to retry delays so many clients do not retry in synchronized waves.</dd><dt>Idempotency</dt><dd>The property that repeating an operation produces the same result as doing it once, making retries and duplicate deliveries safe.</dd><dt>Poison message</dt><dd>A message that fails processing every time it is received and would loop forever without a dead-letter queue.</dd><dt>Dead-letter queue (DLQ)</dt><dd>A queue that receives messages or events that failed processing after a configured number of attempts, for later inspection.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A payment Lambda function processes SQS messages. It records each payment ID in DynamoDB with a conditional put using attribute_not_exists, so a message delivered twice is charged once. Its SQS queue has a redrive policy with maxReceiveCount of 5 and a DLQ, and a CloudWatch alarm fires when the DLQ holds any messages.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> If a question mentions throttling errors such as ProvisionedThroughputExceededException or ThrottlingException, the answer is almost always retries with exponential backoff (and jitter), not simply adding more retries or raising timeouts.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why add jitter to exponential backoff?</summary><p>Without randomness, clients that failed together retry together, recreating the load spike; jitter spreads retries out over time.</p></details>
+<details class="sq"><summary>Which errors should not be retried?</summary><p>Client errors that will fail again unchanged, such as validation errors, malformed requests or AccessDenied; retry only transient errors like throttling, 5xx and timeouts.</p></details>
+<details class="sq"><summary>How does a DLQ help with a poison message in SQS?</summary><p>After the message's receive count exceeds maxReceiveCount, SQS moves it to the DLQ, so it stops being retried and blocking processing, and you can inspect it.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../architectural-patterns-event-driven-microservices-fan-out-choreography/">← Architectural patterns: event-driven, microservices, fan-out</a><a href="../messaging-and-streaming-sqs-standard-vs-fifo-message-groups-deduplicat/">Messaging and streaming: SQS standard vs FIFO (message group →</a></nav>
+</main>
+</body>
+</html>

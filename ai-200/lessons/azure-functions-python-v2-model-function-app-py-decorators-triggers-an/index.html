@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Azure Functions Python v2 model: function_app.py… · AI-200 Lesson</title>
+<meta name="description" content="Azure Functions runs small pieces of code in response to events without you managing servers. Each function has exactly one trigger, the event that starts ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Azure Functions Python v2 model: function_app.py… · AI-200 Lesson">
+<meta property="og:description" content="Azure Functions runs small pieces of code in response to events without you managing servers. Each function has exactly one trigger, the event that starts ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/azure-functions-python-v2-model-function-app-py-decorators-triggers-an/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/azure-functions-python-v2-model-function-app-py-decorators-triggers-an/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 3: Connect to and consume Azure services</p>
+<h1>Azure Functions Python v2 model: function_app.py, decorators, triggers and input/output bindings</h1>
+<article class="lbody">
+<p>Azure Functions runs small pieces of code in response to events without you managing servers. Each function has exactly one trigger, the event that starts it (an HTTP request, a timer, a queue message), and optionally bindings, which connect it declaratively to other services for input and output. Bindings remove boilerplate: instead of writing SDK code to read a blob or send a queue message, you declare the binding and use a parameter.</p>
+<p>The Python v2 programming model defines functions in code with decorators, rather than a separate <code>function.json</code> file per function as in the older v1 model. A v2 project has a <code>function_app.py</code> file at its root that creates a <code>FunctionApp</code> object, and each function is a Python function decorated with a trigger and any bindings. Supporting files are <code>host.json</code> (runtime settings), <code>local.settings.json</code> (local app settings) and <code>requirements.txt</code> (which must include <code>azure-functions</code>).</p>
+<pre class="code" tabindex="0"><code>import azure.functions as func
+import json, logging
+
+app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
+
+@app.route(route=&quot;orders&quot;, methods=[&quot;POST&quot;])
+@app.queue_output(arg_name=&quot;outmsg&quot;, queue_name=&quot;new-orders&quot;, connection=&quot;AzureWebJobsStorage&quot;)
+def create_order(req: func.HttpRequest, outmsg: func.Out[str]) -&gt; func.HttpResponse:
+    order = req.get_json()
+    outmsg.set(json.dumps(order))
+    return func.HttpResponse(&quot;accepted&quot;, status_code=202)
+
+@app.blob_trigger(arg_name=&quot;blob&quot;, path=&quot;uploads/{name}&quot;, connection=&quot;DocsStorage&quot;)
+@app.blob_output(arg_name=&quot;out&quot;, path=&quot;processed/{name}.txt&quot;, connection=&quot;DocsStorage&quot;)
+def extract(blob: func.InputStream, out: func.Out[str]):
+    logging.info(&quot;Processing %s&quot;, blob.name)
+    out.set(blob.read().decode(&quot;utf-8&quot;, errors=&quot;ignore&quot;))</code></pre>
+<p>Walk through it. <code>@app.route</code> makes an HTTP trigger; <code>req</code> is a <code>func.HttpRequest</code>, and the return value is the HTTP response. <code>@app.queue_output</code> adds an output binding; the <code>arg_name</code> must match a parameter of type <code>func.Out[...]</code>, and calling <code>.set()</code> writes the message when the function completes. The blob example shows a trigger with a path pattern, where <code>{name}</code> is a binding expression captured from the triggering blob and reused in the output path. Input bindings, such as <code>@app.blob_input</code> or <code>@app.cosmos_db_input</code>, load data before your code runs.</p>
+<p>The <code>connection</code> argument is not a connection string. It is the name of an app setting (or a prefix for a group of settings) that holds the connection details, which lets you switch to identity-based connections without code changes. <code>AzureWebJobsStorage</code> is the storage account the Functions host itself uses.</p>
+<p>Large apps can split functions across files with blueprints: create <code>func.Blueprint()</code> in a module, decorate functions on it, and register it in <code>function_app.py</code> with <code>app.register_functions(bp)</code>. Some triggers, such as the Service Bus trigger, can also bind to SDK types for richer access. Functions only appear if the file imports cleanly, so an import error in <code>function_app.py</code> results in no functions being found; check the startup logs when that happens.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Trigger</dt><dd>The event that starts a function; every function has exactly one.</dd><dt>Binding</dt><dd>A declarative connection to another service that supplies input data or writes output without SDK code.</dd><dt>function_app.py</dt><dd>The entry file of a Python v2 function app that creates FunctionApp and defines decorated functions.</dd><dt>func.Out</dt><dd>The parameter type for an output binding; calling set() provides the value to write.</dd><dt>Blueprint</dt><dd>A v2 model feature for defining functions in separate modules and registering them with the app.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A developer wants an HTTP endpoint that accepts orders and queues them for later processing. In function_app.py they add @app.route for POST /orders and @app.queue_output bound to the new-orders queue. The function body is three lines: read JSON, set the output, return 202. No storage SDK code is needed, and a second queue-triggered function processes the orders.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> In the v2 model, decorators in function_app.py replace function.json; the connection parameter names an app setting, not a literal connection string, and each function has one trigger but any number of bindings.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How many triggers can a single function have?</summary><p>Exactly one, though it can have multiple input and output bindings.</p></details>
+<details class="sq"><summary>What does the connection argument in a binding decorator contain?</summary><p>The name of an app setting (or setting prefix) that holds connection information, not the connection string itself.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../picking-service-bus-event-grid-or-event-hubs-for-a-scenario/">← Picking Service Bus, Event Grid or Event Hubs for a scenario</a><a href="../common-triggers-http-auth-levels-timer-six-field-ncrontab-service-bus/">Common triggers: HTTP (auth levels), timer (six-field NCRONT →</a></nav>
+</main>
+</body>
+</html>

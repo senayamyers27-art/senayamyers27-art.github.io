@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Deployments and ReplicaSets: how the Pod template, labels… · CKAD Lesson</title>
+<meta name="description" content="A Deployment is the standard way to run a stateless app. It does not manage Pods directly.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Deployments and ReplicaSets: how the Pod template, labels… · CKAD Lesson">
+<meta property="og:description" content="A Deployment is the standard way to run a stateless app. It does not manage Pods directly.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/deployments-and-replicasets-how-the-pod-template-labels-and-selectors/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/deployments-and-replicasets-how-the-pod-template-labels-and-selectors/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 2: Application Deployment</p>
+<h1>Deployments and ReplicaSets: how the Pod template, labels and selectors fit together</h1>
+<article class="lbody">
+<p>A Deployment is the standard way to run a stateless app. It does not manage Pods directly. Instead it creates a ReplicaSet, and the ReplicaSet keeps the requested number of Pod replicas running, creating new ones when Pods die and deleting extras. The Deployment's own job is to manage ReplicaSets over time, which is what makes rolling updates and rollbacks possible.</p>
+<p>Three parts of the Deployment spec work together. <code>replicas</code> is how many Pods you want. <code>template</code> is the Pod template: the metadata (including labels) and Pod spec every replica is made from. <code>selector</code> tells the controller which Pods belong to it, using <code>matchLabels</code> (or <code>matchExpressions</code>).</p>
+<pre class="code" tabindex="0"><code>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels:
+    app: web
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+        tier: frontend
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.27</code></pre>
+<p>The rule is that the selector must match the template's labels; the API server rejects a Deployment where it does not. The template can carry extra labels (like <code>tier</code> above) that the selector ignores. In <code>apps/v1</code> the selector is immutable after creation, so choose it carefully. The labels in the Deployment's own <code>metadata</code> are just labels on the Deployment object and do not affect selection.</p>
+<p>When you change anything in the Pod template, such as the image, an environment variable or a label, the Deployment computes a hash of the template and creates a new ReplicaSet named after it, for example <code>web-7d9c6b8f5</code>. It then scales the new ReplicaSet up and the old one down. Old ReplicaSets remain at zero replicas as revision history for rollback, up to <code>revisionHistoryLimit</code> (default 10). Changing only <code>replicas</code> does not create a new ReplicaSet; it just scales the current one.</p>
+<p>Pods get names built from the ReplicaSet name plus a random suffix, and an extra <code>pod-template-hash</code> label that keeps ReplicaSets from claiming each other's Pods. You can see the chain with <code>kubectl get deploy,rs,pods -l app=web</code> and <code>kubectl describe rs</code>, whose 'Controlled By' line points to the Deployment.</p>
+<p>Selectors also connect other objects: a Service with <code>selector: app: web</code> sends traffic to these Pods. If you create a bare Pod with the label <code>app: web</code>, the Service will also send it traffic, even though the Deployment does not manage it (the Deployment's ReplicaSets also select on <code>pod-template-hash</code>, so they do not adopt it). A standalone ReplicaSet with a plain <code>app: web</code> selector, however, would adopt such a Pod and delete one to keep its count right. Understanding this label link explains many surprises. Quick generation: <code>kubectl create deployment web --image=nginx:1.27 --replicas=3 --dry-run=client -o yaml</code> produces matching selector and template labels (<code>app: web</code>) automatically.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>ReplicaSet</dt><dd>Controller that keeps a set number of identical Pods running; normally managed by a Deployment.</dd><dt>Pod template</dt><dd>The Pod metadata and spec inside a controller from which every replica is created.</dd><dt>Label selector</dt><dd>A query on labels, such as matchLabels app: web, that decides which Pods an object manages or targets.</dd><dt>pod-template-hash</dt><dd>Label added by the Deployment to tell Pods of different ReplicaSets apart.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A developer edits the image in a Deployment. <code>kubectl get rs</code> then shows two ReplicaSets: the new one scaling from 0 to 3 and the old one from 3 to 0. After the rollout the old ReplicaSet stays at 0 replicas, ready to be used if they run <code>kubectl rollout undo</code>.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> If <code>kubectl apply</code> fails with 'selector does not match template labels', make spec.selector.matchLabels a subset of spec.template.metadata.labels. The selector cannot be changed later in apps/v1.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What object does a Deployment create directly?</summary><p>A ReplicaSet, which in turn creates the Pods.</p></details>
+<details class="sq"><summary>Does scaling a Deployment from 3 to 5 replicas create a new ReplicaSet?</summary><p>No; only changes to the Pod template create a new ReplicaSet. Scaling adjusts the current one.</p></details>
+<details class="sq"><summary>What must be true about a Deployment's selector and template labels?</summary><p>Every label in the selector must appear with the same value in the template's labels.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../mounting-volumes-with-volumemounts-mountpath-subpath-and-readonly/">← Mounting volumes with volumeMounts, mountPath, subPath and r</a><a href="../rolling-updates-maxsurge-maxunavailable-minreadyseconds-the-recreate-s/">Rolling updates: maxSurge, maxUnavailable, minReadySeconds;  →</a></nav>
+</main>
+</body>
+</html>

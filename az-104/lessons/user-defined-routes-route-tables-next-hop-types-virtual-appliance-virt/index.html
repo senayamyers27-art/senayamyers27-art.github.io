@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>User-defined routes: route tables, next hop types… · Azure Administrator Lesson</title>
+<meta name="description" content="Azure routes traffic automatically with system routes, which you cannot delete. Each subnet gets a route for the VNet's own address space (next hop Virtual">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="User-defined routes: route tables, next hop types… · Azure Administrator Lesson">
+<meta property="og:description" content="Azure routes traffic automatically with system routes, which you cannot delete. Each subnet gets a route for the VNet's own address space (next hop Virtual">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-104/lessons/user-defined-routes-route-tables-next-hop-types-virtual-appliance-virt/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-104/lessons/user-defined-routes-route-tables-next-hop-types-virtual-appliance-virt/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Azure Administrator</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure Administrator Associate AZ-104 · Domain 4: Implement and manage virtual networking</p>
+<h1>User-defined routes: route tables, next hop types (virtual appliance, virtual network gateway, internet, none) and forced tunneling</h1>
+<article class="lbody">
+<p>Azure routes traffic automatically with system routes, which you cannot delete. Each subnet gets a route for the VNet's own address space (next hop Virtual network), a default route 0.0.0.0/0 to the Internet, routes for peered VNets and routes learned from gateways. Certain private and reserved ranges not used in the VNet get next hop None, so traffic to them is dropped. This works well until you want traffic to go somewhere else, most often through a firewall.</p>
+<p>User-defined routes (UDRs) let you override system routes. You create a route table resource, add routes to it, and associate the route table with one or more subnets. A route table affects traffic leaving resources in the subnets it is associated with; it is never associated with a NIC or a whole VNet, and each subnet can have at most one route table. The route table must be in the same region and subscription as the VNet.</p>
+<p>Each route has an address prefix (destination) and a next hop type. Virtual appliance sends traffic to the private IP of a network virtual appliance (NVA) such as Azure Firewall or a third-party firewall VM; you must enter that next hop IP address. Virtual network gateway sends traffic to the VPN gateway, typically toward on-premises. Virtual network routes traffic within the VNet, useful to override a broader rule for a specific range. Internet sends traffic to the internet directly. None drops the traffic, a simple way to block a destination.</p>
+<p>When several routes match a destination, Azure picks the longest prefix match: a /24 route wins over a /16 route. If routes with the same prefix come from different sources, a UDR wins over a BGP (Border Gateway Protocol) route learned from a gateway, which wins over a system route. The route table also has a 'Propagate gateway routes' setting; turning it off stops routes learned by the VPN or ExpressRoute gateway from being added to the subnet.</p>
+<p>An NVA forwards traffic that is not addressed to itself, so on its network interface you must enable IP forwarding in Azure (and routing inside its OS). Forgetting this is a common reason traffic disappears after adding a UDR. A typical hub-and-spoke rule is a UDR on each spoke subnet: 0.0.0.0/0 next hop Virtual appliance 10.0.1.4 (the firewall), so all outbound and spoke-to-spoke traffic is inspected.</p>
+<p>Forced tunneling means sending all internet-bound traffic back to on-premises for inspection instead of letting it leave Azure directly. With a VPN gateway, you create a UDR for 0.0.0.0/0 with next hop Virtual network gateway (and configure the default site on the route-based gateway); with ExpressRoute, on-premises advertises a default route over BGP. Use Network Watcher's effective routes or next hop tool to confirm which route a VM's traffic actually takes.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>System route</dt><dd>A default route Azure creates automatically for each subnet, such as the VNet range and 0.0.0.0/0 to the internet.</dd><dt>Route table</dt><dd>A resource holding user-defined routes that is associated with subnets to control outbound traffic.</dd><dt>Virtual appliance next hop</dt><dd>A route next hop that forwards traffic to the private IP of a network virtual appliance such as a firewall.</dd><dt>Forced tunneling</dt><dd>Routing all internet-bound traffic back to on-premises through a VPN or ExpressRoute connection.</dd><dt>IP forwarding</dt><dd>A NIC setting that lets a VM forward traffic not addressed to it, required for NVAs.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Security requires that all traffic from application subnets to the internet passes through Azure Firewall at 10.0.1.4. The administrator creates a route table with 0.0.0.0/0 next hop Virtual appliance 10.0.1.4 and associates it with each application subnet. A test with Network Watcher's next hop tool shows the firewall's IP as next hop for an internet destination.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Route tables are associated with subnets, not NICs. The longest prefix wins; on a tie, UDR beats BGP beats system routes. Virtual appliance needs a next hop IP and IP forwarding on the NVA's NIC. None drops traffic.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which next hop type drops traffic to a destination?</summary><p>None.</p></details>
+<details class="sq"><summary>A UDR sends traffic to a firewall VM, but traffic never arrives at its destination. What NIC setting should you check on the firewall VM?</summary><p>IP forwarding, which must be enabled for a VM to forward traffic not addressed to itself.</p></details>
+<details class="sq"><summary>How do you force all internet-bound traffic from Azure subnets back to on-premises over a site-to-site VPN?</summary><p>Add a UDR for 0.0.0.0/0 with next hop Virtual network gateway (forced tunneling), with a default site on the route-based VPN gateway.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Azure Administrator for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-104/">Open the Azure Administrator study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../public-ip-addresses-standard-sku-static-allocation-zones/">← Public IP addresses: Standard SKU, static allocation, zones</a><a href="../network-security-groups-and-application-security-groups-rule-priority/">Network security groups and application security groups: rul →</a></nav>
+</main>
+</body>
+</html>

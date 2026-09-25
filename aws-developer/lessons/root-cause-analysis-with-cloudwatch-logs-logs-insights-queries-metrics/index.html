@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Root cause analysis with CloudWatch Logs, Logs Insights… · Developer Associate Lesson</title>
+<meta name="description" content="When something breaks in production, you need to go from a symptom ('checkout is slow') to a cause ('the payment function times out calling a third-party A">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Root cause analysis with CloudWatch Logs, Logs Insights… · Developer Associate Lesson">
+<meta property="og:description" content="When something breaks in production, you need to go from a symptom ('checkout is slow') to a cause ('the payment function times out calling a third-party A">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/root-cause-analysis-with-cloudwatch-logs-logs-insights-queries-metrics/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/root-cause-analysis-with-cloudwatch-logs-logs-insights-queries-metrics/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 4: Troubleshooting and Optimization</p>
+<h1>Root cause analysis with CloudWatch Logs, Logs Insights queries, metrics and dashboards</h1>
+<article class="lbody">
+<p>When something breaks in production, you need to go from a symptom ('checkout is slow') to a cause ('the payment function times out calling a third-party API'). Amazon CloudWatch provides the raw material: logs, metrics and dashboards. Domain 4 of the exam presents symptoms and asks where to look.</p>
+<p>CloudWatch Logs organizes log data into log groups (usually one per application or function, such as <code>/aws/lambda/checkout</code>) containing log streams (one per source, such as one per Lambda execution environment or container). Lambda writes everything your code prints plus its own <code>START</code>, <code>END</code> and <code>REPORT</code> lines; the <code>REPORT</code> line shows duration, billed duration, memory size, max memory used and init duration for cold starts. Set a retention period on each log group, because the default is to keep logs forever. You can search logs with filter patterns, stream them live (Live Tail), and forward them in real time with subscription filters to Lambda, Kinesis or Amazon Data Firehose.</p>
+<p>CloudWatch Logs Insights is an interactive query language for log groups. Queries chain commands with pipes: <code>fields</code>, <code>filter</code>, <code>stats</code>, <code>sort</code>, <code>limit</code> and <code>parse</code>. Logs Insights automatically discovers fields in JSON logs, which is another reason to log in JSON. You choose one or more log groups and a time range, run the query and can add results to a dashboard.</p>
+<pre class="code" tabindex="0"><code>fields @timestamp, @requestId, @message
+| filter @message like /ERROR/
+| sort @timestamp desc
+| limit 50
+
+filter @type = &quot;REPORT&quot;
+| stats avg(@duration), max(@duration), max(@maxMemoryUsed) by bin(5m)</code></pre>
+<p>Metrics are numerical time series. AWS services publish metrics automatically, for example Lambda <code>Invocations</code>, <code>Errors</code>, <code>Throttles</code>, <code>Duration</code>, <code>ConcurrentExecutions</code> and <code>IteratorAge</code>; API Gateway <code>Count</code>, <code>4XXError</code>, <code>5XXError</code>, <code>Latency</code> and <code>IntegrationLatency</code>; SQS <code>ApproximateNumberOfMessagesVisible</code> and <code>ApproximateAgeOfOldestMessage</code>; DynamoDB consumed capacity and <code>ThrottledRequests</code>. Each metric belongs to a namespace and has dimensions (such as <code>FunctionName</code>), and you view it with a statistic (Average, Sum, Maximum, percentiles like p99) over a period. Metric filters turn log patterns into metrics, such as counting lines containing <code>PaymentDeclined</code>, so you can graph and alarm on them.</p>
+<p>A useful root cause process: start with metrics to find when the problem began and which component is affected (for example, API Gateway <code>Latency</code> minus <code>IntegrationLatency</code> tells you whether time was spent in API Gateway or the backend); narrow the time window; use Logs Insights to find errors and slow requests in that window; follow a request ID or correlation ID across services; and use X-Ray traces for the call path. CloudWatch dashboards place the key graphs for an application side by side, can span Regions and accounts, and can be shared, making them the first stop during an incident. Contributor Insights can show the top contributors, such as the most throttled DynamoDB keys or the noisiest client IPs.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Log group</dt><dd>A CloudWatch Logs container for log streams that share retention, encryption and access settings.</dd><dt>CloudWatch Logs Insights</dt><dd>An interactive query service for searching and aggregating log data with a pipe-based query language.</dd><dt>Metric filter</dt><dd>A rule that extracts metric values from matching log events so they can be graphed and alarmed on.</dd><dt>Dimension</dt><dd>A name-value pair that identifies a specific metric series, such as FunctionName=checkout.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Users report slow checkout since 14:00. The dashboard shows API Gateway Latency rising while IntegrationLatency rises by the same amount, so the backend is slow. A Logs Insights query on the checkout function's REPORT lines shows max duration near the timeout, and filtering for ERROR reveals timeouts calling the payment provider.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Know which tool answers which question: metrics tell you what and when, logs (via Logs Insights) tell you why, and traces tell you where in the call chain. Turning a log pattern into something you can alarm on means a metric filter.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How can you count occurrences of a specific error message in logs and alarm on it?</summary><p>Create a metric filter on the log group that matches the message, then create a CloudWatch alarm on the resulting metric.</p></details>
+<details class="sq"><summary>Which Lambda log line shows memory used and duration?</summary><p>The REPORT line written at the end of each invocation.</p></details>
+<details class="sq"><summary>Why set a log group retention period?</summary><p>By default logs are kept indefinitely, which grows cost; retention deletes logs after the chosen period.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../testing-in-development-environments-unit-tests-in-ci-integration-tests/">← Testing in development environments: unit tests in CI, integ</a><a href="../common-lambda-errors-throttling-429-timeouts-accessdenied-from-the-exe/">Common Lambda errors: throttling (429), timeouts, AccessDeni →</a></nav>
+</main>
+</body>
+</html>

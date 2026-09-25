@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Change feed: change feed processor with a lease… · AI-200 Lesson</title>
+<meta name="description" content="The change feed is a persistent, ordered record of changes to items in a Cosmos DB container. Instead of polling with queries, your code reads what changed">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Change feed: change feed processor with a lease… · AI-200 Lesson">
+<meta property="og:description" content="The change feed is a persistent, ordered record of changes to items in a Cosmos DB container. Instead of polling with queries, your code reads what changed">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/change-feed-change-feed-processor-with-a-lease-container-azure-functio/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/change-feed-change-feed-processor-with-a-lease-container-azure-functio/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 2: Develop AI solutions by using Azure data management services</p>
+<h1>Change feed: change feed processor with a lease container, Azure Functions Cosmos DB trigger, latest-version mode vs all versions and deletes</h1>
+<article class="lbody">
+<p>The change feed is a persistent, ordered record of changes to items in a Cosmos DB container. Instead of polling with queries, your code reads what changed since it last looked. It is the backbone of event-driven patterns: updating a search or vector index when documents change, generating embeddings for new items, keeping a cache or a materialized view in sync, or triggering workflows. Changes are ordered within each partition key value, but not across partitions.</p>
+<p>The change feed has two modes. Latest version mode (the default) delivers the latest version of each created or updated item. If an item changes several times between reads, you may see only its latest state, and deletes do not appear at all. The usual workaround is a soft delete: set a flag such as <code>deleted: true</code> (which is an update the feed sees) and let a TTL (time to live) remove the item later. All versions and deletes mode records every change, including intermediate versions and deletes, with metadata about the operation. It requires the account to use continuous backup, and you can only read changes that are within the continuous backup retention window.</p>
+<p>The change feed processor is a library feature (in the .NET and Java SDKs, and conceptually reused by Azure Functions) that makes consuming the feed reliable at scale. It has four parts: the monitored container whose changes you read; a lease container that stores checkpoints (how far each partition has been processed) and coordinates ownership; the compute instances, each with a unique instance name; and the delegate, your handler code that processes each batch. When you add instances, leases are rebalanced so the work spreads out; if an instance fails, another takes over its leases and resumes from the last checkpoint. Processing is at least once, so make handlers idempotent.</p>
+<p>For Python developers, the most common way to consume the change feed is the Azure Functions Cosmos DB trigger, which runs a change feed processor for you. You supply the connection, database, monitored container and lease container; the function receives a list of changed documents.</p>
+<pre class="code" tabindex="0"><code>import azure.functions as func
+app = func.FunctionApp()
+
+@app.cosmos_db_trigger(arg_name=&quot;docs&quot;, connection=&quot;CosmosConn&quot;,
+    database_name=&quot;kb&quot;, container_name=&quot;chunks&quot;,
+    lease_container_name=&quot;leases&quot;, create_lease_container_if_not_exists=True)
+def embed_new_chunks(docs: func.DocumentList):
+    for d in docs:
+        if not d.get(&quot;embedding&quot;):
+            ...  # call embedding model, upsert vector</code></pre>
+<p>If several independent functions monitor the same container, each needs its own lease state; share one lease container but give each a different lease prefix, or use separate lease containers. Otherwise they compete for the same leases and each sees only part of the changes. The Python SDK can also read the feed directly with <code>container.query_items_change_feed()</code>, where you manage continuation tokens yourself.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Change feed</dt><dd>An ordered, persistent log of creates and updates (and, in one mode, deletes) to a Cosmos DB container.</dd><dt>Lease container</dt><dd>A container that stores change feed checkpoints and partition ownership for processors and Functions triggers.</dd><dt>Latest version mode</dt><dd>The default change feed mode that returns the latest state of changed items and does not include deletes.</dd><dt>All versions and deletes mode</dt><dd>A change feed mode that records every change, including deletes, and requires continuous backup.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A knowledge base must keep its vectors current. A Python function with a Cosmos DB trigger listens to the chunks container, and for each new or edited chunk it calls the embedding model and upserts the vector. Deleted articles were not disappearing from search, so the team changed deletion to set deleted: true with a TTL, which the latest version mode feed delivers as an update.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Deletes are invisible in latest version mode; answer with soft delete plus TTL, or all versions and deletes mode (which needs continuous backup). Two functions on one container need separate lease prefixes or containers.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What is stored in the lease container?</summary><p>Checkpoints and ownership records that track how far each partition range has been processed and by which instance.</p></details>
+<details class="sq"><summary>How can you capture deletions if you must stay on latest version mode?</summary><p>Use a soft delete flag that the feed sees as an update, and remove the item later with TTL.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../cosmos-db-vector-search-container-vector-policy-path-data-type-dimensi/">← Cosmos DB vector search: container vector policy (path, data</a><a href="../azure-database-for-postgresql-flexible-server-allow-listing-and-enabli/">Azure Database for PostgreSQL flexible server: allow-listing →</a></nav>
+</main>
+</body>
+</html>

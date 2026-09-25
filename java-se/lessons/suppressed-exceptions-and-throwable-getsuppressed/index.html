@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Suppressed exceptions and Throwable.getSuppressed() · OCP Java Lesson</title>
+<meta name="description" content="Sometimes more than one exception happens during the same operation. In try-with-resources this is common: the body throws an exception, and then the autom">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Suppressed exceptions and Throwable.getSuppressed() · OCP Java Lesson">
+<meta property="og:description" content="Sometimes more than one exception happens during the same operation. In try-with-resources this is common: the body throws an exception, and then the autom">
+<link rel="canonical" href="https://senayamyers27-art.github.io/java-se/lessons/suppressed-exceptions-and-throwable-getsuppressed/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/java-se/lessons/suppressed-exceptions-and-throwable-getsuppressed/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">OCP Java</a> / <a href="../">Lessons</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25) · Domain 4: Handling exceptions</p>
+<h1>Suppressed exceptions and Throwable.getSuppressed()</h1>
+<article class="lbody">
+<p>Sometimes more than one exception happens during the same operation. In try-with-resources this is common: the body throws an exception, and then the automatic <code>close()</code> call also throws. Java cannot throw both at once, so it has to choose one as the primary exception and remember the other. The one it keeps as primary is the exception from the try block. Any exceptions thrown while closing resources are attached to it as suppressed exceptions.</p>
+<p>Suppressed exceptions are stored inside the primary <code>Throwable</code>. The method <code>addSuppressed(Throwable)</code> adds one, and <code>getSuppressed()</code> returns a <code>Throwable[]</code> array of them, in the order they were added. With several resources, each failing <code>close()</code> adds another suppressed exception, and because resources close in reverse order, the array follows that reverse order. A catch block for the primary exception can loop over the array to log every problem.</p>
+<p>If the try block completes normally and only <code>close()</code> throws, there is nothing to suppress: the exception from <code>close()</code> becomes the primary exception and is thrown normally. If two resources both fail to close and the body succeeded, the first close exception (from the last declared resource) becomes primary and the second one is suppressed inside it.</p>
+<pre class="code" tabindex="0"><code>class Door implements AutoCloseable {
+    public void close() { throw new IllegalStateException(&quot;door stuck&quot;); }
+}
+
+try (Door d = new Door()) {
+    throw new RuntimeException(&quot;fire alarm&quot;);
+} catch (RuntimeException e) {
+    System.out.println(e.getMessage());          // fire alarm
+    for (Throwable t : e.getSuppressed()) {
+        System.out.println(&quot;suppressed: &quot; + t.getMessage()); // door stuck
+    }
+}</code></pre>
+<p>Suppression happens automatically only in try-with-resources. A classic <code>try/finally</code> behaves worse: if the <code>try</code> throws and the <code>finally</code> also throws, the exception from <code>finally</code> replaces the original, and the original is lost entirely unless you add it yourself with <code>addSuppressed</code>. This is one of the strongest reasons to prefer try-with-resources over manual cleanup.</p>
+<p>Stack traces printed with <code>printStackTrace()</code> include suppressed exceptions under a &quot;Suppressed:&quot; heading, which you will see in lab output. Do not confuse suppressed exceptions with the cause: <code>getCause()</code> returns the exception that led to this one, set when one exception wraps another, while <code>getSuppressed()</code> lists additional exceptions that happened alongside it.</p>
+<p>On the exam, identify which exception is primary (from the try body if there is one), then list the close exceptions in reverse resource order as suppressed.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Suppressed exception</dt><dd>An exception thrown while closing a resource that is attached to the primary exception instead of replacing it.</dd><dt>Primary exception</dt><dd>The exception that actually propagates; in try-with-resources, the one thrown by the try block if there is one.</dd><dt>getSuppressed()</dt><dd>A Throwable method returning an array of the exceptions suppressed by this one.</dd><dt>getCause()</dt><dd>A Throwable method returning the exception that caused this one, which is different from suppressed exceptions.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A backup job fails while writing to a network share, and then closing the connection fails too. Because the job uses try-with-resources, the log shows the real write error as the main exception, with the close failure listed under Suppressed, so the operations team fixes the right problem first.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> In try-with-resources, the body's exception wins and close exceptions become suppressed. In a plain finally, a new exception replaces the original, which is lost.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>If the try body and a resource's close() both throw, which exception reaches the catch block?</summary><p>The one from the try body; the close() exception is available through getSuppressed().</p></details>
+<details class="sq"><summary>If only close() throws, is anything suppressed?</summary><p>No. The close() exception is thrown as the primary exception.</p></details>
+<details class="sq"><summary>What is the difference between getCause() and getSuppressed()?</summary><p>getCause returns the exception that caused this one; getSuppressed returns extra exceptions that were thrown alongside it and suppressed.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study OCP Java for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../java-se/">Open the OCP Java study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../try-with-resources-autocloseable-and-reverse-close-order/">← try-with-resources, AutoCloseable and reverse close order</a><a href="../declaring-exceptions-with-throws-and-overriding-rules/">Declaring exceptions with throws and overriding rules →</a></nav>
+</main>
+</body>
+</html>

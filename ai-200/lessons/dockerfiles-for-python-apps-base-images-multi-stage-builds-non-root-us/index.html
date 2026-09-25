@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dockerfiles for Python apps: base images, multi-stage… · AI-200 Lesson</title>
+<meta name="description" content="A Dockerfile is the recipe that turns your Python source code into a container image: a read-only, layered package holding an operating system userland, th">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Dockerfiles for Python apps: base images, multi-stage… · AI-200 Lesson">
+<meta property="og:description" content="A Dockerfile is the recipe that turns your Python source code into a container image: a read-only, layered package holding an operating system userland, th">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/dockerfiles-for-python-apps-base-images-multi-stage-builds-non-root-us/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/dockerfiles-for-python-apps-base-images-multi-stage-builds-non-root-us/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 1: Develop containerized solutions on Azure</p>
+<h1>Dockerfiles for Python apps: base images, multi-stage builds, non-root users, .dockerignore</h1>
+<article class="lbody">
+<p>A Dockerfile is the recipe that turns your Python source code into a container image: a read-only, layered package holding an operating system userland, the Python runtime, your dependencies and your code. Every Azure container service in this exam (App Service, Container Apps, Container Apps jobs and AKS, the Azure Kubernetes Service) runs images built this way, so a clean Dockerfile is the first skill the rest of the domain builds on.</p>
+<p>Start with the base image in the <code>FROM</code> line. Official Python images come in variants: the full Debian-based image is large but has build tools; <code>-slim</code> images drop most of those tools and are the usual choice for production; Alpine images are tiny but use musl instead of glibc, so many Python wheels must be compiled from source, which often makes builds slower and bigger in practice. Pin a specific version tag (for example a Python minor version plus <code>-slim</code>) rather than <code>latest</code>, so rebuilds are predictable.</p>
+<p>Each instruction (<code>RUN</code>, <code>COPY</code>, <code>ADD</code>) creates a layer, and Docker caches layers. Order instructions from least to most frequently changing: copy <code>requirements.txt</code> first, run <code>pip install --no-cache-dir -r requirements.txt</code>, and only then copy the rest of your code. A code change then reuses the cached dependency layer instead of reinstalling everything.</p>
+<p>A multi-stage build uses more than one <code>FROM</code>. The first stage (the builder) has compilers and headers and installs wheels into a virtual environment; the final stage starts from a small runtime image and uses <code>COPY --from=builder</code> to bring over only the finished virtual environment and your code. Build tools, caches and secrets used during the build never reach the final image, which shrinks size and attack surface.</p>
+<pre class="code" tabindex="0"><code>FROM python:3.12-slim AS builder
+WORKDIR /app
+RUN python -m venv /opt/venv
+ENV PATH=/opt/venv/bin:$PATH
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+FROM python:3.12-slim
+RUN useradd --create-home appuser
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH=/opt/venv/bin:$PATH
+WORKDIR /app
+COPY . .
+USER appuser
+EXPOSE 8000
+CMD [&quot;gunicorn&quot;, &quot;-b&quot;, &quot;0.0.0.0:8000&quot;, &quot;app:app&quot;]</code></pre>
+<p>By default a container process runs as root. If an attacker exploits your app, root inside the container makes escaping or tampering easier. Create an unprivileged user and switch to it with <code>USER</code> before <code>CMD</code>, as above. Listen on a port above 1024, because non-root users cannot bind low ports without extra capabilities.</p>
+<p>Finally, <code>.dockerignore</code> works like <code>.gitignore</code> for the build context: it lists files that are never sent to the builder. Exclude <code>.git</code>, <code>__pycache__</code>, virtual environments, test data and especially <code>.env</code> files or local credentials. This speeds up builds (especially remote builds that upload the context, such as <code>az acr build</code>) and keeps secrets out of <code>COPY . .</code> layers, where anyone who pulls the image could read them.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Base image</dt><dd>The image named in FROM that your image builds on, such as a slim Python image.</dd><dt>Multi-stage build</dt><dd>A Dockerfile with several FROM stages where the final stage copies only needed artifacts from earlier stages.</dd><dt>Build context</dt><dd>The set of files sent to the builder with a build; .dockerignore removes files from it.</dd><dt>Layer cache</dt><dd>Docker's reuse of unchanged instruction results, which makes instruction order matter for build speed.</dd><dt>USER instruction</dt><dd>Sets the user that later instructions and the running container use, so the app need not run as root.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A team's FastAPI image was 1.1 GB and rebuilt all dependencies on every commit. They switched to a slim base, copied requirements.txt before the code, added a builder stage for compiled wheels and a .dockerignore excluding .git and .env. The final image dropped to a few hundred megabytes, rebuilds after code-only changes took seconds, and a security scan no longer flagged a leaked .env file.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> If a question asks how to keep compilers or secrets out of the final image, the answer is a multi-stage build; if it asks how to stop files from being sent to the build at all, the answer is .dockerignore.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why should you copy requirements.txt and run pip install before copying the rest of the source code?</summary><p>Because layers are cached in order; code changes then reuse the cached dependency layer instead of reinstalling every package.</p></details>
+<details class="sq"><summary>What does a multi-stage build improve, and how?</summary><p>Image size and security: build tools live only in an earlier stage, and the final stage uses COPY --from to take just the built artifacts.</p></details>
+<details class="sq"><summary>Why run the app with a USER other than root?</summary><p>To limit what an attacker can do if the app is compromised; root in the container makes tampering and escape attempts easier.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><span></span><a href="../azure-container-registry-basic-standard-and-premium-tiers-geo-replicat/">Azure Container Registry: Basic, Standard and Premium tiers; →</a></nav>
+</main>
+</body>
+</html>

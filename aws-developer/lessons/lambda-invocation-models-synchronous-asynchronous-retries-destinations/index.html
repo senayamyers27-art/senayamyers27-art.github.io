@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lambda invocation models: synchronous, asynchronous… · Developer Associate Lesson</title>
+<meta name="description" content="How a Lambda function is invoked decides who retries on failure and where errors end up. There are three models, and many exam questions quietly depend on ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Lambda invocation models: synchronous, asynchronous… · Developer Associate Lesson">
+<meta property="og:description" content="How a Lambda function is invoked decides who retries on failure and where errors end up. There are three models, and many exam questions quietly depend on ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/lambda-invocation-models-synchronous-asynchronous-retries-destinations/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/lambda-invocation-models-synchronous-asynchronous-retries-destinations/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 1: Development with AWS Services</p>
+<h1>Lambda invocation models: synchronous, asynchronous (retries, destinations, DLQs) and event source mappings (SQS, Kinesis, DynamoDB Streams, partial batch responses)</h1>
+<article class="lbody">
+<p>How a Lambda function is invoked decides who retries on failure and where errors end up. There are three models, and many exam questions quietly depend on which one is in play.</p>
+<p>Synchronous invocation (<code>InvocationType</code> <code>RequestResponse</code>) means the caller waits for the function to finish and receives the result or error. API Gateway, Application Load Balancer, Amazon Cognito triggers and a direct <code>aws lambda invoke</code> call are synchronous. Lambda does not retry on its own; the caller decides. If the function throws, API Gateway returns an error to the client, and it is the client's job to retry.</p>
+<p>Asynchronous invocation (<code>InvocationType</code> <code>Event</code>) puts the event on an internal Lambda queue and returns immediately with HTTP 202. Amazon S3 event notifications, SNS and EventBridge invoke functions this way. If the function returns an error, Lambda retries it twice more by default (configurable to 0, 1 or 2 retries), with delays between attempts, and keeps events in the queue for up to six hours by default (configurable maximum event age). When all attempts fail, the event can go to a dead-letter queue (an SQS queue or SNS topic that receives only the event payload) or, the newer and richer option, an on-failure destination. Destinations can also route successful results: on-success and on-failure destinations can be SQS, SNS, Lambda, EventBridge (and S3 for failures), and they receive the invocation record including the response or error details. Because events may be delivered more than once, asynchronous handlers must be idempotent.</p>
+<p>Event source mappings are for poll-based sources: SQS, Kinesis Data Streams, DynamoDB Streams, Amazon MQ, Amazon MSK and Apache Kafka. Here the Lambda service runs pollers that read records in batches and invoke your function synchronously with each batch. Settings include batch size, batching window, and for streams, starting position and parallelization factor.</p>
+<p>Error behaviour differs by source. For SQS, a failed batch is not deleted, so messages become visible again after the queue's visibility timeout and are retried until they succeed or reach the queue's <code>maxReceiveCount</code> and move to the queue's own DLQ (configured on the queue, not the function). For Kinesis and DynamoDB Streams, a failing batch blocks that shard, because records must be processed in order, and Lambda retries it until it succeeds or the records expire. Stream mappings let you limit this with maximum retry attempts, maximum record age, bisect batch on function error, and an on-failure destination that receives details of discarded records.</p>
+<p>Partial batch responses avoid reprocessing successful records. Enable <code>ReportBatchItemFailures</code> on the event source mapping and return the IDs of only the failed items; Lambda then retries just those (for streams, from the first failed sequence number).</p>
+<pre class="code" tabindex="0"><code>def handler(event, context):
+    failures = []
+    for record in event['Records']:
+        try:
+            process(record)
+        except Exception:
+            failures.append({'itemIdentifier': record['messageId']})
+    return {'batchItemFailures': failures}</code></pre>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Synchronous invocation</dt><dd>The caller waits for the function's response; retries are the caller's responsibility.</dd><dt>Asynchronous invocation</dt><dd>Lambda queues the event, returns 202 immediately, and retries failures itself before sending them to a DLQ or destination.</dd><dt>Lambda destination</dt><dd>A target (SQS, SNS, Lambda, EventBridge, or S3 for failures) that receives a record of an asynchronous or stream invocation's success or failure.</dd><dt>Event source mapping</dt><dd>A Lambda resource that polls a queue or stream and invokes the function with batches of records.</dd><dt>ReportBatchItemFailures</dt><dd>An event source mapping setting that lets the function return only the failed records so successful ones are not retried.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An S3 upload triggers an image-resizing function asynchronously. Corrupt images make it throw an error, so Lambda retries twice and then sends the invocation record, including the error message and the original event, to an on-failure destination SQS queue that the team reviews each morning.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> A DLQ configured on the Lambda function only applies to asynchronous invocations. For an SQS event source, configure the redrive policy and DLQ on the source queue itself.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which invocation model does S3 use, and what happens when the function fails?</summary><p>Asynchronous; Lambda retries up to two more times by default, then sends the event to a DLQ or on-failure destination if configured.</p></details>
+<details class="sq"><summary>Why can one bad record stall a Kinesis-triggered function?</summary><p>Stream batches are processed in order per shard, so Lambda keeps retrying the failing batch until it succeeds or expires unless you set retry limits, bisect on error or partial batch responses.</p></details>
+<details class="sq"><summary>What does a function return to report partial batch failures?</summary><p>An object with batchItemFailures listing the itemIdentifier (message ID or sequence number) of each failed record.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../lambda-configuration-memory-timeout-15-minute-max-ephemeral-tmp-storag/">← Lambda configuration: memory, timeout (15-minute max), ephem</a><a href="../lambda-coding-practices-initializing-sdk-clients-and-connections-outsi/">Lambda coding practices: initializing SDK clients and connec →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Using `count` and `for_each` on module blocks · Terraform Associate Lesson</title>
+<meta name="description" content="Since Terraform 0.13, the count and for_each meta-arguments work on module blocks as well as resources. They let one module block create several instances ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Using `count` and `for_each` on module blocks · Terraform Associate Lesson">
+<meta property="og:description" content="Since Terraform 0.13, the count and for_each meta-arguments work on module blocks as well as resources. They let one module block create several instances ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/terraform/lessons/using-count-and-for-each-on-module-blocks/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/terraform/lessons/using-count-and-for-each-on-module-blocks/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Terraform Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004) · Domain 5: Terraform modules</p>
+<h1>Using `count` and `for_each` on module blocks</h1>
+<article class="lbody">
+<p>Since Terraform 0.13, the <code>count</code> and <code>for_each</code> meta-arguments work on <code>module</code> blocks as well as resources. They let one module block create several instances of an entire module, each with its own copy of all the module's resources. This is how you stamp out a set of similar environments, buckets or services without copying code.</p>
+<p>With <code>count</code>, you give a whole number and Terraform creates that many instances, indexed from zero. Inside the module block, <code>count.index</code> gives the current number, which you can use to vary inputs. The instances are addressed as <code>module.NAME[0]</code>, <code>module.NAME[1]</code> and so on. <code>count</code> also works as an on/off switch: <code>count = var.enable_monitoring ? 1 : 0</code> includes or omits the entire module.</p>
+<p>With <code>for_each</code>, you give a map or a set of strings, and Terraform creates one instance per element. <code>each.key</code> and <code>each.value</code> are available inside the block. Instances are addressed by key, such as <code>module.bucket[&quot;logs&quot;]</code>. Because each instance is tied to a stable key rather than a position, removing one element from the middle of the collection destroys only that instance; with <code>count</code>, removing an element shifts every later index and can cause unwanted replacements.</p>
+<pre class="code" tabindex="0"><code>module &quot;bucket&quot; {
+  source   = &quot;./modules/bucket&quot;
+  for_each = toset([&quot;logs&quot;, &quot;backups&quot;, &quot;assets&quot;])
+  name     = &quot;example-${each.key}&quot;
+}
+
+output &quot;bucket_arns&quot; {
+  value = { for k, m in module.bucket : k =&gt; m.arn }
+}</code></pre>
+<p>Because a counted or for_each module is a collection, you read outputs with an index or key: <code>module.bucket[&quot;logs&quot;].arn</code>, or iterate as in the example. The values used in <code>count</code> and <code>for_each</code> must be known at plan time; you cannot base them on attributes that only exist after apply, such as a generated ID. A module block cannot use <code>count</code> and <code>for_each</code> together.</p>
+<p>One restriction to remember: a module that contains its own <code>provider</code> blocks (a legacy module) cannot be used with <code>count</code>, <code>for_each</code> or <code>depends_on</code>. This is another reason to keep provider configuration in the root module and pass it down. When converting an existing single module call to <code>for_each</code>, the resource addresses change, so use a <code>moved</code> block (for example from <code>module.bucket</code> to <code>module.bucket[&quot;logs&quot;]</code>) to avoid destroying and recreating the resources.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>count on a module</dt><dd>Creates a number of module instances addressed by index, such as module.web[0].</dd><dt>for_each on a module</dt><dd>Creates one module instance per map key or set element, addressed by key, such as module.web[&quot;blue&quot;].</dd><dt>each.key / each.value</dt><dd>Values available inside a for_each block that identify the current element.</dd><dt>Legacy module</dt><dd>A module containing its own provider blocks; it cannot be used with count, for_each or depends_on.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A company runs the same service in three regions. Instead of three module blocks, it uses for_each over a map of region names to CIDR ranges and passes each.value as the network range. Adding a fourth region is a one-line change to the map.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Prefer for_each over count when instances are distinct and may be removed individually; count indexes shift when an item in the middle is removed.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How do you read the endpoint output of the instance with key prod in a for_each module named app?</summary><p>module.app[&quot;prod&quot;].endpoint.</p></details>
+<details class="sq"><summary>How can count be used to make a module optional?</summary><p>Set count = var.enabled ? 1 : 0 so the module has one instance or none.</p></details>
+<details class="sq"><summary>Which kind of module cannot use count or for_each?</summary><p>A module that includes its own provider configuration blocks.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Terraform Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../terraform/">Open the Terraform Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../terraform-init-or-terraform-get-to-install-modules-into-terraform-modu/">← `terraform init` or `terraform get` to install modules into </a><a href="../standard-module-structure-main-tf-variables-tf-outputs-tf-readme/">Standard module structure: main.tf, variables.tf, outputs.tf →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Secrets and configuration: Secrets Manager (rotation) vs… · Developer Associate Lesson</title>
+<meta name="description" content="Applications need configuration values (feature settings, endpoint URLs, table names) and secrets (database passwords, API keys). Both should live outside ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Secrets and configuration: Secrets Manager (rotation) vs… · Developer Associate Lesson">
+<meta property="og:description" content="Applications need configuration values (feature settings, endpoint URLs, table names) and secrets (database passwords, API keys). Both should live outside ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/secrets-and-configuration-secrets-manager-rotation-vs-systems-manager/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/secrets-and-configuration-secrets-manager-rotation-vs-systems-manager/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 2: Security</p>
+<h1>Secrets and configuration: Secrets Manager (rotation) vs Systems Manager Parameter Store (SecureString, tiers)</h1>
+<article class="lbody">
+<p>Applications need configuration values (feature settings, endpoint URLs, table names) and secrets (database passwords, API keys). Both should live outside the code, in a service that controls access with IAM and records use in CloudTrail. AWS offers two main options, and the exam typically asks you to pick between them.</p>
+<p>AWS Systems Manager Parameter Store is a hierarchical key-value store for configuration and secrets. Parameters have names like paths, such as <code>/myapp/prod/db-url</code>, which lets you fetch a whole branch with <code>GetParametersByPath</code> and control access by path in IAM policies. Types are <code>String</code>, <code>StringList</code> and <code>SecureString</code>; SecureString values are encrypted with a KMS key (the AWS managed <code>aws/ssm</code> key or your customer managed key) and returned decrypted when you pass <code>WithDecryption=true</code> and have <code>kms:Decrypt</code> permission. Parameters keep a version history. There are two tiers: Standard parameters are free, with a smaller maximum value size (4 KB) and a per-Region count quota; Advanced parameters allow larger values (8 KB) and parameter policies such as expiration dates and notifications, and are charged. Standard throughput is enough for most apps; higher throughput can be enabled at extra cost.</p>
+<p>AWS Secrets Manager is built specifically for secrets. Its headline feature is automatic rotation: on a schedule, Secrets Manager invokes a rotation Lambda function that creates a new credential, sets it in the database or service, tests it and marks it current. AWS provides ready-made rotation functions for Amazon RDS, Aurora, Redshift and DocumentDB, and you can write your own for other systems. During rotation, staging labels (<code>AWSCURRENT</code>, <code>AWSPENDING</code>, <code>AWSPREVIOUS</code>) track versions so apps always read a working value. Secrets Manager also supports cross-Region replication of secrets, resource-based policies for cross-account access, and generating random passwords. It is always encrypted with KMS and has a per-secret monthly charge plus API charges.</p>
+<p>Choosing: if the requirement mentions automatic rotation of database credentials, cross-Region replicas of secrets or RDS integration, choose Secrets Manager. If it emphasizes low cost, simple configuration values, a hierarchy of settings, or storing non-secret config alongside a few encrypted values, choose Parameter Store with SecureString. Parameter Store can also reference Secrets Manager secrets by a special path, giving one API for both.</p>
+<p>In Lambda, fetch secrets at initialization (outside the handler) and cache them for a period, rather than on every invocation, to reduce latency and API costs. The AWS Parameters and Secrets Lambda Extension provides a local cache over HTTP for this. In CloudFormation, dynamic references like <code>{{resolve:secretsmanager:MySecret:SecretString:password}}</code> and <code>{{resolve:ssm-secure:/myapp/db-pass}}</code> (for supported resource properties) inject values at deploy time without putting them in the template. Never store secrets in plain environment variables or source control.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Secrets Manager rotation</dt><dd>A scheduled process in which a Lambda function replaces a secret's credential in both the secret and the target service.</dd><dt>SecureString</dt><dd>A Parameter Store parameter type whose value is encrypted with a KMS key.</dd><dt>Parameter hierarchy</dt><dd>Path-style parameter names that group settings and allow retrieval and IAM control by path.</dd><dt>Advanced parameter</dt><dd>A paid Parameter Store tier with larger values and parameter policies such as expiration.</dd><dt>Staging label</dt><dd>A label such as AWSCURRENT or AWSPENDING that marks which version of a secret is in use.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A compliance team requires the production Aurora password to change every 30 days with no downtime. The developers store it in Secrets Manager with the built-in Aurora rotation function on a 30-day schedule, and their Lambda functions read the secret through the caching extension so new values are picked up within minutes.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Automatic rotation is the keyword for Secrets Manager. Cheapest way to store configuration and some encrypted values, organized in a hierarchy: Parameter Store with SecureString.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which service rotates RDS credentials automatically?</summary><p>AWS Secrets Manager, using a rotation Lambda function.</p></details>
+<details class="sq"><summary>What is needed to read a SecureString in plaintext?</summary><p>Call GetParameter with WithDecryption set to true and have kms:Decrypt permission on the key used.</p></details>
+<details class="sq"><summary>Name one feature of Advanced parameters that Standard parameters lack.</summary><p>Parameter policies such as expiration, or larger value sizes (8 KB instead of 4 KB).</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../encryption-in-transit-tls-acm-certificates-us-east-1-for-cloudfront-en/">← Encryption in transit: TLS, ACM certificates (us-east-1 for </a><a href="../keeping-sensitive-data-out-of-code-and-logs-default-credential-chain-n/">Keeping sensitive data out of code and logs: default credent →</a></nav>
+</main>
+</body>
+</html>

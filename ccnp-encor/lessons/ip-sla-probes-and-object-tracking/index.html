@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IP SLA probes and object tracking · ENCOR Lesson</title>
+<meta name="description" content="IP SLA (IP service level agreement) is a Cisco IOS feature that generates synthetic traffic to measure network performance continuously: reachability, roun">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="IP SLA probes and object tracking · ENCOR Lesson">
+<meta property="og:description" content="IP SLA (IP service level agreement) is a Cisco IOS feature that generates synthetic traffic to measure network performance continuously: reachability, roun">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ccnp-encor/lessons/ip-sla-probes-and-object-tracking/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ccnp-encor/lessons/ip-sla-probes-and-object-tracking/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">ENCOR</a> / <a href="../">Lessons</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2 · Domain 4: Network Assurance</p>
+<h1>IP SLA probes and object tracking</h1>
+<article class="lbody">
+<p>IP SLA (IP service level agreement) is a Cisco IOS feature that generates synthetic traffic to measure network performance continuously: reachability, round-trip time, jitter, packet loss and even application responses such as DNS or HTTP. Because the router actively probes, you can detect problems before users do and make routing decisions based on actual path health rather than just link state.</p>
+<p>An IP SLA operation defines what to send, where and how often. The most common is <code>icmp-echo</code>, which pings a target. <code>udp-jitter</code> sends UDP packets and measures delay, jitter and loss in each direction, which is ideal for voice; it needs an IP SLA responder on the far Cisco device (<code>ip sla responder</code>) to add timestamps. Other types include <code>tcp-connect</code>, <code>http</code>, <code>dns</code> and <code>udp-echo</code>.</p>
+<pre class="code" tabindex="0"><code>ip sla 10
+ icmp-echo 203.0.113.1 source-interface GigabitEthernet0/0
+ frequency 10
+ threshold 500
+ timeout 1000
+ip sla schedule 10 life forever start-time now
+!
+track 1 ip sla 10 reachability
+ delay down 10 up 30
+!
+ip route 0.0.0.0 0.0.0.0 203.0.113.1 track 1
+ip route 0.0.0.0 0.0.0.0 198.51.100.1 10</code></pre>
+<p>This probe pings the primary ISP's gateway every 10 seconds. An operation does nothing until it is scheduled, which is a frequent lab mistake. Results appear in <code>show ip sla statistics</code> and the configuration in <code>show ip sla configuration</code>.</p>
+<p>Object tracking connects measurements to actions. A track object watches something and reports up or down. It can follow an IP SLA operation's <code>reachability</code> (up if the operation succeeds) or <code>state</code> (up only if the return code is OK and, for some operations, within the threshold), an interface's line protocol (<code>track 2 interface Gi0/1 line-protocol</code>), or whether a route is in the routing table (<code>track 3 ip route 10.0.0.0 255.0.0.0 reachability</code>). Tracks can be combined with Boolean logic (<code>track 10 list boolean and</code>). The <code>delay</code> command dampens flapping by waiting before changing state.</p>
+<p>Clients of tracking include static routes (the route is removed when the track is down, letting a floating static with higher administrative distance take over, as in the example above), HSRP and VRRP (decrement priority when a tracked uplink or remote target fails, so the other router becomes active), PBR (<code>set ip next-hop verify-availability</code> with a track), and EEM applets that react to track changes.</p>
+<p>The key insight is that an interface can stay up while the path beyond it is broken. A broadband modem, for instance, keeps Ethernet up even when the ISP fails. Tracking the interface alone would miss that; tracking an IP SLA probe to a remote target catches it. Choose a target that truly represents the path, such as the ISP's next hop or a well-known remote address reachable only via that link, and source the probe from the correct interface. Check tracking with <code>show track</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>IP SLA operation</dt><dd>A configured synthetic probe, such as icmp-echo or udp-jitter, that measures a path.</dd><dt>IP SLA responder</dt><dd>A Cisco device feature that answers and timestamps probes such as udp-jitter for accurate measurements.</dd><dt>Track object</dt><dd>An object whose up or down state follows an IP SLA, interface or route and is used by other features.</dd><dt>Floating static route</dt><dd>A backup static route with a higher administrative distance that is used only when the primary disappears.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A branch router's primary ISP link stays physically up during a provider outage, so traffic is black-holed. After adding an icmp-echo IP SLA to the ISP gateway, a track object and a tracked default route, the router removes the primary default within seconds of the outage and the floating static via the LTE backup takes over.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> IP SLA operations must be scheduled with ip sla schedule or they never run. Tracking an interface misses failures beyond the link; tracking an IP SLA detects them.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why use IP SLA tracking instead of interface tracking for an internet uplink?</summary><p>The interface can stay up while the provider path is down; an IP SLA probe to a remote target detects end-to-end failure.</p></details>
+<details class="sq"><summary>Which IP SLA operation measures jitter for voice, and what does it need on the far end?</summary><p>udp-jitter, which needs an IP SLA responder on the far Cisco device.</p></details>
+<details class="sq"><summary>How does a tracked static route provide failover?</summary><p>When the track goes down, the tracked route is removed from the routing table and a floating static route with higher administrative distance becomes active.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study ENCOR for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ccnp-encor/">Open the ENCOR study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../span-rspan-and-erspan/">← SPAN, RSPAN and ERSPAN</a><a href="../catalyst-center-formerly-dna-center-workflows-assurance-health-scores/">Catalyst Center (formerly DNA Center) workflows: assurance,  →</a></nav>
+</main>
+</body>
+</html>

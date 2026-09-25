@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Unicast reverse path forwarding (uRPF) checks: strict and… · JNCIA-Junos Lesson</title>
+<meta name="description" content="Attackers often forge (spoof) the source address of packets, for example in denial-of-service floods, to hide their origin or to make replies hit a victim.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Unicast reverse path forwarding (uRPF) checks: strict and… · JNCIA-Junos Lesson">
+<meta property="og:description" content="Attackers often forge (spoof) the source address of packets, for example in denial-of-service floods, to hide their origin or to make replies hit a victim.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/jncia-junos/lessons/unicast-reverse-path-forwarding-urpf-checks-strict-and-loose/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/jncia-junos/lessons/unicast-reverse-path-forwarding-urpf-checks-strict-and-loose/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">JNCIA-Junos</a> / <a href="../">Lessons</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106 · Domain 7: Routing policy and firewall filters</p>
+<h1>Unicast reverse path forwarding (uRPF) checks: strict and loose</h1>
+<article class="lbody">
+<p>Attackers often forge (spoof) the source address of packets, for example in denial-of-service floods, to hide their origin or to make replies hit a victim. Unicast reverse path forwarding (uRPF) is a simple defense. Normally a router looks only at a packet's destination address. With uRPF enabled on an interface, the router also looks up the packet's source address in its forwarding table and asks whether that source is plausible. Packets that fail the check are dropped. This supports the widely recommended practice of filtering spoofed traffic at the network edge.</p>
+<p>In strict mode, the source address must be reachable through the same interface the packet arrived on. In other words, if the router were to send a reply to that source, it would use this interface. A packet arriving on a customer interface with a source address from some other network fails, because the route to that source points elsewhere. Strict mode is very effective on single-homed customer or access interfaces where traffic always comes back the way it went.</p>
+<p>In loose mode, the source address only needs to have a route in the forwarding table through any interface. Loose mode does not verify the arrival interface, so it catches fewer spoofed packets, mainly those using sources the router has no route for at all, such as unallocated or unrouted address space. It is useful where routing is asymmetric, for example on links to multiple providers, where strict mode would drop legitimate traffic. Keep in mind that a default route can make almost any source look reachable, which weakens loose mode considerably.</p>
+<p>Asymmetric routing is the main risk with strict mode. If traffic from a network arrives on one link but the router's best route back to that network uses another link, strict uRPF drops valid traffic. By default Junos compares against active paths only. The option <code>set routing-options forwarding-table unicast-reverse-path feasible-paths</code> makes the check consider all feasible paths, such as alternate routes learned from BGP, which reduces false drops in multihomed designs.</p>
+<p>Configuration is per interface and per family:</p>
+<pre class="code" tabindex="0"><code>set interfaces ge-0/0/1 unit 0 family inet rpf-check
+set interfaces ge-0/0/2 unit 0 family inet rpf-check mode loose
+set interfaces ge-0/0/1 unit 0 family inet rpf-check fail-filter RPF-EXCEPTIONS</code></pre>
+<p>The first line enables strict mode (the default). The second enables loose mode. The <code>fail-filter</code> option names a firewall filter that is applied only to packets that fail the check, letting you make exceptions, such as accepting DHCP requests that legitimately use a source of 0.0.0.0, or count and log failures before dropping them. Detailed interface output such as <code>show interfaces ge-0/0/1.0 extensive</code> shows RPF failure counters, which tell you how much traffic is being dropped. Platform support and exact behavior can vary, so check the documentation for your hardware.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>uRPF</dt><dd>Unicast reverse path forwarding, a check that validates a packet's source address against the forwarding table to drop spoofed traffic.</dd><dt>Strict mode</dt><dd>The source must be reachable via the same interface the packet arrived on.</dd><dt>Loose mode</dt><dd>The source only needs a route in the forwarding table via any interface.</dd><dt>fail-filter</dt><dd>A firewall filter applied only to packets that fail the uRPF check, used for exceptions or logging.</dd><dt>Feasible paths</dt><dd>An option that lets uRPF consider all valid alternate paths, not just active ones, to handle asymmetric routing.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An ISP enables strict <code>rpf-check</code> on each single-homed customer interface. A compromised customer device starts sending floods with random source addresses. Because those sources do not route back through that customer's interface, the router drops them, and the ISP's RPF failure counters reveal which customer needs to be contacted.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Strict mode checks the arrival interface and suits single-homed edges; loose mode only checks that a route exists and suits asymmetric or multihomed links. Asymmetric routing plus strict mode drops legitimate traffic.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why can strict uRPF drop legitimate traffic on a multihomed link?</summary><p>With asymmetric routing, the best route back to the source may use a different interface than the one the packet arrived on.</p></details>
+<details class="sq"><summary>Which Junos statement enables loose uRPF on an interface?</summary><p><code>set interfaces &lt;if&gt; unit &lt;n&gt; family inet rpf-check mode loose</code>.</p></details>
+<details class="sq"><summary>What is the purpose of <code>fail-filter</code>?</summary><p>To apply a filter to packets that fail the check, for exceptions such as DHCP or for counting and logging.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study JNCIA-Junos for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../jncia-junos/">Open the JNCIA-Junos study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../applying-filters-to-interfaces-input-output-and-to-lo0-to-protect-the/">← Applying filters to interfaces (input/output) and to lo0 to </a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cluster DNS names: &lt;service&gt;.&lt;namespace&gt;.svc.cluster.local · CKAD Lesson</title>
+<meta name="description" content="Kubernetes runs a cluster DNS server, normally CoreDNS, as Pods in the kube-system namespace behind a Service usually called kube-dns. The kubelet configur">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Cluster DNS names: &lt;service&gt;.&lt;namespace&gt;.svc.cluster.local · CKAD Lesson">
+<meta property="og:description" content="Kubernetes runs a cluster DNS server, normally CoreDNS, as Pods in the kube-system namespace behind a Service usually called kube-dns. The kubelet configur">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/cluster-dns-names-service-namespace-svc-cluster-local/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/cluster-dns-names-service-namespace-svc-cluster-local/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 5: Services and Networking</p>
+<h1>Cluster DNS names: &lt;service&gt;.&lt;namespace&gt;.svc.cluster.local</h1>
+<article class="lbody">
+<p>Kubernetes runs a cluster DNS server, normally CoreDNS, as Pods in the <code>kube-system</code> namespace behind a Service usually called <code>kube-dns</code>. The kubelet configures every Pod's <code>/etc/resolv.conf</code> to use it. As a result, applications find Services by name instead of by IP, and the names keep working when Pods and even Service IPs change.</p>
+<p>Every Service gets a DNS name of the form <code>&lt;service&gt;.&lt;namespace&gt;.svc.&lt;cluster-domain&gt;</code>. The cluster domain is <code>cluster.local</code> by default, though administrators can change it. A Service <code>web</code> in namespace <code>shop</code> is therefore <code>web.shop.svc.cluster.local</code>, which resolves to the Service's ClusterIP. For a headless Service, the same name returns the IPs of its ready Pods, and StatefulSet Pods get individual names such as <code>db-0.db.shop.svc.cluster.local</code> (pod name, then the headless Service name).</p>
+<p>You rarely need the full name, thanks to search domains. A Pod in <code>shop</code> has a resolv.conf like this:</p>
+<pre class="code" tabindex="0"><code>nameserver 10.96.0.10
+search shop.svc.cluster.local svc.cluster.local cluster.local
+options ndots:5</code></pre>
+<p>When the Pod looks up a short name, the resolver tries appending each search domain in turn. So from inside <code>shop</code>, plain <code>web</code> becomes <code>web.shop.svc.cluster.local</code> and resolves. From a Pod in another namespace, <code>web</code> alone would look in that Pod's own namespace and fail, so you use <code>web.shop</code> (which matches via the <code>svc.cluster.local</code> search domain) or the full name. This is the most common DNS trap: short names only work within the same namespace.</p>
+<p>The <code>ndots:5</code> option means a name with fewer than five dots is first tried with the search domains before being tried as-is. That is why an external name like <code>api.example.com</code> generates a few failed internal lookups before succeeding; a trailing dot (<code>api.example.com.</code>) marks a name as fully qualified and skips the search list.</p>
+<p>Services also get SRV records for named ports, in the form <code>_&lt;port-name&gt;._&lt;protocol&gt;.&lt;service&gt;.&lt;namespace&gt;.svc.cluster.local</code>, which some clients use to discover port numbers. Pods themselves can be looked up by an IP-based name like <code>10-244-1-5.shop.pod.cluster.local</code>, but applications normally use Service names.</p>
+<p>Test DNS from a temporary Pod: <code>kubectl run dns --image=busybox --rm -it --restart=Never -- nslookup web.shop</code>. A 'can't resolve' answer means the Service name or namespace is wrong (or DNS itself is broken; check <code>kubectl get pods -n kube-system -l k8s-app=kube-dns</code>). An answer with an IP but a failed connection means DNS is fine and the problem lies with endpoints, ports or NetworkPolicy. Remember that NetworkPolicies that restrict egress must allow DNS traffic to the cluster DNS Pods, or every name lookup fails.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>CoreDNS</dt><dd>The DNS server that normally provides cluster DNS for Services and Pods.</dd><dt>Service FQDN</dt><dd>The fully qualified Service name &lt;service&gt;.&lt;namespace&gt;.svc.cluster.local.</dd><dt>Search domains</dt><dd>Suffixes in a Pod's resolv.conf that let short names like web resolve within its namespace.</dd><dt>ndots</dt><dd>Resolver option setting how many dots a name needs before it is tried as absolute first.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A frontend Pod in namespace <code>web</code> calls the host <code>catalog</code> and gets 'name not resolved'. The catalog Service lives in namespace <code>inventory</code>. Changing the setting to <code>catalog.inventory</code> (or <code>catalog.inventory.svc.cluster.local</code>) fixes it, confirmed with <code>nslookup catalog.inventory</code> from a busybox Pod.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> A short Service name only resolves from the same namespace. Across namespaces, use at least <code>&lt;service&gt;.&lt;namespace&gt;</code>.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What is the full DNS name of Service <code>api</code> in namespace <code>prod</code>?</summary><p><code>api.prod.svc.cluster.local</code> (with the default cluster domain).</p></details>
+<details class="sq"><summary>Why does <code>api</code> fail to resolve from a Pod in namespace <code>dev</code>?</summary><p>The search domains append dev's namespace first, so it looks for api.dev.svc.cluster.local, which does not exist.</p></details>
+<details class="sq"><summary>What does DNS return for a headless Service name?</summary><p>The IPs of its ready Pods rather than a ClusterIP.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../endpointslices-and-why-an-empty-endpoint-list-means-the-selector-or-re/">← EndpointSlices and why an empty endpoint list means the sele</a><a href="../kubectl-expose-kubectl-create-service-and-kubectl-port-forward/">kubectl expose, kubectl create service and kubectl port-forw →</a></nav>
+</main>
+</body>
+</html>

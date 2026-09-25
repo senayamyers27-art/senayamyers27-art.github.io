@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Setting SELinux enforcing and permissive modes… · RHCSA Lesson</title>
+<meta name="description" content="SELinux (Security-Enhanced Linux) is mandatory access control built into the kernel. On top of normal file permissions, every process and file carries a se">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Setting SELinux enforcing and permissive modes… · RHCSA Lesson">
+<meta property="og:description" content="SELinux (Security-Enhanced Linux) is mandatory access control built into the kernel. On top of normal file permissions, every process and file carries a se">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/setting-selinux-enforcing-and-permissive-modes-getenforce-setenforce-e/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/setting-selinux-enforcing-and-permissive-modes-getenforce-setenforce-e/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 10: Manage security</p>
+<h1>Setting SELinux enforcing and permissive modes (getenforce, setenforce, /etc/selinux/config)</h1>
+<article class="lbody">
+<p>SELinux (Security-Enhanced Linux) is mandatory access control built into the kernel. On top of normal file permissions, every process and file carries a security label, and a policy says which process types may access which object types. Even if a service is compromised, SELinux can stop it touching files and ports it was never meant to use. RHEL enables it by default and the RHCSA expects it to stay on.</p>
+<p>SELinux runs in one of three modes. Enforcing applies the policy: forbidden access is denied and logged. Permissive loads the policy and logs what would be denied, but allows it; it is a troubleshooting mode, not a security setting. Disabled means no SELinux at all, which loses protection and requires a full relabel when you turn it back on.</p>
+<p><code>getenforce</code> prints the current mode, and <code>sestatus</code> shows more detail: current mode, mode from the config file and loaded policy name. <code>setenforce 0</code> switches to permissive and <code>setenforce 1</code> back to enforcing, immediately and only until the next boot. setenforce cannot enable or disable SELinux itself.</p>
+<pre class="code" tabindex="0"><code>getenforce            # Enforcing
+setenforce 0          # permissive until reboot
+setenforce 1
+sestatus
+grep ^SELINUX= /etc/selinux/config</code></pre>
+<p>The boot-time mode is set in <code>/etc/selinux/config</code> with <code>SELINUX=enforcing</code>, <code>permissive</code> or <code>disabled</code>, alongside <code>SELINUXTYPE=targeted</code>, the standard policy. Change it there to make a mode persistent. On current RHEL releases, setting disabled in that file does not fully remove SELinux from the kernel; the supported way to disable it completely is the <code>selinux=0</code> kernel argument. You can also choose a mode for one boot with <code>enforcing=0</code> on the kernel command line.</p>
+<p>A common exam scenario: a system boots in permissive or with SELinux disabled, and you must make it enforcing persistently. Set <code>SELINUX=enforcing</code> in the config file, run <code>setenforce 1</code> if SELinux is currently permissive, and if it was disabled, create <code>/.autorelabel</code> with <code>touch /.autorelabel</code> before rebooting so every file gets a correct label.</p>
+<p>Never solve an access problem by leaving SELinux permissive. Use permissive briefly to confirm SELinux is the cause, then fix the labels, port types or booleans, and return to enforcing.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>SELinux</dt><dd>Security-Enhanced Linux, kernel mandatory access control based on labels and policy.</dd><dt>Enforcing mode</dt><dd>SELinux applies the policy, denying and logging forbidden access.</dd><dt>Permissive mode</dt><dd>SELinux logs policy violations but allows them, used for troubleshooting.</dd><dt>/etc/selinux/config</dt><dd>The file setting the SELinux mode and policy type used at boot.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A server was left permissive by a previous admin. getenforce prints Permissive and the config file says SELINUX=permissive. You change the file to SELINUX=enforcing, run setenforce 1, and sestatus now shows both current and config mode as enforcing, so it stays that way after reboot.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> setenforce changes only the running mode; /etc/selinux/config sets the mode at boot. A persistent change needs the file, and graders check after a reboot.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What is the difference between enforcing and permissive?</summary><p>Enforcing denies and logs policy violations; permissive only logs them and allows the access.</p></details>
+<details class="sq"><summary>Can setenforce disable SELinux?</summary><p>No; it only switches between enforcing and permissive at runtime.</p></details>
+<details class="sq"><summary>What should you do before rebooting a system that had SELinux disabled and must now enforce?</summary><p>Set SELINUX=enforcing in /etc/selinux/config and touch /.autorelabel so files are relabeled at boot.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../configuring-key-based-ssh-authentication-ssh-keygen-ssh-copy-id-ssh-pe/">← Configuring key-based SSH authentication (ssh-keygen, ssh-co</a><a href="../listing-and-identifying-selinux-file-and-process-contexts-ls-z-ps-ez-i/">Listing and identifying SELinux file and process contexts (l →</a></nav>
+</main>
+</body>
+</html>

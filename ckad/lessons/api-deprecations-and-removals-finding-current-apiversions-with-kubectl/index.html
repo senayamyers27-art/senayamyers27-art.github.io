@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>API deprecations and removals: finding current… · CKAD Lesson</title>
+<meta name="description" content="Every Kubernetes object has an apiVersion made of an API group and a version, such as apps/v1 for Deployments or batch/v1 for Jobs. Core objects like Pods,">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="API deprecations and removals: finding current… · CKAD Lesson">
+<meta property="og:description" content="Every Kubernetes object has an apiVersion made of an API group and a version, such as apps/v1 for Deployments or batch/v1 for Jobs. Core objects like Pods,">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/api-deprecations-and-removals-finding-current-apiversions-with-kubectl/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/api-deprecations-and-removals-finding-current-apiversions-with-kubectl/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 3: Application Observability and Maintenance</p>
+<h1>API deprecations and removals: finding current apiVersions with kubectl api-resources, api-versions and explain</h1>
+<article class="lbody">
+<p>Every Kubernetes object has an <code>apiVersion</code> made of an API group and a version, such as <code>apps/v1</code> for Deployments or <code>batch/v1</code> for Jobs. Core objects like Pods, Services and ConfigMaps belong to the core group, written simply <code>v1</code>. APIs mature through alpha (for example <code>v1alpha1</code>), beta (<code>v1beta1</code>) and stable (<code>v1</code>) versions. Beta and alpha versions are eventually deprecated and then removed from the API server. After removal, a manifest that still uses the old version fails to apply, even though the object type itself still exists under a newer version.</p>
+<p>Kubernetes publishes a deprecation policy: stable (GA) versions are not removed within a major version, while beta versions are deprecated with notice before removal. When you use a deprecated version, the API server returns a warning, and kubectl prints it as <code>Warning: &lt;group/version&gt; &lt;Kind&gt; is deprecated ... use &lt;new version&gt;</code>. Treat those warnings as a to-do list.</p>
+<p>Three kubectl commands tell you what the cluster actually serves. <code>kubectl api-resources</code> lists every resource type with its short names, API version, whether it is namespaced, and its kind. Filter it: <code>kubectl api-resources | grep -i cronjob</code> shows <code>cronjobs  cj  batch/v1  true  CronJob</code>. <code>kubectl api-resources --api-group=networking.k8s.io</code> lists one group. <code>kubectl api-versions</code> lists every group/version pair served, one per line, so <code>kubectl api-versions | grep autoscaling</code> shows which HPA versions exist.</p>
+<pre class="code" tabindex="0"><code>kubectl api-resources | grep -iE 'ingress|cronjob|horizontal'
+kubectl api-versions | grep -E 'batch|networking|autoscaling'
+kubectl explain ingress
+kubectl explain ingress.spec.rules.http.paths --recursive
+kubectl explain hpa --api-version=autoscaling/v2</code></pre>
+<p><code>kubectl explain &lt;resource&gt;</code> shows the documentation for a type, starting with its GROUP and VERSION (the preferred version), and you can drill down field by field with dots, such as <code>kubectl explain deployment.spec.strategy</code>. <code>--recursive</code> prints the whole field tree, which is an excellent way to find the correct YAML structure during the exam without leaving the terminal. <code>--api-version</code> lets you explain a specific version.</p>
+<p>A practical routine for a manifest that fails with 'no matches for kind &quot;Ingress&quot; in version &quot;extensions/v1beta1&quot;': find the current version with <code>kubectl api-resources | grep ingress</code>, update <code>apiVersion</code>, then run <code>kubectl explain</code> on the parts whose structure changed and fix the fields. Finish with <code>kubectl apply --dry-run=server -f file.yaml</code>, which validates against the live API server without creating anything.</p>
+<p>There is also a <code>kubectl convert</code> plugin that rewrites manifests to newer versions, but it is not part of kubectl by default, so do not rely on it being installed.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>apiVersion</dt><dd>The API group and version of an object, such as apps/v1; core objects use just v1.</dd><dt>Deprecation</dt><dd>An API version is marked for future removal; it still works but produces warnings.</dd><dt>kubectl api-resources</dt><dd>Lists resource types with short names, API version, namespaced flag and kind.</dd><dt>kubectl explain</dt><dd>Shows documentation and field structure for a resource type and version.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A developer inherits an old chart that sets <code>apiVersion: policy/v1beta1</code> on a PodDisruptionBudget. Applying it fails with 'no matches for kind'. <code>kubectl api-resources | grep -i disruption</code> shows <code>policy/v1</code>, so they update the apiVersion, check fields with <code>kubectl explain pdb.spec</code>, and validate with a server-side dry run.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> 'no matches for kind X in version Y' almost always means the API version was removed. <code>kubectl api-resources | grep -i &lt;kind&gt;</code> gives the right one in seconds.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which command lists every group/version the API server serves?</summary><p><code>kubectl api-versions</code>.</p></details>
+<details class="sq"><summary>How can you see the YAML field structure of an Ingress rule without a browser?</summary><p><code>kubectl explain ingress.spec.rules --recursive</code>.</p></details>
+<details class="sq"><summary>What does a deprecation warning from kubectl mean?</summary><p>The API version still works now but is scheduled for removal, so the manifest should be moved to the newer version.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../applying-overlays-with-kubectl-apply-k-and-previewing-with-kubectl-kus/">← Applying overlays with kubectl apply -k and previewing with </a><a href="../updating-manifests-to-supported-api-groups-networking-k8s-io-v1-ingres/">Updating manifests to supported API groups (networking.k8s.i →</a></nav>
+</main>
+</body>
+</html>

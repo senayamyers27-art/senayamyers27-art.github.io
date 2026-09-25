@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Control Plane Policing (CoPP) · ENCOR Lesson</title>
+<meta name="description" content="The route processor CPU handles routing protocols, management sessions and any packet punted from the data plane. It has limited capacity, so a flood of tr">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Control Plane Policing (CoPP) · ENCOR Lesson">
+<meta property="og:description" content="The route processor CPU handles routing protocols, management sessions and any packet punted from the data plane. It has limited capacity, so a flood of tr">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ccnp-encor/lessons/control-plane-policing-copp/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ccnp-encor/lessons/control-plane-policing-copp/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">ENCOR</a> / <a href="../">Lessons</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2 · Domain 5: Security</p>
+<h1>Control Plane Policing (CoPP)</h1>
+<article class="lbody">
+<p>The route processor CPU handles routing protocols, management sessions and any packet punted from the data plane. It has limited capacity, so a flood of traffic aimed at the device, whether from an attack, a misconfiguration or a loop, can overwhelm it and cause routing adjacencies to drop. Control Plane Policing (CoPP) protects the CPU by applying a QoS policy to traffic headed to the control plane, limiting each category of traffic to a safe rate.</p>
+<p>CoPP uses the Modular QoS CLI you already know. You classify control plane traffic with ACLs and class maps, define a policy map with police actions per class, and attach the policy to the special <code>control-plane</code> interface instead of a physical interface:</p>
+<pre class="code" tabindex="0"><code>ip access-list extended COPP-ROUTING
+ permit ospf any any
+ permit tcp any any eq bgp
+ permit tcp any eq bgp any
+ip access-list extended COPP-MGMT
+ permit tcp 10.99.0.0 0.0.0.255 any eq 22
+ permit udp 10.99.0.0 0.0.0.255 any eq snmp
+!
+class-map match-all CM-ROUTING
+ match access-group name COPP-ROUTING
+class-map match-all CM-MGMT
+ match access-group name COPP-MGMT
+!
+policy-map PM-COPP
+ class CM-ROUTING
+  police 1000000 conform-action transmit exceed-action transmit
+ class CM-MGMT
+  police 500000 conform-action transmit exceed-action drop
+ class class-default
+  police 200000 conform-action transmit exceed-action drop
+!
+control-plane
+ service-policy input PM-COPP</code></pre>
+<p>Design classes by importance. Critical traffic such as routing protocols gets a generous rate, and some designs even transmit its excess so adjacencies are never harmed. Management traffic from trusted sources gets a moderate rate. Anything that does not match a defined class lands in class-default, which is policed tightly. Traffic you never expect to reach the CPU, such as management protocols from untrusted sources, can be classified and dropped. Note that in CoPP ACLs, <code>permit</code> means 'this traffic belongs to the class' and <code>deny</code> means 'not in this class'; the action comes from the policy map, not the ACL.</p>
+<p>Choosing rates requires knowing your baseline. Rates that are too low will drop legitimate hellos during normal bursts; rates that are too high give no protection. A safe approach is to deploy with exceed actions set to transmit, watch the counters with <code>show policy-map control-plane</code> to learn normal traffic levels, then tighten and change exceed actions to drop.</p>
+<p>Platform differences matter. On many Catalyst IOS XE switches, a system-defined CoPP policy (<code>system-cpp-policy</code>) is applied by default with preconfigured classes and hardware rate limiters, and you can adjust its rates rather than building your own from scratch. On routers, CoPP is typically configured manually as above.</p>
+<p>CoPP works alongside other controls: infrastructure ACLs at the edge block unwanted traffic before it reaches the device, <code>access-class</code> restricts VTY access, and features like routing protocol authentication protect the protocols themselves. CoPP is the last line of defense that keeps the CPU responsive when something gets through.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>CoPP</dt><dd>Control Plane Policing: an MQC policy applied to the control-plane interface that rate-limits traffic to the CPU.</dd><dt>control-plane</dt><dd>The special configuration mode representing the route processor, where the CoPP service policy is attached.</dd><dt>class-default</dt><dd>The catch-all class for traffic that matches no defined class, usually policed tightly in CoPP.</dd><dt>Exceed action</dt><dd>What a policer does with traffic above the configured rate, such as drop or transmit.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A misconfigured monitoring server starts sending thousands of SNMP requests per second to a core router, and CPU climbs. Because CoPP polices SNMP in its management class and class-default, excess requests are dropped at the control plane, CPU stays moderate and OSPF adjacencies remain stable while the team fixes the server.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> CoPP is applied with service-policy input under control-plane. ACL permit only classifies traffic into a class; the police action decides whether it is dropped. Baseline first, then tighten.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Where is a CoPP policy attached?</summary><p>Under the control-plane configuration mode, with service-policy input.</p></details>
+<details class="sq"><summary>In a CoPP classification ACL, what does a deny entry mean?</summary><p>The traffic does not match that class and is evaluated against the next class; it is not dropped by the ACL.</p></details>
+<details class="sq"><summary>Why start CoPP deployment with exceed-action transmit?</summary><p>To measure normal control plane traffic without dropping anything, so rates can be set safely before enforcing drops.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study ENCOR for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ccnp-encor/">Open the ENCOR study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../infrastructure-security-standard-and-extended-acls-placement-and-order/">← Infrastructure security: standard and extended ACLs, placeme</a><a href="../rest-api-security-https-tokens-secret-handling/">REST API security: HTTPS, tokens, secret handling →</a></nav>
+</main>
+</body>
+</html>

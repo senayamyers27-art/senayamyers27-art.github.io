@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Secrets management with HashiCorp Vault and the Vault… · Terraform Associate Lesson</title>
+<meta name="description" content="HashiCorp Vault is a secrets management system. It stores secrets centrally, controls who can read them with policies, records every access in audit logs a">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Secrets management with HashiCorp Vault and the Vault… · Terraform Associate Lesson">
+<meta property="og:description" content="HashiCorp Vault is a secrets management system. It stores secrets centrally, controls who can read them with policies, records every access in audit logs a">
+<link rel="canonical" href="https://senayamyers27-art.github.io/terraform/lessons/secrets-management-with-hashicorp-vault-and-the-vault-provider/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/terraform/lessons/secrets-management-with-hashicorp-vault-and-the-vault-provider/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Terraform Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004) · Domain 4: Terraform configuration</p>
+<h1>Secrets management with HashiCorp Vault and the Vault provider</h1>
+<article class="lbody">
+<p>HashiCorp Vault is a secrets management system. It stores secrets centrally, controls who can read them with policies, records every access in audit logs and, most importantly, can generate dynamic secrets: credentials created on demand for a single use or a short lease and revoked automatically afterwards. Pairing Terraform with Vault means your configuration never needs a long-lived cloud key or database password typed into a file.</p>
+<p>Terraform talks to Vault through the Vault provider, configured like any other provider with the Vault server address and a way to authenticate. The address and token are usually supplied through environment variables such as <code>VAULT_ADDR</code> and <code>VAULT_TOKEN</code> rather than written into code, or through an auth method such as AppRole or a cloud identity. The provider can do two jobs: manage Vault itself (mounts, policies, auth methods, roles) as infrastructure, and read secrets out of Vault for use elsewhere in your configuration.</p>
+<p>Reading a static secret from a key/value engine is done with a data source, for example <code>vault_kv_secret_v2</code> for version 2 of the KV engine or the older generic secret data source. You then reference an attribute of that data source in another resource or provider block. For dynamic secrets, data sources such as the AWS access credentials one ask Vault's AWS secrets engine to mint short-lived AWS keys, which you can feed into the AWS provider block. When the lease expires, Vault revokes the keys, so a leaked credential has a short useful life.</p>
+<pre class="code" tabindex="0"><code>data &quot;vault_kv_secret_v2&quot; &quot;db&quot; {
+  mount = &quot;secret&quot;
+  name  = &quot;app/db&quot;
+}
+
+# later: data.vault_kv_secret_v2.db.data[&quot;password&quot;]</code></pre>
+<p>There is an important caveat that the exam likes: values read through a data source are stored in the Terraform state file, just like any other attribute. Vault protects the secret at rest in Vault, but once Terraform reads it into a normal data source, your state becomes another place the secret lives. Mitigations include protecting state with an encrypted, access-controlled backend, preferring short-lived dynamic secrets so a copy in state quickly becomes useless, and, where the provider supports it, using ephemeral resources so the secret is used during the run but never persisted.</p>
+<p>In HCP Terraform you can go further with dynamic provider credentials, where each run authenticates to Vault using a signed workload identity token instead of a stored Vault token. Whatever the pattern, the principle is the same: Vault is the single source of truth for secrets, Terraform fetches them just in time, and nothing secret is hard-coded in your configuration or committed to version control.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>HashiCorp Vault</dt><dd>A secrets management tool that stores, controls access to, audits and dynamically generates secrets.</dd><dt>Dynamic secret</dt><dd>A credential Vault generates on demand with a lease and revokes automatically when the lease expires.</dd><dt>Vault provider</dt><dd>The Terraform provider used to configure Vault and to read secrets from it through data sources or ephemeral resources.</dd><dt>Lease</dt><dd>The time period a Vault secret is valid for before it must be renewed or is revoked.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>Instead of storing an AWS access key in HCP Terraform variables, a team configures the Vault AWS secrets engine. Their configuration reads short-lived AWS credentials from Vault at the start of each run and passes them into the AWS provider block; the keys expire shortly after the run, so even the copy in state is quickly worthless.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Secrets read from Vault through a normal data source end up in Terraform state. Vault does not change that; protect the state and prefer short-lived or ephemeral secrets.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why are dynamic secrets safer than static ones for Terraform runs?</summary><p>They are created on demand with a short lease and revoked automatically, so a leaked copy (including one in state) stops working soon after the run.</p></details>
+<details class="sq"><summary>How should the Vault token for the Vault provider usually be supplied?</summary><p>Through an environment variable such as VAULT_TOKEN or an auth method, not hard-coded in the configuration.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Terraform Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../terraform/">Open the Terraform Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../sensitive-data-sensitive-values-ephemeral-variables-and-resources-writ/">← Sensitive data: `sensitive` values, ephemeral variables and </a><a href="../root-module-vs-child-modules-a-module-is-any-directory-of-tf-files/">Root module vs child modules; a module is any directory of . →</a></nav>
+</main>
+</body>
+</html>

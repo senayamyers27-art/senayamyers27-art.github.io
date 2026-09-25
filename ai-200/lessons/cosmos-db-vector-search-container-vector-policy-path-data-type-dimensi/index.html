@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cosmos DB vector search: container vector policy (path… · AI-200 Lesson</title>
+<meta name="description" content="Embedding models turn text or images into vectors: long arrays of numbers where similar meanings sit close together. Vector search finds the items whose ve">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Cosmos DB vector search: container vector policy (path… · AI-200 Lesson">
+<meta property="og:description" content="Embedding models turn text or images into vectors: long arrays of numbers where similar meanings sit close together. Vector search finds the items whose ve">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ai-200/lessons/cosmos-db-vector-search-container-vector-policy-path-data-type-dimensi/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ai-200/lessons/cosmos-db-vector-search-container-vector-policy-path-data-type-dimensi/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AI-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204) · Domain 2: Develop AI solutions by using Azure data management services</p>
+<h1>Cosmos DB vector search: container vector policy (path, data type, dimensions, distance function), vector indexes (flat, quantizedFlat, diskANN) and VectorDistance()</h1>
+<article class="lbody">
+<p>Embedding models turn text or images into vectors: long arrays of numbers where similar meanings sit close together. Vector search finds the items whose vectors are nearest to a query vector. Cosmos DB for NoSQL can store embeddings inside the same JSON items as your operational data and search them, so a RAG (retrieval-augmented generation) app does not need a separate vector database. The feature must be enabled on the account first (the vector search capability for NoSQL).</p>
+<p>Vector search needs two pieces of configuration on the container. The first is the container vector policy (vector embedding policy), which describes each embedding property: its <code>path</code> (for example <code>/embedding</code>), its <code>dataType</code> (such as <code>float32</code>, or smaller types like <code>int8</code> and <code>uint8</code>), its number of <code>dimensions</code> (which must match your embedding model's output length) and its <code>distanceFunction</code>: <code>cosine</code>, <code>dotproduct</code> or <code>euclidean</code>. Use the distance function your embedding model was designed for; cosine is the common default for text embeddings. The vector policy is set when you create the container, so plan it up front.</p>
+<p>The second piece is a vector index in the container's indexing policy, listed under <code>vectorIndexes</code> with the same path and a type. There are three types. <code>flat</code> does exact brute-force search over full-precision vectors; it gives perfect recall but supports only a limited number of dimensions and gets expensive as data grows, so it fits small datasets. <code>quantizedFlat</code> compresses vectors (quantization) and still scans them, trading a little accuracy for lower cost and supporting larger dimensions. <code>diskANN</code> builds a graph-based approximate nearest neighbor index developed by Microsoft Research, giving low latency and cost at large scale with high but not perfect recall. As a rule of thumb: small or exact needs, flat; moderate size, quantizedFlat; large scale, diskANN.</p>
+<pre class="code" tabindex="0"><code>&quot;vectorEmbeddingPolicy&quot;: { &quot;vectorEmbeddings&quot;: [
+  { &quot;path&quot;: &quot;/embedding&quot;, &quot;dataType&quot;: &quot;float32&quot;, &quot;dimensions&quot;: 1536, &quot;distanceFunction&quot;: &quot;cosine&quot; } ] },
+&quot;indexingPolicy&quot;: {
+  &quot;includedPaths&quot;: [ { &quot;path&quot;: &quot;/*&quot; } ],
+  &quot;excludedPaths&quot;: [ { &quot;path&quot;: &quot;/embedding/*&quot; } ],
+  &quot;vectorIndexes&quot;: [ { &quot;path&quot;: &quot;/embedding&quot;, &quot;type&quot;: &quot;diskANN&quot; } ] }</code></pre>
+<p>Notice the embedding path is excluded from the regular range index. Indexing hundreds of numbers per item as normal properties would make every write expensive and adds no value; the vector index handles it.</p>
+<p>You query with the system function <code>VectorDistance()</code>, which returns a similarity score between an item's vector and the query vector. Combine it with <code>TOP</code> and <code>ORDER BY</code> to get the k nearest items, and add ordinary WHERE filters for metadata.</p>
+<pre class="code" tabindex="0"><code>results = container.query_items(
+    query=&quot;SELECT TOP 5 c.id, c.text, VectorDistance(c.embedding, @q) AS score &quot;
+          &quot;FROM c WHERE c.category = @cat ORDER BY VectorDistance(c.embedding, @q)&quot;,
+    parameters=[{&quot;name&quot;: &quot;@q&quot;, &quot;value&quot;: query_vector}, {&quot;name&quot;: &quot;@cat&quot;, &quot;value&quot;: &quot;manuals&quot;}],
+    enable_cross_partition_query=True)</code></pre>
+<p>Always use <code>TOP</code> with vector queries so the engine does not return every item. For cosine and dot product, a higher score means more similar; the ORDER BY on VectorDistance returns the most similar items first.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Vector embedding policy</dt><dd>Container setting that defines each vector path, data type, dimension count and distance function.</dd><dt>flat index</dt><dd>An exact, brute-force vector index with perfect recall, suited to small datasets and limited dimensions.</dd><dt>quantizedFlat index</dt><dd>A vector index that compresses vectors and scans them, lowering cost with a small accuracy trade-off.</dd><dt>diskANN index</dt><dd>A graph-based approximate nearest neighbor index designed for low latency at large scale.</dd><dt>VectorDistance()</dt><dd>The Cosmos DB query function that returns the similarity score between two vectors.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A support chatbot stores product manual chunks in Cosmos DB with a 1536-dimension float32 embedding, cosine distance and a diskANN index, and excludes /embedding/* from range indexing. For each question it embeds the text and runs SELECT TOP 5 with VectorDistance and a WHERE filter on product line, then feeds the five chunks to the model.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Dimensions in the vector policy must match the embedding model output; choose flat for small exact search, quantizedFlat for mid-size and diskANN for large scale, and exclude the vector path from the regular index.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which four properties describe a vector in the container vector policy?</summary><p>The path, the data type, the number of dimensions and the distance function (cosine, dotproduct or euclidean).</p></details>
+<details class="sq"><summary>Why include TOP in a VectorDistance query?</summary><p>To limit the result to the k nearest items; without it the query would score and return far more items and cost more RUs.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AI-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ai-200/">Open the AI-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../request-units-point-reads-vs-queries-indexing-policy-include-exclude-p/">← Request Units: point reads vs queries, indexing policy inclu</a><a href="../change-feed-change-feed-processor-with-a-lease-container-azure-functio/">Change feed: change feed processor with a lease container, A →</a></nav>
+</main>
+</body>
+</html>

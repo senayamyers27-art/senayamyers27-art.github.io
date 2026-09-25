@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>volumeBindingMode Immediate vs WaitForFirstConsumer · CKA Lesson</title>
+<meta name="description" content="A StorageClass's volumeBindingMode decides when a PVC is bound and, for dynamic provisioning, when the volume is created. The choice matters whenever stora">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="volumeBindingMode Immediate vs WaitForFirstConsumer · CKA Lesson">
+<meta property="og:description" content="A StorageClass's volumeBindingMode decides when a PVC is bound and, for dynamic provisioning, when the volume is created. The choice matters whenever stora">
+<link rel="canonical" href="https://senayamyers27-art.github.io/cka/lessons/volumebindingmode-immediate-vs-waitforfirstconsumer/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/cka/lessons/volumebindingmode-immediate-vs-waitforfirstconsumer/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKA</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum) · Domain 4: Storage</p>
+<h1>volumeBindingMode Immediate vs WaitForFirstConsumer</h1>
+<article class="lbody">
+<p>A StorageClass's <code>volumeBindingMode</code> decides when a PVC is bound and, for dynamic provisioning, when the volume is created. The choice matters whenever storage is tied to a topology, such as a zone or a single node.</p>
+<p>With <code>Immediate</code>, the default, binding and provisioning happen as soon as the PVC is created, before any Pod uses it. That is fine for storage reachable from every node, such as NFS. But for topology-constrained storage, the volume might be created in a zone, or on a node, where the Pod later cannot run, for example because of resource limits, node affinity or taints. The Pod then fails to schedule with a volume node affinity conflict.</p>
+<p>With <code>WaitForFirstConsumer</code>, binding is delayed until a Pod that uses the PVC is created. The scheduler first chooses a node considering all the Pod's constraints, including which nodes the storage can reach, and only then is the PV provisioned in the right place or a matching static PV selected. Until then, <code>kubectl get pvc</code> shows Pending and <code>kubectl describe pvc</code> shows an event like 'waiting for first consumer to be created before binding'. That is normal, not an error.</p>
+<pre class="code" tabindex="0"><code>apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata: {name: local-storage}
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer</code></pre>
+<p>Local volumes, which are disks attached to a specific node, should always use a class with WaitForFirstConsumer. Otherwise a claim might bind to a local PV on node03 while the Pod's other constraints only allow node01, and the Pod would never schedule. Many cloud CSI StorageClasses also use WaitForFirstConsumer so disks are created in the same zone as the Pod.</p>
+<p>There is one trap. Setting <code>spec.nodeName</code> directly on a Pod bypasses the scheduler, and with it the logic that triggers delayed binding, so the PVC may never bind. Use node affinity or a nodeSelector instead if you need to steer the Pod.</p>
+<p>When diagnosing, remember which mode you are in. A Pending PVC in a WaitForFirstConsumer class with no Pod using it is expected. A Pending PVC in an Immediate class means provisioning or matching failed. And a Pod Pending with 'node(s) had volume node affinity conflict' usually means a volume was bound somewhere the Pod cannot go, often because the class used Immediate.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>volumeBindingMode</dt><dd>StorageClass field controlling when PVCs bind: Immediate or WaitForFirstConsumer.</dd><dt>Immediate</dt><dd>Binds or provisions as soon as the PVC is created, regardless of Pod placement.</dd><dt>WaitForFirstConsumer</dt><dd>Delays binding until a Pod using the claim is scheduled, respecting topology.</dd><dt>Volume node affinity conflict</dt><dd>A scheduling failure where the Pod cannot run on any node the bound volume can reach.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A learner creates a PVC in the local-storage class and panics when it stays Pending. <code>kubectl describe pvc</code> says it is waiting for the first consumer. Creating the Pod that uses it triggers scheduling to node02, the claim binds to node02's local PV, and the Pod starts.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Pending with 'waiting for first consumer' is the expected state until a Pod uses the claim. Do not set nodeName on such Pods, because it skips the scheduler that triggers binding.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which binding mode should local volumes use, and why?</summary><p>WaitForFirstConsumer, so the PV is chosen only after the scheduler picks a node that satisfies all of the Pod's constraints.</p></details>
+<details class="sq"><summary>What is the default volumeBindingMode?</summary><p>Immediate.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../cka/">Open the CKA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../storageclasses-provisioners-and-dynamic-provisioning-the-default-stora/">← StorageClasses, provisioners and dynamic provisioning; the d</a><a href="../volume-expansion-with-allowvolumeexpansion/">Volume expansion with allowVolumeExpansion →</a></nav>
+</main>
+</body>
+</html>

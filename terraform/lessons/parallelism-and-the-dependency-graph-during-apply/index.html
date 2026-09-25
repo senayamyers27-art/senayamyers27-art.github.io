@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Parallelism and the dependency graph during apply · Terraform Associate Lesson</title>
+<meta name="description" content="Terraform does not process resources one at a time in file order. It builds a dependency graph: a directed acyclic graph (a graph with directions and no lo">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Parallelism and the dependency graph during apply · Terraform Associate Lesson">
+<meta property="og:description" content="Terraform does not process resources one at a time in file order. It builds a dependency graph: a directed acyclic graph (a graph with directions and no lo">
+<link rel="canonical" href="https://senayamyers27-art.github.io/terraform/lessons/parallelism-and-the-dependency-graph-during-apply/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/terraform/lessons/parallelism-and-the-dependency-graph-during-apply/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Terraform Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004) · Domain 3: Core Terraform workflow</p>
+<h1>Parallelism and the dependency graph during apply</h1>
+<article class="lbody">
+<p>Terraform does not process resources one at a time in file order. It builds a dependency graph: a directed acyclic graph (a graph with directions and no loops) where each node is a resource, data source, provider, variable, output or similar object, and each edge means one node must be handled before another. Edges come from references between blocks, such as a subnet using <code>aws_vpc.main.id</code>, and from explicit <code>depends_on</code> arguments.</p>
+<p>When you plan or apply, Terraform walks this graph. Any node whose dependencies are complete can start. Resources that do not depend on each other, such as ten unrelated storage buckets, can be created at the same time. Resources on a chain, such as network then subnet then instance, happen in sequence. During destroy the graph is walked in reverse, so dependents are removed before the things they depend on.</p>
+<p>Terraform limits how many operations run at once. By default it performs up to 10 concurrent operations. You can change this with <code>-parallelism=n</code> on plan, apply and destroy. Raising it can speed up large configurations with many independent resources. Lowering it, even to <code>-parallelism=1</code>, can help when a provider's API enforces rate limits, when debugging to see operations one at a time, or when the machine running Terraform is short of resources. The setting controls concurrency only; it never changes the order required by dependencies.</p>
+<pre class="code" tabindex="0"><code>terraform apply -parallelism=4
+terraform graph | dot -Tsvg &gt; graph.svg</code></pre>
+<p><code>terraform graph</code> prints the dependency graph in the DOT language, which tools such as Graphviz can render as a picture. It is a handy way to understand why Terraform orders things as it does or to spot an unexpected dependency.</p>
+<p>If an operation fails during apply, Terraform stops starting new operations that depend on it, lets operations already in progress finish, and records everything that succeeded in state. The error is reported at the end. That is why an apply can leave some resources created and others not, and why the next apply simply continues from the recorded state.</p>
+<p>Cycles are not allowed. If resource A references B and B references A, directly or through a chain, Terraform reports a cycle error during plan. The fix is to restructure: often by moving an attribute into a separate resource, such as a separate security group rule instead of an inline rule, so the dependency runs one way.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Dependency graph</dt><dd>Directed acyclic graph of configuration objects that Terraform uses to order operations.</dd><dt>-parallelism</dt><dd>Option setting the maximum number of concurrent operations during plan, apply or destroy; the default is 10.</dd><dt>terraform graph</dt><dd>Command that outputs the dependency graph in DOT format for visualization.</dd><dt>Cycle</dt><dd>A circular dependency between objects that makes the graph impossible to order; Terraform reports it as an error.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>An apply creating 200 DNS records keeps failing with throttling errors from the DNS provider's API. Running <code>terraform apply -parallelism=2</code> spreads the requests out so the provider no longer throttles them, at the cost of a slower run.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Parallelism defaults to 10 and changes how many operations run at once, never the order. Order comes from the graph: implicit references plus <code>depends_on</code>, reversed for destroy.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What decides the order in which Terraform creates resources?</summary><p>The dependency graph built from references and <code>depends_on</code>; independent resources may be created concurrently.</p></details>
+<details class="sq"><summary>Why might you lower <code>-parallelism</code>?</summary><p>To avoid API rate limits or throttling, to simplify debugging, or to reduce load on the machine running Terraform.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Terraform Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../terraform/">Open the Terraform Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../resource-replacement-with-replace-instead-of-the-deprecated-terraform/">← Resource replacement with `-replace` instead of the deprecat</a><a href="../resource-blocks-vs-data-blocks-and-addressing-them-type-name-data-type/">Resource blocks vs data blocks, and addressing them (`TYPE.N →</a></nav>
+</main>
+</body>
+</html>

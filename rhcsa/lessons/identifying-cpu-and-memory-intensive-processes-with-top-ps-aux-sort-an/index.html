@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Identifying CPU- and memory-intensive processes with top… · RHCSA Lesson</title>
+<meta name="description" content="A process is a running instance of a program, identified by a process ID (PID). When a system is slow, your job is to find which processes are using the CP">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Identifying CPU- and memory-intensive processes with top… · RHCSA Lesson">
+<meta property="og:description" content="A process is a running instance of a program, identified by a process ID (PID). When a system is slow, your job is to find which processes are using the CP">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/identifying-cpu-and-memory-intensive-processes-with-top-ps-aux-sort-an/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/identifying-cpu-and-memory-intensive-processes-with-top-ps-aux-sort-an/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 4: Operate running systems</p>
+<h1>Identifying CPU- and memory-intensive processes with top, ps aux --sort and killing them (kill, pkill, signals 15 and 9)</h1>
+<article class="lbody">
+<p>A process is a running instance of a program, identified by a process ID (PID). When a system is slow, your job is to find which processes are using the CPU or memory and decide whether to stop them. The RHCSA expects you to identify such processes and terminate them correctly.</p>
+<p><code>top</code> gives a live, refreshing view. The header shows uptime, load average (average number of processes waiting to run over 1, 5 and 15 minutes), task counts, CPU usage and memory. Below, processes are listed with PID, USER, priority (PR), nice value (NI), memory columns (VIRT, RES for resident memory in RAM), state (S), %CPU, %MEM and COMMAND. By default top sorts by CPU; press <code>M</code> to sort by memory, <code>P</code> to return to CPU, <code>k</code> to kill a process by PID, <code>r</code> to renice one and <code>q</code> to quit.</p>
+<p><code>ps</code> takes a snapshot. <code>ps aux</code> lists every process with user, PID, %CPU, %MEM, VSZ, RSS, state, start time and full command. Add <code>--sort</code> to order it: <code>ps aux --sort=-%cpu | head</code> shows the heaviest CPU users first (the minus means descending), and <code>--sort=-%mem</code> does the same for memory. <code>ps -ef</code> is another common style, and <code>ps -o pid,ni,%cpu,cmd -p PID</code> shows chosen columns. <code>pgrep name</code> prints PIDs whose name matches.</p>
+<pre class="code" tabindex="0"><code>ps aux --sort=-%cpu | head -5
+ps aux --sort=-%mem | head -5
+pgrep -l dd
+kill 4312          # SIGTERM (15), polite request
+kill -9 4312       # SIGKILL, cannot be ignored
+pkill -u harry     # signal all of harry's processes
+killall stress-ng</code></pre>
+<p>Processes are stopped by sending signals. <code>kill PID</code> sends SIGTERM, signal 15, by default. SIGTERM asks the process to terminate; a well-written program catches it, saves its work, closes files and exits cleanly. SIGKILL, signal 9 (<code>kill -9 PID</code> or <code>kill -KILL PID</code>), is handled by the kernel: the process is removed immediately and cannot catch, delay or ignore it, so it gets no chance to clean up. The right approach is SIGTERM first and SIGKILL only if the process does not exit. Other signals include SIGHUP (1), which many daemons treat as 'reload configuration', and SIGINT (2), what Ctrl+C sends. <code>kill -l</code> lists them all.</p>
+<p><code>pkill</code> and <code>killall</code> signal processes by name or other attributes rather than PID. <code>pkill -u harry</code> targets a user's processes, <code>pkill -t pts/1</code> those on a terminal, and <code>killall name</code> matches exact command names. Because they can match more than you intend, preview with <code>pgrep -l</code> first.</p>
+<p>Normal users can signal only their own processes; root can signal any. Killing a process that belongs to a systemd service may simply cause systemd to restart it, so for services use <code>systemctl stop</code> instead.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>PID</dt><dd>Process ID: the unique number identifying a running process.</dd><dt>top</dt><dd>Interactive, live view of processes sorted by resource use; M sorts by memory, P by CPU, k kills.</dd><dt>ps aux --sort=-%cpu</dt><dd>Snapshot of all processes sorted by descending CPU usage.</dd><dt>SIGTERM (15)</dt><dd>Default kill signal requesting a clean shutdown; the process may catch it.</dd><dt>SIGKILL (9)</dt><dd>Signal that terminates a process immediately; it cannot be caught or ignored.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>The load average is climbing. <code>ps aux --sort=-%cpu | head -3</code> shows a runaway <code>dd</code> owned by harry at 99% CPU. <code>kill 5821</code> has no effect after a few seconds, so you use <code>kill -9 5821</code>, and top shows the CPU returning to idle.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Try SIGTERM (15, the default) before SIGKILL (9). SIGKILL cannot be caught, so the process gets no chance to clean up. Use a minus in --sort=-%cpu for highest first.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which signal does <code>kill PID</code> send by default?</summary><p>SIGTERM, signal 15.</p></details>
+<details class="sq"><summary>How do you list the five most memory-hungry processes?</summary><p>ps aux --sort=-%mem | head -6 (header plus five), or press M in top.</p></details>
+<details class="sq"><summary>Why can a process not ignore SIGKILL?</summary><p>SIGKILL is acted on by the kernel directly and cannot be caught or blocked by the process.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../interrupting-the-boot-process-to-gain-access-rd-break-chroot-sysroot-p/">← Interrupting the boot process to gain access (rd.break, chro</a><a href="../adjusting-process-scheduling-with-nice-and-renice-range-20-to-19/">Adjusting process scheduling with nice and renice (range -20 →</a></nav>
+</main>
+</body>
+</html>

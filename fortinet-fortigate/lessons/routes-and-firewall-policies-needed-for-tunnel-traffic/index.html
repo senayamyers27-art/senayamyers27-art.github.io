@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Routes and firewall policies needed for tunnel traffic · FortiGate Admin Lesson</title>
+<meta name="description" content="A common surprise with route-based IPsec is that the tunnel can show up while no traffic passes between the sites. That is because bringing the tunnel up i">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Routes and firewall policies needed for tunnel traffic · FortiGate Admin Lesson">
+<meta property="og:description" content="A common surprise with route-based IPsec is that the tunnel can show up while no traffic passes between the sites. That is because bringing the tunnel up i">
+<link rel="canonical" href="https://senayamyers27-art.github.io/fortinet-fortigate/lessons/routes-and-firewall-policies-needed-for-tunnel-traffic/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/fortinet-fortigate/lessons/routes-and-firewall-policies-needed-for-tunnel-traffic/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">FortiGate Admin</a> / <a href="../">Lessons</a></p>
+<p class="note">Fortinet NSE 4 - FortiOS 7.6 Administrator NSE4_FGT_AD-7.6 · Domain 5: VPN</p>
+<h1>Routes and firewall policies needed for tunnel traffic</h1>
+<article class="lbody">
+<p>A common surprise with route-based IPsec is that the tunnel can show up while no traffic passes between the sites. That is because bringing the tunnel up is only half the job: you must also tell the FortiGate to route the remote subnets into the tunnel and to permit that traffic with firewall policies. This is heavily tested because it separates people who clicked through a wizard from people who understand the data path.</p>
+<p>Recall that a route-based tunnel creates a virtual tunnel interface. The routing table has no idea which destinations belong on the far side of that interface until you add routes. So for each remote subnet reachable over the tunnel, you add a static route whose destination is that subnet and whose device (interface) is the tunnel interface (a route-based tunnel usually needs no next-hop gateway on the tunnel interface). Without this route, traffic to the remote LAN follows the default route out to the Internet instead of entering the tunnel, and nothing works even though the tunnel is up.</p>
+<p>Second, firewall policies must allow the traffic in both directions. You create a policy from the local LAN interface to the tunnel interface for outbound traffic to the remote site, and a policy from the tunnel interface to the local LAN interface for inbound traffic from the remote site. Both use the appropriate address objects for the local and remote subnets and the required services. The FortiGate is stateful, so replies to a session are allowed by the policy that created it; the second policy is needed so that hosts at the remote site can start their own connections, and missing it is a frequent cause of connectivity that works only one way. Note that for tunnel traffic you normally do not apply source NAT (the two LANs should see each other's real addresses), unlike Internet policies.</p>
+<p>Putting it together, the minimum for working route-based tunnel traffic is: the tunnel up (phase 1 and 2 negotiated), a route for each remote subnet pointing at the tunnel interface, and firewall policies in both directions between the local LAN and the tunnel interface. If any one is missing, the tunnel may be up but traffic fails. When troubleshooting 'tunnel is up but no traffic', check the route to the remote subnet and both policies first.</p>
+<p>On the remote FortiGate you configure the mirror image: a route for your local subnet via its tunnel interface, and policies in both directions. Both ends must agree, and the phase 2 selectors should encompass the subnets your routes and policies use.</p>
+<p>In a lab you bring up a route-based tunnel, deliberately omit the route, observe traffic failing while the tunnel is up, then add the route and the two policies and watch connectivity succeed.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Route via tunnel interface</dt><dd>A static route whose destination is the remote subnet and whose device is the IPsec tunnel interface, directing traffic into the tunnel.</dd><dt>Bidirectional policies</dt><dd>Firewall policies allowing traffic both from LAN to tunnel and from tunnel to LAN, so that either site can start connections (replies to a session are allowed statefully).</dd><dt>No SNAT for tunnel traffic</dt><dd>Tunnel policies normally do not apply source NAT so both LANs see each other's real addresses.</dd><dt>Up but no traffic</dt><dd>The symptom when a tunnel negotiates successfully but the route or policies are missing, so no data crosses it.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A new route-based tunnel shows as up but the two LANs cannot reach each other; the admin adds a route for the remote subnet via the tunnel interface and firewall policies in both directions, and traffic then flows.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> A tunnel showing up is not enough. You still need a route for the remote subnet via the tunnel interface and policies in both directions, and tunnel policies usually should not apply SNAT.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>A route-based tunnel is up but no traffic passes. What is most likely missing?</summary><p>A route directing the remote subnet into the tunnel interface, and/or firewall policies allowing the traffic in both directions.</p></details>
+<details class="sq"><summary>Why do you need policies in both directions for tunnel traffic?</summary><p>Each policy only allows sessions started on its ingress side (replies are handled statefully), so without the tunnel-to-LAN policy the remote site cannot start connections and access works only one way.</p></details>
+<details class="sq"><summary>Should tunnel traffic policies apply source NAT?</summary><p>Normally no; the two LANs should see each other's real addresses, unlike Internet-bound policies.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study FortiGate Admin for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../fortinet-fortigate/">Open the FortiGate Admin study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../site-to-site-with-static-peers-and-dial-up-dynamic-peers/">← Site-to-site with static peers and dial-up (dynamic) peers</a><a href="../redundant-vpns-two-tunnels-route-distance-priority-dpd-tunnel-monitori/">Redundant VPNs: two tunnels, route distance/priority, DPD, t →</a></nav>
+</main>
+</body>
+</html>

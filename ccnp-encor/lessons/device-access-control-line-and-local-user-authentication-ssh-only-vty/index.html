@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Device access control: line and local user… · ENCOR Lesson</title>
+<meta name="description" content="Every router and switch must be protected against unauthorized administrative access. ENCOR tests the basic building blocks on Cisco IOS: how the console a">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Device access control: line and local user… · ENCOR Lesson">
+<meta property="og:description" content="Every router and switch must be protected against unauthorized administrative access. ENCOR tests the basic building blocks on Cisco IOS: how the console a">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ccnp-encor/lessons/device-access-control-line-and-local-user-authentication-ssh-only-vty/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ccnp-encor/lessons/device-access-control-line-and-local-user-authentication-ssh-only-vty/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">ENCOR</a> / <a href="../">Lessons</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2 · Domain 5: Security</p>
+<h1>Device access control: line and local user authentication, SSH-only VTY access</h1>
+<article class="lbody">
+<p>Every router and switch must be protected against unauthorized administrative access. ENCOR tests the basic building blocks on Cisco IOS: how the console and VTY lines authenticate users, how passwords are stored, and how to allow only SSH.</p>
+<p>Cisco devices have lines: the console line (<code>line con 0</code>) for direct serial access and virtual terminal lines (<code>line vty 0 4</code>, or <code>0 15</code> on many platforms) for remote Telnet or SSH. The simplest method is a line password: <code>password</code> plus <code>login</code> under the line. Everyone shares one password and there is no accountability, so it is only suitable for labs. A better method is local user accounts: <code>username admin privilege 15 secret &lt;password&gt;</code> creates a user, and <code>login local</code> under the line makes the device prompt for username and password and check the local database. Each administrator gets their own account, and logs can record who did what.</p>
+<p>Protect the privileged EXEC mode with <code>enable secret</code>, which is stored as a hash, rather than the old <code>enable password</code>. Use the <code>secret</code> keyword for usernames as well. Modern IOS XE supports strong hashing types such as type 8 (PBKDF2 with SHA-256) and type 9 (scrypt), selectable with <code>algorithm-type</code>; type 5 is MD5-based and older, and type 7, produced by <code>service password-encryption</code> for plain <code>password</code> commands, is a weak reversible encoding that only stops shoulder surfing. Never rely on type 7.</p>
+<p>Telnet sends everything, including passwords, in clear text, so SSH should be the only remote access method. Enabling SSH requires a hostname other than the default, a domain name, and an RSA key pair, plus user authentication:</p>
+<pre class="code" tabindex="0"><code>hostname R1
+ip domain name example.com
+crypto key generate rsa modulus 2048
+ip ssh version 2
+username admin privilege 15 algorithm-type scrypt secret &lt;password&gt;
+!
+line vty 0 15
+ login local
+ transport input ssh
+ exec-timeout 10 0
+ access-class 10 in</code></pre>
+<p><code>transport input ssh</code> blocks Telnet on the VTY lines. <code>ip ssh version 2</code> disables the weaker SSHv1. <code>exec-timeout</code> logs out idle sessions. <code>access-class 10 in</code> applies a standard ACL that limits which source addresses may connect to the VTY lines, typically only the management network. Also consider <code>login block-for</code> to slow down password guessing (temporarily blocking logins after repeated failures), <code>security passwords min-length</code>, and disabling unused services such as the HTTP server if not needed.</p>
+<p>Privilege levels range from 0 to 15. Level 1 is user EXEC and 15 is full privileged access; intermediate levels can be assigned specific commands, though role-based access through AAA is generally cleaner. For the console, apply <code>login local</code> and an <code>exec-timeout</code> too, since physical access is also a risk. Verify with <code>show ip ssh</code>, <code>show ssh</code> and <code>show users</code>. Local accounts remain important even with central AAA, as a fallback when the servers are unreachable.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>VTY lines</dt><dd>Virtual terminal lines used for remote Telnet or SSH management sessions.</dd><dt>login local</dt><dd>Line command that authenticates users against the device's local username database.</dd><dt>enable secret</dt><dd>The hashed password protecting privileged EXEC mode.</dd><dt>transport input ssh</dt><dd>Line command that permits only SSH for incoming remote sessions.</dd><dt>access-class</dt><dd>Applies an ACL to VTY lines to restrict which source addresses can connect.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A security review finds switches reachable by Telnet from the user VLAN with a shared line password. The team creates individual local accounts with scrypt secrets, generates 2048-bit RSA keys, sets <code>transport input ssh</code>, applies <code>access-class</code> permitting only the management subnet and adds <code>exec-timeout 10 0</code> to every VTY and console line.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> SSH needs a hostname, domain name and RSA keys. Use access-class (not ip access-group) to filter VTY access. Type 7 passwords are reversible; prefer secret with type 8 or 9 hashing.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What four things must be in place before SSH works on IOS?</summary><p>A non-default hostname, an IP domain name, an RSA key pair and a user authentication method such as a local username with login local.</p></details>
+<details class="sq"><summary>Which command limits VTY access to the management subnet?</summary><p>access-class with a standard ACL applied inbound under line vty.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study ENCOR for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ccnp-encor/">Open the ENCOR study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../netconf-and-restconf-for-configuration-and-operational-data/">← NETCONF and RESTCONF for configuration and operational data</a><a href="../aaa-with-tacacs-and-radius-method-lists-and-fallback/">AAA with TACACS+ and RADIUS, method lists and fallback →</a></nav>
+</main>
+</body>
+</html>

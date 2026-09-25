@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>XFS can grow but not shrink; ext4 can do both when unmounted · RHCSA Lesson</title>
+<meta name="description" content="When you resize storage, the file system type decides what is possible. This is one of the most tested distinctions in RHCSA storage: XFS, the RHEL default">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="XFS can grow but not shrink; ext4 can do both when unmounted · RHCSA Lesson">
+<meta property="og:description" content="When you resize storage, the file system type decides what is possible. This is one of the most tested distinctions in RHCSA storage: XFS, the RHEL default">
+<link rel="canonical" href="https://senayamyers27-art.github.io/rhcsa/lessons/xfs-can-grow-but-not-shrink-ext4-can-do-both-when-unmounted/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/rhcsa/lessons/xfs-can-grow-but-not-shrink-ext4-can-do-both-when-unmounted/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">RHCSA</a> / <a href="../">Lessons</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10) · Domain 6: Create and configure file systems</p>
+<h1>XFS can grow but not shrink; ext4 can do both when unmounted</h1>
+<article class="lbody">
+<p>When you resize storage, the file system type decides what is possible. This is one of the most tested distinctions in RHCSA storage: XFS, the RHEL default, can only get bigger. ext4 can get bigger while mounted, and it can get smaller, but only while unmounted. Knowing this lets you pick the right file system at creation time and avoid destroying data during a resize.</p>
+<p>XFS was designed around large, growing data sets. <code>xfs_growfs</code> extends it while it is mounted and in use, which is why growing XFS is quick and painless. There is no tool to shrink XFS in place. If an XFS volume truly must become smaller, the only path is to back up the data (for example with <code>xfsdump</code> or <code>tar</code>), unmount, reduce or recreate the logical volume, run <code>mkfs.xfs</code> again, and restore. On the exam that usually means you should not have chosen XFS for a volume the task says will shrink.</p>
+<p>ext4 grows online with <code>resize2fs</code> exactly like XFS grows with <code>xfs_growfs</code>. Shrinking requires more care, because the file system must be made smaller before the volume under it, never the other way around. Cutting the LV first chops off the end of the file system and corrupts data. The manual order is: unmount, check, shrink the file system, then shrink the LV.</p>
+<pre class="code" tabindex="0"><code>umount /logs
+e2fsck -f /dev/vg1/logs          # required check before shrinking
+resize2fs /dev/vg1/logs 800M     # shrink file system first
+lvreduce -L 800M /dev/vg1/logs   # then the LV to match
+mount /logs</code></pre>
+<p>The safer shortcut is <code>lvreduce -r -L 800M /dev/vg1/logs</code>. The <code>-r</code> option calls <code>fsadm</code>, which checks and shrinks the file system in the correct order before reducing the LV; it will unmount if needed or ask you to. Used on an XFS volume, <code>lvreduce -r</code> fails because XFS cannot shrink, which protects you. Without <code>-r</code>, <code>lvreduce</code> shows a warning that data may be destroyed; treat that warning seriously.</p>
+<p>Remember also that you cannot shrink an ext4 file system below the space its data uses, and <code>resize2fs</code> will refuse. Always confirm with <code>df -h</code> and <code>lvs</code> afterwards, and check that the data is still readable.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Shrink</dt><dd>Reducing a file system and its volume to a smaller size; supported offline by ext4 and not at all by XFS.</dd><dt>e2fsck -f</dt><dd>Forces a full consistency check of an ext file system, required by resize2fs before shrinking.</dd><dt>lvreduce</dt><dd>Decreases the size of a logical volume; with -r it shrinks the file system first.</dd><dt>fsadm</dt><dd>A helper used by lvextend -r and lvreduce -r to resize the file system on a logical volume.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A colleague needs 300 MiB back from the ext4 /reports volume. You unmount it, run lvreduce -r -L -300M /dev/vg1/reports, which checks and shrinks the file system before the LV, then remount and confirm the files are intact. The same request on an XFS volume would mean back up, recreate and restore.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Order is everything when shrinking: file system first, then logical volume. For growing it is the reverse: volume first, then file system. The -r option handles both orders for you.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Can you shrink a mounted ext4 file system?</summary><p>No. ext4 grows online but must be unmounted, and checked with e2fsck -f, before it can be shrunk.</p></details>
+<details class="sq"><summary>How do you reduce the size of an XFS volume?</summary><p>You cannot shrink XFS; back up the data, recreate a smaller LV and file system, and restore.</p></details>
+<details class="sq"><summary>Why is running lvreduce before resize2fs dangerous?</summary><p>It removes space the file system still thinks it owns, cutting off data at the end and corrupting the file system.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study RHCSA for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../rhcsa/">Open the RHCSA study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../extending-existing-logical-volumes-and-their-file-systems-lvextend-r-x/">← Extending existing logical volumes and their file systems (l</a><a href="../diagnosing-and-correcting-file-permission-problems-ls-l-namei-l-chmod/">Diagnosing and correcting file permission problems (ls -l, n →</a></nav>
+</main>
+</body>
+</html>

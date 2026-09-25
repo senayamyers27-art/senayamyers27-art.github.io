@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Defender for Identity alerts: DCSync, Golden Ticket… · SC-200 Lesson</title>
+<meta name="description" content="Defender for Identity (MDI) raises alerts for classic Active Directory attacks. You don't need to know how to perform them, but you must recognize them, un">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Defender for Identity alerts: DCSync, Golden Ticket… · SC-200 Lesson">
+<meta property="og:description" content="Defender for Identity (MDI) raises alerts for classic Active Directory attacks. You don't need to know how to perform them, but you must recognize them, un">
+<link rel="canonical" href="https://senayamyers27-art.github.io/sc-200/lessons/defender-for-identity-alerts-dcsync-golden-ticket-pass-the-hash-latera/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/sc-200/lessons/defender-for-identity-alerts-dcsync-golden-ticket-pass-the-hash-latera/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">SC-200</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Security Operations Analyst Associate SC-200 · Domain 2: Respond to security incidents</p>
+<h1>Defender for Identity alerts: DCSync, Golden Ticket, pass-the-hash; lateral movement paths; KRBTGT reset</h1>
+<article class="lbody">
+<p>Defender for Identity (MDI) raises alerts for classic Active Directory attacks. You don't need to know how to perform them, but you must recognize them, understand what the attacker gained, and know the correct response.</p>
+<p>DCSync abuses directory replication. Domain controllers legitimately replicate with each other using the Directory Replication Service (DRS) protocol. An attacker with an account holding replication rights (such as Domain Admins, or an account given the 'Replicating Directory Changes All' permission) asks a domain controller to replicate password data, from a machine that is not a domain controller. MDI alerts on 'Suspected DCSync attack (replication of directory services)' because replication requests from a non-DC are abnormal. The response is to find how the attacker got the privileged account, remove any unexpected replication permissions, reset affected credentials and treat any obtained hashes as compromised.</p>
+<p>A Golden Ticket is a forged Kerberos ticket-granting ticket (TGT). If an attacker steals the hash of the KRBTGT account, the account that signs all TGTs in the domain, they can create TGTs for any user, with any group memberships and long lifetimes, without ever touching a password. MDI detects signs of forged tickets, such as encryption downgrades, tickets for nonexistent accounts, time anomalies and forged authorization data. A Golden Ticket means the domain is fully compromised.</p>
+<p>Pass-the-hash uses a stolen NTLM password hash to authenticate as a user without knowing the password. Pass-the-ticket does the same with a stolen Kerberos ticket. MDI flags 'Suspected identity theft (pass-the-hash)' or pass-the-ticket when a user's credentials appear on a device where that user is not logged on. Response: isolate the source device, reset the user's password, and investigate how the hash was stolen, often through credential dumping from LSASS.</p>
+<p>Lateral movement paths (LMPs) show how an attacker could get from a non-sensitive account to a sensitive one by chaining sessions and local admin rights. For example, a helpdesk user is local admin on a workstation where a domain admin has logged on, so compromising the helpdesk user could expose the domain admin's credentials. MDI shows LMPs on user and device pages and in reports. You reduce them by removing unnecessary local admin rights, using tiered admin models and Local Administrator Password Solution (LAPS), and stopping privileged accounts from signing in to ordinary workstations.</p>
+<p>Recovering from a Golden Ticket requires resetting the KRBTGT password twice. Active Directory keeps the current and previous KRBTGT password, and tickets signed with either remain valid, so one reset is not enough. Wait for replication across all domain controllers between the two resets, and plan the resets carefully because they can break existing sessions. First remove the attacker's access, or they will steal the new hash too.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>DCSync</dt><dd>An attack that impersonates a domain controller to request password data via directory replication.</dd><dt>Golden Ticket</dt><dd>A forged Kerberos TGT created with the stolen KRBTGT hash, granting access as any user.</dd><dt>Pass-the-hash</dt><dd>Authenticating with a stolen NTLM hash instead of the password.</dd><dt>Lateral movement path</dt><dd>A chain of sessions and admin rights that lets an attacker move from a low-value account to a sensitive one.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>MDI raises 'Suspected DCSync attack' from a workstation using a service account that someone granted replication rights years ago. The SOC isolates the workstation, removes the replication permissions, resets the service account and all privileged passwords, and, because the KRBTGT hash may have been taken, performs two KRBTGT resets separated by full replication.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> KRBTGT is reset twice because AD accepts tickets signed with the current or the previous password. DCSync is recognized by replication requests coming from a machine that is not a domain controller.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why is a single KRBTGT reset not enough after a Golden Ticket attack?</summary><p>Tickets signed with the previous KRBTGT password remain valid, so you reset twice, allowing replication in between.</p></details>
+<details class="sq"><summary>What makes replication traffic suspicious enough for a DCSync alert?</summary><p>It comes from a device that is not a domain controller using an account with replication rights.</p></details>
+<details class="sq"><summary>How do you reduce lateral movement paths?</summary><p>Remove unnecessary local admin rights, use LAPS and tiered administration, and keep privileged accounts off ordinary workstations.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study SC-200 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../sc-200/">Open the SC-200 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../defender-for-office-365-threat-explorer-removing-delivered-phishing-us/">← Defender for Office 365: Threat Explorer, removing delivered</a><a href="../microsoft-entra-id-protection-risky-users-and-sign-ins-confirm-user-co/">Microsoft Entra ID Protection: risky users and sign-ins, con →</a></nav>
+</main>
+</body>
+</html>

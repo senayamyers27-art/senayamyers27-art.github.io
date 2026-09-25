@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Immutable infrastructure: replace rather than patch in place · Terraform Associate Lesson</title>
+<meta name="description" content="In a mutable model, you keep servers running for a long time and change them in place: log in, apply patches, edit configuration files, upgrade software. O">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Immutable infrastructure: replace rather than patch in place · Terraform Associate Lesson">
+<meta property="og:description" content="In a mutable model, you keep servers running for a long time and change them in place: log in, apply patches, edit configuration files, upgrade software. O">
+<link rel="canonical" href="https://senayamyers27-art.github.io/terraform/lessons/immutable-infrastructure-replace-rather-than-patch-in-place/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/terraform/lessons/immutable-infrastructure-replace-rather-than-patch-in-place/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Terraform Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004) · Domain 1: Infrastructure as Code (IaC) with Terraform</p>
+<h1>Immutable infrastructure: replace rather than patch in place</h1>
+<article class="lbody">
+<p>In a mutable model, you keep servers running for a long time and change them in place: log in, apply patches, edit configuration files, upgrade software. Over months, each server accumulates its own history of changes, and two servers that started identical slowly diverge. These are sometimes called snowflake servers because no two are alike, and rebuilding one exactly becomes hard.</p>
+<p>Immutable infrastructure flips this. Once a component is deployed, you do not modify it. When something needs to change, you build a new version, deploy it alongside or instead of the old one, and destroy the old one. Every running instance is built from a known, versioned definition, so what runs in production is exactly what was tested.</p>
+<p>Terraform supports this pattern naturally. Many resource arguments cannot be changed on a live object; changing them forces replacement, which the plan marks with <code>-/+</code> and the note that the change forces replacement. For a virtual machine, changing the image ID is a typical example. The usual workflow is to bake a new machine image with Packer or a similar tool, update the image ID variable in Terraform, and apply. Terraform destroys the old instance and creates a new one.</p>
+<p>Replacement order matters for availability. By default Terraform destroys the old object before creating the new one. Adding <code>lifecycle { create_before_destroy = true }</code> reverses that: the new object is created first, and the old one is destroyed only after the new one succeeds. Combined with a load balancer, auto scaling group or rolling deployment, this gives zero or near-zero downtime updates.</p>
+<pre class="code" tabindex="0"><code>resource &quot;aws_instance&quot; &quot;web&quot; {
+  ami           = var.image_id
+  instance_type = &quot;t3.small&quot;
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}</code></pre>
+<p>Benefits include consistency, easier rollback (redeploy the previous image), less configuration drift, and a smaller attack surface because no one needs to log in to production servers to change them. Security patches are applied by rebuilding images and replacing instances. The costs are that data must live outside the replaceable parts, in databases, object storage or attached volumes, and that your pipeline must be able to build and roll out new images quickly. Terraform does not force immutability; in-place updates remain available for arguments that support them.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Immutable infrastructure</dt><dd>A practice where deployed components are never modified; changes are made by replacing them with new versions.</dd><dt>Mutable infrastructure</dt><dd>Servers that are updated and patched in place over their lifetime.</dd><dt>Snowflake server</dt><dd>A server whose configuration has drifted into something unique and hard to reproduce.</dd><dt>Golden image</dt><dd>A pre-built, versioned machine image containing the OS and software, used to launch identical instances.</dd><dt>create_before_destroy</dt><dd>A lifecycle setting that makes Terraform create the replacement before destroying the original.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A critical OpenSSL patch is released. Instead of logging in to 50 servers, the team rebuilds its golden image with Packer, updates the image ID in Terraform, and applies. Instances are replaced behind the load balancer with <code>create_before_destroy</code>, and every server now runs the identical patched image.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Know that Terraform's default replacement order is destroy then create, and that <code>create_before_destroy</code> reverses it. In plan output, <code>-/+</code> means replace (destroy then create), while <code>+/-</code> means create then destroy.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>How is a patch applied in an immutable infrastructure model?</summary><p>By building a new image or artifact with the patch and replacing the running components, not by modifying them in place.</p></details>
+<details class="sq"><summary>What is Terraform's default order when a resource must be replaced, and how do you change it?</summary><p>Destroy the old object, then create the new one; set <code>lifecycle { create_before_destroy = true }</code> to create the new one first.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Terraform Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../terraform/">Open the Terraform Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../terraform-vs-configuration-management-tools-provisioning-infrastructur/">← Terraform vs configuration management tools: provisioning in</a><a href="../installing-terraform-and-pinning-its-version-with-required-version/">Installing Terraform and pinning its version with `required_ →</a></nav>
+</main>
+</body>
+</html>

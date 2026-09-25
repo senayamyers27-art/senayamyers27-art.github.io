@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Resource-based policies: Lambda permissions for… · Developer Associate Lesson</title>
+<meta name="description" content="Identity-based policies are attached to a user or role and say what that identity can do. Resource-based policies are attached to a resource and say who ca">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Resource-based policies: Lambda permissions for… · Developer Associate Lesson">
+<meta property="og:description" content="Identity-based policies are attached to a user or role and say what that identity can do. Resource-based policies are attached to a resource and say who ca">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/resource-based-policies-lambda-permissions-for-s3-sns-api-gateway-s3-b/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/resource-based-policies-lambda-permissions-for-s3-sns-api-gateway-s3-b/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 2: Security</p>
+<h1>Resource-based policies: Lambda permissions for S3/SNS/API Gateway, S3 bucket policies, KMS key policies</h1>
+<article class="lbody">
+<p>Identity-based policies are attached to a user or role and say what that identity can do. Resource-based policies are attached to a resource and say who can access it. They include a <code>Principal</code> element naming who is allowed, which can be an AWS account, a role, or an AWS service such as <code>s3.amazonaws.com</code>. Many integration errors on the exam come down to a missing resource-based policy.</p>
+<p>A Lambda function's resource-based policy (its function policy) controls which services and accounts may invoke it. When S3, SNS, EventBridge or API Gateway invokes a function, those services do not assume your execution role; they need permission on the function itself. You add it with <code>lambda add-permission</code> (the console does this for you when you add a trigger). Use <code>SourceArn</code> (and for S3, <code>SourceAccount</code>) conditions so only your specific bucket, topic or API can invoke the function, which prevents the confused deputy problem where another customer's resource triggers your function.</p>
+<pre class="code" tabindex="0"><code>aws lambda add-permission \
+  --function-name resize-image \
+  --statement-id s3-invoke \
+  --action lambda:InvokeFunction \
+  --principal s3.amazonaws.com \
+  --source-arn arn:aws:s3:::my-upload-bucket \
+  --source-account 111122223333</code></pre>
+<p>For API Gateway the principal is <code>apigateway.amazonaws.com</code> and the source ARN is the API's execute-api ARN, which can be scoped to a stage, method and path. When a stage variable points to different function aliases, each alias needs its own permission. A missing permission here shows up as a 500 error from API Gateway with 'Invalid permissions on Lambda function' in execution logs. For SQS, Kinesis and DynamoDB Streams event sources it is the opposite: Lambda polls them, so the execution role needs read permissions and no function policy is required.</p>
+<p>S3 bucket policies are JSON policies on the bucket. They can grant access to other accounts, enforce conditions for everyone (for example deny any request where <code>aws:SecureTransport</code> is false, or deny <code>PutObject</code> without a required encryption header), and restrict access to specific VPC endpoints or source IPs. Access within one account is granted if either the identity policy or the bucket policy allows it and nothing explicitly denies it; cross-account access requires both sides to allow it. S3 Block Public Access settings override bucket policies that would make data public.</p>
+<p>AWS Key Management Service (KMS) key policies are special: every KMS key must have one, and it is the primary control. IAM policies grant access to a key only if the key policy allows it, typically through the default statement that gives the account root principal full access, which in effect delegates to IAM. Without that statement, even an administrator's IAM policy cannot use the key. For cross-account use, the key policy must name the other account and that account's IAM policies must also allow the KMS actions. Grants are an additional mechanism for temporary, programmatic delegation of key use to AWS services.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Resource-based policy</dt><dd>A policy attached to a resource that names the principals allowed to access it.</dd><dt>Function policy</dt><dd>The resource-based policy on a Lambda function that authorizes services or accounts to invoke it.</dd><dt>Bucket policy</dt><dd>A resource-based policy on an S3 bucket controlling access and enforcing conditions for requests to it.</dd><dt>Key policy</dt><dd>The mandatory resource-based policy on a KMS key; IAM policies only work if it allows them.</dd><dt>Confused deputy</dt><dd>A situation where a trusted service is tricked into acting for the wrong party, prevented with SourceArn and SourceAccount conditions.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A developer creates an SNS topic subscription to a Lambda function using the CLI, but messages never trigger it. The function policy has no statement allowing sns.amazonaws.com. Running lambda add-permission with the topic's ARN as the source ARN fixes delivery.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Push-based sources (S3, SNS, API Gateway, EventBridge) need permission in the function's resource-based policy. Poll-based sources (SQS, Kinesis, DynamoDB Streams) need permissions in the execution role.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why does S3 need a Lambda function policy but SQS does not?</summary><p>S3 invokes the function directly, so the function must allow the S3 principal; with SQS, Lambda polls the queue using the execution role's permissions.</p></details>
+<details class="sq"><summary>An admin with full IAM permissions cannot use a KMS key. Why might that be?</summary><p>The key policy does not allow the account root or the admin, so IAM policies are not honored for that key.</p></details>
+<details class="sq"><summary>How can you force all S3 access to a bucket to use HTTPS?</summary><p>Add a bucket policy that denies all actions when the condition aws:SecureTransport is false.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../iam-for-applications-execution-roles-instance-profiles-ecs-task-roles/">← IAM for applications: execution roles, instance profiles, EC</a><a href="../cross-account-access-with-sts-assumerole-and-trust-policies-temporary/">Cross-account access with STS AssumeRole and trust policies; →</a></nav>
+</main>
+</body>
+</html>

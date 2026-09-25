@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Separation of control plane and forwarding plane · JNCIA-Junos Lesson</title>
+<meta name="description" content="Every router does two very different jobs. It has to work out where traffic should go, by running routing protocols, handling management sessions and build">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Separation of control plane and forwarding plane · JNCIA-Junos Lesson">
+<meta property="og:description" content="Every router does two very different jobs. It has to work out where traffic should go, by running routing protocols, handling management sessions and build">
+<link rel="canonical" href="https://senayamyers27-art.github.io/jncia-junos/lessons/separation-of-control-plane-and-forwarding-plane/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/jncia-junos/lessons/separation-of-control-plane-and-forwarding-plane/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">JNCIA-Junos</a> / <a href="../">Lessons</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106 · Domain 2: Junos OS fundamentals</p>
+<h1>Separation of control plane and forwarding plane</h1>
+<article class="lbody">
+<p>Every router does two very different jobs. It has to work out where traffic should go, by running routing protocols, handling management sessions and building tables. And it has to actually move millions of packets per second out the right interfaces. Junos separates these into the control plane and the forwarding plane (also called the data plane), and runs them on different hardware.</p>
+<p>The control plane is handled by the Routing Engine (RE). It is essentially a general-purpose computer: CPU, memory and storage running the Junos kernel and daemons. It talks OSPF, BGP and other protocols with neighbors, runs the CLI and J-Web, handles SSH, SNMP and syslog, and computes the best path to each destination. From that it builds a routing table and then a forwarding table.</p>
+<p>The forwarding plane is handled by the Packet Forwarding Engine (PFE). On most platforms it is built from specialised ASICs (application-specific integrated circuits) designed to look up destinations, apply filters, policers and CoS, and forward traffic at line rate. The RE sends a copy of the forwarding table down to the PFE, and the PFE forwards transit traffic using that copy without involving the RE for each packet.</p>
+<p>The two are connected by an internal link. Over it the RE pushes forwarding table updates to the PFE, and the PFE sends up the small amount of traffic that the RE itself must handle, such as routing protocol packets or an SSH session to the router. This host-bound traffic is called exception traffic, and it is rate-limited so it cannot overwhelm the RE.</p>
+<p>The benefits are the reason this design is on the exam. Performance: forwarding speed does not depend on RE CPU load, so a busy CLI session or a large BGP update does not slow transit traffic. Stability: if the RE is heavily loaded, or a routing daemon restarts, the PFE can keep forwarding with the last forwarding table it received. Security: because transit traffic never reaches the RE, attacks against the router itself are limited to the exception path, which you can protect with a loopback filter. Scale: vendors can improve RE and PFE hardware independently.</p>
+<p>You can see both sides from the CLI. <code>show route</code> displays the routing table held on the RE. <code>show route forwarding-table</code> shows the forwarding table that has been built for the PFE. <code>show chassis routing-engine</code> shows RE CPU and memory; <code>show chassis fpc</code> shows the line cards that host PFEs on modular platforms.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Control plane</dt><dd>The functions that decide where traffic goes: routing protocols, management and table building, handled by the Routing Engine.</dd><dt>Forwarding plane</dt><dd>The functions that move transit packets using the forwarding table, handled by the Packet Forwarding Engine.</dd><dt>Routing Engine (RE)</dt><dd>The CPU-based component that runs Junos, the CLI and routing protocols.</dd><dt>Packet Forwarding Engine (PFE)</dt><dd>The component, usually ASIC-based, that forwards traffic at line rate.</dd><dt>Exception traffic</dt><dd>Packets that the PFE must send up to the RE, such as traffic addressed to the router itself.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>During a maintenance window, an engineer runs a large <code>show route</code> command and the RE CPU climbs to 90 percent for a minute. Customers see no effect, because their transit traffic is forwarded by the PFE using its forwarding table, which the heavy CLI output does not touch.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> If a question asks which component forwards transit traffic, the answer is the PFE. If it asks which runs protocols, builds tables or hosts the CLI, the answer is the RE.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What does the RE send to the PFE?</summary><p>A copy of the forwarding table (plus configuration such as filters and CoS), which the PFE uses to forward transit traffic.</p></details>
+<details class="sq"><summary>Why can a router keep forwarding if its routing daemon restarts?</summary><p>Because the PFE keeps using the last forwarding table it received from the RE, independent of the RE's processes.</p></details>
+<details class="sq"><summary>Name one security benefit of separating the planes.</summary><p>Transit traffic never reaches the RE, so only host-bound exception traffic can target the control plane, and it can be rate-limited and filtered.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study JNCIA-Junos for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../jncia-junos/">Open the JNCIA-Junos study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../junos-os-as-one-modular-os-across-routing-switching-and-security-platf/">← Junos OS as one modular OS across routing, switching and sec</a><a href="../routing-engine-re-runs-the-cli-routing-protocols-builds-the-routing-an/">Routing Engine (RE): runs the CLI, routing protocols, builds →</a></nav>
+</main>
+</body>
+</html>

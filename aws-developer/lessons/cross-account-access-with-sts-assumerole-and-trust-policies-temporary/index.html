@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cross-account access with STS AssumeRole and trust… · Developer Associate Lesson</title>
+<meta name="description" content="Organizations run many AWS accounts, and applications often need to reach resources in another account: a build pipeline deploying to production, a reporti">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Cross-account access with STS AssumeRole and trust… · Developer Associate Lesson">
+<meta property="og:description" content="Organizations run many AWS accounts, and applications often need to reach resources in another account: a build pipeline deploying to production, a reporti">
+<link rel="canonical" href="https://senayamyers27-art.github.io/aws-developer/lessons/cross-account-access-with-sts-assumerole-and-trust-policies-temporary/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/aws-developer/lessons/cross-account-access-with-sts-assumerole-and-trust-policies-temporary/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Developer Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02 · Domain 2: Security</p>
+<h1>Cross-account access with STS AssumeRole and trust policies; temporary credentials</h1>
+<article class="lbody">
+<p>Organizations run many AWS accounts, and applications often need to reach resources in another account: a build pipeline deploying to production, a reporting job reading a data account's bucket. The standard, secure way to do this is for the caller to assume a role in the target account, receiving short-lived credentials, instead of creating IAM users with long-term keys in every account.</p>
+<p>Two policies on the target role make this work. The trust policy (the role's resource-based policy, also called the assume role policy) says who may assume the role: its <code>Principal</code> names the trusted account or specific role, and the action is <code>sts:AssumeRole</code>. The permissions policy says what the role can do once assumed. On the calling side, the caller's own identity policy must allow <code>sts:AssumeRole</code> on the target role's ARN. Both sides must agree; that is the rule for all cross-account access.</p>
+<pre class="code" tabindex="0"><code>{
+  &quot;Version&quot;: &quot;2012-10-17&quot;,
+  &quot;Statement&quot;: [{
+    &quot;Effect&quot;: &quot;Allow&quot;,
+    &quot;Principal&quot;: { &quot;AWS&quot;: &quot;arn:aws:iam::111122223333:role/ci-deployer&quot; },
+    &quot;Action&quot;: &quot;sts:AssumeRole&quot;,
+    &quot;Condition&quot;: { &quot;StringEquals&quot;: { &quot;sts:ExternalId&quot;: &quot;example-external-id&quot; } }
+  }]
+}</code></pre>
+<p>The caller then calls the AWS Security Token Service (STS) <code>AssumeRole</code> API with the role ARN and a session name. STS returns temporary credentials: an access key ID, a secret access key and a session token, plus an expiration time. The session lasts one hour by default; you can request from 15 minutes up to the role's configured maximum session duration (which can be set as high as 12 hours). Code uses all three values, and the session token is what distinguishes temporary credentials from long-term ones. When credentials expire, the caller must assume the role again; SDK assume-role credential providers and CLI profiles with <code>role_arn</code> and <code>source_profile</code> refresh automatically.</p>
+<p>An external ID is a secret-ish value that a third party must pass when assuming a role in your account, required through a condition in the trust policy. It protects against the confused deputy problem when a vendor serves many customers. Multi-factor authentication (MFA) can also be required with the <code>aws:MultiFactorAuthPresent</code> condition. When one assumed role is used to assume another, called role chaining, the session is limited to one hour.</p>
+<p>STS has related APIs worth recognizing: <code>AssumeRoleWithWebIdentity</code> exchanges a token from an OpenID Connect (OIDC) provider, such as a CI system's identity token or Cognito, for AWS credentials; <code>AssumeRoleWithSAML</code> does the same for SAML identity providers; <code>GetSessionToken</code> returns temporary credentials for an IAM user, typically to satisfy an MFA requirement; <code>GetCallerIdentity</code> tells you who the current credentials belong to; and <code>DecodeAuthorizationMessage</code> decodes the encoded message that some services return with an authorization failure, which helps you see which policy denied a request.</p>
+<p>Every assumed-role action is logged in AWS CloudTrail with the role session name, so choose meaningful session names (such as the pipeline run ID) to make auditing easier. In the target account, the actions appear as performed by the role, and the session name shows who used it.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Trust policy</dt><dd>The resource-based policy on an IAM role that specifies which principals may assume it.</dd><dt>AssumeRole</dt><dd>The STS API that returns temporary credentials for a role to a trusted caller.</dd><dt>Temporary credentials</dt><dd>An access key ID, secret access key and session token that expire after a set duration.</dd><dt>External ID</dt><dd>A value required in a trust policy condition that third parties must supply when assuming a role, preventing confused deputy attacks.</dd><dt>Role chaining</dt><dd>Using credentials from one assumed role to assume another role; sessions are limited to one hour.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A CodeBuild project in a tools account deploys to a production account. Production has a deploy role whose trust policy allows the build project's service role, and the build role's policy allows sts:AssumeRole on that ARN. The buildspec runs aws sts assume-role, exports the three returned values as environment variables, and runs the deployment.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Cross-account access needs both sides: the target role's trust policy must trust the caller, and the caller's IAM policy must allow sts:AssumeRole on the role. If either is missing, you get AccessDenied.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>What three values make up temporary credentials?</summary><p>An access key ID, a secret access key and a session token.</p></details>
+<details class="sq"><summary>Which policy on a role decides who can assume it?</summary><p>The trust policy (assume role policy document).</p></details>
+<details class="sq"><summary>Which STS API would a CI system with an OIDC token use to get AWS credentials without stored keys?</summary><p>AssumeRoleWithWebIdentity.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Developer Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../aws-developer/">Open the Developer Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../resource-based-policies-lambda-permissions-for-s3-sns-api-gateway-s3-b/">← Resource-based policies: Lambda permissions for S3/SNS/API G</a><a href="../amazon-cognito-user-pools-sign-up-sign-in-id-access-refresh-tokens-vs/">Amazon Cognito: user pools (sign-up, sign-in, ID/access/refr →</a></nav>
+</main>
+</body>
+</html>

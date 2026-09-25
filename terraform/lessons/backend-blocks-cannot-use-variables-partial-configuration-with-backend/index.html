@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Backend blocks cannot use variables; partial… · Terraform Associate Lesson</title>
+<meta name="description" content="Terraform initializes the backend before it evaluates anything else in the configuration, because it needs the backend to read state. At that early point, ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Backend blocks cannot use variables; partial… · Terraform Associate Lesson">
+<meta property="og:description" content="Terraform initializes the backend before it evaluates anything else in the configuration, because it needs the backend to read state. At that early point, ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/terraform/lessons/backend-blocks-cannot-use-variables-partial-configuration-with-backend/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/terraform/lessons/backend-blocks-cannot-use-variables-partial-configuration-with-backend/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">Terraform Associate</a> / <a href="../">Lessons</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004) · Domain 6: Terraform state management</p>
+<h1>Backend blocks cannot use variables; partial configuration with `-backend-config`</h1>
+<article class="lbody">
+<p>Terraform initializes the backend before it evaluates anything else in the configuration, because it needs the backend to read state. At that early point, input variables, locals and data sources have not been processed. As a result, a <code>backend</code> block cannot contain references such as <code>var.bucket</code>, <code>local.key</code> or any other expression that depends on configuration values. Only literal values are allowed, and Terraform reports an error if you try to use a variable there.</p>
+<p>That restriction creates a practical problem. You often want the same code to use a different bucket or key for each environment, and you certainly do not want access keys hard-coded in version control. The answer is partial configuration: leave some or all backend arguments out of the block and supply them when you run <code>terraform init</code>.</p>
+<p>There are three ways to provide the missing values. You can pass key/value pairs on the command line with <code>-backend-config=&quot;KEY=VALUE&quot;</code>, repeating the flag for each argument. You can pass a file path with <code>-backend-config=PATH</code>, where the file contains the arguments in HCL format (commonly named something like <code>prod.s3.tfbackend</code>). Or, if you run init interactively and required values are missing, Terraform prompts for them. Many backends also read certain settings, especially credentials, from environment variables.</p>
+<pre class="code" tabindex="0"><code># backend.tf
+terraform {
+  backend &quot;s3&quot; {}
+}
+
+# prod.s3.tfbackend
+bucket = &quot;example-prod-state&quot;
+key    = &quot;app/terraform.tfstate&quot;
+region = &quot;us-east-1&quot;
+
+$ terraform init -backend-config=prod.s3.tfbackend</code></pre>
+<p>An empty backend block like <code>backend &quot;s3&quot; {}</code> is valid and common; it declares the backend type while leaving all settings to init. Terraform merges the values from the block, the files and the command line. The final merged configuration is stored in <code>.terraform/terraform.tfstate</code> and in any saved plan files, so be aware that secrets passed this way are written to local disk. For credentials, environment variables or the platform's standard credential chain are usually a better choice.</p>
+<p>Partial configuration works well with CI pipelines, which can call <code>terraform init -backend-config=env/${ENV}.tfbackend</code> for each environment while the Terraform code stays identical. It also keeps environment-specific or sensitive details out of shared code. The <code>cloud</code> block for HCP Terraform has a similar limitation and can instead read settings from environment variables such as <code>TF_CLOUD_ORGANIZATION</code> and <code>TF_WORKSPACE</code>.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Partial configuration</dt><dd>Leaving some backend arguments out of the backend block and supplying them at terraform init time.</dd><dt>-backend-config</dt><dd>An init flag that supplies backend settings, either as KEY=VALUE pairs or as a path to a configuration file.</dd><dt>Backend configuration file</dt><dd>An HCL file of backend arguments passed with -backend-config, often named with a .tfbackend suffix.</dd><dt>Early evaluation</dt><dd>The reason backends cannot use variables: backends are initialized before variables and locals are evaluated.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A pipeline deploys the same code to dev and prod. The backend block is just backend &quot;azurerm&quot; {}. The dev job runs terraform init -backend-config=dev.tfbackend and the prod job uses prod.tfbackend, each pointing at a different storage account and key, with credentials coming from the pipeline's managed identity.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> If a question shows var. inside a backend block, the answer is that it is not allowed; use -backend-config files or key/value pairs at init instead.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Why can't a backend block reference input variables?</summary><p>The backend is initialized before Terraform evaluates variables and locals, so only literal values are allowed.</p></details>
+<details class="sq"><summary>Name two forms the -backend-config flag accepts.</summary><p>A KEY=VALUE pair such as -backend-config=&quot;bucket=my-state&quot;, or a path to a file containing backend arguments.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study Terraform Associate for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../terraform/">Open the Terraform Associate study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../the-backend-block-inside-terraform-remote-backends-such-as-s3-azurerm/">← The `backend` block inside `terraform {}`: remote backends s</a><a href="../migrating-state-between-backends-with-terraform-init-migrate-state/">Migrating state between backends with `terraform init -migra →</a></nav>
+</main>
+</body>
+</html>

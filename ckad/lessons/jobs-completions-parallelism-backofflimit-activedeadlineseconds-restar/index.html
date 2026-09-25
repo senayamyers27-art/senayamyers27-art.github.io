@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jobs: completions, parallelism, backoffLimit… · CKAD Lesson</title>
+<meta name="description" content="A Job creates one or more Pods and tracks how many finish successfully. When the required number of successes is reached, the Job is complete and no new Po">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Jobs: completions, parallelism, backoffLimit… · CKAD Lesson">
+<meta property="og:description" content="A Job creates one or more Pods and tracks how many finish successfully. When the required number of successes is reached, the Job is complete and no new Po">
+<link rel="canonical" href="https://senayamyers27-art.github.io/ckad/lessons/jobs-completions-parallelism-backofflimit-activedeadlineseconds-restar/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/ckad/lessons/jobs-completions-parallelism-backofflimit-activedeadlineseconds-restar/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">CKAD</a> / <a href="../">Lessons</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum) · Domain 1: Application Design and Build</p>
+<h1>Jobs: completions, parallelism, backoffLimit, activeDeadlineSeconds, restartPolicy Never/OnFailure</h1>
+<article class="lbody">
+<p>A Job creates one or more Pods and tracks how many finish successfully. When the required number of successes is reached, the Job is complete and no new Pods are started. Completed Pods are kept (in Completed status) so you can read their logs, until the Job is deleted or cleaned up by <code>ttlSecondsAfterFinished</code> if you set it.</p>
+<p><code>completions</code> is how many successful Pod runs the Job needs; it defaults to 1. <code>parallelism</code> is how many Pods may run at the same time; it also defaults to 1. With <code>completions: 6</code> and <code>parallelism: 2</code>, the Job runs two Pods at a time until six have succeeded. If you set parallelism but leave completions unset, you get a work-queue style Job where Pods coordinate among themselves and the Job completes once one succeeds and all have finished.</p>
+<p><code>backoffLimit</code> is the number of retries before the Job is marked Failed; the default is 6. Failed Pods are retried with an increasing delay (exponential back-off). <code>activeDeadlineSeconds</code> is a hard time limit for the whole Job: once it passes, Kubernetes terminates the running Pods and marks the Job Failed with the reason DeadlineExceeded. The deadline takes precedence over backoffLimit, so a Job can fail on time even if it still had retries left.</p>
+<p>The Pod template's <code>restartPolicy</code> must be <code>Never</code> or <code>OnFailure</code>. With <code>Never</code>, a failed container leaves a failed Pod behind and the Job controller creates a brand-new Pod for the retry, so you see several Pods and can inspect each one's logs. With <code>OnFailure</code>, the kubelet restarts the container inside the same Pod, so you see one Pod with a rising restart count and earlier logs are harder to reach (use <code>kubectl logs --previous</code>).</p>
+<pre class="code" tabindex="0"><code>apiVersion: batch/v1
+kind: Job
+metadata:
+  name: crunch
+spec:
+  completions: 6
+  parallelism: 2
+  backoffLimit: 3
+  activeDeadlineSeconds: 120
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: worker
+        image: busybox
+        command: [&quot;sh&quot;, &quot;-c&quot;, &quot;echo working; sleep 5&quot;]</code></pre>
+<p>Generate a starting point with <code>kubectl create job crunch --image=busybox --dry-run=client -o yaml -- sh -c 'echo working; sleep 5' &gt; job.yaml</code>, then add the extra fields. Watch progress with <code>kubectl get job crunch</code> (the COMPLETIONS column shows something like 4/6) and <code>kubectl get pods -w</code>. The Job adds a <code>job-name=crunch</code> label to its Pods, so <code>kubectl logs -l job-name=crunch</code> gathers their output.</p>
+<p>Most Job fields in the Pod template cannot be changed after creation. If you need different settings, delete the Job and create it again.</p>
+<h2>Key terms</h2>
+<dl class="terms"><dt>completions</dt><dd>Number of successful Pod runs required for the Job to finish (default 1).</dd><dt>parallelism</dt><dd>Maximum number of the Job's Pods running at once (default 1).</dd><dt>backoffLimit</dt><dd>Number of retries before the Job is marked Failed (default 6).</dd><dt>activeDeadlineSeconds</dt><dd>Maximum run time for the whole Job, after which its Pods are stopped and it fails.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>A thumbnail generator must process 20 batches but the cluster can only spare capacity for four at once. The team sets <code>completions: 20</code>, <code>parallelism: 4</code> and <code>activeDeadlineSeconds: 1800</code>, so the work finishes in waves of four and never runs past half an hour.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> Know the defaults (completions 1, parallelism 1, backoffLimit 6) and that activeDeadlineSeconds wins over backoffLimit. Also remember Never gives new Pods on retry while OnFailure restarts the same Pod.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>A Job has completions 5 and parallelism 2. What is the most Pods running at once?</summary><p>Two; parallelism caps concurrent Pods while the Job works toward five successes.</p></details>
+<details class="sq"><summary>A Job fails with reason DeadlineExceeded. Which field caused it?</summary><p>activeDeadlineSeconds, the overall time limit for the Job.</p></details>
+<details class="sq"><summary>How do retries differ between restartPolicy Never and OnFailure?</summary><p>Never creates a new Pod for each retry; OnFailure restarts the container within the same Pod.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study CKAD for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../ckad/">Open the CKAD study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../choosing-a-workload-deployment-statefulset-daemonset-job-cronjob-bare/">← Choosing a workload: Deployment, StatefulSet, DaemonSet, Job</a><a href="../cronjobs-schedule-syntax-concurrencypolicy-history-limits-running-a-jo/">CronJobs: schedule syntax, concurrencyPolicy, history limits →</a></nav>
+</main>
+</body>
+</html>

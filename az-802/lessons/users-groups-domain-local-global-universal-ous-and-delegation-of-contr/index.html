@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Users, groups (domain local, global, universal), OUs and… · AZ-802 Lesson</title>
+<meta name="description" content="Users, computers and groups are the everyday objects of AD. Organizational units (OUs) are containers you create to organize those objects.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Users, groups (domain local, global, universal), OUs and… · AZ-802 Lesson">
+<meta property="og:description" content="Users, computers and groups are the everyday objects of AD. Organizational units (OUs) are containers you create to organize those objects.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/az-802/lessons/users-groups-domain-local-global-universal-ous-and-delegation-of-contr/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/az-802/lessons/users-groups-domain-local-global-universal-ous-and-delegation-of-contr/">
+<link rel="icon" href="../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../manifest.webmanifest">
+<link rel="preload" href="../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../assets/style.css">
+<script src="../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../">All certifications</a> / <a href="../../">AZ-802</a> / <a href="../">Lessons</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802 · Domain 1: Deploy and manage AD DS</p>
+<h1>Users, groups (domain local, global, universal), OUs and delegation of control; group managed service accounts and the KDS root key</h1>
+<article class="lbody">
+<p>Users, computers and groups are the everyday objects of AD. Organizational units (OUs) are containers you create to organize those objects. OUs matter for two reasons: you link Group Policy Objects (GPOs) to them, and you delegate administrative control over them. The built-in Users and Computers containers are not OUs, so you cannot link GPOs to them; most organizations build an OU structure by location, department or object type and move objects into it.</p>
+<p>Groups have a type and a scope. Security groups can be used in permissions; distribution groups are only for email. Scope decides what a group can contain and where it can be used. A domain local group can contain accounts and groups from any trusted domain but can only be assigned permissions in its own domain, so it is ideal for resource permissions. A global group can contain only members from its own domain but can be used anywhere in the forest or trusting domains, so it is ideal for grouping people by role. A universal group can contain members from any domain in the forest and be used anywhere in the forest; its membership is stored in the global catalog, so keep universal membership stable.</p>
+<p>Microsoft's recommended nesting strategy is AGDLP: put Accounts in Global groups, put global groups in Domain Local groups, and assign Permissions to the domain local groups. In multi-domain forests, AGUDLP adds universal groups in the middle. This keeps permissions on resources short and lets you change who has access by changing global group membership.</p>
+<p>Delegation of control lets you give limited rights without making someone a Domain Admin. Right-click an OU, choose Delegate Control, pick a group (for example Helpdesk) and a task such as reset user passwords and force password change at next logon. The wizard writes access control entries on the OU. Always delegate to groups, not individuals, and review the result on the OU's Security tab under Advanced.</p>
+<p>Services often run under accounts with passwords that never change, which is a security risk. A group managed service account (gMSA) fixes this. AD generates and rotates a complex password automatically (every 30 days by default), and only the computers you list may retrieve it. Before creating the first gMSA, the domain needs a Key Distribution Services (KDS) root key, which DCs use to derive gMSA passwords. <code>Add-KdsRootKey -EffectiveImmediately</code> still waits up to 10 hours for replication; in a single-DC lab you can backdate it with <code>-EffectiveTime ((Get-Date).AddHours(-10))</code>, but do not do that in production.</p>
+<pre class="code" tabindex="0"><code>New-ADServiceAccount -Name svcWeb -DNSHostName svcWeb.corp.contoso.com `
+  -PrincipalsAllowedToRetrieveManagedPassword WebServers
+# On a member of WebServers:
+Install-ADServiceAccount svcWeb
+Test-ADServiceAccount svcWeb
+```
+Then set the service to log on as `CORP\svcWeb$` with a blank password.</code></pre>
+<h2>Key terms</h2>
+<dl class="terms"><dt>Domain local group</dt><dd>A group whose permissions apply only in its own domain but which can contain members from any trusted domain.</dd><dt>Global group</dt><dd>A group containing members only from its own domain that can be used for permissions across the forest.</dd><dt>Universal group</dt><dd>A group with members from any domain in the forest, usable anywhere, with membership replicated to the global catalog.</dd><dt>gMSA</dt><dd>Group managed service account: a service identity whose password AD rotates and releases only to authorized hosts.</dd><dt>KDS root key</dt><dd>The domain key that Key Distribution Services uses to generate gMSA passwords; required once before the first gMSA.</dd></dl>
+<div class="panel ex"><strong>Real-world example</strong><p>The helpdesk needs to unlock accounts and reset passwords for the Sales OU only. The admin runs Delegate Control on OU=Sales, grants the Helpdesk-Sales group Reset user passwords, and confirms that helpdesk staff cannot modify group memberships or other OUs.</p></div>
+<div class="status notice"><strong>Exam tip:</strong> If New-ADServiceAccount fails with a key-related error, the answer is almost always that the KDS root key is missing or not yet effective. For group scope questions, remember AGDLP.</div>
+<h2>Check yourself</h2>
+<details class="sq"><summary>Which group scope should receive NTFS permissions on a file share in the AGDLP model?</summary><p>A domain local group.</p></details>
+<details class="sq"><summary>What must exist in the domain before you can create a gMSA?</summary><p>A KDS root key created with Add-KdsRootKey and effective (normally after replication).</p></details>
+<details class="sq"><summary>Why can you not link a GPO to the default Users container?</summary><p>It is a container, not an OU; GPOs can only link to sites, domains and OUs.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Study AZ-802 for free</strong><br><span class="note">A week-by-week plan with every lesson, quizzes, checkpoint tests, a practice exam and hands-on labs.</span></div><a class="btn sm" href="../../az-802/">Open the AZ-802 study plan</a></div>
+<nav class="pager" aria-label="More lessons"><a href="../forest-external-shortcut-and-realm-trusts-transitivity-and-direction-s/">← Forest, external, shortcut and realm trusts; transitivity an</a><a href="../default-domain-policy-vs-fine-grained-password-policies-psos-ad-recycl/">Default Domain Policy vs fine-grained password policies (PSO →</a></nav>
+</main>
+</body>
+</html>
