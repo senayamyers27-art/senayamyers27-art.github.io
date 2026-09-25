@@ -7,10 +7,29 @@
   const U = CertHub.U;
   const contact = () => `<a href="https://github.com/senayamyers27-art/Claude.ai-stuff/security/advisories/new" target="_blank" rel="noopener">GitHub private reporting</a>`;
 
+  // Accounts exist only when site.config.json sets apiOrigin; the policies describe whichever is true.
+  const accounts = () => !!(CertHub.site && CertHub.site.apiUrl);
+
+  function accountPrivacy() {
+    return `<h2>Optional accounts</h2>
+    <p>You can use everything without an account. If you choose to create one, we store on our server (a Cloudflare Worker with a Cloudflare D1 database):</p>
+    <ul>
+      <li>Your email address, used to send sign-in links and nothing else (no newsletters unless you ask)</li>
+      <li>A copy of your study progress and lab progress, including lab notes, so it can sync between your devices</li>
+      <li>One cookie, <code>__Host-cs_session</code>, that keeps you signed in for up to 30 days. It is secure, HTTP-only and not used for tracking. The site stores only a hash of it.</li>
+      <li>If you buy Pro or a group plan: a Stripe customer ID and your plan status. Payment details are handled by Stripe; we never see card numbers.</li>
+      <li>If you join an organization through an invite: your membership. Instructors of your cohort can see your email and progress numbers (questions answered, accuracy, days checked, labs finished, last test score and last activity). They cannot see your lab notes.</li>
+      <li>A security log of account events (sign-in, billing and organization changes) with the time and IP address, kept to investigate abuse.</li>
+    </ul>
+    <p>Sign-in emails are sent through our email provider (Resend). On the Account page you can download all your account data or delete your account at any time. Deleting it removes your server data and cancels any subscription; progress on your own device stays until you clear it.</p>`;
+  }
+
   function privacy() {
     return `<h1>Privacy Policy</h1>
     <p class="meta">Effective ${EFFECTIVE}</p>
-    <div class="status notice"><strong>Short version:</strong> ${SITE} has no accounts, no cookies, no analytics, no ads and no tracking. Your study progress and lab notes stay in your own browser. We never receive them.</div>
+    <div class="status notice"><strong>Short version:</strong> ${accounts()
+      ? `${SITE} has no analytics, no ads and no tracking. Without an account your study progress and lab notes stay in your own browser. Accounts are optional; if you create one, we store your email and a synced copy of your progress, and nothing else about you.`
+      : `${SITE} has no accounts, no cookies, no analytics, no ads and no tracking. Your study progress and lab notes stay in your own browser. We never receive them.`}</div>
     <div class="prose">
     <h2>What this policy covers</h2>
     <p>This policy explains what information ${SITE} (“the site”, “we”) handles when you use the study plans, quizzes, labs and portfolio pages.</p>
@@ -23,7 +42,7 @@
       <li>Lab progress: steps and checks you ticked, when you finished a lab, and the notes you type</li>
       <li>Your light or dark theme choice</li>
     </ul>
-    <p>This data never leaves your device unless you choose to move it. It is not sent to us or to anyone else. Clearing your browser's site data deletes it. Anyone with access to your device and browser profile can see it, so don't put passwords, API keys or other secrets in lab notes.</p>
+    <p>${accounts() ? "Unless you sign in to sync it (see Optional accounts below), this" : "This"} data never leaves your device unless you choose to move it. It is not sent to us or to anyone else. Clearing your browser's site data deletes it. Anyone with access to your device and browser profile can see it, so don't put passwords, API keys or other secrets in lab notes.</p>
 
     <h2>Backups you create</h2>
     <p>“Download backup” and “Copy backup” produce a file or text containing the data above. It goes only where you save or paste it. “Restore” reads a backup you choose back into your browser.</p>
@@ -31,12 +50,14 @@
     <h2>Offline copy</h2>
     <p>The site uses a service worker to keep a copy of its own pages, scripts, fonts and question banks on your device so it works offline. It caches only the site's files, not your data.</p>
 
+    ${accounts() ? accountPrivacy() : ""}
     <h2>What we don't collect</h2>
     <ul>
-      <li>No accounts, names, email addresses or passwords</li>
-      <li>No cookies</li>
+      ${accounts() ? `<li>No passwords, names or profiles; an email address only if you create an account</li>
+      <li>No cookies except the sign-in cookie for people who create an account</li>` : `<li>No accounts, names, email addresses or passwords</li>
+      <li>No cookies</li>`}
       <li>No analytics, advertising, social media or tracking scripts, and no fingerprinting</li>
-      <li>No requests to other websites: fonts and all other files are served from this site</li>
+      <li>No requests to other websites: fonts and all other files are served from this site${accounts() ? " (signed-in accounts also talk to the site's own account service)" : ""}</li>
     </ul>
 
     <h2>Hosting and server logs</h2>
@@ -49,7 +70,8 @@
     <p>Labs and exam pages link to official documentation and vendor sites (for example CompTIA, ISC2, Cisco, NIST and tool vendors). Those sites have their own privacy practices. Labs that use cloud services (such as AWS) or third-party tools involve accounts you create with those providers under their terms.</p>
 
     <h2>Children</h2>
-    <p>The site is intended for adults and students preparing for professional certifications. It is not directed to children under 13, and it does not knowingly collect personal information from anyone.</p>
+    <p>The site is intended for adults and students preparing for professional certifications. It is not directed to children under 13${accounts() ? "" : ", and it does not knowingly collect personal information from anyone"}.</p>
+    ${accounts() ? `<p>Accounts are only for people aged 13 or older, or the minimum age for consenting to online services where you live if that is higher (up to 16 in some EU countries). We don't knowingly collect personal information from children under 13. If you believe a child has created an account, contact us and we will delete it. Studying without an account needs no personal information at all.</p>` : ""}
 
     <h2>Your choices</h2>
     <p>You can view, back up, restore or erase your data at any time: use the backup and reset options on the Progress tab or home page, or clear this site's data in your browser settings.</p>
@@ -88,7 +110,9 @@
     <p>Exam objectives, domain weights, formats and dates change. We work to keep content current and show when each exam's details were last checked, but we can't guarantee that questions, plans or lab steps are complete, current or error-free, or that using the site will lead to passing an exam. Always confirm details with the official exam objectives. Practice questions are original study material, not actual exam questions.</p>
 
     <h2>5. Your content</h2>
-    <p>Notes, write-ups and portfolio text you create belong to you. They are stored only in your browser (see the <a href="#privacy">Privacy Policy</a>).</p>
+    <p>Notes, write-ups and portfolio text you create belong to you. They are stored in your browser${accounts() ? ", and on our server only if you sign in to sync them," : ""} (see the <a href="#privacy">Privacy Policy</a>).${accounts() ? " You let us store and copy them only to sync them to your devices." : ""}</p>
+    ${accounts() ? `<h2>5a. Accounts and paid plans</h2>
+    <p>Accounts are optional. You must be at least 13 years old to create one, or older where local law sets a higher age for consenting to online services. Keep your email account secure, since sign-in links go there. Pro and group plans renew automatically until cancelled; you can cancel any time from Manage billing and keep access until the end of the paid period. If you're not happy with Pro, ask within 7 days of your first payment for a full refund. Prices and taxes are shown at checkout by Stripe. Organization owners are responsible for inviting only people who agreed to share their progress numbers with instructors. We may suspend accounts that abuse the service.</p>` : ""}
 
     <h2>6. Acceptable use</h2>
     <p>Don't try to disrupt the site or its hosting, bypass its security controls, or use automated tools to overload it. If you find a security issue, please report it privately (see the <a href="#security">Security</a> page).</p>
@@ -114,25 +138,37 @@
     const row = (what, how) => `<tr><td><strong>${what}</strong></td><td>${how}</td></tr>`;
     return `<h1>Security</h1>
     <p class="meta">How ${SITE} protects visitors, and how to report a problem. Last reviewed ${EFFECTIVE}.</p>
-    <div class="status notice">The site stores nothing about you on a server: there are no accounts, no database and no cookies. That removes most of the risks a typical website has.</div>
+    <div class="status notice">${accounts()
+      ? "Without an account the site stores nothing about you on a server. Optional accounts are protected as described under Accounts below."
+      : "The site stores nothing about you on a server: there are no accounts, no database and no cookies. That removes most of the risks a typical website has."}</div>
     <h2>In the browser</h2>
-    <div class="scroll"><table class="sectable"><tbody>
+    <div class="scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)"><table class="sectable"><tbody>
       ${row("Content Security Policy", "Scripts, styles, fonts and connections are allowed only from the site itself. No inline scripts, <code>eval</code> or third-party code. Plugins (<code>object-src</code>) are blocked.")}
       ${row("No third parties", "Fonts are self-hosted and there are no analytics, ads or CDNs, so no outside service sees your visits. An automated test fails if any page requests another site.")}
       ${row("Output escaping", "All content is escaped before it's placed on the page, which prevents injected HTML or script (XSS). A lint check blocks unescaped values.")}
       ${row("Clickjacking protection", "<code>frame-ancestors 'none'</code> and <code>X-Frame-Options: DENY</code> stop other sites from framing the pages.")}
       ${row("Isolation headers", "<code>Cross-Origin-Opener-Policy</code> and <code>Cross-Origin-Resource-Policy: same-origin</code>, <code>X-Content-Type-Options: nosniff</code>, a strict <code>Referrer-Policy</code>, and a <code>Permissions-Policy</code> that turns off camera, microphone, location, payment and USB access.")}
-      ${row("Local data only", "Progress and notes stay in your browser's storage. Nothing is uploaded.")}
+      ${row("Local data only", accounts() ? "Progress and notes stay in your browser's storage. Nothing is uploaded unless you sign in to sync." : "Progress and notes stay in your browser's storage. Nothing is uploaded.")}
     </tbody></table></div>
+    ${accounts() ? `<h2>Accounts</h2>
+    <div class="scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)"><table class="sectable"><tbody>
+      ${row("No passwords", "Sign-in uses one-time email links that expire in 15 minutes. Only a SHA-256 hash of each link and session token is stored, so a database leak can't be used to sign in.")}
+      ${row("Session cookie", "<code>__Host-</code> prefixed, <code>Secure</code>, <code>HttpOnly</code>, <code>SameSite=Lax</code>, 30-day sliding expiry; signing out deletes it on the server.")}
+      ${row("Request forgery", "Every change must come from the site's own origin; the API allows cross-origin requests only from the site.")}
+      ${row("Abuse limits", "Sign-in links are rate-limited per IP address and per email, and request sizes are capped.")}
+      ${row("Access control", "Every query is scoped to the signed-in user. Instructors see progress numbers for their own cohorts only, never lab notes. CSV exports are protected against spreadsheet formula injection.")}
+      ${row("Payments", "Handled by Stripe Checkout. Webhooks are verified with Stripe's signature and processed once; plans are decided on the server, never in the browser.")}
+      ${row("Your control", "Download everything the server holds about you, or delete your account, from the Account page.")}
+    </tbody></table></div>` : ""}
     <h2>In transit</h2>
-    <div class="scroll"><table class="sectable"><tbody>
+    <div class="scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)"><table class="sectable"><tbody>
       ${row("HTTPS everywhere", "Every <code>http://</code> request is redirected to <code>https://</code> (301), and pages upgrade any insecure request.")}
       ${row("HSTS", "<code>Strict-Transport-Security</code> for two years including subdomains, so browsers refuse plain HTTP after the first visit.")}
       ${row("Modern TLS", "TLS 1.2 minimum and TLS 1.3 enabled; TLS 1.0 and 1.1 are refused. Certificates are issued and renewed automatically by Cloudflare.")}
       ${row("One canonical address", "<code>www</code> and the Cloudflare preview address redirect to the main domain; preview builds are hidden from search engines.")}
     </tbody></table></div>
     <h2>In development and operations</h2>
-    <div class="scroll"><table class="sectable"><tbody>
+    <div class="scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)"><table class="sectable"><tbody>
       ${row("Checks on every change", "Automated CI validates content, runs a security lint (CSP, inline scripts, insecure links, escaping), audits dependencies and runs a browser test of every page before anything can deploy.")}
       ${row("Code and secret scanning", "CodeQL static analysis and gitleaks secret scanning run on the repository.")}
       ${row("Dependency updates", "Dependabot opens updates for build tools and GitHub Actions weekly; actions are pinned to exact commit SHAs.")}

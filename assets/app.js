@@ -20,7 +20,7 @@
       const plan = buildPlan(c);
       const labCount = new Set(plan.weeks.flatMap(w => w.labRefs || []).filter(l => labs[l])).size;
       const days = Object.values(p.checks).filter(Boolean).length;
-      foot = `<span>${plan.weeks.length} weeks · ${c.questions.length} questions${labCount ? ` · ${labCount} labs` : ""}</span><span>${s.t ? `${Math.round(100 * s.c / s.t)}% of ${s.t} answered` : days ? `${days} days checked` : "Not started"}</span>`;
+      foot = `<span>${plan.weeks.length} weeks · ${c.qCount ?? (c.questions || []).length} questions${labCount ? ` · ${labCount} labs` : ""}</span><span>${s.t ? `${Math.round(100 * s.c / s.t)}% of ${s.t} answered` : days ? `${days} days checked` : "Not started"}</span>`;
     } else foot = `<span>Study plan not written yet</span>`;
     const inner = `<span class="vendor">${esc(c.vendor)} · ${esc(c.exam)}</span>
       <h2>${esc(c.name)}</h2>
@@ -30,19 +30,41 @@
       <div class="cardfoot">${badge}${foot}</div>`;
     return built ? `<a class="card" href="#${esc(id)}">${inner}</a>` : `<div class="card" aria-disabled="true" style="opacity:.7">${inner}</div>`;
   }
+  /* ---------- career tracks ---------- */
+  const TRACKS = CertHub.tracks || [{ id: "all", name: "All", certs: CertHub.catalog }];
+  const TRACK_KEY = "certhub:track";
+  const curTrack = () => { const t = CertHub.store.get(TRACK_KEY) || "all"; return t === "all" || TRACKS.some(x => x.id === t) ? t : "all"; };
+  function trackPicker() {
+    const cur = curTrack();
+    return `<div class="trackpick" role="group" aria-labelledby="tracks-h">${[["all", "All tracks"], ...TRACKS.map(t => [t.id, t.name])].map(([id, name]) => `<button type="button" class="chipbtn" data-track="${esc(id)}" aria-pressed="${cur === id}">${esc(name)}</button>`).join("")}</div>`;
+  }
+  function trackCards() {
+    const cur = curTrack();
+    if (cur === "all") return TRACKS.map(t => `<h3 class="trackh">${esc(t.name)}</h3><p class="note">${esc(t.blurb || "")}</p><div class="cards">${t.certs.map(certCard).join("")}</div>`).join("");
+    const t = TRACKS.find(x => x.id === cur);
+    return `<p class="note">${esc(t.blurb || "")}</p><div class="cards">${t.certs.map(certCard).join("")}</div>`;
+  }
+  document.addEventListener("click", e => {
+    const b = e.target.closest("[data-track]"); if (!b) return;
+    CertHub.store.set(TRACK_KEY, b.dataset.track);
+    document.querySelectorAll("[data-track]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    const box = document.getElementById("trackcards"); if (box) box.innerHTML = trackCards();
+  });
+
   function homeView() {
     const lp = loadLabProgress();
     const labList = labOrder.map(id => labs[id]);
     const doneLabs = labList.filter(l => labStatus(l, lp).state === "done").length;
     const start = labs["lab-home-lab"];
     return `<section class="hero">
-      <h1>Study plans and hands-on labs for cybersecurity certifications</h1>
-      <p class="meta">Pick a certification for a week-by-week plan with quizzes, timed checkpoint tests, a practice exam weighted like the real one, and spaced review. Every week links to step-by-step labs you do in your own home lab, so you finish with real experience and a portfolio, not just a score.</p>
+      <h1>Study plans and hands-on labs for IT and cybersecurity certifications</h1>
+      <p class="meta">Pick a career track and a certification for a week-by-week plan with quizzes, timed checkpoint tests, a practice exam weighted like the real one, and spaced review. Every week links to step-by-step labs you do in your own home lab, so you finish with real experience and a portfolio, not just a score.</p>
       <div class="btns">${start ? `<a class="btn" href="#lab-home-lab">Start with the home lab</a>` : ""}<a class="btn ghost" href="#labs">Browse ${labList.length} labs</a><a class="btn ghost" href="#portfolio">Your portfolio${doneLabs ? ` (${doneLabs})` : ""}</a></div>
     </section>
     ${CertHub.install.installed() ? "" : `<div class="panel installcard"><div class="grow"><strong>Get the app on your phone</strong><br><span class="note">Install it from your browser: it opens full screen and works offline. No app store needed.</span></div><div class="btns" style="margin:0">${CertHub.install.prompt ? `<button type="button" class="btn sm" data-gact="install">Install</button>` : ""}<a class="btn ghost sm" href="#install">How to install</a></div></div>`}
-    <h2>Certifications</h2>
-    <div class="cards">${CertHub.catalog.map(certCard).join("")}</div>
+    <h2 id="tracks-h">Certifications by career track</h2>
+    ${trackPicker()}
+    <div id="trackcards">${trackCards()}</div>
     <h2>Your progress</h2>
     <div class="panel">
       <p class="note" style="margin:0">Progress, lab notes and checkmarks are saved in this browser only. Nothing is sent anywhere. Back up to move them to another device.</p>
@@ -69,9 +91,11 @@
   };
 
   /* ---------- router ---------- */
-  const NAV = [["home", "Certifications"], ["labs", "Labs"], ["portfolio", "Portfolio"]];
+  const NAV = [["home", "Certifications"], ["labs", "Labs"], ["portfolio", "Portfolio"], ["frameworks", "Frameworks"]];
+  // The Account tab only appears when the site has an accounts API configured.
+  const navItems = () => CertHub.sync && CertHub.sync.enabled ? NAV.concat([["account", "Account"]]) : NAV;
   function topNav(cur) {
-    $("#tabs").innerHTML = NAV.map(([k, l]) => `<a role="tab" href="#${k}" aria-selected="${cur === k}">${l}</a>`).join("");
+    $("#tabs").innerHTML = navItems().map(([k, l]) => `<a role="tab" href="#${k}" aria-selected="${cur === k}">${l}</a>`).join("");
     $("#count").innerHTML = "";
   }
   // Route tokens come from the URL, so only look them up as the objects' own keys
@@ -86,7 +110,7 @@
     if (!/^[a-z0-9-]{1,64}$/.test(head || "")) head = "home";
     if (tab && !/^[a-z]{1,16}$/.test(tab)) tab = "";
     const prev = view;
-    if (prev.startsWith("lab-")) CertHub.labViews.leave();
+    if (prev.startsWith("lab-") || prev.startsWith("cap-")) CertHub.labViews.leave();
     let title = "Cyber Cert Study", brand = "Cyber Cert Study";
     if (own(certs, head)) {
       CertHub.certView.open(head, tab || "week");
@@ -98,6 +122,10 @@
       if (head === "labs") { topNav("labs"); $("#app").innerHTML = CertHub.labViews.library(); title = "Hands-on Labs"; view = "labs"; }
       else if (own(labs, head)) { topNav("labs"); $("#app").innerHTML = CertHub.labViews.detail(labs[head]); title = labs[head].title; view = head; }
       else if (own(POLICY_TITLES, head)) { topNav(""); const pv = CertHub.policyViews; $("#app").innerHTML = head === "privacy" ? pv.privacy() : head === "terms" ? pv.terms() : head === "install" ? pv.install() : head === "support" ? pv.support() : pv.security(); title = POLICY_TITLES[head]; view = head; }
+      else if (head === "account" && CertHub.accountViews) { topNav("account"); $("#app").innerHTML = CertHub.accountViews.account(); title = "Account"; view = "account"; }
+      else if (/^cohort-[0-9a-f]{24}$/.test(head) && CertHub.accountViews) { topNav("account"); CertHub.accountViews.cohort(head.slice(7)); title = "Cohort Progress"; view = head; }
+      else if (/^cap-[a-z0-9-]{1,60}$/.test(head) && CertHub.pro) { topNav("labs"); CertHub.pro.capstoneView(head); title = "Capstone project"; view = head; }
+      else if (head === "frameworks" && CertHub.frameworksView) { topNav("frameworks"); $("#app").innerHTML = CertHub.frameworksView(); title = "Frameworks"; view = "frameworks"; }
       else if (head === "portfolio") { topNav("portfolio"); $("#app").innerHTML = CertHub.labViews.portfolio(); title = "Lab Portfolio"; view = "portfolio"; }
       else { topNav("home"); $("#app").innerHTML = homeView(); view = "home"; }
     }

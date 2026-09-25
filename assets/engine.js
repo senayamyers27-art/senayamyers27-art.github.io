@@ -6,9 +6,11 @@
   const { $, esc, DAY, today, parseD, fmt, fmtLong, shuffle, dc } = U;
   const INTERVALS = [1, 3, 7, 14];
 
-  let C, PLAN, W, DOM, Q, S;
+  let C, PLAN, W, DOM, Q, S, FREE_Q, PRO = null;
   let active = false;
-  const TAB_IDS = ["week", "plan", "practice", "labs", "progress", "about"];
+  const TAB_IDS = ["week", "plan", "practice", "labs", "progress", "guide", "about"];
+  const Pro = () => CertHub.pro || { available: false, active: false };
+  const toQ = ([id, w, d, q, o, a, e, src]) => ({ id, w, d, q, o, a, e, src });
 
   function open(id, tab) {
     if (C && C.id === id && S) {
@@ -24,14 +26,42 @@
     W = PLAN.weeks;
     DOM = Object.fromEntries(C.domains.map(d => [d.id, d]));
     // Week 0 questions are placed by domain.
-    Q = (C.questions || []).map(([id, w, d, q, o, a, e, src]) => ({ id, w, d, q, o, a, e, src }));
+    FREE_Q = (C.questions || []).map(toQ);
+    Q = FREE_Q;
+    PRO = null;
+    if (!Array.isArray(C.questions)) {
+      // The question bank loads separately; redraw once it arrives.
+      CertHub.loadQuestions(id).then(qs => {
+        if (!C || C.id !== id || !qs) return;
+        FREE_Q = qs.map(toQ);
+        Q = FREE_Q.concat(PRO ? PRO.questions : []);
+        if (active && !(S.quiz && !S.quiz.done)) render();
+      }, e => { if (active && C.id === id) CertHub.ui.toast(e.message); });
+    }
     const p = loadProgress(C.id);
     if (!p.start) p.start = C.start || U.iso(U.nextMonday(today()));
     if (!p.examDate) p.examDate = C.examDate || U.iso(U.addDays(parseD(p.start), W.length * 7 + 1));
-    S = { tab: TAB_IDS.includes(tab) ? tab : "week", viewWeek: null, quiz: null, p };
+    S = { tab: TAB_IDS.includes(tab) ? tab : "week", viewWeek: null, quiz: null, fc: null, p };
     saveProgress(C.id, p);
     render();
+    loadPro();
     return true;
+  }
+  // Pro members get the extra question bank, flashcards and study guide for this certification.
+  function loadPro() {
+    const id = C.id;
+    if (!Pro().active) { if (PRO) { PRO = null; Q = FREE_Q; if (active) render(); } return; }
+    if (PRO) return;
+    Pro().load(id).then(b => {
+      if (!b || !C || C.id !== id || PRO) return;
+      const doms = new Set(C.domains.map(d => d.id));
+      const ok = x => Array.isArray(x) && typeof x[0] === "string" && doms.has(x[2]) && Array.isArray(x[4]) && x[4].length === 4 && x[5] >= 0 && x[5] < 4;
+      PRO = { questions: (Array.isArray(b.questions) ? b.questions : []).filter(ok).map(toQ),
+        flashcards: (Array.isArray(b.flashcards) ? b.flashcards : []).filter(f => Array.isArray(f) && doms.has(f[0]) && f[1] && f[2]),
+        guide: Array.isArray(b.guide) ? b.guide : [] };
+      Q = FREE_Q.concat(PRO.questions); // FREE_Q may still be loading; its loader adds PRO back in
+      if (active && !(S.quiz && !S.quiz.done)) render();
+    });
   }
   function close() { active = false; clearTimeout(tickT); }
 
@@ -53,6 +83,9 @@
   function record(q, ok, fromReview) {
     const st = S.p.stats[q.d] || (S.p.stats[q.d] = { c: 0, t: 0 });
     st.t++; if (ok) st.c++;
+    // Objective-level accuracy for the score report, when the question names its objective.
+    const obj = String(q.src || "").match(/^(\d{1,2}\.\d{1,2})\b/);
+    if (obj) { const objs = S.p.objs || (S.p.objs = {}); const o = objs[obj[1]] || (objs[obj[1]] = { c: 0, t: 0 }); o.t++; if (ok) o.c++; }
     const r = S.p.review[q.id];
     const t = today().getTime();
     if (!ok) S.p.review[q.id] = { box: 0, due: t + DAY };
@@ -81,7 +114,17 @@
     // Top up with earlier weeks' material, then anything else from this week's domain.
     if (qs.length < 10) qs = qs.concat(pickFor(q => !qs.includes(q) && (q.w ? q.w < n : W.some(w => w.n < n && w.dom === q.d)), 10 - qs.length));
     if (qs.length < 10 && wk.dom) qs = qs.concat(pickFor(q => !qs.includes(q) && q.d === wk.dom, 10 - qs.length));
+    // Small domains (a few questions in week 1): fill up from the rest of the bank.
+    if (qs.length < 10) qs = qs.concat(pickFor(q => !qs.includes(q), 10 - qs.length));
     return shuffle(qs);
+  }
+  // Pro: the real exam's length, weighted by domain, topped up from any domain if one runs short.
+  function fullExamQs() {
+    const N = C.examSim.questions;
+    let out = [];
+    C.domains.forEach(d => { out = out.concat(pickFor(q => q.d === d.id, Math.round(N * d.w / 100))); });
+    if (out.length < N) out = out.concat(pickFor(q => !out.includes(q), N - out.length));
+    return shuffle(out.slice(0, N));
   }
   function examQs() {
     const N = C.examSim.questions;
@@ -127,7 +170,7 @@
     if (z.mode === "test") { if (z.i < z.qs.length) z.ans[z.i] = z.picked; z.qs.forEach((q, i) => record(q, z.ans[i] === q.a, false)); }
     z.done = true; clearTimeout(tickT);
     z.score = z.qs.filter((q, i) => z.ans[i] === q.a).length;
-    S.p.history.unshift({ at: Date.now(), title: z.title, score: z.score, total: z.qs.length });
+    S.p.history.unshift({ at: Date.now(), title: z.title, score: z.score, total: z.qs.length, ...(z.kind ? { kind: z.kind } : {}) });
     S.p.history = S.p.history.slice(0, 60);
     save(); render(); window.scrollTo(0, 0);
   }
@@ -141,9 +184,11 @@
   }
 
   /* ---------- views ---------- */
-  const TABS = [["week", "This week"], ["plan", "Plan"], ["practice", "Quizzes & tests"], ["labs", "Labs"], ["progress", "Progress"], ["about", "About the exam"]];
+  const TABS = [["week", "This week"], ["plan", "Plan"], ["practice", "Quizzes & tests"], ["labs", "Labs"], ["progress", "Progress"], ["guide", "Flashcards & guide"], ["about", "About the exam"]];
+  // The Pro tab only shows where Pro can be bought.
+  const tabs = () => TABS.filter(([k]) => k !== "guide" || Pro().available);
   function renderTabs() {
-    $("#tabs").innerHTML = TABS.map(([k, l]) => `<button role="tab" aria-selected="${S.tab === k}" data-tab="${k}">${k === "plan" ? `${W.length}-week plan` : l}</button>`).join("");
+    $("#tabs").innerHTML = tabs().map(([k, l]) => `<button role="tab" aria-selected="${S.tab === k}" data-tab="${k}">${k === "plan" ? `${W.length}-week plan` : l}</button>`).join("");
     const days = Math.ceil((parseD(S.p.examDate) - today()) / DAY);
     $("#count").innerHTML = days >= 0 ? `<b>${days}</b> days<span class="wide"> to exam</span>` : "Exam passed";
   }
@@ -214,11 +259,12 @@
   }
   function practiceView() {
     if (S.quiz) return quizView();
+    if (!Array.isArray(C.questions)) return `<h1>Quizzes & tests</h1><p class="note">Loading questions…</p>`;
     const due = dueIds().length;
     const cnt = d => Q.filter(q => q.d === d).length;
     const ex = examQs().length;
     return `<h1>Quizzes & tests</h1>
-    <p class="meta">${Q.length} questions in the bank, written from the official exam objectives${C.id === "security-plus" ? " and your bootcamp notes" : ""}. Answer options are shuffled every time.</p>
+    <p class="meta">${Q.length} questions in the bank${PRO ? ` (${FREE_Q.length} free + ${PRO.questions.length} Pro)` : ""}, written from the official exam objectives${C.id === "security-plus" ? " and your bootcamp notes" : ""}. Answer options are shuffled every time.</p>
     <h2>Quick practice</h2>
     <div class="panel">
       <div class="row"><div class="grow"><h3>Weekly quiz</h3><span class="note">10 questions with instant feedback</span></div><select id="wsel" aria-label="Week">${W.map(w => `<option value="${w.n}" ${w.n === weekNow() ? "selected" : ""}>Week ${w.n}</option>`).join("")}</select><button class="btn" data-act="weekly-sel">Start</button></div>
@@ -229,16 +275,28 @@
     <p class="note">Timed, up to 25 questions, answers shown at the end. Aim for 80% or better before moving on.</p>
     <div class="panel">${PLAN.checkpoints.map(c => `<div class="row"><div class="grow"><h3>Domain ${c.dom}: ${esc(DOM[c.dom].name)}</h3><span class="note">End of week ${c.after} · ${Math.min(25, cnt(c.dom))} questions, ${Math.max(5, Math.round(30 * Math.min(25, cnt(c.dom)) / 25))} minutes</span></div><button class="btn ghost" data-act="checkpoint" data-d="${c.dom}">Start</button></div>`).join("")}</div>
     <h2>Full practice exam</h2>
-    <div class="panel"><div class="row"><div class="grow"><h3>Exam simulation</h3><span class="note">Weighted like the real exam. ${ex} questions available now${ex < C.examSim.questions ? ` (the real exam has ${C.examSim.questions})` : ""}, ${examMinutes(ex)} minutes at the real exam's pace.</span></div><button class="btn" data-act="exam">Start</button></div></div>`;
+    <div class="panel"><div class="row"><div class="grow"><h3>Exam simulation</h3><span class="note">Weighted like the real exam. ${ex} questions available now${ex < C.examSim.questions ? ` (the real exam has ${C.examSim.questions})` : ""}, ${examMinutes(ex)} minutes at the real exam's pace.</span></div><button class="btn" data-act="exam">Start</button></div>
+    ${fullExamRow()}</div>
+    ${Pro().available && !Pro().active ? Pro().teaser(`Get about 300 more ${C.short} questions and full-length ${C.examSim.questions}-question exams with a pass estimate.`) : ""}`;
   }
+  function fullExamRow() {
+    if (!Pro().available) return "";
+    const N = C.examSim.questions, M = C.examSim.minutes;
+    const ready = Pro().active && PRO;
+    return `<div class="row"><div class="grow"><h3>Full-length exam <span class="chip pro">Pro</span></h3><span class="note">${N} questions in ${M} minutes, weighted like the real exam, with a pass estimate at the end.${Pro().active && !PRO ? " Loading the Pro question bank…" : ""}</span></div>${ready ? `<button class="btn" data-act="fullexam">Start</button>` : Pro().active ? "" : `<a class="btn ghost" href="#account">Unlock</a>`}</div>`;
+  }
+  // A rough pass estimate from a full-length score. Real exams use scaled scores, so this is a guide.
+  const passBand = pct => pct >= 85 ? ["Likely pass", "var(--ok)"] : pct >= 75 ? ["Borderline", "var(--warn)"] : ["Not yet", "var(--bad)"];
   const examMinutes = n => Math.max(10, Math.round(C.examSim.minutes * n / C.examSim.questions));
   function quizView() {
     const z = S.quiz;
     if (z.done) {
       const pct = Math.round(100 * z.score / z.qs.length);
       return `<div class="qhead"><strong>${esc(z.title)}</strong><button class="btn ghost sm" data-act="quit">Done</button></div>
-      <div class="panel"><div class="big">${pct}%</div><p class="meta">${z.score} of ${z.qs.length} correct${z.mode === "test" ? (pct >= 85 ? ". Exam-ready range." : pct >= 75 ? ". Close. Review the misses below." : ". Revisit these topics before moving on.") : ""}</p></div>
-      <h2>Review</h2>${z.qs.map((q, i) => { const ok = z.ans[i] === q.a; return `<div class="panel" style="--c:${ok ? "var(--ok)" : "var(--bad)"}"><p style="margin:0 0 6px"><strong>${ok ? "Correct" : "Missed"}</strong> · <span class="note">${esc(domName(q.d))}</span></p><p style="margin:0 0 8px">${esc(q.q)}</p>${ok ? "" : `<p class="note" style="margin:0">Your answer: ${esc(z.ans[i] == null ? "none" : q.o[z.ans[i]])}</p>`}<p style="margin:4px 0 0"><strong>${esc(q.o[q.a])}</strong></p><div class="expl">${esc(q.e)}${q.src ? `<br><small class="note">Source: ${esc(q.src)}</small>` : ""}</div></div>`; }).join("")}`;
+      <div class="panel"><div class="big">${pct}%</div><p class="meta">${z.score} of ${z.qs.length} correct${z.mode === "test" ? (pct >= 85 ? ". Exam-ready range." : pct >= 75 ? ". Close. Review the misses below." : ". Revisit these topics before moving on.") : ""}</p>
+      ${z.kind === "full" ? `<p style="margin:8px 0 0"><span class="chip" style="--c:${passBand(pct)[1]}">${passBand(pct)[0]}</span> <span class="note">Pass estimate. Real exams use scaled scores, so treat 85%+ on full-length exams as your target.</span></p>
+      <div class="bars" style="margin-top:12px">${C.domains.map(d => { const qs = z.qs.map((q, i) => [q, i]).filter(([q]) => q.d === d.id); const c = qs.filter(([q, i]) => z.ans[i] === q.a).length; const p = qs.length ? Math.round(100 * c / qs.length) : 0; return `<div class="b" style="--c:${dc(d.id)}"><div class="flex"><span>D${d.id} ${esc(d.name)}</span><strong>${c}/${qs.length}</strong></div><div class="track"><i style="width:${p}%"></i></div></div>`; }).join("")}</div>` : ""}</div>
+      <h2>Review</h2>${z.qs.map((q, i) => { const ok = z.ans[i] === q.a; return `<div class="panel" style="--c:${ok ? "var(--ok)" : "var(--bad)"}"><p style="margin:0 0 6px"><strong>${ok ? "Correct" : "Missed"}</strong> · <span class="note">${esc(domName(q.d))}</span></p><p class="qtext" style="margin:0 0 8px">${esc(q.q)}</p>${ok ? "" : `<p class="note" style="margin:0">Your answer: ${esc(z.ans[i] == null ? "none" : q.o[z.ans[i]])}</p>`}<p style="margin:4px 0 0"><strong>${esc(q.o[q.a])}</strong></p><div class="expl">${esc(q.e)}${q.src ? `<br><small class="note">Source: ${esc(q.src)}</small>` : ""}</div></div>`; }).join("")}`;
     }
     const q = z.qs[z.i];
     const opts = q.o.map((o, k) => {
@@ -277,6 +335,7 @@
     ${weak ? `<div class="status">Weakest so far: <strong>Domain ${weak.d}</strong> at ${weak.pct}%. <button class="btn ghost sm" style="margin-left:6px" data-act="drill-d" data-d="${weak.d}">Drill it</button></div>` : ""}
     <h2>Accuracy by domain</h2>
     <div class="panel bars">${rows.map(r => `<div class="b" style="--c:${dc(r.d)}"><div class="flex"><span>D${r.d} ${esc(DOM[r.d].name)} <span class="note">(${DOM[r.d].w}%)</span></span><strong>${r.pct == null ? "–" : r.pct + "%"}</strong></div><div class="track"><i style="width:${r.pct || 0}%"></i></div><span class="note">${r.c}/${r.t} answered</span></div>`).join("")}</div>
+    ${Pro().available ? (Pro().active ? scoreReport(rows) : `<h2>Score report <span class="chip pro">Pro</span></h2>` + Pro().teaser("See your predicted score, weakest exam objectives, your trend over time and whether you're ready to book.")) : ""}
     <h2>Recent quizzes and tests</h2>
     <div class="panel">${S.p.history.length ? S.p.history.slice(0, 15).map(h => `<div class="row"><div class="grow">${esc(h.title)}<br><span class="note">${new Date(h.at).toLocaleDateString()}</span></div><strong>${Math.round(100 * h.score / h.total)}%</strong></div>`).join("") : `<p class="note" style="margin:0">Take this week's quiz to start tracking.</p>`}</div>
     <h2>Dates</h2>
@@ -289,6 +348,82 @@
       <div class="btns"><button class="btn ghost sm no-framed" data-act="export">Download backup</button><button class="btn ghost sm" data-act="copybackup">Copy backup</button><label class="btn ghost sm" for="imp">Restore from file</label><input type="file" id="imp" accept="application/json" class="hide"><button class="btn ghost sm" data-act="pasterestore">Restore from text</button><button class="btn ghost sm" data-act="reset">Reset ${esc(C.short)} progress</button></div>
       <p class="note" id="datamsg" role="status"></p></div>`;
   }
+  /* ---------- Pro: score report ---------- */
+  function scoreReport(rows) {
+    const answered = rows.reduce((a, r) => a + r.t, 0);
+    const head = `<h2>Score report <span class="chip pro">Pro</span></h2>`;
+    if (answered < 30) return head + `<div class="panel"><p class="note" style="margin:0">Answer at least 30 questions (${answered} so far) to get a predicted score. Weekly quizzes, drills and full-length exams all count.</p></div>`;
+    // Predicted score: accuracy in each domain weighted by that domain's share of the exam.
+    const seen = rows.filter(r => r.t >= 10);
+    const wsum = seen.reduce((a, r) => a + DOM[r.d].w, 0);
+    const predicted = wsum ? Math.round(seen.reduce((a, r) => a + DOM[r.d].w * r.c / r.t, 0) / wsum * 100) : null;
+    const coverage = seen.reduce((a, r) => a + DOM[r.d].w, 0);
+    const fulls = S.p.history.filter(h => h.kind === "full");
+    const lastFull = fulls[0] ? Math.round(100 * fulls[0].score / fulls[0].total) : null;
+    const weakDom = rows.filter(r => r.t >= 10 && r.pct < 75);
+    let verdict, color, advice;
+    if (predicted >= 85 && coverage === 100 && !weakDom.length && lastFull != null && lastFull >= 85) { verdict = "Ready to book"; color = "var(--ok)"; advice = "Your practice covers every domain and your latest full-length exam is in the passing range. Keep reviewing daily until exam day."; }
+    else if (predicted >= 75) { verdict = "Almost ready"; color = "var(--warn)"; advice = [coverage < 100 ? "answer at least 10 questions in every domain" : "", weakDom.length ? `bring ${weakDom.map(r => `Domain ${r.d}`).join(", ")} above 75%` : "", lastFull == null ? "take a full-length exam" : lastFull < 85 ? "score 85%+ on a full-length exam" : ""].filter(Boolean).join(", then ").replace(/^./, c => c.toUpperCase()) + "."; }
+    else { verdict = "Not ready yet"; color = "var(--bad)"; advice = "Work through the weekly plan and drill your weakest domains before taking full-length exams."; }
+    // Trend: last 10 scored quizzes and tests, oldest first.
+    const recent = S.p.history.slice(0, 10).reverse();
+    const avg = list => list.length ? Math.round(list.reduce((a, h) => a + 100 * h.score / h.total, 0) / list.length) : null;
+    const last5 = avg(S.p.history.slice(0, 5)), prev5 = avg(S.p.history.slice(5, 10));
+    const objs = Object.entries(S.p.objs || {}).filter(([, o]) => o.t >= 3).map(([k, o]) => ({ k, pct: Math.round(100 * o.c / o.t), t: o.t })).sort((a, b) => a.pct - b.pct || b.t - a.t).slice(0, 6);
+    return head + `<div class="panel">
+      <div class="row"><div class="grow"><span class="note">Predicted score</span><div class="big">${predicted == null ? "–" : predicted + "%"}</div><span class="note">From ${answered} answers, weighted by exam domain${coverage < 100 ? `; covers ${coverage}% of the exam so far` : ""}.</span></div>
+      <div><span class="chip" style="--c:${color}">${verdict}</span></div></div>
+      <p style="margin:10px 0 0">${esc(advice)}</p>
+      ${lastFull != null ? `<p class="note" style="margin:6px 0 0">Latest full-length exam: ${lastFull}% (${fulls.length} taken).</p>` : ""}
+    </div>
+    ${recent.length >= 2 ? `<h3>Trend</h3><div class="panel"><div class="trend" role="img" aria-label="Last ${recent.length} scores">${recent.map(h => { const p = Math.round(100 * h.score / h.total); return `<span class="tbar" style="height:${Math.max(4, p)}%;--c:${p >= 85 ? "var(--ok)" : p >= 75 ? "var(--warn)" : "var(--bad)"}" title="${esc(h.title)}: ${p}%"></span>`; }).join("")}</div>
+      <p class="note" style="margin:8px 0 0">Last ${recent.length} quizzes and tests, oldest to newest.${last5 != null && prev5 != null ? ` Average ${last5}% for the latest 5, ${last5 >= prev5 ? "up" : "down"} ${Math.abs(last5 - prev5)} points on the 5 before.` : ""}</p></div>` : ""}
+    ${objs.length ? `<h3>Weakest objectives</h3><div class="panel">${objs.map(o => `<div class="row"><div class="grow">Objective ${esc(o.k)}<br><span class="note">${o.t} answered</span></div><strong>${o.pct}%</strong></div>`).join("")}<p class="note" style="margin:8px 0 0">Look these up in the official exam objectives and reread them before your next drill.</p></div>` : ""}`;
+  }
+
+  /* ---------- Pro: flashcards and study guide ---------- */
+  // Stable key for a card (content order can change between updates).
+  const cardKey = f => "c" + [...String(f[1])].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7).toString(36);
+  function guideView() {
+    const intro = `<h1>Flashcards & study guide <span class="chip pro">Pro</span></h1>`;
+    if (!Pro().active) return intro + `<p class="meta">Flashcards for every domain with spaced repetition, and a study guide you can print.</p>` + Pro().teaser(`Unlock ${C.short} flashcards and the printable study guide.`);
+    if (!PRO) return intro + `<p class="note">Loading…</p>`;
+    const cards = PRO.flashcards, sched = S.p.cards || {};
+    const now = today().getTime() + 1000;
+    const dueN = d => cards.filter(f => (!d || f[0] === d) && (!sched[cardKey(f)] || sched[cardKey(f)].due <= now)).length;
+    const learned = cards.filter(f => sched[cardKey(f)] && sched[cardKey(f)].box >= 2).length;
+    const guide = C.domains.map(d => ({ d, g: PRO.guide.find(x => x && x.domain === d.id) })).filter(x => x.g);
+    return intro + `<p class="meta">${cards.length} flashcards · ${learned} learned · ${dueN(0)} due today. Cards you know come back after 1, 3, 7 and 14 days; cards you miss come back tomorrow.</p>
+    ${S.fc ? flashcardHtml() : cards.length ? `<div class="panel no-print"><div class="row"><div class="grow"><h3>Study flashcards</h3><span class="note">Up to 20 due cards at a time</span></div><select id="fcsel" aria-label="Domain"><option value="0">All domains (${dueN(0)} due)</option>${C.domains.map(d => `<option value="${d.id}">D${d.id} ${esc(d.name)} (${dueN(d.id)})</option>`).join("")}</select><button class="btn" data-act="fcstart">Start</button></div></div>` : `<p class="note">No flashcards for ${esc(C.short)} yet.</p>`}
+    ${guide.length ? `<div class="flex no-print" style="margin-top:28px"><h2 style="margin:0">Study guide</h2><button class="btn ghost sm" data-act="printguide">Print or save as PDF</button></div>
+    <div class="guide">${guide.map(({ d, g }) => `<details class="week" style="--c:${dc(d.id)}"><summary><span class="num">D${d.id}</span><span class="grow"><strong>${esc(d.name)}</strong><br><span class="note">${d.w}% of the exam</span></span></summary>
+      <p>${esc(g.summary || "")}</p>
+      ${(Array.isArray(g.sections) ? g.sections : []).map(sec => `<h3>${esc(sec.title || "")}</h3><ul class="clean">${(Array.isArray(sec.points) ? sec.points : []).map(x => `<li>${esc(x)}</li>`).join("")}</ul>`).join("")}
+      ${Array.isArray(g.examTips) && g.examTips.length ? `<div class="status notice"><strong>Exam tips</strong><ul class="clean">${g.examTips.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+    </details>`).join("")}</div>` : ""}`;
+  }
+  function flashcardHtml() {
+    const fc = S.fc;
+    if (fc.i >= fc.deck.length) return `<div class="panel"><div class="big">${fc.known}/${fc.seen}</div><p class="meta">cards known on the first try this session.</p><div class="btns"><button class="btn" data-act="fcdone">Done</button></div></div>`;
+    const f = fc.deck[fc.i];
+    return `<div class="qhead"><strong>Flashcards</strong><span class="note">${fc.i + 1} of ${fc.deck.length} · <button class="btn ghost sm" data-act="fcdone">Stop</button></span></div>
+    <div class="flashcard ${fc.flipped ? "flipped" : ""}" style="--c:${dc(f[0])}">
+      <span class="note">Domain ${f[0]}</span>
+      <p class="q">${esc(f[1])}</p>
+      ${fc.flipped ? `<div class="expl">${esc(f[2])}</div>` : ""}
+    </div>
+    <div class="btns">${fc.flipped ? `<button class="btn" data-act="fcknow">Got it</button><button class="btn ghost" data-act="fcagain">Again</button>` : `<button class="btn" data-act="fcflip">Show answer</button>`}</div>`;
+  }
+  function fcGrade(knew) {
+    const fc = S.fc, f = fc.deck[fc.i], k = cardKey(f);
+    const cards = S.p.cards || (S.p.cards = {});
+    const t = today().getTime();
+    if (!fc.graded.has(k)) { fc.graded.add(k); fc.seen++; if (knew) fc.known++; }
+    if (knew) { const box = Math.min(((cards[k] || {}).box ?? -1) + 1, INTERVALS.length - 1); cards[k] = { box, due: t + INTERVALS[box] * DAY }; }
+    else { cards[k] = { box: 0, due: t + DAY }; fc.deck.push(f); } // see it again this session
+    fc.i++; fc.flipped = false; save(); render();
+  }
+
   function aboutView() {
     const x = C.examInfo || {};
     return `<h1>${esc(C.name)} ${esc(C.exam)}</h1>
@@ -311,7 +446,8 @@
   }
   function render() {
     renderTabs();
-    const v = { week: weekView, plan: planView, practice: practiceView, labs: labsView, progress: progressView, about: aboutView }[S.tab];
+    if (S.tab === "guide" && !Pro().available) S.tab = "week";
+    const v = { week: weekView, plan: planView, practice: practiceView, labs: labsView, progress: progressView, guide: guideView, about: aboutView }[S.tab];
     $("#app").innerHTML = v();
     if (S.quiz && !S.quiz.done && S.quiz.end && S.tab === "practice") tick();
   }
@@ -336,6 +472,18 @@
       "drill-d": () => drill(d),
       checkpoint: () => cp(d),
       exam: () => { const qs = examQs(); startQuiz({ title: "Practice exam", qs, mode: "test", minutes: examMinutes(qs.length) }); },
+      fullexam: () => { if (!PRO) return; startQuiz({ title: "Full-length exam", qs: fullExamQs(), mode: "test", minutes: C.examSim.minutes, kind: "full" }); },
+      fcstart: () => {
+        const dom = +$("#fcsel").value, sched = S.p.cards || {}, now = today().getTime() + 1000;
+        const due = PRO.flashcards.filter(f => (!dom || f[0] === dom) && (!sched[cardKey(f)] || sched[cardKey(f)].due <= now));
+        if (!due.length) { CertHub.ui.toast("Nothing due in this domain. Come back tomorrow."); return; }
+        S.fc = { deck: shuffle(due).slice(0, 20), i: 0, flipped: false, known: 0, seen: 0, graded: new Set() }; render(); window.scrollTo(0, 0);
+      },
+      fcflip: () => { S.fc.flipped = true; render(); },
+      fcknow: () => fcGrade(true),
+      fcagain: () => fcGrade(false),
+      fcdone: () => { S.fc = null; render(); },
+      printguide: () => { document.querySelectorAll(".guide details").forEach(d => { d.open = true; }); window.print(); },
       next, prev, quit: quitQuiz,
       finish: async () => {
         const unanswered = S.quiz.qs.length - S.quiz.ans.filter((x, i) => x != null || (i === S.quiz.i && S.quiz.picked != null)).length;
@@ -373,6 +521,12 @@
   CertHub.certView = {
     open, close,
     get active() { return active; },
+    // A quiz or test in progress holds unsaved state; sync waits until it's finished.
+    get busy() { return !!(active && S && ((S.quiz && !S.quiz.done) || S.fc)); },
+    // Sign-in or plan changed: load or drop the Pro bank for the open certification.
+    proChanged() { if (C && S) { loadPro(); if (active) renderTabs(); } },
+    // Re-read progress from storage after sync merged in changes from another device.
+    reload() { if (C && S && !(S.quiz && !S.quiz.done)) { const { start, examDate } = S.p; S.p = loadProgress(C.id); S.p.start = S.p.start || start; S.p.examDate = S.p.examDate || examDate; if (active) render(); } },
     title: () => C ? `${C.short} ${C.exam}` : "",
     // Weeks and certifications that use a lab, for the lab page's "Used in" list.
     usesOf(labId) {

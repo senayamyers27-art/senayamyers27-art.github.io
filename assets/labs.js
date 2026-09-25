@@ -3,10 +3,11 @@
 (function () {
   const { U, labs, labOrder, loadLabProgress, saveLabProgress, labStatus, ui } = CertHub;
   const { $, esc } = U;
-  const TRACKS = ["Foundations", "Networking", "Blue team", "GRC & architecture"];
-  const trackColor = t => `var(--d${{ Foundations: 1, Networking: 3, "Blue team": 2, "GRC & architecture": 5 }[t] || 6})`;
+  const TRACKS = ["Foundations", "Networking", "Blue team", "GRC & architecture", "Systems administration", "Software engineering"];
+  const trackColor = t => `var(--d${{ Foundations: 1, Networking: 3, "Blue team": 2, "GRC & architecture": 5, "Systems administration": 6, "Software engineering": 7 }[t] || 6})`;
   const STATE = { new: "Not started", doing: "In progress", done: "Done" };
-  const filters = { track: "", cert: "", state: "", q: "" };
+  const filters = { track: "", cert: "", state: "", role: "", q: "" };
+  const nice = () => CertHub.nice || { roles: [], rolesFor: () => [] };
   let current = null;
 
   const all = () => labOrder.map(id => labs[id]);
@@ -31,6 +32,7 @@
     return all().filter(l => (!filters.track || l.track === filters.track)
       && (!filters.cert || certsUsing(l).includes(filters.cert))
       && (!filters.state || labStatus(l, lp).state === filters.state)
+      && (!filters.role || nice().rolesFor(l).some(r => r.id === filters.role))
       && (!q || (l.title + " " + l.summary + " " + l.youWillNeed.join(" ")).toLowerCase().includes(q)));
   }
   function listHtml() {
@@ -49,10 +51,12 @@
     <div class="filters">
       <label>Track <select id="f-track"><option value="">All tracks</option>${TRACKS.map(t => `<option ${filters.track === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
       <label>Certification <select id="f-cert"><option value="">All</option>${Object.values(CertHub.certs).map(c => `<option value="${esc(c.id)}" ${filters.cert === c.id ? "selected" : ""}>${esc(c.short)}</option>`).join("")}</select></label>
+      <label>Job role <select id="f-role"><option value="">Any role</option>${nice().roles.map(r => `<option value="${esc(r.id)}" ${filters.role === r.id ? "selected" : ""}>${esc(r.name)}</option>`).join("")}</select></label>
       <label>Status <select id="f-state"><option value="">Any</option>${Object.entries(STATE).map(([k, v]) => `<option value="${k}" ${filters.state === k ? "selected" : ""}>${v}</option>`).join("")}</select></label>
       <label class="grow">Search <input type="search" id="f-q" value="${esc(filters.q)}" placeholder="Wireshark, Splunk, VLAN…"></label>
     </div>
-    <div id="lablist">${listHtml()}</div>`;
+    <div id="lablist">${listHtml()}</div>
+    ${CertHub.pro ? CertHub.pro.capstoneSection() : ""}`;
   }
 
   /* ---------- one lab ---------- */
@@ -67,7 +71,7 @@
     <h1>${esc(lab.title)}</h1>
     <p class="meta"><span class="chip" style="--c:${trackColor(lab.track)}">${esc(lab.track)}</span> ${esc(lab.level)} · about ${hours(lab.minutes)} · ${esc(lab.cost)}</p>
     <p class="lede">${esc(lab.summary)}</p>
-    <div class="panel realworld"><strong>On the job</strong><p>${esc(lab.realWorld)}</p></div>
+    <div class="panel realworld"><strong>On the job</strong><p>${esc(lab.realWorld)}</p>${nice().rolesFor(lab).length ? `<p class="note" style="margin:8px 0 0">Builds skills for these <a href="#frameworks">NICE work roles</a>: ${nice().rolesFor(lab).map(r => `<strong>${esc(r.name)}</strong> (${esc(r.titles)})`).join("; ")}</p>` : ""}</div>
     ${lab.safety ? `<div class="status warn"><strong>Safety:</strong> ${esc(lab.safety)}</div>` : ""}
     ${req.length ? `<p class="note">Do first: ${req.map(r => `<a href="#${esc(r.id)}">${esc(r.title)}</a> (${STATE[labStatus(r).state].toLowerCase()})`).join(", ")}</p>` : ""}
     <h2>You'll need</h2>
@@ -77,7 +81,7 @@
     <ol class="steps-list">${lab.steps.map((x, i) => `<li class="${s.steps && s.steps[i] ? "checked" : ""}">
       <label class="stephead"><input type="checkbox" data-lstep="${i}" ${s.steps && s.steps[i] ? "checked" : ""}><span class="stepnum">${i + 1}</span><strong>${esc(x.title)}</strong></label>
       <div class="stepbody"><p>${esc(x.body)}</p>
-      ${x.cmd ? `<div class="cmd"><pre><code>${esc(x.cmd)}</code></pre><button type="button" class="btn ghost sm copybtn" data-copy="${i}">Copy</button></div>` : ""}
+      ${x.cmd ? `<div class="cmd"><pre tabindex="0" aria-label="Command for step ${i + 1}"><code>${esc(x.cmd)}</code></pre><button type="button" class="btn ghost sm copybtn" data-copy="${i}">Copy</button></div>` : ""}
       ${x.check ? `<p class="check"><strong>Check:</strong> ${esc(x.check)}</p>` : ""}</div>
     </li>`).join("")}</ol>
     <h2>Prove it worked</h2>
@@ -130,6 +134,16 @@ ${lab.deliverable}
   }
 
   /* ---------- portfolio ---------- */
+  // Which NICE work roles the finished labs build toward, strongest first.
+  function rolesSummary(done) {
+    const count = {};
+    done.forEach(l => nice().rolesFor(l).forEach(r => { count[r.id] = (count[r.id] || 0) + 1; }));
+    const list = nice().roles.filter(r => count[r.id]).sort((a, b) => count[b.id] - count[a.id]);
+    if (!list.length) return "";
+    return `<h2>Job roles your labs build toward</h2>
+    <p class="note">From the <a href="#frameworks">NICE Workforce Framework</a>. Use these role names and job titles in your resume summary and job searches.</p>
+    <div class="panel">${list.map(r => { const total = CertHub.nice.labsForRole(r.id).length; return `<div class="row"><div class="grow"><strong>${esc(r.name)}</strong><br><span class="note">${esc(r.titles)}</span></div><span class="note">${count[r.id]} of ${total} labs</span></div>`; }).join("")}</div>`;
+  }
   function portfolioView() {
     const lp = loadLabProgress();
     const done = all().filter(l => labStatus(l, lp).state === "done").sort((a, b) => lp[a.id].done - lp[b.id].done);
@@ -138,11 +152,12 @@ ${lab.deliverable}
     const nextUp = all().filter(l => labStatus(l, lp).state === "new" && (l.requires || []).every(r => !labs[r] || labStatus(labs[r], lp).state === "done")).slice(0, 4);
     return `<h1>Your portfolio</h1>
     <p class="meta">Finished labs become proof of hands-on experience. Copy the write-ups into a GitHub repository and the bullets into your resume.</p>
-    <div class="figs3"><div class="fig"><b>${done.length}</b><span>labs finished</span></div><div class="fig"><b>${hours(mins)}</b><span>hands-on time</span></div><div class="fig"><b>${new Set(done.map(l => l.track)).size}</b><span>of 4 tracks</span></div></div>
+    <div class="figs3"><div class="fig"><b>${done.length}</b><span>labs finished</span></div><div class="fig"><b>${hours(mins)}</b><span>hands-on time</span></div><div class="fig"><b>${new Set(done.map(l => l.track)).size}</b><span>of ${TRACKS.length} tracks</span></div></div>
     ${done.length ? `<div class="btns"><button type="button" class="btn" data-lact="copybullets">Copy all resume bullets</button><button type="button" class="btn ghost" data-lact="copyportfolio">Copy full portfolio (Markdown)</button></div>
     <h2>Finished labs</h2>
     <div class="panel">${done.map(l => `<div class="row"><div class="grow"><a href="#${esc(l.id)}"><strong>${esc(l.title)}</strong></a><br><span class="note">${esc(l.track)} · finished ${new Date(lp[l.id].done).toLocaleDateString()}</span><p class="resume" style="margin:6px 0 0">${esc(l.resume)}</p></div></div>`).join("")}</div>`
     : `<div class="status">No finished labs yet. Mark a lab complete and it shows up here with its resume bullet.</div>`}
+    ${done.length ? rolesSummary(done) : ""}
     ${doing.length ? `<h2>In progress</h2><div class="labgrid">${doing.map(l => card(l)).join("")}</div>` : ""}
     ${nextUp.length ? `<h2>Good next labs</h2><div class="labgrid">${nextUp.map(l => card(l)).join("")}</div>` : ""}
     <h2>Publish it</h2>
@@ -185,7 +200,7 @@ ${lab.deliverable}
     if (e.target.id === "labnotes" && current) {
       const v = e.target.value;
       clearTimeout(noteT);
-      noteT = setTimeout(() => { const { p, s } = prog(); s.notes = v; s.started = s.started || Date.now(); saveLabProgress(p); }, 400);
+      noteT = setTimeout(() => { const { p, s } = prog(); s.notes = v; s.notesAt = Date.now(); s.started = s.started || Date.now(); saveLabProgress(p); }, 400);
     }
   });
   document.addEventListener("click", async e => {
@@ -209,8 +224,10 @@ ${lab.deliverable}
   });
   function flushNotes() {
     const t = $("#labnotes"); if (!t || !current) return;
-    clearTimeout(noteT); const { p, s } = prog(); s.notes = t.value; saveLabProgress(p);
+    clearTimeout(noteT); const { p, s } = prog(); if (s.notes !== t.value) { s.notes = t.value; s.notesAt = Date.now(); } saveLabProgress(p);
   }
 
-  CertHub.labViews = { library: libraryView, detail: detailView, portfolio: portfolioView, leave() { flushNotes(); current = null; } };
+  CertHub.labViews = { library: libraryView, detail: detailView, portfolio: portfolioView, leave() { flushNotes(); current = null; },
+    // Used by the Frameworks page: open the library filtered to one job role.
+    filterRole(id) { filters.role = nice().roles.some(r => r.id === id) ? id : ""; } };
 })();
