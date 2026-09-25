@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Iniciar, detener y comprobar servicios de red (systemctl s… · Lección de RHCSA</title>
+<meta name="description" content="Un servicio de red es un demonio, un programa en segundo plano, que escucha en un puerto de red a la espera de clientes: sshd en el puerto 22, un servidor ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Iniciar, detener y comprobar servicios de red (systemctl s… · Lección de RHCSA">
+<meta property="og:description" content="Un servicio de red es un demonio, un programa en segundo plano, que escucha en un puerto de red a la espera de clientes: sshd en el puerto 22, un servidor ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/starting-stopping-and-checking-network-services-systemctl-status-ss-tl/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/starting-stopping-and-checking-network-services-systemctl-status-ss-tl/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/starting-stopping-and-checking-network-services-systemctl-status-ss-tl/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Iniciar, detener y comprobar servicios de red (systemctl status, ss -tlnp)</h1>
+<article class="lbody">
+<p>Un servicio de red es un demonio, un programa en segundo plano, que escucha en un puerto de red a la espera de clientes: sshd en el puerto 22, un servidor web en el 80 y el 443, chronyd para la hora. En RHEL, systemd gestiona los demonios como unidades de servicio, como <code>sshd.service</code> o <code>httpd.service</code>, y <code>systemctl</code> es la forma de controlarlos. Una tarea de servicio solo está terminada cuando el servicio está en ejecución ahora, arrancará al iniciar el sistema y realmente escucha donde los clientes lo esperan.</p>
+<p>Dos ideas distintas son fáciles de confundir. Iniciar o detener cambia el estado actual: <code>systemctl start httpd</code>, <code>systemctl stop httpd</code>, <code>systemctl restart httpd</code> (detener y luego iniciar) y <code>systemctl reload httpd</code> (volver a leer la configuración sin cortar las conexiones, si el servicio lo admite). Habilitar o deshabilitar cambia lo que ocurre al arrancar: <code>systemctl enable httpd</code> hace que se inicie automáticamente, <code>disable</code> lo impide. <code>systemctl enable --now httpd</code> hace ambas cosas a la vez y es el comando habitual en el examen.</p>
+<pre class="code" tabindex="0"><code>systemctl enable --now httpd
+systemctl status httpd          # estado, PID, líneas de log recientes
+systemctl is-active httpd       # active / inactive / failed
+systemctl is-enabled httpd      # enabled / disabled / masked
+systemctl list-units --type=service --state=running
+systemctl mask telnet.socket    # impedir cualquier inicio</code></pre>
+<p><code>systemctl status UNIT</code> es la herramienta principal de diagnóstico. Muestra si la unidad está cargada y habilitada, su estado activo (active (running), inactive (dead) o failed), el PID principal, el uso de memoria y CPU, y las líneas más recientes del journal, que normalmente explican un fallo. <code>is-active</code> e <code>is-enabled</code> devuelven solo el estado y un código de salida correspondiente, lo que resulta práctico en scripts. <code>systemctl --failed</code> lista las unidades que fallaron. Enmascarar una unidad con <code>systemctl mask</code> la enlaza a la nada para que no pueda iniciarse en absoluto, ni siquiera como dependencia, hasta que la desenmascares con <code>unmask</code>.</p>
+<p><code>ss</code> (socket statistics) muestra en qué está escuchando realmente el sistema, lo que prueba que el servicio es accesible a nivel de red. <code>ss -tlnp</code> significa TCP (<code>-t</code>), solo sockets en escucha (<code>-l</code>), direcciones y puertos numéricos en lugar de nombres (<code>-n</code>) y el proceso dueño de cada socket (<code>-p</code>, que necesita root para mostrar los procesos de otros usuarios). Añade <code>-u</code> para UDP. La columna Local Address te dice dónde escucha: <code>0.0.0.0:22</code> o <code>[::]:22</code> significa todas las direcciones IPv4 o IPv6, mientras que <code>127.0.0.1:631</code> significa solo localhost, inaccesible desde cualquier otro lugar.</p>
+<p>Si un servicio está en ejecución pero los clientes siguen sin poder conectarse, revisa las siguientes capas. El firewall debe permitir el puerto (<code>firewall-cmd --list-all</code>), y SELinux debe permitir que el servicio use un puerto no estándar. Si un servicio no arranca en absoluto, lee <code>systemctl status</code> y <code>journalctl -u UNIT</code>, corrige la configuración y usa la comprobación de sintaxis propia del servicio si la tiene, como <code>sshd -t</code> o <code>apachectl configtest</code>.</p>
+<p>Después de cambiar el propio archivo de una unidad, ejecuta <code>systemctl daemon-reload</code> para que systemd vuelva a leer sus definiciones antes de reiniciar el servicio.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Service unit (unidad de servicio)</dt><dd>Una unidad de systemd (name.service) que describe cómo ejecutar y gestionar un demonio.</dd><dt>start vs enable</dt><dd>start ejecuta el servicio ahora; enable hace que arranque al iniciar el sistema. enable --now hace ambas cosas.</dd><dt>systemctl status</dt><dd>Muestra el estado de carga, habilitación y actividad de una unidad, su PID principal y las líneas de log recientes.</dd><dt>ss -tlnp</dt><dd>Lista numéricamente los sockets TCP en escucha con el proceso dueño.</dd><dt>mask</dt><dd>Enlaza una unidad a /dev/null para que no pueda iniciarse hasta que se desenmascare.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Instalas httpd y ejecutas <code>systemctl enable --now httpd</code>. <code>systemctl status httpd</code> muestra active (running), y <code>ss -tlnp | grep ':80'</code> muestra httpd escuchando en *:80. Una prueba desde otro host falla, así que añades el servicio http en firewalld y la página carga.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Una tarea que dice que el servicio debe estar en ejecución y ser persistente necesita tanto start como enable: systemctl enable --now. Luego pruébalo con systemctl is-enabled, is-active y ss -tlnp.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cuál es la diferencia entre <code>systemctl start</code> y <code>systemctl enable</code>?</summary><p>start ejecuta el servicio ahora; enable lo configura para que arranque automáticamente al iniciar el sistema.</p></details>
+<details class="sq"><summary>¿Qué significan las letras de ss -tlnp?</summary><p>TCP, sockets en escucha, salida numérica y mostrar el proceso dueño.</p></details>
+<details class="sq"><summary>¿Qué te dice 127.0.0.1:25 en la salida de ss?</summary><p>Que el servicio escucha solo en la interfaz de loopback, así que los hosts remotos no pueden conectarse.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../preserving-the-systemd-journal-across-reboots-storage-persistent-var-l/">← Conservar el journal de systemd entre reinicios (Storage=per</a><a href="../securely-transferring-files-between-systems-with-scp-sftp-and-rsync-ov/">Transferir archivos de forma segura entre sistemas con scp,  →</a></nav>
+</main>
+</body>
+</html>

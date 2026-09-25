@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Proceso de arranque: UEFI/BIOS, GRUB2, kernel, initramfs (… · Lección de Linux+</title>
+<meta name="description" content="Cada vez que una máquina Linux se enciende, recorre una cadena predecible de relevos: firmware, cargador de arranque, kernel, sistema de archivos inicial e">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Proceso de arranque: UEFI/BIOS, GRUB2, kernel, initramfs (… · Lección de Linux+">
+<meta property="og:description" content="Cada vez que una máquina Linux se enciende, recorre una cadena predecible de relevos: firmware, cargador de arranque, kernel, sistema de archivos inicial e">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/linux-plus/lessons/boot-process-uefi-bios-grub2-kernel-initramfs-dracut-mkinitramfs-syste/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/linux-plus/lessons/boot-process-uefi-bios-grub2-kernel-initramfs-dracut-mkinitramfs-syste/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../linux-plus/">Linux+</a> / <a href="../">Lecciones</a> · <a href="../../../../linux-plus/lessons/boot-process-uefi-bios-grub2-kernel-initramfs-dracut-mkinitramfs-syste/" hreflang="en" lang="en">English</a></p>
+<p class="note">CompTIA Linux+ XK0-006</p>
+<h1>Proceso de arranque: UEFI/BIOS, GRUB2, kernel, initramfs (dracut, mkinitramfs), targets de systemd</h1>
+<article class="lbody">
+<p>Cada vez que una máquina Linux se enciende, recorre una cadena predecible de relevos: firmware, cargador de arranque, kernel, sistema de archivos inicial en RAM y, por último, el sistema init. Conocer cada etapa te permite deducir dónde se detuvo un arranque fallido y qué herramienta lo soluciona, que es exactamente como se plantean las preguntas de Linux+.</p>
+<p>Primero viene el firmware. Las máquinas antiguas usan BIOS (Basic Input/Output System), que lee el primer sector del disco de arranque, el MBR (Master Boot Record), y ejecuta el pequeño fragmento de código de arranque guardado allí. Las máquinas modernas usan UEFI (Unified Extensible Firmware Interface), que en cambio lee una ESP (EFI System Partition), una pequeña partición con formato FAT normalmente montada en <code>/boot/efi</code>, y ejecuta un ejecutable EFI como <code>grubx64.efi</code> o <code>shimx64.efi</code>. UEFI también admite Secure Boot, donde el firmware solo ejecuta cargadores de arranque firmados con claves de confianza. Puedes comprobar en qué modo arrancaste buscando el directorio <code>/sys/firmware/efi</code>: si existe, arrancaste con UEFI.</p>
+<p>Luego viene el cargador de arranque, casi siempre GRUB2 (GRand Unified Bootloader versión 2). GRUB muestra el menú de kernels, carga en memoria la imagen del kernel elegida (por ejemplo <code>/boot/vmlinuz-...</code>) y el initramfs correspondiente, y le pasa al kernel su línea de comandos, como <code>root=UUID=...</code> y <code>quiet</code>. Nunca editas directamente el <code>grub.cfg</code> generado. En su lugar, cambias <code>/etc/default/grub</code> (por ejemplo <code>GRUB_TIMEOUT</code> o <code>GRUB_CMDLINE_LINUX</code>) y lo regeneras con <code>grub2-mkconfig -o /boot/grub2/grub.cfg</code> en sistemas de la familia Red Hat o con <code>update-grub</code> (un envoltorio de <code>grub-mkconfig</code>) en sistemas de la familia Debian. La herramienta <code>grubby</code> en sistemas tipo RHEL edita los argumentos del kernel por entrada.</p>
+<p>Después, el kernel inicializa el hardware para el que tiene controladores integrados, pero a menudo todavía no puede leer el sistema de archivos raíz real, porque el controlador de la controladora de disco, LVM, RAID o cifrado vive en un módulo dentro de ese mismo sistema de archivos. El initramfs (sistema de archivos inicial en RAM) resuelve este problema del huevo y la gallina: es un archivo comprimido que se descomprime en memoria y contiene solo los módulos y scripts necesarios para encontrar, desbloquear y montar la raíz real. Se reconstruye con <code>dracut</code> en Red Hat, Fedora y SUSE (<code>dracut -f</code> regenera la imagen para el kernel en ejecución) y con <code>mkinitramfs</code> o <code>update-initramfs -u</code> en Debian y Ubuntu. Reconstrúyelo después de agregar un controlador de almacenamiento o de cambiar la configuración del dispositivo raíz.</p>
+<p>Una vez montada la raíz, el kernel inicia el PID 1, que en las distribuciones actuales es systemd. systemd lleva el sistema a un target, un grupo con nombre de unidades que reemplaza a los antiguos runlevels de SysV. Los más comunes son <code>multi-user.target</code> (servidor en modo texto, como el runlevel 3), <code>graphical.target</code> (escritorio, como el runlevel 5), <code>rescue.target</code> (monousuario con servicios básicos) y <code>emergency.target</code> (casi nada, con el sistema de archivos raíz en solo lectura). Consulta el predeterminado con <code>systemctl get-default</code>, cámbialo con <code>systemctl set-default multi-user.target</code> y cambia el sistema en ejecución con <code>systemctl isolate rescue.target</code>.</p>
+<p>Para un cambio puntual en el arranque, presiona <code>e</code> en el menú de GRUB y agrega <code>systemd.unit=rescue.target</code> (o <code>emergency.target</code>) a la línea que empieza con <code>linux</code>, y luego presiona Ctrl+X para arrancar. Esa edición no se guarda, lo que la convierte en una forma segura de recuperar un sistema sin cambiar nada de forma permanente.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>UEFI</dt><dd>Unified Extensible Firmware Interface: firmware moderno que arranca ejecutables EFI desde una EFI System Partition y admite Secure Boot.</dd><dt>ESP (EFI System Partition)</dt><dd>Partición de sistema EFI: una pequeña partición FAT, normalmente montada en /boot/efi, que contiene los cargadores de arranque UEFI.</dd><dt>GRUB2</dt><dd>El cargador de arranque estándar de Linux; se configura mediante /etc/default/grub y un grub.cfg generado.</dd><dt>initramfs</dt><dd>Un sistema de archivos raíz temporal y comprimido que se carga en RAM y contiene los controladores y scripts necesarios para montar el sistema de archivos raíz real.</dd><dt>dracut / mkinitramfs</dt><dd>Herramientas que construyen la imagen initramfs: dracut en la familia Red Hat y SUSE, mkinitramfs/update-initramfs en la familia Debian.</dd><dt>systemd target (target de systemd)</dt><dd>Una unidad que agrupa otras unidades en un estado del sistema, como multi-user.target o graphical.target, y reemplaza a los runlevels de SysV.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Después de mover el sistema de archivos raíz de un servidor a una nueva controladora RAID, este no arranca y cae en un shell de emergencia de dracut que dice que no encuentra el dispositivo raíz. Arrancas una entrada de kernel anterior desde el menú de GRUB, confirmas el nombre del módulo de la controladora con lsmod y luego ejecutas dracut -f para reconstruir el initramfs de modo que incluya el nuevo controlador. El siguiente arranque encuentra el sistema de archivos raíz con normalidad.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Relaciona el síntoma con la etapa: si no aparece el menú de GRUB, apunta al firmware o al cargador de arranque; un error de 'cannot find root' apunta al initramfs o al argumento root=; y un arranque que se detiene en un shell de emergencia después de cargar el kernel suele apuntar a unidades de systemd o a /etc/fstab.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Editaste GRUB_CMDLINE_LINUX en /etc/default/grub en un sistema RHEL, pero el cambio no tiene efecto tras reiniciar. ¿Qué paso faltó?</summary><p>Regenerar la configuración de GRUB con grub2-mkconfig -o /boot/grub2/grub.cfg (o usar grubby); /etc/default/grub solo se lee cuando se reconstruye la configuración.</p></details>
+<details class="sq"><summary>¿Por qué Linux necesita un initramfs?</summary><p>Porque los controladores necesarios para llegar al sistema de archivos raíz (controladora de almacenamiento, LVM, RAID, LUKS) pueden ser módulos guardados en ese mismo sistema de archivos; el initramfs los lleva en RAM para que se pueda montar la raíz real.</p></details>
+<details class="sq"><summary>¿Qué comando hace que un servidor arranque en una consola de texto de forma predeterminada a partir de ahora?</summary><p>systemctl set-default multi-user.target.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Linux+ gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../linux-plus/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><span></span><a href="../filesystem-hierarchy-standard-etc-var-usr-opt-home-boot-proc-sys-dev/">Estándar de jerarquía del sistema de archivos (FHS): /etc, / →</a></nav>
+</main>
+</body>
+</html>

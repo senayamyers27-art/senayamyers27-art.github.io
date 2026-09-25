@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Control de acceso a dispositivos: autenticación por línea … · Lección de ENCOR</title>
+<meta name="description" content="Cada router y switch debe estar protegido contra el acceso administrativo no autorizado. ENCOR evalúa los bloques básicos en Cisco IOS: cómo autentican a l">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Control de acceso a dispositivos: autenticación por línea … · Lección de ENCOR">
+<meta property="og:description" content="Cada router y switch debe estar protegido contra el acceso administrativo no autorizado. ENCOR evalúa los bloques básicos en Cisco IOS: cómo autentican a l">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/device-access-control-line-and-local-user-authentication-ssh-only-vty/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/device-access-control-line-and-local-user-authentication-ssh-only-vty/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ccnp-encor/">ENCOR</a> / <a href="../">Lecciones</a> · <a href="../../../../ccnp-encor/lessons/device-access-control-line-and-local-user-authentication-ssh-only-vty/" hreflang="en" lang="en">English</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2</p>
+<h1>Control de acceso a dispositivos: autenticación por línea y por usuario local, acceso VTY solo por SSH</h1>
+<article class="lbody">
+<p>Cada router y switch debe estar protegido contra el acceso administrativo no autorizado. ENCOR evalúa los bloques básicos en Cisco IOS: cómo autentican a los usuarios las líneas de consola y VTY, cómo se almacenan las contraseñas y cómo permitir solo SSH.</p>
+<p>Los dispositivos Cisco tienen líneas: la línea de consola (<code>line con 0</code>) para el acceso serial directo y las líneas de terminal virtual (<code>line vty 0 4</code>, o <code>0 15</code> en muchas plataformas) para Telnet o SSH remoto. El método más simple es una contraseña de línea: <code>password</code> más <code>login</code> bajo la línea. Todos comparten una sola contraseña y no hay rendición de cuentas, así que solo es adecuado para laboratorios. Un mejor método son las cuentas de usuario locales: <code>username admin privilege 15 secret &lt;password&gt;</code> crea un usuario, y <code>login local</code> bajo la línea hace que el dispositivo pida usuario y contraseña y los verifique en la base de datos local. Cada administrador tiene su propia cuenta, y los logs pueden registrar quién hizo qué.</p>
+<p>Protege el modo EXEC privilegiado con <code>enable secret</code>, que se almacena como hash, en lugar del antiguo <code>enable password</code>. Usa también la palabra clave <code>secret</code> para los nombres de usuario. IOS XE moderno admite tipos de hash fuertes como el tipo 8 (PBKDF2 con SHA-256) y el tipo 9 (scrypt), seleccionables con <code>algorithm-type</code>; el tipo 5 se basa en MD5 y es más antiguo, y el tipo 7, producido por <code>service password-encryption</code> para los comandos <code>password</code> simples, es una codificación débil y reversible que solo evita que alguien lea la contraseña por encima de tu hombro. Nunca confíes en el tipo 7.</p>
+<p>Telnet envía todo, incluidas las contraseñas, en texto claro, así que SSH debe ser el único método de acceso remoto. Habilitar SSH requiere un hostname distinto al predeterminado, un nombre de dominio y un par de claves RSA, además de autenticación de usuarios:</p>
+<pre class="code" tabindex="0"><code>hostname R1
+ip domain name example.com
+crypto key generate rsa modulus 2048
+ip ssh version 2
+username admin privilege 15 algorithm-type scrypt secret &lt;password&gt;
+!
+line vty 0 15
+ login local
+ transport input ssh
+ exec-timeout 10 0
+ access-class 10 in</code></pre>
+<p><code>transport input ssh</code> bloquea Telnet en las líneas VTY. <code>ip ssh version 2</code> deshabilita el SSHv1, más débil. <code>exec-timeout</code> cierra las sesiones inactivas. <code>access-class 10 in</code> aplica una ACL estándar que limita qué direcciones de origen pueden conectarse a las líneas VTY, típicamente solo la red de gestión. Considera también <code>login block-for</code> para frenar los intentos de adivinar contraseñas (bloqueando temporalmente los inicios de sesión después de fallas repetidas), <code>security passwords min-length</code> y deshabilitar los servicios sin uso, como el servidor HTTP si no se necesita.</p>
+<p>Los niveles de privilegio van de 0 a 15. El nivel 1 es EXEC de usuario y el 15 es acceso privilegiado completo; a los niveles intermedios se les pueden asignar comandos específicos, aunque el acceso basado en roles mediante AAA suele ser más limpio. Para la consola, aplica también <code>login local</code> y un <code>exec-timeout</code>, ya que el acceso físico también es un riesgo. Verifica con <code>show ip ssh</code>, <code>show ssh</code> y <code>show users</code>. Las cuentas locales siguen siendo importantes incluso con AAA central, como respaldo cuando los servidores son inalcanzables.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>VTY lines (líneas VTY)</dt><dd>Líneas de terminal virtual que se usan para las sesiones de gestión remota por Telnet o SSH.</dd><dt>login local</dt><dd>Comando de línea que autentica a los usuarios contra la base de datos local de nombres de usuario del dispositivo.</dd><dt>enable secret</dt><dd>La contraseña con hash que protege el modo EXEC privilegiado.</dd><dt>transport input ssh</dt><dd>Comando de línea que permite solo SSH para las sesiones remotas entrantes.</dd><dt>access-class</dt><dd>Aplica una ACL a las líneas VTY para restringir qué direcciones de origen pueden conectarse.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una revisión de seguridad descubre switches alcanzables por Telnet desde la VLAN de usuarios con una contraseña de línea compartida. El equipo crea cuentas locales individuales con secrets scrypt, genera claves RSA de 2048 bits, configura <code>transport input ssh</code>, aplica <code>access-class</code> permitiendo solo la subred de gestión y agrega <code>exec-timeout 10 0</code> a cada línea VTY y de consola.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> SSH necesita un hostname, un nombre de dominio y claves RSA. Usa access-class (no ip access-group) para filtrar el acceso VTY. Las contraseñas tipo 7 son reversibles; prefiere secret con hash tipo 8 o 9.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué cuatro cosas deben estar listas antes de que SSH funcione en IOS?</summary><p>Un hostname no predeterminado, un nombre de dominio IP, un par de claves RSA y un método de autenticación de usuarios, como un nombre de usuario local con login local.</p></details>
+<details class="sq"><summary>¿Qué comando limita el acceso VTY a la subred de gestión?</summary><p>access-class con una ACL estándar aplicada en entrada bajo line vty.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia ENCOR gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ccnp-encor/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../netconf-and-restconf-for-configuration-and-operational-data/">← NETCONF y RESTCONF para datos de configuración y operacional</a><a href="../aaa-with-tacacs-and-radius-method-lists-and-fallback/">AAA con TACACS+ y RADIUS, method lists y fallback →</a></nav>
+</main>
+</body>
+</html>

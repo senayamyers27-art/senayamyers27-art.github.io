@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PriorityClasses y preemption (desplazamiento) · Lección de CKA</title>
+<meta name="description" content="Cuando un clúster está lleno, ¿qué Pods deberían ganar? Las PriorityClasses te permiten clasificar las cargas de trabajo para que los Pods importantes se p">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="PriorityClasses y preemption (desplazamiento) · Lección de CKA">
+<meta property="og:description" content="Cuando un clúster está lleno, ¿qué Pods deberían ganar? Las PriorityClasses te permiten clasificar las cargas de trabajo para que los Pods importantes se p">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/priorityclasses-and-preemption/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/priorityclasses-and-preemption/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/priorityclasses-and-preemption/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>PriorityClasses y preemption (desplazamiento)</h1>
+<article class="lbody">
+<p>Cuando un clúster está lleno, ¿qué Pods deberían ganar? Las PriorityClasses te permiten clasificar las cargas de trabajo para que los Pods importantes se programen primero y, si es necesario, desplacen a los menos importantes.</p>
+<p>Una PriorityClass es un objeto de alcance de clúster que asocia un nombre con un <code>value</code> entero; números más altos significan mayor prioridad. Los Pods la referencian mediante <code>spec.priorityClassName</code>, y la admisión copia el valor en <code>spec.priority</code>. Una PriorityClass puede tener <code>globalDefault: true</code>, que entonces se aplica a los Pods que no indican ninguna; sin ella, esos Pods reciben prioridad 0. Kubernetes incluye dos clases integradas, <code>system-cluster-critical</code> y <code>system-node-critical</code>, con valores muy altos, que usan componentes como CoreDNS y los agentes de CNI. Las clases normales de usuario deberían usar valores mucho más bajos.</p>
+<pre class="code" tabindex="0"><code>kubectl create priorityclass high-priority --value=100000 --description='Customer-facing APIs'
+kubectl get priorityclass</code></pre>
+<pre class="code" tabindex="0"><code>spec:
+  priorityClassName: high-priority
+  containers:
+  - name: api
+    image: api:1.0</code></pre>
+<p>La prioridad afecta la programación de dos maneras. Primero, la cola de programación se ordena por prioridad, así que los Pods en Pending de mayor prioridad se intentan antes que los de menor. Segundo, la preemption: si un Pod de alta prioridad no cabe en ningún lado, el scheduler busca un nodo donde desalojar uno o más Pods de menor prioridad haría espacio. Luego termina ordenadamente a esas víctimas y registra el nodo objetivo en el <code>status.nominatedNodeName</code> del Pod que desplaza. Ese Pod se programa una vez que se libera espacio, aunque puede terminar en otro lugar si otro nodo queda disponible primero.</p>
+<p>La preemption intenta respetar los PodDisruptionBudgets, pero puede violarlos si no hay otra opción. No considera como víctimas a Pods de prioridad igual o mayor. Puedes hacer que una clase no desplace a otros con <code>preemptionPolicy: Never</code>: esos Pods siguen adelantándose en la cola, pero nunca desalojan a otros.</p>
+<p>La prioridad también cuenta cuando el kubelet desaloja Pods por presión de recursos en el nodo, junto con si el uso supera los requests. En la práctica, cuando ves que se terminan Pods de menor prioridad con un motivo que menciona preemption, o un Pod en Pending con un nodo nominado, revisa <code>kubectl get pods -o custom-columns=NAME:.metadata.name,PRIO:.spec.priority</code> y las PriorityClasses involucradas.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>PriorityClass</dt><dd>Un objeto de alcance de clúster que asigna una prioridad entera a los Pods que lo referencian.</dd><dt>Preemption (desplazamiento)</dt><dd>El scheduler desaloja Pods de menor prioridad para hacer espacio a un Pod en Pending de mayor prioridad.</dd><dt>globalDefault</dt><dd>Un indicador de PriorityClass que la convierte en la clase por defecto para los Pods que no indican ninguna.</dd><dt>preemptionPolicy: Never</dt><dd>Da a una clase prioridad en la cola sin permitirle desalojar a otros Pods.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un job batch nocturno llena los requests de CPU del clúster. Cuando se crea un Pod de la API de pagos con la clase <code>high-priority</code>, no cabe, así que el scheduler desaloja dos Pods batch con prioridad 0 en node02, define nominatedNodeName como node02 y luego programa ahí el Pod de la API.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> PriorityClass es de alcance de clúster y los Pods la referencian por nombre; un error de tipeo en priorityClassName hace que la creación del Pod falle en la admisión. Solo se pueden desplazar Pods de menor prioridad.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué prioridad recibe un Pod si no indica ninguna clase y no existe una clase globalDefault?</summary><p>Cero.</p></details>
+<details class="sq"><summary>¿Cómo puede una clase obtener prioridad en la cola de programación sin desalojar a otros?</summary><p>Define preemptionPolicy: Never en la PriorityClass.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../pod-affinity-and-anti-affinity-with-topologykey-topologyspreadconstrai/">← Pod affinity y anti-affinity con topologyKey; topologySpread</a><a href="../workload-autoscaling-horizontalpodautoscaler-kubectl-autoscale-autosca/">Autoescalado de cargas de trabajo: HorizontalPodAutoscaler ( →</a></nav>
+</main>
+</body>
+</html>

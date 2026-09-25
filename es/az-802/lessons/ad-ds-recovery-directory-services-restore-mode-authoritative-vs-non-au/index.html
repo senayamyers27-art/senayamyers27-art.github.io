@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Recuperación de AD DS: Modo de restauración de servicios d… · Lección de AZ-802</title>
+<meta name="description" content="Tarde o temprano alguien elimina una OU llena de usuarios, o la base de datos de un DC se corrompe. Para recuperarte, necesitas una buena copia de segurida">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Recuperación de AD DS: Modo de restauración de servicios d… · Lección de AZ-802">
+<meta property="og:description" content="Tarde o temprano alguien elimina una OU llena de usuarios, o la base de datos de un DC se corrompe. Para recuperarte, necesitas una buena copia de segurida">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-802/lessons/ad-ds-recovery-directory-services-restore-mode-authoritative-vs-non-au/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-802/lessons/ad-ds-recovery-directory-services-restore-mode-authoritative-vs-non-au/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-802/">AZ-802</a> / <a href="../">Lecciones</a> · <a href="../../../../az-802/lessons/ad-ds-recovery-directory-services-restore-mode-authoritative-vs-non-au/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802</p>
+<h1>Recuperación de AD DS: Modo de restauración de servicios de directorio, restauración autoritativa frente a no autoritativa, restauración autoritativa de SYSVOL (DFSR)</h1>
+<article class="lbody">
+<p>Tarde o temprano alguien elimina una OU llena de usuarios, o la base de datos de un DC se corrompe. Para recuperarte, necesitas una buena copia de seguridad del estado del sistema y entender cómo trata la replicación de AD los datos restaurados. La pregunta central es si quieres que los asociados de replicación sobrescriban los datos restaurados, o que estos los sobrescriban a ellos.</p>
+<p>La base de datos de AD (<code>ntds.dit</code>) no se puede restaurar mientras AD DS se está ejecutando en ese DC. El Modo de restauración de servicios de directorio (DSRM) es un modo de arranque especial en el que el DC se inicia sin AD DS, e inicias sesión con la cuenta de administrador de DSRM, una cuenta local cuya contraseña se estableció durante la promoción y puede restablecerse con <code>ntdsutil</code> usando el comando 'set dsrm password'. Entras en DSRM estableciendo la opción de arranque con <code>bcdedit /set safeboot dsrepair</code> y reiniciando (quítala después con <code>bcdedit /deletevalue safeboot</code>), o mediante las opciones de inicio avanzadas. Para el mantenimiento sin conexión, como desfragmentar la base de datos, puedes en cambio detener el servicio Active Directory Domain Services, lo que se conoce como AD DS reiniciable.</p>
+<p>Una restauración no autoritativa recupera la base de datos de AD del DC desde la copia de seguridad; cuando el DC se reinicia normalmente, los asociados de replicación le envían cada cambio hecho desde la copia de seguridad, incluidas las eliminaciones. Es la opción correcta cuando la base de datos de un DC está dañada pero el resto del dominio está bien; el DC simplemente se pone al día. No recuperará los objetos eliminados, porque los asociados volverán a replicar la eliminación.</p>
+<p>Una restauración autoritativa es la forma de recuperar objetos eliminados desde una copia de seguridad. Después de la restauración no autoritativa, y antes de reiniciar, ejecutas <code>ntdsutil</code>, activas la instancia con <code>activate instance ntds</code>, entras en <code>authoritative restore</code> y ejecutas <code>restore subtree &quot;OU=Sales,DC=contoso,DC=com&quot;</code> o <code>restore object</code> para un solo objeto. Ntdsutil eleva en una cantidad grande los números de versión de los atributos de esos objetos (de forma predeterminada, 100 000 por cada día transcurrido desde la copia de seguridad), así que después del reinicio ganan la replicación y se copian de nuevo a todos los DC. Ntdsutil también escribe archivos LDIF para los atributos con vínculos inversos, como la pertenencia de los objetos a grupos fuera del subárbol, que importas con <code>ldifde</code> para restaurar la pertenencia a grupos. No deben usarse copias de seguridad más antiguas que la vida útil de marcas de exclusión (normalmente 180 días). Si la Papelera de reciclaje de AD está habilitada, es preferible <code>Restore-ADObject</code> o Active Directory Administrative Center, que recuperan los objetos con todos sus atributos y sin tiempo de inactividad.</p>
+<p>SYSVOL, que contiene las plantillas de directiva de grupo y los scripts de inicio de sesión, se replica mediante DFS Replication, no mediante la replicación de AD, así que restaurar AD no lo repara. Para un solo DC dañado, basta con una sincronización no autoritativa de SYSVOL: establece <code>msDFSR-Enabled</code> en FALSE en el objeto de suscripción de SYSVOL de ese DC, replica y luego establécelo en TRUE, y extraerá una copia nueva. Si SYSVOL está dañado en todas partes, realizas una restauración autoritativa de SYSVOL. En el DC con la copia buena estableces <code>msDFSR-Enabled</code> en FALSE y <code>msDFSR-Options</code> en 1 en su objeto de suscripción de SYSVOL (en CN=SYSVOL Subscription dentro de su DFSR-LocalSettings), y estableces <code>msDFSR-Enabled</code> en FALSE en todos los demás DC. Después de forzar la replicación de AD con <code>repadmin /syncall</code>, reinicias DFSR en el DC autoritativo y vuelves a establecer su <code>msDFSR-Enabled</code> en TRUE, esperando el evento 4602; luego vuelves a habilitar los demás, que se sincronizan a partir de él.</p>
+<p>En resumen: DSRM es la herramienta, la no autoritativa repara un DC, la autoritativa gana frente a los demás, y SYSVOL tiene su propio procedimiento de DFSR.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>DSRM</dt><dd>Directory Services Restore Mode (Modo de restauración de servicios de directorio): un modo de arranque del DC sin AD DS en ejecución, usado para restaurar la base de datos con una contraseña local de DSRM.</dd><dt>Non-authoritative restore (restauración no autoritativa)</dt><dd>Restaurar la base de datos de AD de un DC, que luego recibe los cambios más recientes de los asociados de replicación.</dd><dt>Authoritative restore (restauración autoritativa)</dt><dd>Marcar los objetos restaurados con números de versión más altos mediante ntdsutil para que se repliquen y sobrescriban a los asociados.</dd><dt>Tombstone lifetime (vida útil de marcas de exclusión)</dt><dd>Cuánto tiempo se conservan los objetos eliminados como marcas de exclusión; no deben restaurarse copias de seguridad más antiguas que esto.</dd><dt>msDFSR-Options</dt><dd>El atributo de la suscripción de SYSVOL que se establece en 1 en el DC elegido como autoritativo en una restauración de SYSVOL con DFSR.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un administrador elimina accidentalmente la OU Sales, y la Papelera de reciclaje de AD no está habilitada. En DC2 reinicia en DSRM, restaura el estado del sistema de la noche anterior con wbadmin, ejecuta la restauración autoritativa de ntdsutil sobre el subárbol Sales, reinicia e importa con ldifde el archivo LDIF generado para restaurar la pertenencia de los usuarios a grupos de otras OU.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Los objetos eliminados necesitan una restauración autoritativa (o la Papelera de reciclaje); un DC corrupto necesita una no autoritativa. SYSVOL es DFSR, y se restaura por separado con msDFSR-Enabled y msDFSR-Options en los objetos de suscripción.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué una restauración no autoritativa no recupera una OU eliminada?</summary><p>Cuando el DC se reinicia, los asociados de replicación envían la eliminación más reciente, que vuelve a eliminar los objetos restaurados.</p></details>
+<details class="sq"><summary>¿Qué les hace ntdsutil a los objetos durante una restauración autoritativa?</summary><p>Aumenta los números de versión de sus atributos para que las versiones restauradas ganen la replicación y sobrescriban las copias de los demás DC.</p></details>
+<details class="sq"><summary>En una restauración autoritativa de SYSVOL, ¿qué atributos estableces en el DC autoritativo?</summary><p>msDFSR-Enabled en FALSE y msDFSR-Options en 1 en su objeto de suscripción de SYSVOL, y más tarde msDFSR-Enabled de nuevo en TRUE.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AZ-802 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-802/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../azure-vm-troubleshooting-boot-diagnostics-serial-console-run-command-r/">← Solución de problemas de máquinas virtuales de Azure: diagnó</a><a href="../backup-windows-server-backup-bare-metal-and-system-state-backup-azure/">Copia de seguridad: Windows Server Backup, copia de segurida →</a></nav>
+</main>
+</body>
+</html>

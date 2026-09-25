@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pruebas con `test policy` · Lección de JNCIA-Junos</title>
+<meta name="description" content="Las políticas de enrutamiento pueden tener efectos amplios, y un error en un route filter o en el orden de los términos puede anunciar o bloquear mucho más">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Pruebas con `test policy` · Lección de JNCIA-Junos">
+<meta property="og:description" content="Las políticas de enrutamiento pueden tener efectos amplios, y un error en un route filter o en el orden de los términos puede anunciar o bloquear mucho más">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/jncia-junos/lessons/testing-with-test-policy/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/jncia-junos/lessons/testing-with-test-policy/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../jncia-junos/">JNCIA-Junos</a> / <a href="../">Lecciones</a> · <a href="../../../../jncia-junos/lessons/testing-with-test-policy/" hreflang="en" lang="en">English</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106</p>
+<h1>Pruebas con `test policy`</h1>
+<article class="lbody">
+<p>Las políticas de enrutamiento pueden tener efectos amplios, y un error en un route filter o en el orden de los términos puede anunciar o bloquear mucho más de lo que pretendías. Junos te da una forma de ver qué coincidiría con una política antes de confiar en ella: el comando del modo operacional <code>test policy</code>.</p>
+<p>La sintaxis es <code>test policy &lt;policy-name&gt; &lt;prefix&gt;</code>. Junos toma las rutas que están actualmente en la tabla de enrutamiento (inet.0 por defecto) y que caen dentro del prefijo que indicas, pasa cada una por la política nombrada y muestra las rutas que la política acepta. Para probar contra todas las rutas de la tabla, usa <code>0.0.0.0/0</code> como prefijo. Como el comando trabaja sobre rutas que ya están en la tabla de enrutamiento, es una buena forma de revisar las políticas de exportación, que operan sobre rutas que el dispositivo ya tiene.</p>
+<pre class="code" tabindex="0"><code>user@R1&gt; test policy ADVERTISE-AGG 0.0.0.0/0
+inet.0: 25 destinations, 27 routes (25 active, 0 holddown, 0 hidden)
++ = Active Route, - = Last Active, * = Both
+198.51.100.0/24    *[Aggregate/130] 01:12:04
+                       Reject
+Policy ADVERTISE-AGG: 1 prefix accepted, 24 prefix rejected</code></pre>
+<p>Hay un comportamiento que debes recordar: la acción por defecto de <code>test policy</code> es accept. Cuando una ruta pasa por todos los términos sin llegar a una acción terminante, <code>test policy</code> la trata como aceptada y la muestra. No aplica la política por defecto del protocolo con el que finalmente usarás la política, porque no está ligado a ningún protocolo. Así que si tu política no tiene un término final de rechazo, <code>test policy</code> puede mostrar muchas más rutas aceptadas de las que el protocolo realmente anunciará, o lo contrario según el valor por defecto del protocolo. El enfoque más limpio es terminar las políticas con un término terminante explícito, lo que además hace que la salida de la prueba coincida con la realidad.</p>
+<p><code>test policy</code> es una revisión de la lógica, no una simulación completa. No muestra cambios de atributos como modificaciones de métrica o de community, y no puede decirte qué hará un vecino BGP con las rutas. Para eso, mira los resultados reales después de hacer commit: <code>show route advertising-protocol bgp &lt;neighbor&gt;</code> muestra lo que realmente se está enviando, y <code>show route receive-protocol bgp &lt;neighbor&gt;</code> muestra lo que se recibe antes de la política de importación. Comparar la salida de la prueba con esos comandos es un buen hábito.</p>
+<p>Un flujo de trabajo práctico es: escribir o cambiar la política en modo de configuración, hacer commit (la política no tiene efecto hasta que se aplica, así que confirmar una política sin aplicar es inofensivo), ejecutar <code>test policy</code> con <code>0.0.0.0/0</code> y con prefijos específicos, y solo entonces aplicarla bajo el protocolo. Usar <code>commit confirmed</code> en el paso final te da un rollback automático si el cambio te deja sin acceso.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>test policy</dt><dd>Un comando operacional que pasa las entradas de la tabla de enrutamiento por una política y muestra las rutas que acepta.</dd><dt>Default accept in test policy (accept por defecto en test policy)</dt><dd>Las rutas que la política probada no rechaza explícitamente se muestran como aceptadas.</dd><dt>advertising-protocol</dt><dd><code>show route advertising-protocol bgp &lt;neighbor&gt;</code> muestra las rutas que realmente se anuncian a un vecino BGP.</dd><dt>commit confirmed</dt><dd>Un commit que hace rollback automáticamente a menos que se confirme dentro de un tiempo establecido, útil al aplicar cambios de política riesgosos.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Antes de aplicar una nueva política de exportación BGP, una ingeniera hace commit de la definición de la política sin aplicarla y ejecuta <code>test policy EXPORT-ISP 0.0.0.0/0</code>. La salida muestra 400 rutas aceptadas en lugar de las 2 esperadas. Se da cuenta de que a la política le falta un término final de rechazo, lo agrega, vuelve a probar y ve solo las dos aggregates, y luego aplica la política.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> <code>test policy</code> acepta por defecto cualquier ruta que la política no rechace explícitamente, sin importar la política por defecto del protocolo. Usa <code>0.0.0.0/0</code> para probar toda la tabla.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué prefijo le das a <code>test policy</code> para evaluar todas las rutas de inet.0?</summary><p><code>0.0.0.0/0</code>.</p></details>
+<details class="sq"><summary>Una ruta no coincide con ningún término de la política probada. ¿Cómo la muestra <code>test policy</code>?</summary><p>Como aceptada, porque la acción por defecto de <code>test policy</code> es accept.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia JNCIA-Junos gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../jncia-junos/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../route-filters-and-match-types-exact-orlonger-longer-upto-prefix-length/">← Route filters y tipos de coincidencia: exact, orlonger, long</a><a href="../firewall-filters-stateless-term-order-match-conditions-implicit-discar/">Firewall filters: stateless, orden de los términos, condicio →</a></nav>
+</main>
+</body>
+</html>

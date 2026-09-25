@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>kubectl get, describe, get events y top pod/node (metrics-… · Lección de CKAD</title>
+<meta name="description" content="Monitorear una aplicación en Kubernetes empieza con cuatro comandos de kubectl. Cada uno responde una pregunta distinta, y saber cuál usar te ahorra minuto">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="kubectl get, describe, get events y top pod/node (metrics-… · Lección de CKAD">
+<meta property="og:description" content="Monitorear una aplicación en Kubernetes empieza con cuatro comandos de kubectl. Cada uno responde una pregunta distinta, y saber cuál usar te ahorra minuto">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/kubectl-get-describe-get-events-top-pod-node-metrics-server-for-monito/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/kubectl-get-describe-get-events-top-pod-node-metrics-server-for-monito/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/kubectl-get-describe-get-events-top-pod-node-metrics-server-for-monito/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>kubectl get, describe, get events y top pod/node (metrics-server) para monitoreo</h1>
+<article class="lbody">
+<p>Monitorear una aplicación en Kubernetes empieza con cuatro comandos de kubectl. Cada uno responde una pregunta distinta, y saber cuál usar te ahorra minutos en cada tarea del examen.</p>
+<p><code>kubectl get</code> responde '¿Qué existe y en qué estado está?'. Imprime un resumen de una línea por objeto: para los Pods, el conteo READY, STATUS, RESTARTS y AGE. Combina tipos con comas (<code>kubectl get deploy,rs,pods,svc</code>), filtra con etiquetas (<code>-l app=web</code>), mira en todos los namespaces (<code>-A</code>) y observa los cambios en vivo (<code>-w</code>). <code>kubectl get all</code> muestra los tipos comunes de workload y Service de un namespace, pero no ConfigMaps, Secrets, PVCs ni Ingresses.</p>
+<p><code>kubectl describe</code> responde '¿Por qué está en ese estado?'. Muestra la vista completa y legible de un objeto, incluida información relacionada que <code>get</code> omite: estados de los contenedores y motivos de la última terminación, códigos de salida, configuración de probes, volúmenes montados, el nodo, las solicitudes de recursos y, sobre todo, la sección Events al final. Para un Pod atascado en Pending, describe muestra fallos de scheduling como CPU insuficiente; para un Service muestra los endpoints; para un Deployment, sus condiciones de rollout.</p>
+<p><code>kubectl get events</code> responde '¿Qué ha pasado recientemente en este namespace?'. Los eventos son registros de corta duración creados por los controladores, el scheduler y el kubelet: decisiones de scheduling, descargas de imágenes, fallos de probes, OOM kills, back-offs. Se conservan solo por un tiempo limitado (una hora por defecto en muchos clústeres), así que revísalos pronto. Ordénalos cronológicamente con <code>kubectl get events --sort-by=.metadata.creationTimestamp</code>, filtra advertencias con <code>--field-selector type=Warning</code> o limítate a un objeto con <code>--field-selector involvedObject.name=web-5d8f7</code>. <code>kubectl events</code> es un comando más nuevo con una salida similar y una opción <code>--for pod/web-5d8f7</code>.</p>
+<pre class="code" tabindex="0"><code>kubectl get pods -o wide -w
+kubectl describe pod web-5d8f7
+kubectl get events -A --field-selector type=Warning
+kubectl get events --sort-by=.metadata.creationTimestamp
+kubectl top node
+kubectl top pod -A --sort-by=memory
+kubectl top pod web-5d8f7 --containers</code></pre>
+<p><code>kubectl top</code> responde '¿Cuánta CPU y memoria está usando ahora mismo?'. Necesita el complemento metrics-server, que recopila el uso de recursos de cada kubelet y lo sirve a través de la Metrics API. Sin él obtienes un error que dice que las métricas no están disponibles; en minikube lo activas con <code>minikube addons enable metrics-server</code>. <code>kubectl top node</code> muestra el uso por nodo, <code>kubectl top pod</code> por Pod, <code>--containers</code> desglosa un Pod por contenedor, y <code>--sort-by=cpu</code> o <code>--sort-by=memory</code> ordena la lista. Los números son muestras recientes, no historial, y se muestran en milicores (<code>m</code>) y mebibytes (<code>Mi</code>). La misma Metrics API alimenta al HorizontalPodAutoscaler.</p>
+<p>Una tarea clásica del examen es 'encuentra el Pod que usa más CPU en el namespace X y escribe su nombre en un archivo': <code>kubectl top pod -n X --sort-by=cpu --no-headers | head -1 | awk '{print $1}' &gt; /path/file</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>kubectl describe</dt><dd>Vista detallada de un objeto, incluido su estado relacionado y los eventos recientes.</dd><dt>Event (evento)</dt><dd>Un registro de corta duración de algo que le ocurrió a un objeto, como un fallo de scheduling o la descarga de una imagen.</dd><dt>metrics-server</dt><dd>Complemento del clúster que recopila el uso de CPU y memoria de los kubelets para kubectl top y el HPA.</dd><dt>kubectl top</dt><dd>Muestra el uso actual de CPU y memoria de nodos o Pods a partir de la Metrics API.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un Pod lleva cinco minutos en Pending. <code>kubectl get pod</code> solo dice Pending, pero <code>kubectl describe pod</code> muestra el evento '0/3 nodes are available: 3 Insufficient memory', lo que lleva al desarrollador a reducir la solicitud de memoria del Pod.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> <code>get</code> te dice qué, <code>describe</code> y los eventos te dicen por qué, <code>top</code> te dice cuánto. Si <code>kubectl top</code> da error, falta metrics-server o todavía no está listo.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué comando muestra por qué un Pod está atascado en Pending?</summary><p><code>kubectl describe pod &lt;name&gt;</code> (su sección Events), o <code>kubectl get events</code>.</p></details>
+<details class="sq"><summary>¿De qué depende <code>kubectl top</code>?</summary><p>Del complemento metrics-server, que proporciona la Metrics API.</p></details>
+<details class="sq"><summary>¿Cómo listas los eventos recientes en orden cronológico?</summary><p><code>kubectl get events --sort-by=.metadata.creationTimestamp</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../what-each-probe-failure-does-restart-the-container-vs-remove-the-pod-f/">← Qué provoca el fallo de cada probe: reiniciar el contenedor </a><a href="../container-logs-kubectl-logs-with-c-f-previous-tail-since-l-and-deploy/">Logs de contenedores: kubectl logs con -c, -f, --previous, - →</a></nav>
+</main>
+</body>
+</html>

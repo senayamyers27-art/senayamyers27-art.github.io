@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Políticas de recuperación: Retain y Delete (Recycle obsole… · Lección de CKA</title>
+<meta name="description" content="Cuando se borra un PersistentVolumeClaim, la persistentVolumeReclaimPolicy de su PersistentVolume decide qué pasa con el PV y con el almacenamiento subyace">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Políticas de recuperación: Retain y Delete (Recycle obsole… · Lección de CKA">
+<meta property="og:description" content="Cuando se borra un PersistentVolumeClaim, la persistentVolumeReclaimPolicy de su PersistentVolume decide qué pasa con el PV y con el almacenamiento subyace">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/reclaim-policies-retain-and-delete-recycle-deprecated-and-cleaning-up/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/reclaim-policies-retain-and-delete-recycle-deprecated-and-cleaning-up/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/reclaim-policies-retain-and-delete-recycle-deprecated-and-cleaning-up/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Políticas de recuperación: Retain y Delete (Recycle obsoleta) y limpieza de PVs en Released</h1>
+<article class="lbody">
+<p>Cuando se borra un PersistentVolumeClaim, la <code>persistentVolumeReclaimPolicy</code> de su PersistentVolume decide qué pasa con el PV y con el almacenamiento subyacente. Elegir la política equivocada puede destruir datos que querías conservar o dejar almacenamiento huérfano.</p>
+<p><code>Delete</code> elimina tanto el objeto PV como el recurso de almacenamiento que lo respalda, como un disco en la nube, cuando se borra el claim. Es el valor predeterminado para los volúmenes aprovisionados dinámicamente, tomado del campo <code>reclaimPolicy</code> de la StorageClass, que a su vez tiene Delete como valor predeterminado. Mantiene el clúster ordenado, pero no ofrece una segunda oportunidad para los datos.</p>
+<p><code>Retain</code> conserva el PV y sus datos. El PV pasa a la fase <code>Released</code> y no queda disponible para nuevos claims, porque todavía tiene un <code>claimRef</code> al claim borrado y puede contener los datos del inquilino anterior. Los PVs creados manualmente tienen Retain como valor predeterminado. Es la opción segura para los datos importantes.</p>
+<p><code>Recycle</code> está obsoleta. Antes limpiaba el volumen con un borrado básico de su contenido y lo volvía a dejar Available, y solo funcionaba con algunos tipos de volumen como NFS y hostPath. El reemplazo recomendado es el aprovisionamiento dinámico. Debes saber que existe y que no deberías usarla.</p>
+<p>Para reutilizar un PV en Released con Retain, primero decide qué hacer con sus datos: respaldarlos, borrarlos o conservarlos intencionalmente para un nuevo claim. Luego quita la referencia obsoleta al claim para que el PV vuelva a estar Available. Otra opción es borrar el objeto PV y crear uno nuevo que apunte al mismo almacenamiento.</p>
+<pre class="code" tabindex="0"><code>kubectl get pv            # STATUS Released, CLAIM app/data
+kubectl patch pv pv-data -p '{&quot;spec&quot;:{&quot;claimRef&quot;:null}}'
+kubectl get pv pv-data    # STATUS Available
+# cambiar la política de un PV existente (por ejemplo, aprovisionado dinámicamente)
+kubectl patch pv pvc-1234 -p '{&quot;spec&quot;:{&quot;persistentVolumeReclaimPolicy&quot;:&quot;Retain&quot;}}'</code></pre>
+<p>Cambiar un PV aprovisionado dinámicamente a Retain antes de borrar su claim es una forma común de proteger los datos durante una migración. Recuerda que borrar un objeto PV con Retain no borra el recurso de almacenamiento; tienes que limpiarlo tú mismo en el sistema de almacenamiento. Por último, Kubernetes protege los objetos en uso: un PVC usado por un Pod en ejecución, o un PV vinculado a un PVC, recibe un finalizer de protección, así que una solicitud de borrado lo deja en Terminating hasta que deje de estar en uso.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>persistentVolumeReclaimPolicy</dt><dd>El campo del PV que decide qué pasa con el volumen después de que se borra su claim.</dd><dt>Retain (conservar)</dt><dd>Conserva el PV y los datos después de borrar el claim; el PV pasa a Released.</dd><dt>Delete (borrar)</dt><dd>Elimina el PV y su almacenamiento de respaldo cuando se borra el claim.</dd><dt>Recycle (reciclar)</dt><dd>Una política obsoleta que limpiaba el volumen y lo volvía a dejar Available.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un equipo borra el PVC de una antigua aplicación de reportes y más tarde necesita los datos. Como el PV se creó manualmente con Retain, está en Released con los archivos intactos. Copias los datos, limpias el claimRef con kubectl patch y el PV se vincula al PVC de la nueva aplicación.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El aprovisionamiento dinámico usa Delete por defecto. Si el examen te pide conservar los datos de un claim aprovisionado dinámicamente, cambia el PV a Retain con patch antes de borrar el PVC.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿A qué fase pasa un PV con Retain después de que se borra su claim?</summary><p>Released.</p></details>
+<details class="sq"><summary>¿Cómo vuelves a dejar Available un PV en Released?</summary><p>Limpia o conserva los datos según corresponda y luego quita spec.claimRef, por ejemplo con kubectl patch.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../access-modes-readwriteonce-readonlymany-readwritemany-readwriteoncepod/">← Modos de acceso: ReadWriteOnce, ReadOnlyMany, ReadWriteMany </a><a href="../storageclasses-provisioners-and-dynamic-provisioning-the-default-stora/">StorageClasses, provisioners y aprovisionamiento dinámico; l →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Programar tareas con at, cron (crontab -e, /etc/cron.d) y … · Lección de RHCSA</title>
+<meta name="description" content="RHEL te ofrece tres formas de ejecutar comandos más tarde. at ejecuta un trabajo una sola vez a una hora determinada. cron ejecuta trabajos de forma repeti">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Programar tareas con at, cron (crontab -e, /etc/cron.d) y … · Lección de RHCSA">
+<meta property="og:description" content="RHEL te ofrece tres formas de ejecutar comandos más tarde. at ejecuta un trabajo una sola vez a una hora determinada. cron ejecuta trabajos de forma repeti">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/scheduling-tasks-with-at-cron-crontab-e-etc-cron-d-and-systemd-timer-u/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/scheduling-tasks-with-at-cron-crontab-e-etc-cron-d-and-systemd-timer-u/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/scheduling-tasks-with-at-cron-crontab-e-etc-cron-d-and-systemd-timer-u/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Programar tareas con at, cron (crontab -e, /etc/cron.d) y unidades timer de systemd (OnCalendar=, OnBootSec=)</h1>
+<article class="lbody">
+<p>RHEL te ofrece tres formas de ejecutar comandos más tarde. <code>at</code> ejecuta un trabajo una sola vez a una hora determinada. cron ejecuta trabajos de forma repetida según un calendario. Las unidades timer de systemd también ejecutan trabajos según un calendario o en relación con eventos como el arranque, y se integran con el registro y la gestión de servicios. El examen puede pedir cualquiera de ellas, así que conoce la sintaxis de cada una.</p>
+<p><code>at</code> necesita que el servicio atd esté en ejecución (<code>systemctl enable --now atd</code>). Le das una hora y escribes los comandos, terminando con Ctrl+D, o se los pasas por una tubería. <code>atq</code> lista los trabajos pendientes y <code>atrm N</code> elimina el trabajo N.</p>
+<pre class="code" tabindex="0"><code>echo 'tar czf /tmp/etc.tgz /etc' | at now + 30 minutes
+at 17:00 tomorrow
+atq
+atrm 3</code></pre>
+<p>cron lo ejecuta crond. Cada usuario edita su propia tabla con <code>crontab -e</code>; root puede gestionar la de otro usuario con <code>crontab -e -u alice</code> y listarla con <code>crontab -l -u alice</code>. Una línea tiene cinco campos de tiempo y luego el comando: minuto (0-59), hora (0-23), día del mes (1-31), mes (1-12) y día de la semana (0-7, donde 0 y 7 son domingo). <code>*</code> significa todos los valores, <code>*/15</code> significa cada 15, las comas listan valores y los guiones dan rangos. Así, <code>30 2 * * 1-5 /usr/local/bin/backup.sh</code> se ejecuta a las 02:30 de lunes a viernes.</p>
+<p>Los trabajos de todo el sistema van en archivos dentro de <code>/etc/cron.d/</code>. Estos usan los mismos cinco campos más un sexto campo que nombra al usuario con el que se ejecutan, por ejemplo <code>0 * * * * root /usr/local/bin/cleanup.sh</code>. Olvidar ese campo de usuario es un error común. Los scripts que se colocan en <code>/etc/cron.daily/</code>, <code>/etc/cron.weekly/</code> y <code>/etc/cron.monthly/</code> los ejecuta anacron, que recupera los trabajos que se perdieron mientras la máquina estaba apagada.</p>
+<p>Un timer de systemd es una unidad <code>.timer</code> que activa una unidad <code>.service</code> correspondiente. <code>OnCalendar=</code> establece calendarios de reloj como <code>daily</code>, <code>Mon..Fri 02:30</code> o <code>*-*-* 02:30:00</code>. <code>OnBootSec=15min</code> se ejecuta un tiempo determinado después del arranque, y <code>OnUnitActiveSec=</code> se repite en relación con la última ejecución. <code>Persistent=true</code> ejecuta en el siguiente arranque un trabajo de calendario que se perdió.</p>
+<pre class="code" tabindex="0"><code># /etc/systemd/system/backup.timer
+[Unit]
+Description=Nightly backup
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target</code></pre>
+<p>Crea <code>backup.service</code> con <code>Type=oneshot</code> y <code>ExecStart=/usr/local/bin/backup.sh</code>, luego ejecuta <code>systemctl daemon-reload</code> y <code>systemctl enable --now backup.timer</code>; habilitas el timer, no el servicio. <code>systemctl list-timers</code> muestra la próxima ejecución, <code>systemd-analyze calendar 'Mon..Fri 02:30'</code> comprueba una expresión y <code>journalctl -u backup.service</code> muestra la salida.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>at</dt><dd>Programa un trabajo de una sola vez, ejecutado por el servicio atd; atq lista y atrm elimina trabajos.</dd><dt>crontab</dt><dd>Una tabla por usuario de trabajos recurrentes, con cinco campos de tiempo y un comando, que se edita con crontab -e.</dd><dt>/etc/cron.d</dt><dd>Un directorio de archivos cron del sistema cuyas líneas incluyen un campo de usuario entre el calendario y el comando.</dd><dt>Timer unit (unidad timer)</dt><dd>Un archivo .timer de systemd que inicia un servicio correspondiente según un calendario (OnCalendar=) o después de un evento (OnBootSec=).</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>La tarea: el usuario natasha debe ejecutar /bin/echo hello todos los días a las 14:23. Como root ejecutas crontab -e -u natasha y añades 23 14 * * * /bin/echo hello, y luego lo confirmas con crontab -l -u natasha. Como es su crontab, no hace falta campo de usuario.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Conoce qué formato de cron necesita un campo de usuario: los crontabs personales nunca lo llevan, /etc/crontab y los archivos de /etc/cron.d siempre. Y recuerda habilitar la unidad .timer, no la .service, en los timers de systemd.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué significa el calendario de cron */10 8-17 * * 1-5?</summary><p>Cada 10 minutos de 08:00 a 17:50, de lunes a viernes.</p></details>
+<details class="sq"><summary>¿Cómo haces que un timer de systemd se inicie al arrancar y se ejecute según el calendario?</summary><p>Crea el .timer y el .service correspondiente, ejecuta systemctl daemon-reload y luego systemctl enable --now name.timer.</p></details>
+<details class="sq"><summary>¿Qué hace OnBootSec=10min?</summary><p>Dispara el servicio diez minutos después de que arranca el sistema.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../diagnosing-and-correcting-file-permission-problems-ls-l-namei-l-chmod/">← Diagnosticar y corregir problemas de permisos de archivos (l</a><a href="../starting-and-stopping-services-and-configuring-them-to-start-at-boot-s/">Iniciar y detener servicios y configurarlos para que arranqu →</a></nav>
+</main>
+</body>
+</html>

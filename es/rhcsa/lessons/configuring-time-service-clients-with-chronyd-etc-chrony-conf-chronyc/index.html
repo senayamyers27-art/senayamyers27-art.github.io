@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Configurar clientes del servicio de hora con chronyd (/etc… · Lección de RHCSA</title>
+<meta name="description" content="La hora exacta importa más de lo que parece. Los logs de distintos sistemas deben coincidir al resolver problemas, Kerberos y muchas comprobaciones de TLS ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Configurar clientes del servicio de hora con chronyd (/etc… · Lección de RHCSA">
+<meta property="og:description" content="La hora exacta importa más de lo que parece. Los logs de distintos sistemas deben coincidir al resolver problemas, Kerberos y muchas comprobaciones de TLS ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/configuring-time-service-clients-with-chronyd-etc-chrony-conf-chronyc/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/configuring-time-service-clients-with-chronyd-etc-chrony-conf-chronyc/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/configuring-time-service-clients-with-chronyd-etc-chrony-conf-chronyc/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Configurar clientes del servicio de hora con chronyd (/etc/chrony.conf, chronyc sources) y timedatectl</h1>
+<article class="lbody">
+<p>La hora exacta importa más de lo que parece. Los logs de distintos sistemas deben coincidir al resolver problemas, Kerberos y muchas comprobaciones de TLS (Transport Layer Security) fallan cuando los relojes se desfasan, y las tareas programadas se ejecutan en el momento equivocado. RHEL mantiene la hora con chrony, una implementación de NTP (Network Time Protocol). El demonio es <code>chronyd</code>, se configura en <code>/etc/chrony.conf</code> y se consulta con <code>chronyc</code>.</p>
+<p>La configuración nombra las fuentes de hora. Una línea <code>server</code> nombra un servidor NTP; una línea <code>pool</code> nombra un nombre DNS (Domain Name System) que se resuelve en varios servidores. La opción <code>iburst</code> envía una ráfaga rápida de peticiones al arrancar para que el reloj se sincronice antes. Para apuntar un cliente a un servidor concreto, comenta la línea pool predeterminada y añade la tuya.</p>
+<pre class="code" tabindex="0"><code># /etc/chrony.conf
+#pool 2.rhel.pool.ntp.org iburst
+server classroom.example.com iburst
+driftfile /var/lib/chrony/drift
+makestep 1.0 3</code></pre>
+<p>Después de editar, reinicia el servicio con <code>systemctl restart chronyd</code> y asegúrate de que esté habilitado. Luego compruébalo con <code>chronyc sources -v</code>. La línea que empieza con <code>^*</code> es la fuente seleccionada actualmente para sincronizar; <code>^+</code> marca candidatas aceptables y <code>^?</code> significa que la fuente es inaccesible o todavía no se ha evaluado. <code>chronyc tracking</code> muestra el desfase actual y el estrato (stratum).</p>
+<p><code>timedatectl</code> es la herramienta general para los ajustes del reloj. <code>timedatectl</code> sin más muestra la hora local, UTC (Coordinated Universal Time), la zona horaria, si NTP está activo y si el reloj está sincronizado. <code>timedatectl set-timezone Europe/Berlin</code> establece la zona (lista los nombres con <code>timedatectl list-timezones</code>). <code>timedatectl set-ntp true</code> habilita la hora por red, lo que en RHEL inicia y habilita chronyd; <code>set-ntp false</code> lo detiene para que puedas poner la hora a mano con <code>timedatectl set-time</code>.</p>
+<pre class="code" tabindex="0"><code>timedatectl set-timezone America/New_York
+timedatectl set-ntp true
+systemctl restart chronyd
+chronyc sources -v
+timedatectl        # System clock synchronized: yes</code></pre>
+<p>Si una fuente nunca llega a <code>^*</code>, revisa la resolución de nombres del servidor, la accesibilidad de red y que el puerto UDP 123 no esté bloqueado en el camino. Un cliente no necesita abrir el firewall local para NTP, porque es él quien inicia las peticiones.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>NTP</dt><dd>Network Time Protocol, usado para sincronizar relojes con servidores de hora por la red.</dd><dt>chronyd</dt><dd>El demonio NTP de RHEL, configurado en /etc/chrony.conf.</dd><dt>iburst</dt><dd>Una opción de servidor de chrony que envía varias peticiones rápidas al arrancar para sincronizar antes.</dd><dt>timedatectl</dt><dd>Una herramienta de systemd para ver y establecer la hora, la zona horaria y si la sincronización NTP está activada.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una tarea te pide convertir el sistema en cliente de hora de classroom.example.com. Reemplazas la línea pool de /etc/chrony.conf por server classroom.example.com iburst, ejecutas systemctl enable chronyd y systemctl restart chronyd, y al cabo de un minuto chronyc sources muestra ^* classroom.example.com.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> En la salida de chronyc sources, el asterisco después del acento circunflejo marca la fuente con la que realmente estás sincronizado. Sin asterisco, la configuración todavía no funciona.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué línea añadirías a /etc/chrony.conf para usar ntp1.example.com?</summary><p>server ntp1.example.com iburst, y luego reiniciar chronyd.</p></details>
+<details class="sq"><summary>¿Qué hace timedatectl set-ntp true en RHEL?</summary><p>Activa la sincronización de hora por red habilitando e iniciando chronyd.</p></details>
+<details class="sq"><summary>En la salida de chronyc sources, ¿qué significa ^??</summary><p>Que la fuente es inaccesible o todavía no se ha evaluado.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../setting-the-default-boot-target-systemctl-get-default-set-default/">← Establecer el target de arranque predeterminado (systemctl g</a><a href="../installing-and-updating-packages-from-the-red-hat-cdn-a-remote-reposit/">Instalar y actualizar paquetes desde la CDN de Red Hat, un r →</a></nav>
+</main>
+</body>
+</html>

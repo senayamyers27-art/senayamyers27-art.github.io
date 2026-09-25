@@ -2387,4 +2387,4 @@ CertHub.addLessons("ccna", [
    ]
   ]
  }
-]);
+], { reviewed: "2026-09-25" });

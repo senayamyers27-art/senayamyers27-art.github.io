@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AWS X-Ray: segmentos, subsegmentos, anotaciones vs metadat… · Lección de Developer Associate</title>
+<meta name="description" content="Los logs te dicen lo que hizo un componente; el rastreo distribuido muestra una solicitud completa mientras viaja por API Gateway, Lambda, DynamoDB, SQS y ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="AWS X-Ray: segmentos, subsegmentos, anotaciones vs metadat… · Lección de Developer Associate">
+<meta property="og:description" content="Los logs te dicen lo que hizo un componente; el rastreo distribuido muestra una solicitud completa mientras viaja por API Gateway, Lambda, DynamoDB, SQS y ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/aws-x-ray-segments-subsegments-annotations-vs-metadata-sampling-active/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/aws-x-ray-segments-subsegments-annotations-vs-metadata-sampling-active/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/aws-x-ray-segments-subsegments-annotations-vs-metadata-sampling-active/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>AWS X-Ray: segmentos, subsegmentos, anotaciones vs metadatos, muestreo, rastreo activo, el daemon de X-Ray/agente de CloudWatch</h1>
+<article class="lbody">
+<p>Los logs te dicen lo que hizo un componente; el rastreo distribuido muestra una solicitud completa mientras viaja por API Gateway, Lambda, DynamoDB, SQS y API externas. AWS X-Ray recopila esos datos de trazas, dibuja un mapa de servicios de tu aplicación y te permite encontrar qué llamada hizo que una solicitud fuera lenta o fallara.</p>
+<p>Una traza es el recorrido completo de una solicitud, identificada por un ID de traza que se pasa entre servicios en el encabezado <code>X-Amzn-Trace-Id</code>. Cada servicio que maneja la solicitud envía un segmento: un documento JSON que describe el trabajo que hizo ese servicio, con horas de inicio y fin, el nombre del recurso, detalles de la solicitud y la respuesta HTTP, y cualquier error o falla. Dentro de un segmento, los subsegmentos desglosan más el trabajo, como cada llamada al SDK de AWS de destino, cada llamada HTTP o consulta SQL, o un bloque de tu propio código que quieras cronometrar. Las llamadas a servicios que no envían sus propios segmentos (una API externa, por ejemplo) aparecen como nodos inferidos a partir de los subsegmentos. El mapa de servicios agrupa los segmentos en nodos y los colorea según sus tasas de errores (4xx), fallas (5xx) y limitación (429).</p>
+<p>Puedes adjuntar datos adicionales a los segmentos de dos formas, y la diferencia se evalúa con frecuencia. Las anotaciones (annotations) son pares clave-valor simples (cadena, número o booleano) que X-Ray indexa, así que puedes buscar y filtrar trazas con expresiones de filtro como <code>annotation.customer_tier = &quot;gold&quot;</code> y crear grupos a partir de ellas. Los metadatos (metadata) son datos clave-valor de cualquier tipo, incluidos objetos y listas, que se guardan con la traza pero no se indexan, así que puedes verlos pero no buscar por ellos. Pon en las anotaciones los ID y las categorías por los que vayas a filtrar; pon en los metadatos las cargas de depuración más grandes.</p>
+<pre class="code" tabindex="0"><code>from aws_xray_sdk.core import xray_recorder
+
+@xray_recorder.capture('charge_card')   # crea un subsegmento
+def charge_card(order):
+    sub = xray_recorder.current_subsegment()
+    sub.put_annotation('order_id', order['id'])
+    sub.put_metadata('order', order)</code></pre>
+<p>El muestreo (sampling) controla cuántas solicitudes se rastrean, para mantener bajos el costo y la sobrecarga. La regla predeterminada registra la primera solicitud de cada segundo (el reservorio) y el cinco por ciento de las solicitudes adicionales. Puedes crear reglas de muestreo personalizadas en la consola, que coinciden por nombre de servicio, ruta de URL, método HTTP, etc., con su propio reservorio y tasa, y los SDK las aplican sin cambios de código. Si una pregunta pide rastrear más o menos solicitudes para una ruta, la respuesta es una regla de muestreo.</p>
+<p>Para habilitar el rastreo en Lambda, activa el rastreo activo (<code>TracingConfig: Mode: Active</code>, o <code>Tracing: Active</code> en Globals de SAM). Lambda crea entonces segmentos para la invocación, y el rol de ejecución necesita permiso para enviar datos (<code>xray:PutTraceSegments</code> y <code>xray:PutTelemetryRecords</code>, incluidos en la política administrada <code>AWSXRayDaemonWriteAccess</code>). API Gateway tiene un ajuste de rastreo de X-Ray por etapa. Para ver las llamadas de destino como subsegmentos, instrumenta tu código con el SDK de X-Ray (o AWS Distro for OpenTelemetry, que AWS ahora recomienda para la instrumentación nueva) para que los clientes del SDK de AWS y las bibliotecas HTTP queden parcheados.</p>
+<p>En EC2, ECS y servidores locales, el SDK no envía los datos directamente a la API de X-Ray. Envía los segmentos por el puerto UDP 2000 a un recolector local, el daemon de X-Ray o el agente de CloudWatch (que puede actuar como ese recolector), que los almacena en búfer y los sube por lotes. En ECS lo ejecutas como un contenedor sidecar, y el SDK lo encuentra mediante la variable de entorno <code>AWS_XRAY_DAEMON_ADDRESS</code>. El rol de instancia o de tarea necesita los mismos permisos de escritura. En Lambda y en Elastic Beanstalk (con un ajuste de opción), este recolector ya se proporciona. La falta de trazas desde EC2 suele significar que el daemon no está en ejecución o que al rol le falta permiso.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Segment (segmento)</dt><dd>El registro del trabajo realizado por un servicio para una solicitud rastreada, incluidos los tiempos, los detalles de la solicitud y los errores.</dd><dt>Subsegment (subsegmento)</dt><dd>Una parte más detallada de un segmento, como una llamada de destino o un bloque de código cronometrado.</dd><dt>Annotation (anotación)</dt><dd>Un par clave-valor indexado en un segmento que se puede usar en expresiones de filtro para buscar trazas.</dd><dt>Metadata (metadatos)</dt><dd>Datos clave-valor no indexados de cualquier tipo, guardados con un segmento para verlos pero no para buscarlos.</dd><dt>Sampling rule (regla de muestreo)</dt><dd>Una regla que define cuántas solicitudes de cierto tipo se rastrean, usando un reservorio y una tasa fija.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Soporte necesita encontrar las trazas de los pedidos fallidos de un cliente específico. El desarrollador agrega put_annotation('customer_id', id) en la función de pedidos. Ahora el equipo puede ejecutar la expresión de filtro annotation.customer_id = &quot;C-1042&quot; en la consola de X-Ray y abrir exactamente las trazas lentas, donde un subsegmento muestra una llamada a DynamoDB que está siendo limitada.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> ¿Necesitas buscar o filtrar trazas por un valor? Anotación. ¿Necesitas guardar detalles adicionales solo para verlos? Metadatos. ¿No hay trazas desde EC2 o ECS? Revisa el daemon o el agente en UDP 2000 y los permisos de escritura de X-Ray del rol.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Puedes filtrar trazas por un valor de metadatos?</summary><p>No; los metadatos no se indexan. Usa una anotación para los valores por los que necesites buscar.</p></details>
+<details class="sq"><summary>¿Qué registra la regla de muestreo predeterminada de X-Ray?</summary><p>La primera solicitud de cada segundo, más el cinco por ciento de las solicitudes adicionales.</p></details>
+<details class="sq"><summary>¿Qué hay que hacer para rastrear una función Lambda además de instrumentar el código?</summary><p>Habilitar el rastreo activo en la función y dar a su rol de ejecución permisos de escritura de X-Ray, como PutTraceSegments.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../common-lambda-errors-throttling-429-timeouts-accessdenied-from-the-exe/">← Errores comunes de Lambda: limitación (429), tiempos de espe</a><a href="../custom-metrics-putmetricdata-cloudwatch-embedded-metric-format-high-re/">Métricas personalizadas: PutMetricData, formato de métricas  →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Problemas de contenedores: logs, conflictos de puertos, de… · Lección de Linux+</title>
+<meta name="description" content="Los contenedores fallan de maneras características: la aplicación de adentro se cae, no se puede publicar el puerto, no se puede descargar la imagen, o el ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Problemas de contenedores: logs, conflictos de puertos, de… · Lección de Linux+">
+<meta property="og:description" content="Los contenedores fallan de maneras características: la aplicación de adentro se cae, no se puede publicar el puerto, no se puede descargar la imagen, o el ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/linux-plus/lessons/container-problems-logs-port-conflicts-image-pulls-storage/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/linux-plus/lessons/container-problems-logs-port-conflicts-image-pulls-storage/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../linux-plus/">Linux+</a> / <a href="../">Lecciones</a> · <a href="../../../../linux-plus/lessons/container-problems-logs-port-conflicts-image-pulls-storage/" hreflang="en" lang="en">English</a></p>
+<p class="note">CompTIA Linux+ XK0-006</p>
+<h1>Problemas de contenedores: logs, conflictos de puertos, descarga de imágenes, almacenamiento</h1>
+<article class="lbody">
+<p>Los contenedores fallan de maneras características: la aplicación de adentro se cae, no se puede publicar el puerto, no se puede descargar la imagen, o el almacenamiento falta, está lleno o es inaccesible. Los comandos de la lección de contenedores se convierten en tu kit de solución de problemas, y el proceso refleja la solución de problemas de servicios comunes.</p>
+<p>Empieza por averiguar el estado del contenedor. <code>podman ps -a</code> (o <code>docker ps -a</code>) incluye los contenedores detenidos y muestra su estado, como <code>Exited (1) 2 minutes ago</code> o un bucle de reinicios. <code>podman logs nombre</code> muestra lo que imprimió la aplicación antes de detenerse, que normalmente es la respuesta: una variable de entorno faltante, un error de configuración, una conexión fallida a la base de datos. <code>podman inspect nombre</code> muestra el código de salida, el indicador OOMKilled, el comando, el entorno, los montajes y la política de reinicio; un código de salida 137 significa que el proceso fue terminado con SIGKILL (128 + 9), a menudo por el OOM killer o por un límite de memoria, mientras que 139 indica una falla de segmentación. <code>podman events</code> muestra los eventos del ciclo de vida, y <code>podman exec -it nombre sh</code> te permite mirar dentro de un contenedor en ejecución. Si el contenedor sale de inmediato, intenta ejecutar la imagen de forma interactiva con un shell para inspeccionarla, o verifica que el comando principal no simplemente termine y salga.</p>
+<p>Los conflictos de puertos aparecen como errores del tipo 'address already in use' cuando publicas con <code>-p</code>. Solo un proceso puede usar un puerto del host, así que revisa con <code>ss -tlpn | grep :8080</code> los servicios del host y con <code>podman ps</code> otros contenedores que ya lo estén publicando, y luego elige otro puerto del host o detén el servicio en conflicto. Si el contenedor se ejecuta pero no es accesible, revisa <code>podman port nombre</code> para confirmar el mapeo, confirma que la aplicación dentro escucha en 0.0.0.0 y no en 127.0.0.1 dentro del contenedor, y revisa el firewall del host. Podman rootless no puede usar puertos del host menores a 1024 de forma predeterminada, lo que produce un error de permisos en lugar de un conflicto.</p>
+<p>Las fallas al descargar imágenes tienen varias causas. 'manifest unknown' o 'not found' significa un nombre de imagen o una etiqueta incorrectos; 'unauthorized' o 'denied' significa que necesitas iniciar sesión con <code>podman login registry</code> o que no tienes acceso a un repositorio privado; 'toomanyrequests' indica un límite de tasa del registro; y los tiempos de espera agotados, las fallas de DNS o los errores de certificado TLS apuntan a problemas de red, de proxy o del reloj. Los nombres cortos sin registro pueden resolverse contra una lista en <code>/etc/containers/registries.conf</code>, así que usa nombres completamente calificados como <code>registry.example.com/team/app:1.4</code> para ser explícito y evitar descargar una imagen impostora. Fijar una etiqueta o un digest específicos en lugar de <code>latest</code> también evita sorpresas.</p>
+<p>Los problemas de almacenamiento vienen en dos formas. Espacio: las imágenes, los contenedores detenidos, los volúmenes y la caché de construcción consumen disco en <code>/var/lib/containers</code> (Podman como root), <code>~/.local/share/containers</code> (Podman rootless) o <code>/var/lib/docker</code>. <code>podman system df</code> resume el uso, y <code>podman image prune</code>, <code>podman container prune</code>, <code>podman volume prune</code> y <code>podman system prune</code> lo recuperan; ten cuidado, porque depurar volúmenes elimina datos. Acceso: un bind mount que da 'Permission denied' dentro del contenedor normalmente significa etiquetas de SELinux (agrega <code>:Z</code> o <code>:z</code> a la opción <code>-v</code>) o desajustes de UID, especialmente en modo rootless, donde los UID del contenedor se asignan a UID subordinados en el host; <code>podman unshare</code> ayuda a ajustar la propiedad. Recuerda también que los datos escritos dentro de un contenedor sin volumen desaparecen cuando se elimina el contenedor, una causa común de pérdida de datos después de actualizar una imagen.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Exit code 137 (código de salida 137)</dt><dd>Un proceso de contenedor terminado por SIGKILL (128 + 9), con frecuencia por límites de memoria o por el OOM killer.</dd><dt>podman ps -a</dt><dd>Lista todos los contenedores, incluidos los detenidos, con su estado e información de salida.</dd><dt>registries.conf</dt><dd>Configuración que controla los registros, incluida la forma en que se resuelven los nombres cortos de imagen.</dd><dt>podman system df</dt><dd>Resume el uso de disco de imágenes, contenedores y volúmenes.</dd><dt>:Z volume option (opción de volumen :Z)</dt><dd>Vuelve a etiquetar un directorio del host montado con una etiqueta SELinux privada para que el contenedor pueda acceder a él.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una API en contenedor se reinicia una y otra vez. podman ps -a muestra Exited (137), y podman inspect muestra OOMKilled true. El contenedor tenía --memory 256m, pero la nueva versión necesita más. Subir el límite a 512m y volver a desplegar detiene los reinicios, y podman logs ahora muestra que el servicio arranca con normalidad.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Revisa primero los logs y luego inspecciona: podman logs explica la mayoría de las caídas de aplicaciones, y podman inspect revela los códigos de salida, las terminaciones por OOM, los montajes y los mapeos de puertos.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Un contenedor sale con el código 137. ¿Cuál es la causa más probable?</summary><p>Fue terminado con SIGKILL, a menudo porque superó su límite de memoria o porque el OOM killer lo eligió.</p></details>
+<details class="sq"><summary>podman run -p 80:8080 falla como usuario normal con un error de permisos. ¿Por qué?</summary><p>Los contenedores rootless no pueden usar puertos del host menores a 1024 de forma predeterminada; usa un puerto del host más alto o ajusta la configuración del sistema.</p></details>
+<details class="sq"><summary>Un directorio montado da Permission denied dentro de un contenedor en un host RHEL. ¿Cuál es una solución común?</summary><p>Agregar :Z (o :z) a la opción del volumen para que el directorio se vuelva a etiquetar y el contenedor pueda acceder a él bajo SELinux.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Linux+ gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../linux-plus/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../package-problems-broken-dependencies-repository-errors-held-packages/">← Problemas de paquetes: dependencias rotas, errores de reposi</a></nav>
+</main>
+</body>
+</html>

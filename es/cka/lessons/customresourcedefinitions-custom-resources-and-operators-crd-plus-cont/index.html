@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CustomResourceDefinitions, custom resources y operators (C… · Lección de CKA</title>
+<meta name="description" content="La API de Kubernetes es extensible. Una CustomResourceDefinition (CRD) le enseña al API server un nuevo tipo de recurso, y desde ese momento puedes crear o">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="CustomResourceDefinitions, custom resources y operators (C… · Lección de CKA">
+<meta property="og:description" content="La API de Kubernetes es extensible. Una CustomResourceDefinition (CRD) le enseña al API server un nuevo tipo de recurso, y desde ese momento puedes crear o">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/customresourcedefinitions-custom-resources-and-operators-crd-plus-cont/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/customresourcedefinitions-custom-resources-and-operators-crd-plus-cont/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/customresourcedefinitions-custom-resources-and-operators-crd-plus-cont/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>CustomResourceDefinitions, custom resources y operators (CRD más controlador)</h1>
+<article class="lbody">
+<p>La API de Kubernetes es extensible. Una CustomResourceDefinition (CRD) le enseña al API server un nuevo tipo de recurso, y desde ese momento puedes crear objetos de ese tipo (custom resources) con kubectl, guardarlos en etcd y protegerlos con RBAC, exactamente igual que los objetos integrados.</p>
+<p>Una CRD vive en la API <code>apiextensions.k8s.io/v1</code>. Su nombre debe ser <code>&lt;plural&gt;.&lt;group&gt;</code>, por ejemplo <code>backups.example.com</code>. El spec declara el <code>group</code>, los <code>names</code> (plural, singular, kind y shortNames opcionales), el <code>scope</code> (Namespaced o Cluster) y una o más <code>versions</code>. Cada versión indica si está <code>served</code>, exactamente una está marcada como <code>storage: true</code>, y cada una tiene un <code>schema</code> OpenAPI v3 que el API server usa para validar los objetos.</p>
+<pre class="code" tabindex="0"><code>apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: backups.example.com
+spec:
+  group: example.com
+  scope: Namespaced
+  names: {plural: backups, singular: backup, kind: Backup, shortNames: [bk]}
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              schedule: {type: string}</code></pre>
+<p>Un custom resource por sí solo no hace nada; son solo datos almacenados. El comportamiento viene de un controlador que vigila esos objetos y actúa sobre ellos. Una CRD más un controlador que codifica conocimiento operativo (cómo desplegar, respaldar, escalar o actualizar una aplicación concreta) se llama operator. Por ejemplo, un operator de base de datos podría vigilar objetos <code>Postgres</code> y crear StatefulSets, Services y Jobs de backup que correspondan a cada uno.</p>
+<p>Los operators normalmente se instalan con Helm o aplicando manifiestos, y la instalación tiene partes diferenciadas: las CRDs, un namespace, un ServiceAccount con permisos de RBAC y el Deployment del controlador. Las CRDs deben existir antes de aplicar cualquier custom resource que las use, por eso muchos proyectos las distribuyen como un archivo o paso separado. Verifica el resultado con <code>kubectl get crd</code>, <code>kubectl api-resources --api-group=example.com</code>, <code>kubectl explain backup.spec</code> y <code>kubectl get backups -A</code>.</p>
+<p>Ten cuidado con los borrados: borrar una CRD borra todos los custom resources de ese tipo en el clúster. Además, si un controlador agrega finalizers a sus custom resources y el controlador se elimina primero, esos recursos pueden quedarse atascados en el borrado porque ya no queda nada que quite el finalizer.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>CustomResourceDefinition</dt><dd>Un objeto que registra un nuevo tipo de recurso en el API server.</dd><dt>Custom resource (recurso personalizado)</dt><dd>Una instancia de un tipo definido por una CRD, guardada en etcd como cualquier objeto.</dd><dt>Operator</dt><dd>Un controlador más CRDs que automatiza la operación de una aplicación específica.</dd><dt>Finalizer</dt><dd>Una clave en un objeto que bloquea su borrado hasta que un controlador realiza la limpieza y la quita.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una tarea dice que instales un operator y crees un custom resource <code>Certificate</code>. Aplicas primero el manifiesto de la CRD del operator, lo confirmas con <code>kubectl get crd | grep cert</code>, instalas el controlador y luego creas el recurso. <code>kubectl describe certificate</code> muestra las actualizaciones de estado del controlador, lo que demuestra que está reconciliando.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si <code>kubectl apply</code> dice 'no matches for kind', falta la CRD o su group/version no coincide con el apiVersion del objeto. Usa <code>kubectl api-resources</code> para ver exactamente qué kinds y groups conoce el clúster.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo debe verse el metadata.name de una CRD?</summary><p>El nombre en plural seguido del group, como backups.example.com.</p></details>
+<details class="sq"><summary>¿Qué convierte una CRD en un operator?</summary><p>Un controlador que vigila los custom resources y reconcilia recursos reales para que coincidan con ellos.</p></details>
+<details class="sq"><summary>¿Qué les pasa a los custom resources existentes si borras su CRD?</summary><p>Se borran todos junto con ella.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../extension-interfaces-cri-containerd-cri-o-crictl-cni-calico-cilium-fla/">← Interfaces de extensión: CRI (containerd, CRI-O, crictl), CN</a><a href="../deployments-and-replicasets-as-self-healing-primitives-rolling-updates/">Deployments y ReplicaSets como primitivas de autorreparación →</a></nav>
+</main>
+</body>
+</html>

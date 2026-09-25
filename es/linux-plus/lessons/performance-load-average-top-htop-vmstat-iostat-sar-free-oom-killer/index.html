@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rendimiento: carga promedio, top/htop, vmstat, iostat, sar… · Lección de Linux+</title>
+<meta name="description" content="Cuando los usuarios dicen que un servidor está lento, necesitas encontrar qué recurso es el cuello de botella: CPU, memoria, E/S de disco u otra cosa. El e">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Rendimiento: carga promedio, top/htop, vmstat, iostat, sar… · Lección de Linux+">
+<meta property="og:description" content="Cuando los usuarios dicen que un servidor está lento, necesitas encontrar qué recurso es el cuello de botella: CPU, memoria, E/S de disco u otra cosa. El e">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/linux-plus/lessons/performance-load-average-top-htop-vmstat-iostat-sar-free-oom-killer/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/linux-plus/lessons/performance-load-average-top-htop-vmstat-iostat-sar-free-oom-killer/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../linux-plus/">Linux+</a> / <a href="../">Lecciones</a> · <a href="../../../../linux-plus/lessons/performance-load-average-top-htop-vmstat-iostat-sar-free-oom-killer/" hreflang="en" lang="en">English</a></p>
+<p class="note">CompTIA Linux+ XK0-006</p>
+<h1>Rendimiento: carga promedio, top/htop, vmstat, iostat, sar, free, OOM killer</h1>
+<article class="lbody">
+<p>Cuando los usuarios dicen que un servidor está lento, necesitas encontrar qué recurso es el cuello de botella: CPU, memoria, E/S de disco u otra cosa. El enfoque es observar primero, identificar el recurso limitado y luego encontrar el proceso responsable. Cada herramienta de abajo responde una parte de esa pregunta.</p>
+<p>La carga promedio (load average) aparece en <code>uptime</code>, <code>top</code> y <code>/proc/loadavg</code> como tres números: el promedio de 1, 5 y 15 minutos. En Linux cuenta los procesos que están en ejecución o esperando una CPU, más los que están en sueño ininterrumpible (normalmente esperando disco o almacenamiento en red). Interprétala en relación con el número de núcleos de CPU, que muestra <code>nproc</code>: una carga de 4 en una máquina de 4 núcleos significa aproximadamente ocupación total, mientras que 12 en la misma máquina significa que el trabajo se está acumulando en cola. Comparar los tres valores te dice si la carga está subiendo o bajando. Una carga alta con poco uso de CPU suele apuntar a esperas de E/S.</p>
+<p><code>top</code> muestra un resumen en vivo y el uso por proceso. En la línea de CPU, <code>us</code> es tiempo de usuario, <code>sy</code> tiempo del sistema (kernel), <code>id</code> inactivo, <code>wa</code> tiempo esperando E/S y <code>st</code> tiempo robado por el hipervisor en máquinas virtuales. Ordena por memoria con <code>M</code> y por CPU con <code>P</code>, y presiona <code>1</code> para mostrar cada CPU por separado. <code>htop</code> presenta los mismos datos con barras de colores por núcleo, desplazamiento más fácil y vistas de árbol.</p>
+<p><code>free -h</code> muestra el uso de memoria. Linux usa la RAM sobrante como caché de páginas (page cache) para acelerar el acceso al disco, así que tener poca memoria 'free' es normal; la columna importante es 'available', una estimación de la memoria que se puede dar a las aplicaciones sin recurrir al swap. Un uso intenso de swap, visible en <code>free</code> y en <code>vmstat</code>, significa presión de memoria real. <code>vmstat 2</code> imprime una línea cada dos segundos: <code>r</code> es la cola de ejecución (procesos esperando CPU), <code>b</code> los procesos bloqueados en E/S, <code>si</code> y <code>so</code> las entradas y salidas de swap, <code>bi</code> y <code>bo</code> los bloques leídos y escritos, y los porcentajes de CPU incluido <code>wa</code>. Valores si/so sostenidos distintos de cero indican presión de memoria; un <code>wa</code> alto con muchos <code>b</code> sugiere un cuello de botella de almacenamiento.</p>
+<p><code>iostat -xz 2</code>, del paquete sysstat, muestra estadísticas por dispositivo: operaciones y rendimiento de lectura y escritura, tiempo de espera promedio (<code>await</code>) y <code>%util</code>, qué tan ocupado está el dispositivo. Un disco cerca del 100 por ciento de utilización con un await en aumento está saturado. <code>iotop</code> muestra qué procesos están haciendo la E/S. <code>sar</code>, también de sysstat, recopila datos de rendimiento periódicamente en segundo plano, así que puedes ver el historial: <code>sar -u</code> para CPU, <code>sar -r</code> para memoria, <code>sar -b</code> o <code>sar -d</code> para E/S, <code>sar -n DEV</code> para red y <code>sar -f</code> para leer el archivo de un día específico. Eso es invaluable cuando el problema ocurrió durante la noche.</p>
+<p>Cuando la memoria y el swap se agotan, el OOM (out-of-memory) killer del kernel elige un proceso para matarlo y mantener vivo el sistema, según una puntuación de 'maldad' (badness) que favorece a los grandes consumidores de memoria. Verás mensajes como 'Out of memory: Killed process 1234 (java)' en <code>dmesg</code> o <code>journalctl -k</code>. La puntuación de cada proceso está en <code>/proc/&lt;PID&gt;/oom_score</code>, y <code>oom_score_adj</code> (de -1000 a 1000) sesga la elección, para que los servicios críticos puedan protegerse (las unidades de systemd usan <code>OOMScoreAdjust=</code>). Las soluciones reales son agregar memoria, corregir fugas, limitar los servicios con configuraciones de cgroup como <code>MemoryMax=</code> o ajustar la aplicación.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Load average (carga promedio)</dt><dd>Número promedio de procesos ejecutables más ininterrumpibles en 1, 5 y 15 minutos; compáralo con la cantidad de núcleos.</dd><dt>I/O wait (wa) (espera de E/S)</dt><dd>Tiempo de CPU inactiva mientras espera que termine la E/S de almacenamiento.</dd><dt>Available memory (memoria disponible)</dt><dd>La estimación de free de la memoria que pueden usar nuevas cargas de trabajo sin swap, incluida la caché recuperable.</dd><dt>sar</dt><dd>Herramienta de sysstat que registra e informa estadísticas históricas de CPU, memoria, disco y red.</dd><dt>OOM killer</dt><dd>Mecanismo del kernel que mata un proceso cuando el sistema se queda sin memoria, registrado en el log del kernel.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un servidor de base de datos de 4 núcleos muestra una carga promedio de 9, pero top informa solo un 20 por ciento de CPU de usuario y un 60 por ciento de wa. iostat -xz 2 muestra el disco de datos al 99 por ciento de util con un await alto, e iotop señala un respaldo nocturno que lee el mismo disco. Reprogramar el respaldo y moverlo a una instantánea devuelve la carga por debajo de 3.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Una carga promedio alta no significa automáticamente CPU alta; revisa wa e iostat, porque en Linux los procesos atascados esperando E/S también cuentan para la carga.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>La carga promedio es 8.0 en un servidor de 2 núcleos. ¿Qué sugiere eso?</summary><p>La demanda supera con creces la capacidad: en promedio hay unas cuatro veces más tareas queriendo ejecutarse (o esperando E/S) que núcleos.</p></details>
+<details class="sq"><summary>free -h muestra poca memoria libre pero un valor available grande. ¿Es un problema?</summary><p>Normalmente no; Linux usa la memoria sobrante como caché, y available muestra la memoria que todavía se puede entregar a las aplicaciones.</p></details>
+<details class="sq"><summary>¿Dónde encuentras evidencia de que el OOM killer terminó un proceso?</summary><p>En el log del kernel, mediante dmesg o journalctl -k, con un mensaje 'Out of memory: Killed process'.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Linux+ gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../linux-plus/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../storage-issues-full-disks-inode-exhaustion-df-i-deleted-but-open-files/">← Problemas de almacenamiento: discos llenos, agotamiento de i</a><a href="../networking-ping-ip-route-ss-dig-resolvectl-traceroute-tracepath-mtr-tc/">Redes: ping, ip route, ss, dig/resolvectl, traceroute/tracep →</a></nav>
+</main>
+</body>
+</html>

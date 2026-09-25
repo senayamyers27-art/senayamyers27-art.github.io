@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Problemas del control plane: manifiestos de static Pods, c… · Lección de CKA</title>
+<meta name="description" content="En un clúster de kubeadm, los componentes del control plane son static Pods definidos en /etc/kubernetes/manifests. Cuando uno se rompe, la causa suele ser">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Problemas del control plane: manifiestos de static Pods, c… · Lección de CKA">
+<meta property="og:description" content="En un clúster de kubeadm, los componentes del control plane son static Pods definidos en /etc/kubernetes/manifests. Cuando uno se rompe, la causa suele ser">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/control-plane-problems-static-pod-manifests-crictl-ps-logs-when-the-ap/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/control-plane-problems-static-pod-manifests-crictl-ps-logs-when-the-ap/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/control-plane-problems-static-pod-manifests-crictl-ps-logs-when-the-ap/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Problemas del control plane: manifiestos de static Pods, crictl ps/logs cuando el API server está caído, síntomas del scheduler y del controller-manager, y salud de etcd con etcdctl</h1>
+<article class="lbody">
+<p>En un clúster de kubeadm, los componentes del control plane son static Pods definidos en <code>/etc/kubernetes/manifests</code>. Cuando uno se rompe, la causa suele ser una mala edición de su manifiesto: un error de tipeo en un flag, una ruta de certificado equivocada, un puerto incorrecto, una imagen inválida o un error de indentación en el YAML. La habilidad consiste en averiguar qué componente está roto y leer sus logs, incluso cuando kubectl no funciona.</p>
+<p>Si el API server está caído, kubectl falla con 'connection refused' en el puerto 6443 o agota el tiempo. No puedes usar <code>kubectl logs</code>, así que ve al nodo del control plane y usa directamente el container runtime. <code>crictl ps -a</code> lista todos los contenedores, incluidos los terminados; un componente que se sigue cayendo muestra un contador de intentos creciente o un estado Exited. <code>crictl logs &lt;container-id&gt;</code> muestra por qué. Si no existe ningún contenedor, el kubelet ni siquiera pudo analizar el manifiesto, así que revisa <code>journalctl -u kubelet</code> en busca de errores sobre el archivo del static Pod. Los logs de los contenedores también están en disco en <code>/var/log/pods/</code> y <code>/var/log/containers/</code>.</p>
+<pre class="code" tabindex="0"><code>sudo crictl ps -a | grep -E 'apiserver|etcd|scheduler|controller'
+sudo crictl logs &lt;container-id&gt; 2&gt;&amp;1 | tail -20
+sudo journalctl -u kubelet | grep -i manifest | tail
+sudo ls /var/log/pods/ | grep kube-apiserver</code></pre>
+<p>Errores típicos del API server: no puede llegar a etcd (URL de <code>--etcd-servers</code> equivocada o flags de certificados de etcd incorrectos), no existe la ruta de un archivo de certificado o de clave, o un flag está mal escrito. Después de corregir el manifiesto, espera: el kubelet detecta el cambio, y el API server puede tardar un minuto en estar listo.</p>
+<p>El scheduler y el controller-manager fallan de forma más silenciosa, porque kubectl sigue funcionando. Reconócelos por sus síntomas. Scheduler caído: los Pods nuevos se quedan en Pending sin nodo y sin eventos FailedScheduling. Controller-manager caído: escalar un Deployment no crea Pods, los Deployments nuevos no obtienen ReplicaSet, las EndpointSlices no se actualizan y los nodos caídos no se marcan ni se limpian. Revisa con <code>kubectl get pods -n kube-system</code> y <code>kubectl logs -n kube-system kube-controller-manager-&lt;node&gt;</code>, o con <code>kubectl describe</code> para ver los motivos de las caídas. Las fallas comunes son rutas de kubeconfig equivocadas (<code>/etc/kubernetes/scheduler.conf</code>, <code>controller-manager.conf</code>) o un nombre de comando incorrecto en el manifiesto.</p>
+<p>La salud de etcd se puede verificar con etcdctl usando los mismos flags de certificados que para los backups. <code>endpoint health</code> informa si un miembro responde, <code>endpoint status -w table</code> muestra el líder, el tamaño de la base de datos y el índice raft, y <code>member list</code> muestra los miembros. Si el directorio de datos o el hostPath de etcd están mal, etcd puede arrancar vacío o fallar, y el API server pierde sus datos o no puede arrancar.</p>
+<pre class="code" tabindex="0"><code>sudo ETCDCTL_API=3 etcdctl --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key \
+  endpoint health</code></pre>
+<p>Antes de editar cualquier manifiesto, cópialo a una ubicación de respaldo fuera del directorio de manifiestos. Una copia que quede dentro del directorio se iniciaría como un segundo Pod.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>crictl ps -a</dt><dd>Lista todos los contenedores de un nodo desde el runtime, incluidos los terminados.</dd><dt>crictl logs</dt><dd>Lee los logs de un contenedor directamente desde el runtime; útil cuando el API server está caído.</dd><dt>etcdctl endpoint health</dt><dd>Verifica si un miembro de etcd está respondiendo.</dd><dt>/var/log/pods</dt><dd>Directorio en disco donde el kubelet guarda los archivos de log de los contenedores por Pod.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Después de que un compañero cambió las rutas de certificados del API server, kubectl informa connection refused. <code>crictl ps -a</code> muestra que el contenedor kube-apiserver se cierra repetidamente, y <code>crictl logs</code> dice que un archivo en /etc/kubernetes/pki no existe por un nombre de archivo mal escrito. Corregir la ruta en kube-apiserver.yaml devuelve la API.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si no hay ningún contenedor en crictl ps -a, el manifiesto no se pudo analizar (revisa el journal del kubelet); si el contenedor se cae, el componente arrancó pero rechazó su configuración (revisa crictl logs).</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo lees los logs del API server cuando kubectl no puede conectarse?</summary><p>En el nodo del control plane, encuentra su contenedor con <code>crictl ps -a</code> y ejecuta <code>crictl logs &lt;id&gt;</code>, o lee los archivos en /var/log/pods.</p></details>
+<details class="sq"><summary>¿Qué síntoma sugiere que el controller-manager está caído?</summary><p>Los Deployments o ReplicaSets no crean ni reemplazan Pods aunque el API server funcione.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../node-problems-notready-kubelet-status-and-journalctl-u-kubelet-kubelet/">← Problemas de nodos: NotReady, estado del kubelet y journalct</a><a href="../pending-pods-failedscheduling-messages-for-resources-taints-affinity-a/">Pods en Pending: mensajes FailedScheduling por recursos, tai →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Restaurar los contextos de archivo predeterminados (restor… · Lección de RHCSA</title>
+<meta name="description" content="SELinux mantiene una base de datos de la política con la etiqueta que debe tener cada ruta, escrita como expresiones regulares como /var/www(/.*)? asociada">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Restaurar los contextos de archivo predeterminados (restor… · Lección de RHCSA">
+<meta property="og:description" content="SELinux mantiene una base de datos de la política con la etiqueta que debe tener cada ruta, escrita como expresiones regulares como /var/www(/.*)? asociada">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/restoring-default-file-contexts-restorecon-rv-and-adding-rules-with-se/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/restoring-default-file-contexts-restorecon-rv-and-adding-rules-with-se/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/restoring-default-file-contexts-restorecon-rv-and-adding-rules-with-se/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Restaurar los contextos de archivo predeterminados (restorecon -Rv) y añadir reglas con semanage fcontext</h1>
+<article class="lbody">
+<p>SELinux mantiene una base de datos de la política con la etiqueta que debe tener cada ruta, escrita como expresiones regulares como <code>/var/www(/.*)?</code> asociadas a <code>httpd_sys_content_t</code>. La etiqueta real se guarda en cada archivo. Cuando ambas no coinciden, la solución es restablecer el archivo a lo que dice la política. Cuando la propia política no tiene ninguna regla para tu ruta personalizada, primero añades una.</p>
+<p><code>restorecon</code> devuelve los archivos a la etiqueta que espera la política. <code>-R</code> actúa recursivamente y <code>-v</code> imprime cada cambio, para que veas qué estaba mal. <code>restorecon -Rv /var/www/html</code> corrige los archivos movidos ahí desde directorios personales. Es seguro ejecutarlo repetidamente, ya que solo cambia las etiquetas que difieren de la política. <code>restorecon -Rnv</code> muestra lo que cambiaría sin cambiar nada.</p>
+<pre class="code" tabindex="0"><code>restorecon -Rv /var/www/html
+# Relabeled /var/www/html/page.html from ...admin_home_t:s0 to ...httpd_sys_content_t:s0</code></pre>
+<p>Las ubicaciones personalizadas necesitan una regla. Si sirves contenido web desde <code>/web</code>, la etiqueta predeterminada de la política para esa ruta es <code>default_t</code>, que httpd no puede leer, y restorecon simplemente volvería a poner <code>default_t</code>. Añade una regla con <code>semanage fcontext -a -t type 'regex'</code> y luego aplícala con restorecon. La expresión regular <code>'/web(/.*)?'</code> coincide con el directorio y todo lo que contiene; ponla entre comillas para que el shell no la expanda.</p>
+<pre class="code" tabindex="0"><code>semanage fcontext -a -t httpd_sys_content_t '/web(/.*)?'
+restorecon -Rv /web
+ls -dZ /web
+semanage fcontext -l -C        # listar las personalizaciones locales</code></pre>
+<p><code>semanage fcontext -l</code> lista todas las reglas, y puedes filtrarlo con grep buscando una ruta existente parecida para encontrar el tipo correcto, por ejemplo <code>semanage fcontext -l | grep '/var/www'</code>. <code>-d</code> borra una regla local y <code>-m</code> modifica una. semanage viene del paquete policycoreutils-python-utils, que puede que tengas que instalar. Como la regla se guarda en la política, sobrevive a los reinicios y a los reetiquetados completos.</p>
+<p>Compáralo con <code>chcon</code>, que cambia directamente la etiqueta de un archivo, por ejemplo <code>chcon -t httpd_sys_content_t /web/index.html</code>. Funciona de inmediato pero es temporal, en el sentido de que restorecon o un reetiquetado lo deshacen, ya que la política sigue diciendo otra cosa. En el examen, usa semanage fcontext más restorecon para todo lo que deba persistir.</p>
+<p>Dos trucos relacionados: <code>touch /.autorelabel</code> y un reinicio reetiquetan todo el sistema de archivos, y <code>restorecon</code> es la solución correcta después de colocar claves SSH o archivos de configuración con <code>mv</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>restorecon</dt><dd>Restablece las etiquetas de SELinux de los archivos a los valores definidos en la política; -R actúa recursivamente y -v informa de los cambios.</dd><dt>semanage fcontext</dt><dd>Añade, modifica, borra o lista las reglas de la política que asocian patrones de ruta con tipos de archivo.</dd><dt>chcon</dt><dd>Cambia directamente la etiqueta de un archivo; el cambio se pierde con restorecon o un reetiquetado.</dd><dt>(/.*)?</dt><dd>El sufijo de expresión regular que, en las reglas de fcontext, coincide con un directorio y todo lo que hay debajo.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Apache debe servir contenido desde /srv/site. Ejecutas semanage fcontext -a -t httpd_sys_content_t '/srv/site(/.*)?' y luego restorecon -Rv /srv/site, que reetiqueta todos los archivos. Tras probar un reetiquetado completo con touch /.autorelabel y un reinicio, ls -Z sigue mostrando httpd_sys_content_t porque la regla está en la política.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> semanage fcontext solo registra la regla; no cambia ningún archivo. Síguelo siempre de restorecon -Rv sobre la ruta, y prefiere esta pareja a chcon para que el cambio persista.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Añadiste una regla con semanage fcontext pero ls -Z muestra la etiqueta anterior. ¿Qué olvidaste?</summary><p>Ejecutar restorecon -Rv sobre la ruta para aplicar la regla a los archivos existentes.</p></details>
+<details class="sq"><summary>¿Por qué chcon no es una solución persistente?</summary><p>Solo cambia la etiqueta en el archivo; restorecon o un reetiquetado la restablecen a lo que dice la política.</p></details>
+<details class="sq"><summary>¿Con qué coincide el patrón '/data(/.*)?'?</summary><p>Con el propio directorio /data y todo lo que hay debajo.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../listing-and-identifying-selinux-file-and-process-contexts-ls-z-ps-ez-i/">← Listar e identificar contextos de SELinux de archivos y proc</a><a href="../managing-selinux-port-labels-semanage-port-a-t-http-port-t-p-tcp/">Gestionar las etiquetas de puertos de SELinux (semanage port →</a></nav>
+</main>
+</body>
+</html>

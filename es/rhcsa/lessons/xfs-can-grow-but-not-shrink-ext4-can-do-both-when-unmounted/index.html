@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>XFS puede crecer pero no reducirse; ext4 puede hacer ambas… · Lección de RHCSA</title>
+<meta name="description" content="Cuando redimensionas almacenamiento, el tipo de sistema de archivos decide qué es posible. Esta es una de las distinciones más evaluadas en el almacenamien">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="XFS puede crecer pero no reducirse; ext4 puede hacer ambas… · Lección de RHCSA">
+<meta property="og:description" content="Cuando redimensionas almacenamiento, el tipo de sistema de archivos decide qué es posible. Esta es una de las distinciones más evaluadas en el almacenamien">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/xfs-can-grow-but-not-shrink-ext4-can-do-both-when-unmounted/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/xfs-can-grow-but-not-shrink-ext4-can-do-both-when-unmounted/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/xfs-can-grow-but-not-shrink-ext4-can-do-both-when-unmounted/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>XFS puede crecer pero no reducirse; ext4 puede hacer ambas cosas cuando está desmontado</h1>
+<article class="lbody">
+<p>Cuando redimensionas almacenamiento, el tipo de sistema de archivos decide qué es posible. Esta es una de las distinciones más evaluadas en el almacenamiento del RHCSA: XFS, el predeterminado de RHEL, solo puede hacerse más grande. ext4 puede hacerse más grande mientras está montado, y puede hacerse más pequeño, pero solo mientras está desmontado. Saber esto te permite elegir el sistema de archivos correcto al crearlo y evitar destruir datos durante un redimensionamiento.</p>
+<p>XFS se diseñó pensando en conjuntos de datos grandes y en crecimiento. <code>xfs_growfs</code> lo amplía mientras está montado y en uso, por eso ampliar XFS es rápido y sencillo. No existe ninguna herramienta para reducir XFS en su lugar. Si un volumen XFS realmente debe hacerse más pequeño, el único camino es respaldar los datos (por ejemplo con <code>xfsdump</code> o <code>tar</code>), desmontar, reducir o volver a crear el volumen lógico, ejecutar <code>mkfs.xfs</code> de nuevo y restaurar. En el examen, eso normalmente significa que no debiste elegir XFS para un volumen que la tarea dice que se reducirá.</p>
+<p>ext4 crece en línea con <code>resize2fs</code> exactamente como XFS crece con <code>xfs_growfs</code>. Reducirlo requiere más cuidado, porque el sistema de archivos debe hacerse más pequeño antes que el volumen que está debajo, nunca al revés. Recortar primero el LV corta el final del sistema de archivos y corrompe los datos. El orden manual es: desmontar, revisar, reducir el sistema de archivos y luego reducir el LV.</p>
+<pre class="code" tabindex="0"><code>umount /logs
+e2fsck -f /dev/vg1/logs          # revisión obligatoria antes de reducir
+resize2fs /dev/vg1/logs 800M     # reducir primero el sistema de archivos
+lvreduce -L 800M /dev/vg1/logs   # luego el LV para que coincida
+mount /logs</code></pre>
+<p>El atajo más seguro es <code>lvreduce -r -L 800M /dev/vg1/logs</code>. La opción <code>-r</code> llama a <code>fsadm</code>, que revisa y reduce el sistema de archivos en el orden correcto antes de reducir el LV; desmontará si hace falta o te pedirá que lo hagas. Usado sobre un volumen XFS, <code>lvreduce -r</code> falla porque XFS no se puede reducir, lo que te protege. Sin <code>-r</code>, <code>lvreduce</code> muestra una advertencia de que los datos pueden destruirse; tómate esa advertencia en serio.</p>
+<p>Recuerda también que no puedes reducir un sistema de archivos ext4 por debajo del espacio que usan sus datos, y <code>resize2fs</code> se negará. Confirma siempre después con <code>df -h</code> y <code>lvs</code>, y comprueba que los datos siguen siendo legibles.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Shrink (reducir)</dt><dd>Reducir un sistema de archivos y su volumen a un tamaño menor; ext4 lo admite sin montar y XFS no lo admite en absoluto.</dd><dt>e2fsck -f</dt><dd>Fuerza una revisión completa de consistencia de un sistema de archivos ext, exigida por resize2fs antes de reducir.</dd><dt>lvreduce</dt><dd>Disminuye el tamaño de un volumen lógico; con -r reduce primero el sistema de archivos.</dd><dt>fsadm</dt><dd>Un ayudante que usan lvextend -r y lvreduce -r para redimensionar el sistema de archivos de un volumen lógico.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un colega necesita recuperar 300 MiB del volumen ext4 /reports. Lo desmontas, ejecutas lvreduce -r -L -300M /dev/vg1/reports, que revisa y reduce el sistema de archivos antes que el LV, luego lo vuelves a montar y confirmas que los archivos están intactos. La misma petición sobre un volumen XFS significaría respaldar, volver a crear y restaurar.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El orden lo es todo al reducir: primero el sistema de archivos, luego el volumen lógico. Al ampliar es al revés: primero el volumen, luego el sistema de archivos. La opción -r gestiona ambos órdenes por ti.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Puedes reducir un sistema de archivos ext4 montado?</summary><p>No. ext4 crece en línea, pero debe desmontarse, y revisarse con e2fsck -f, antes de poder reducirse.</p></details>
+<details class="sq"><summary>¿Cómo reduces el tamaño de un volumen XFS?</summary><p>No puedes reducir XFS; respalda los datos, vuelve a crear un LV y un sistema de archivos más pequeños y restaura.</p></details>
+<details class="sq"><summary>¿Por qué es peligroso ejecutar lvreduce antes que resize2fs?</summary><p>Quita espacio que el sistema de archivos todavía cree que le pertenece, cortando datos al final y corrompiendo el sistema de archivos.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../extending-existing-logical-volumes-and-their-file-systems-lvextend-r-x/">← Ampliar volúmenes lógicos existentes y sus sistemas de archi</a><a href="../diagnosing-and-correcting-file-permission-problems-ls-l-namei-l-chmod/">Diagnosticar y corregir problemas de permisos de archivos (l →</a></nav>
+</main>
+</body>
+</html>

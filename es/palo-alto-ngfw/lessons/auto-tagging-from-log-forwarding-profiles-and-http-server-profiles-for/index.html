@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Auto-tagging desde log forwarding profiles y HTTP server p… · Lección de NGFW Engineer</title>
+<meta name="description" content="El auto-tagging cierra el ciclo entre la detección y la aplicación de políticas. Cuando el firewall registra un evento importante, como una amenaza crítica">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Auto-tagging desde log forwarding profiles y HTTP server p… · Lección de NGFW Engineer">
+<meta property="og:description" content="El auto-tagging cierra el ciclo entre la detección y la aplicación de políticas. Cuando el firewall registra un evento importante, como una amenaza crítica">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/palo-alto-ngfw/lessons/auto-tagging-from-log-forwarding-profiles-and-http-server-profiles-for/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/palo-alto-ngfw/lessons/auto-tagging-from-log-forwarding-profiles-and-http-server-profiles-for/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../palo-alto-ngfw/">NGFW Engineer</a> / <a href="../">Lecciones</a> · <a href="../../../../palo-alto-ngfw/lessons/auto-tagging-from-log-forwarding-profiles-and-http-server-profiles-for/" hreflang="en" lang="en">English</a></p>
+<p class="note">Palo Alto Networks Certified Next-Generation Firewall Engineer NGFW-Engineer</p>
+<h1>Auto-tagging desde log forwarding profiles y HTTP server profiles para webhooks y sistemas de tickets</h1>
+<article class="lbody">
+<p>El auto-tagging cierra el ciclo entre la detección y la aplicación de políticas. Cuando el firewall registra un evento importante, como una amenaza crítica desde un host interno, puede etiquetar la dirección IP del host. Luego, un dynamic address group que coincide con la etiqueta coloca al host en una regla de cuarentena, todo en cuestión de segundos y sin commit.</p>
+<p>El etiquetado se configura en un log forwarding profile (Objects &gt; Log Forwarding). Cada entrada de la match list tiene un tipo de log y un filtro, por ejemplo el threat log con severidad critical. En Built-in Actions agregas una acción de tipo Tagging: eliges el objetivo (dirección de origen, dirección de destino y, para algunos tipos de log, el usuario o la dirección XFF), la acción (agregar o quitar etiqueta), dónde se registra la etiqueta (el User-ID local, Panorama o un dispositivo remoto mediante un HTTP server profile), la etiqueta en sí y un timeout opcional tras el cual la etiqueta vence. Después adjuntas el log forwarding profile a las reglas de seguridad que deben dispararlo.</p>
+<p>El lado de la aplicación es una política normal. Crea un DAG con una expresión de coincidencia sobre la etiqueta, como <code>'quarantine'</code>, y coloca una regla cerca de la parte superior de la rulebase que deniegue o restrinja el tráfico desde ese DAG, quizás permitiendo solo el acceso a los servidores de remediación. Como la membresía del DAG se actualiza dinámicamente, los hosts etiquetados quedan restringidos de inmediato. Un timeout permite que los hosts regresen automáticamente; sin él, un administrador quita la etiqueta después de la limpieza. Etiquetar usuarios en dynamic user groups funciona igual cuando la identidad del usuario importa más que la IP.</p>
+<p>Los HTTP server profiles extienden esto a otros sistemas. En Device &gt; Server Profiles &gt; HTTP defines uno o más servidores (dirección, protocolo, puerto, método) y, por tipo de log, un formato de URI, encabezados, parámetros y una plantilla de carga útil construida con campos del log. Existen formatos de carga útil predefinidos para algunos servicios comunes, y puedes escribir tu propio JSON. Cuando un log forwarding profile envía un log coincidente al perfil HTTP, el firewall llama al webhook. Eso puede abrir un ticket en una herramienta de gestión de servicios de TI, publicar en un canal de chat o disparar un playbook de orquestación que investigue más a fondo. Usa HTTPS y encabezados de autenticación para que el lado receptor pueda confiar en la solicitud.</p>
+<p>Al combinarlo todo, una sola amenaza crítica puede etiquetar al host para ponerlo en cuarentena, abrir un ticket de incidente y notificar al analista de guardia. Este es el tipo de integración que el examen espera que sepas diseñar. Recuerda las piezas: log forwarding profile con un filtro, acción integrada de tagging, DAG en una regla de seguridad y HTTP server profile para la notificación externa. Revisa los IP-Tag logs para confirmar que las etiquetas se registraron y se quitaron como se esperaba.</p>
+<p>Ten cuidado con los filtros. Etiquetar con eventos de baja severidad o propensos a falsos positivos puede poner en cuarentena máquinas sanas, así que empieza solo con alertas y ajusta a medida que ganes confianza.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Auto-tagging (etiquetado automático)</dt><dd>Una acción integrada del reenvío de logs que agrega o quita etiquetas en IP o usuarios cuando se genera un log coincidente.</dd><dt>Built-in action (acción integrada)</dt><dd>Una acción dentro de una entrada de un log forwarding profile, como el etiquetado, que se ejecuta cuando un log coincide.</dd><dt>Webhook</dt><dd>Una solicitud HTTP enviada a otro sistema cuando ocurre un evento, usada aquí mediante un HTTP server profile.</dd><dt>IP-Tag log</dt><dd>El log que registra las etiquetas asignadas a direcciones IP y las que se les quitan.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una laptop dispara una firma de spyware crítica. El log forwarding profile etiqueta su IP como 'quarantine' con un timeout de 24 horas y envía el threat log a un HTTP server profile que abre un ticket. Una regla en la parte superior le niega al DAG Quarantine todo excepto el servidor de remediación, así que la laptop queda aislada incluso antes de que un analista la revise.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> La cadena es: filtro del log forwarding profile, luego la acción de tagging, luego el DAG que coincide con la etiqueta y luego una regla de seguridad que usa el DAG. Los HTTP server profiles envían logs a webhooks para tickets y chat.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Dónde configuras que se agregue una etiqueta cuando se registra una amenaza crítica?</summary><p>En una entrada de un log forwarding profile filtrada por severidad, usando una acción integrada de tagging, adjunto a las reglas de seguridad.</p></details>
+<details class="sq"><summary>¿Cómo queda bloqueada una IP etiquetada?</summary><p>Un dynamic address group que coincide con la etiqueta se usa en una regla de denegación o restricción, y la IP se une al grupo automáticamente.</p></details>
+<details class="sq"><summary>¿Qué define el formato de la carga útil enviada a un webhook de tickets?</summary><p>El formato de carga útil por tipo de log y los encabezados del HTTP server profile.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia NGFW Engineer gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../palo-alto-ngfw/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../external-dynamic-lists-ip-domain-url-and-dynamic-address-groups-with-t/">← External dynamic lists (IP, dominio, URL) y dynamic address </a><a href="../vm-series-bootstrapping-init-cfg-txt-bootstrap-xml-content-license-sof/">Bootstrapping de VM-Series (init-cfg.txt, bootstrap.xml, car →</a></nav>
+</main>
+</body>
+</html>

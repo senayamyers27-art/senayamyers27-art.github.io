@@ -30,35 +30,21 @@
     if (w && w.resolve) w.resolve(qs);
   }
 
-  // Lessons (free teaching text for each plan topic) load on demand too: data/lessons/<id>.js
-  // calls CertHub.addLessons. Certifications without lessons yet resolve to null.
-  const lessons = {}, lWaiting = {};
-  function loadLessons(id) {
-    if (!certs[id] || !certs[id].hasLessons) return Promise.resolve(null);
-    if (lessons[id]) return Promise.resolve(lessons[id]);
-    if (!lWaiting[id]) {
-      lWaiting[id] = new Promise(resolve => {
-        const s = document.createElement("script");
-        s.src = `${BASE}data/lessons/${id}.js`;
-        s.async = true;
-        s.onload = () => loadDiagrams().then(() => resolve(lessons[id] || null));
-        s.onerror = () => { delete lWaiting[id]; s.remove(); resolve(null); };
-        document.head.appendChild(s);
-      });
-    }
-    return lWaiting[id];
-  }
-  // Diagrams (data/diagrams.js) are shared by all certifications and attached to lessons by topic text.
-  const diagrams = {}; let dWaiting = null;
-  function loadDiagrams() {
-    if (!dWaiting) dWaiting = new Promise(resolve => {
+  // Loads a data script once; resolves true when it ran, false when it's missing or offline.
+  const scripts = {};
+  function loadScript(rel) {
+    if (!scripts[rel]) scripts[rel] = new Promise(resolve => {
       const s = document.createElement("script");
-      s.src = `${BASE}data/diagrams.js`; s.async = true;
-      s.onload = () => resolve(diagrams); s.onerror = () => { s.remove(); resolve(diagrams); };
+      s.src = BASE + rel; s.async = true;
+      s.onload = () => resolve(true);
+      s.onerror = () => { delete scripts[rel]; s.remove(); resolve(false); };
       document.head.appendChild(s);
     });
-    return dWaiting;
+    return scripts[rel];
   }
+  // Diagrams (data/diagrams.js) are shared by all certifications and attached to lessons by topic text.
+  const diagrams = {};
+  const loadDiagrams = () => loadScript("data/diagrams.js").then(() => diagrams);
   function addDiagrams(list) {
     (Array.isArray(list) ? list : []).forEach(d => {
       if (!d || !/^[a-z0-9-]+$/.test(d.id || "") || typeof d.svg !== "string") return;
@@ -66,11 +52,36 @@
     });
   }
   const diagramsFor = (cid, t) => diagrams[cid + "|" + t] || [];
-  // Lessons are matched to plan topics by their exact topic text.
-  function addLessons(id, list) {
-    if (!Array.isArray(list)) return;
-    lessons[id] = new Map(list.filter(l => l && typeof l.t === "string").map(l => [l.t, l]));
+  // Lessons (free teaching text for each plan topic) load on demand: data/lessons/<id>.js, and the
+  // Spanish translation from data/lessons-es/<id>.js. Both call CertHub.addLessons and are matched
+  // to plan topics by the English topic text. Certifications without them resolve to null.
+  const lessons = { en: {}, es: {} }, lessonMeta = {};
+  function loadLessons(id, lang = "en") {
+    const c = certs[id];
+    if (!c || !(lang === "es" ? c.hasLessonsEs : c.hasLessons)) return Promise.resolve(null);
+    if (lessons[lang][id]) return Promise.resolve(lessons[lang][id]);
+    return loadScript(`data/${lang === "es" ? "lessons-es" : "lessons"}/${id}.js`).then(loadDiagrams).then(() => lessons[lang][id] || null);
   }
+  function addLessons(id, list, meta) {
+    if (!Array.isArray(list)) return;
+    const lang = meta && meta.lang === "es" ? "es" : "en";
+    lessons[lang][id] = new Map(list.filter(l => l && typeof l.t === "string").map(l => [l.t, l]));
+    if (lang === "en") lessonMeta[id] = meta || {};
+  }
+  // Exam simulations (performance-based questions): data/pbq/<id>.js.
+  const pbqs = {};
+  function loadPbqs(id) {
+    const c = certs[id];
+    if (!c || !c.hasPbqs) return Promise.resolve(null);
+    if (pbqs[id]) return Promise.resolve(pbqs[id]);
+    return loadScript(`data/pbq/${id}.js`).then(() => pbqs[id] || null);
+  }
+  function addPbqs(id, list) { if (Array.isArray(list)) pbqs[id] = list.filter(p => p && p.id && p.type); }
+  // Career pages and interview practice: data/careers.js.
+  const careers = { list: null, interview: {} };
+  const loadCareers = () => loadScript("data/careers.js").then(() => careers);
+  function addCareers(list) { if (Array.isArray(list)) careers.list = list; }
+  function addInterview(map) { if (map && typeof map === "object") careers.interview = map; }
 
   const U = {
     DAY,
@@ -403,6 +414,25 @@
     wrap.querySelector("#rm-time").focus();
   }
 
+  // A shareable completion badge (PNG, 1200x630), drawn on a canvas and downloaded.
+  function makeBadge({ title, line1, line2, file }) {
+    const cv = document.createElement("canvas"); cv.width = 1200; cv.height = 630;
+    const g = cv.getContext("2d");
+    const grad = g.createLinearGradient(0, 0, 1200, 630); grad.addColorStop(0, "#16202C"); grad.addColorStop(1, "#2D5BD0");
+    g.fillStyle = grad; g.fillRect(0, 0, 1200, 630);
+    g.strokeStyle = "rgba(255,255,255,.35)"; g.lineWidth = 4; g.strokeRect(40, 40, 1120, 550);
+    g.beginPath(); g.arc(1030, 170, 80, 0, Math.PI * 2); g.fillStyle = "#3DC19E"; g.fill();
+    g.strokeStyle = "#fff"; g.lineWidth = 14; g.lineCap = "round"; g.beginPath(); g.moveTo(990, 172); g.lineTo(1020, 202); g.lineTo(1074, 140); g.stroke();
+    g.fillStyle = "#fff"; g.textBaseline = "alphabetic";
+    const font = (w, px) => `${w} ${px}px "Public Sans", system-ui, sans-serif`;
+    g.font = font(600, 34); g.fillText("Cyber Cert Study", 90, 130);
+    g.font = font(800, 76); g.fillText(String(title).slice(0, 26), 90, 290);
+    g.font = font(600, 46); g.fillText(String(line1).slice(0, 40), 90, 370);
+    g.font = font(400, 32); g.fillStyle = "rgba(255,255,255,.85)"; g.fillText(String(line2).slice(0, 60), 90, 440);
+    g.fillText(new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }), 90, 540);
+    cv.toBlob(b => { if (!b) return; const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = file || "badge.png"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }, "image/png");
+  }
+
   // Link to open a prefilled issue for a mistake, or "" when the site has no feedback address.
   function reportUrl(title, body) {
     const f = (window.CertHub && CertHub.site && CertHub.site.feedbackUrl) || "";
@@ -415,7 +445,7 @@
     U, store, certs, buildPlan, loadProgress, saveProgress, freshProgress, applyTheme, themeButton, exportAll, importAll, activeNotices,
     backupText, restoreText, ui, install, labs, labOrder, loadLabProgress, saveLabProgress, labStatus,
     register(c) { certs[c.id] = c; if (Array.isArray(c.questions)) c.qCount = c.questions.length; },
-    loadQuestions, addQuestions, loadLessons, addLessons, addDiagrams, diagramsFor, activity, reminderIcs, addReminder, reportUrl, downloadFile,
+    loadQuestions, addQuestions, loadLessons, addLessons, lessonMeta, addDiagrams, diagramsFor, loadPbqs, addPbqs, loadCareers, addCareers, addInterview, careers, loadScript, activity, reminderIcs, addReminder, reportUrl, downloadFile, makeBadge, BASE,
     registerLabs(list) { list.forEach(l => { if (!labs[l.id]) labOrder.push(l.id); labs[l.id] = l; }); }
   };
 })();

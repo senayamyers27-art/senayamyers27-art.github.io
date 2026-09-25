@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VPN IKEv2 resistentes a la computación cuántica (post-quan… · Lección de NGFW Engineer</title>
+<meta name="description" content="Las VPN actuales usan el intercambio de claves Diffie-Hellman, que una computadora cuántica lo suficientemente grande podría romper. La preocupación es 'ha">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="VPN IKEv2 resistentes a la computación cuántica (post-quan… · Lección de NGFW Engineer">
+<meta property="og:description" content="Las VPN actuales usan el intercambio de claves Diffie-Hellman, que una computadora cuántica lo suficientemente grande podría romper. La preocupación es 'ha">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/palo-alto-ngfw/lessons/quantum-resistant-ikev2-vpns-post-quantum-preshared-keys-and-gre-tunne/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/palo-alto-ngfw/lessons/quantum-resistant-ikev2-vpns-post-quantum-preshared-keys-and-gre-tunne/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../palo-alto-ngfw/">NGFW Engineer</a> / <a href="../">Lecciones</a> · <a href="../../../../palo-alto-ngfw/lessons/quantum-resistant-ikev2-vpns-post-quantum-preshared-keys-and-gre-tunne/" hreflang="en" lang="en">English</a></p>
+<p class="note">Palo Alto Networks Certified Next-Generation Firewall Engineer NGFW-Engineer</p>
+<h1>VPN IKEv2 resistentes a la computación cuántica (post-quantum preshared keys) y túneles GRE</h1>
+<article class="lbody">
+<p>Las VPN actuales usan el intercambio de claves Diffie-Hellman, que una computadora cuántica lo suficientemente grande podría romper. La preocupación es 'harvest now, decrypt later' (recolectar ahora, descifrar después): un atacante graba hoy el tráfico VPN cifrado y lo descifra dentro de algunos años. Las funciones de VPN resistentes a la computación cuántica de las versiones recientes de PAN-OS abordan esto para los túneles sitio a sitio IKEv2.</p>
+<p>El enfoque que nombra este tema son las post-quantum preshared keys (PPK), estandarizadas en RFC 8784 para IKEv2. Ambos peers se configuran con la misma clave secreta de alta entropía y un key ID coincidente, además de la autenticación normal. La PPK se mezcla en la derivación de las claves IPsec. Aunque un atacante rompa más adelante el intercambio Diffie-Hellman, aún no puede derivar las claves de sesión sin la PPK, que nunca se envió por la red. Las PPK solo funcionan con IKEv2, no con IKEv1, y ambos peers deben admitir la extensión. Las configuras en las opciones avanzadas de IKEv2 del IKE gateway, con un parámetro de negociación que decide si el túnel exige la PPK o si puede recurrir a un intercambio normal con peers que no la admiten. Exigirla es más seguro, pero fallará con un peer que no la admita.</p>
+<p>Las versiones más recientes también agregan el intercambio de claves híbrido (hybrid key exchange), donde un mecanismo de encapsulamiento de claves post-cuántico se combina con el Diffie-Hellman clásico usando las extensiones de IKEv2 para múltiples intercambios de claves. El principio a recordar es 'híbrido': el resultado es al menos tan fuerte como el más fuerte de los dos métodos. Revisa las notas de la versión para saber qué algoritmos admite tu versión de PAN-OS en lugar de suponerlo.</p>
+<p>Recomendaciones prácticas: usa algoritmos simétricos fuertes como AES-256 con SHA-256 o superior, porque se considera que la criptografía simétrica con claves grandes está mucho menos expuesta a ataques cuánticos. Administra las PPK como cualquier secreto, rótalas y nunca las reutilices entre peers no relacionados.</p>
+<p>Generic Routing Encapsulation (GRE) es un protocolo de tunelización simple y sin cifrado (protocolo IP 47) que envuelve los paquetes dentro de un nuevo encabezado IP. Se usa para llegar a socios o servicios en la nube que requieren GRE y para transportar tráfico como los intercambios de protocolos de enrutamiento hacia un peer. En PAN-OS lo configuras en Network &gt; GRE Tunnels: una interfaz tunnel (con zona y router), la interfaz y dirección locales, la dirección del peer, el TTL, una opción Copy ToS opcional y keepalives que marcan el túnel como caído si el peer deja de responder. Luego enrutas el tráfico hacia la interfaz tunnel igual que con IPsec.</p>
+<p>Como GRE no ofrece confidencialidad ni integridad, no lo uses sobre redes no confiables para datos sensibles a menos que algo más los proteja. La política de seguridad sigue aplicándose al tráfico que entra y sale de la zona de la interfaz del túnel GRE, y necesitas una regla que permita GRE entre los extremos del túnel.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Post-quantum preshared key (PPK, clave precompartida post-cuántica)</dt><dd>Un secreto compartido adicional que se mezcla en la derivación de claves de IKEv2 (RFC 8784) para que las claves de sesión resistan futuros ataques cuánticos contra Diffie-Hellman.</dd><dt>Harvest now, decrypt later (recolectar ahora, descifrar después)</dt><dd>La amenaza de grabar hoy tráfico cifrado para descifrarlo cuando las computadoras cuánticas puedan romper el intercambio de claves.</dd><dt>GRE</dt><dd>Generic Routing Encapsulation, un protocolo de tunelización sin cifrado (protocolo IP 47) que encapsula paquetes en un nuevo encabezado IP.</dd><dt>Hybrid key exchange (intercambio de claves híbrido)</dt><dd>Combinar un intercambio de claves clásico y uno post-cuántico para que el resultado sea al menos tan fuerte como el más fuerte de ambos.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>El túnel entre el centro de datos de un banco y su sitio de recuperación ante desastres (DR) transporta datos de replicación que deben mantenerse confidenciales durante décadas. Ambos lados ejecutan IKEv2 en versiones de PAN-OS que admiten PPK, así que los ingenieros agregan la misma PPK generada aleatoriamente y el mismo key ID en cada IKE gateway y configuran la negociación para exigirla. Ahora el tráfico grabado queda protegido aunque Diffie-Hellman se rompa más adelante.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> PPK significa solo IKEv2 y deben coincidir en ambos peers. GRE no es cifrado; si una pregunta requiere confidencialidad a través de Internet, GRE por sí solo es la respuesta incorrecta.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué una PPK protege contra futuros ataques cuánticos?</summary><p>Se mezcla en la derivación de las claves IPsec pero nunca se transmite, así que romper solo Diffie-Hellman no revela las claves.</p></details>
+<details class="sq"><summary>¿Puedes usar una PPK con un IKE gateway IKEv1?</summary><p>No, las PPK son una extensión de IKEv2.</p></details>
+<details class="sq"><summary>¿Qué hace un keepalive de GRE?</summary><p>Verifica que el peer responda y marca el túnel como caído si no lo hace, para que el enrutamiento pueda reaccionar.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia NGFW Engineer gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../palo-alto-ngfw/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../site-to-site-ipsec-ike-gateway-ike-and-ipsec-crypto-profiles-tunnel-in/">← IPsec sitio a sitio: IKE gateway, perfiles criptográficos IK</a><a href="../globalprotect-portal-gateways-internal-external-authentication-connect/">GlobalProtect: portal, gateways (internos/externos), autenti →</a></nav>
+</main>
+</body>
+</html>

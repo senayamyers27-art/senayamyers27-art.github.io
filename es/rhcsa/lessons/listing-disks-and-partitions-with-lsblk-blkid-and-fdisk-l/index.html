@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Listar discos y particiones con lsblk, blkid y fdisk -l · Lección de RHCSA</title>
+<meta name="description" content="Antes de particionar, formatear o montar nada, debes saber exactamente qué discos existen, cómo están divididos y qué está ya en uso. Elegir el dispositivo">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Listar discos y particiones con lsblk, blkid y fdisk -l · Lección de RHCSA">
+<meta property="og:description" content="Antes de particionar, formatear o montar nada, debes saber exactamente qué discos existen, cómo están divididos y qué está ya en uso. Elegir el dispositivo">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/listing-disks-and-partitions-with-lsblk-blkid-and-fdisk-l/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/listing-disks-and-partitions-with-lsblk-blkid-and-fdisk-l/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/listing-disks-and-partitions-with-lsblk-blkid-and-fdisk-l/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Listar discos y particiones con lsblk, blkid y fdisk -l</h1>
+<article class="lbody">
+<p>Antes de particionar, formatear o montar nada, debes saber exactamente qué discos existen, cómo están divididos y qué está ya en uso. Elegir el dispositivo equivocado es el error más destructivo posible en el examen, así que estos comandos de listado de solo lectura son lo primero que hay que ejecutar en cualquier tarea de almacenamiento.</p>
+<p>Linux nombra los dispositivos de bloques según su controlador. Los discos SATA, SAS y USB aparecen como <code>/dev/sda</code>, <code>/dev/sdb</code>, etc.; las máquinas virtuales suelen usar discos virtio llamados <code>/dev/vda</code>, <code>/dev/vdb</code>; las unidades NVMe aparecen como <code>/dev/nvme0n1</code>. Las particiones añaden un número: <code>/dev/vdb1</code>, o <code>/dev/nvme0n1p1</code> para NVMe, donde una <code>p</code> separa el número. Los volúmenes lógicos LVM aparecen como <code>/dev/mapper/vg-lv</code> y <code>/dev/vg/lv</code>.</p>
+<p><code>lsblk</code> (list block devices) muestra cada disco, partición y volumen lógico como un árbol, con su tamaño, tipo (disk, part, lvm, rom) y puntos de montaje. El árbol muestra la relación directamente: una partición aparece bajo su disco, y un volumen lógico bajo la partición usada como su volumen físico. Es la forma más rápida de encontrar el disco vacío al que se refiere una tarea. <code>lsblk -f</code> añade el tipo de sistema de archivos, la etiqueta y el UUID (universally unique identifier), y <code>lsblk -p</code> imprime las rutas completas de los dispositivos.</p>
+<pre class="code" tabindex="0"><code>lsblk
+lsblk -f
+blkid
+blkid /dev/vdb1
+fdisk -l /dev/vdb
+parted /dev/vdb print
+cat /proc/partitions</code></pre>
+<p><code>blkid</code> imprime los atributos de los dispositivos que contienen una firma reconocida: el UUID, el TYPE del sistema de archivos (xfs, ext4, swap, LVM2_member), el LABEL si se estableció uno y, para las particiones GPT, el PARTUUID. Su uso principal en el examen es obtener el UUID para ponerlo en <code>/etc/fstab</code>. Un dispositivo para el que blkid no muestra nada todavía no tiene un sistema de archivos ni una firma reconocidos. Ejecútalo como root para obtener resultados completos.</p>
+<p><code>fdisk -l</code> lista la tabla de particiones de cada disco, o solo del que nombres. Muestra el tamaño del disco y del sector, el tipo de tabla de particiones (<code>dos</code> para el esquema más antiguo MBR, Master Boot Record, o <code>gpt</code> para la GUID Partition Table) y el sector inicial y final, el tamaño y el tipo de cada partición, como 'Linux filesystem', 'Linux LVM' o 'Linux swap'. <code>parted DEVICE print</code> da información similar y muestra claramente el espacio libre.</p>
+<p>Juntos responden las preguntas clave: qué disco es nuevo o tiene espacio libre (lsblk, fdisk -l), qué tipo de partición tiene (fdisk -l), qué contiene (lsblk -f, blkid) y dónde está montado (lsblk, findmnt). Acostúmbrate a ejecutar <code>lsblk</code> antes y después de cada cambio: antes para elegir el dispositivo correcto y después para confirmar el resultado.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Block device (dispositivo de bloques)</dt><dd>Un dispositivo de almacenamiento, como un disco o una partición, al que se accede por bloques; se encuentra en /dev.</dd><dt>lsblk</dt><dd>Lista los dispositivos de bloques como un árbol con tamaño, tipo y punto de montaje; -f añade detalles del sistema de archivos.</dd><dt>blkid</dt><dd>Muestra el UUID, el tipo de sistema de archivos y la etiqueta de los dispositivos con firmas reconocidas.</dd><dt>fdisk -l</dt><dd>Lista las tablas de particiones, mostrando el tipo de tabla (dos o gpt) y el tamaño y tipo de cada partición.</dd><dt>UUID</dt><dd>Identificador único universal asignado a un sistema de archivos u otra firma, estable aunque cambie el nombre del dispositivo.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una tarea dice que crees una partición swap en el segundo disco. <code>lsblk</code> muestra /dev/vda con las particiones del sistema y un /dev/vdb de 5G sin usar y sin hijos. <code>fdisk -l /dev/vdb</code> confirma una etiqueta gpt sin particiones, así que sabes exactamente en qué dispositivo trabajar.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Ejecuta lsblk antes de tocar cualquier disco para asegurarte de tener el nombre de dispositivo correcto, y usa blkid (o lsblk -f) para obtener el UUID para /etc/fstab. Las particiones NVMe incluyen una p: nvme0n1p1.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué comando muestra discos, particiones y volúmenes lógicos como un árbol con puntos de montaje?</summary><p>lsblk.</p></details>
+<details class="sq"><summary>¿Cómo obtienes el UUID de /dev/vdb1?</summary><p>blkid /dev/vdb1 (o lsblk -f /dev/vdb1).</p></details>
+<details class="sq"><summary>¿Cómo puedes saber si un disco usa MBR o GPT?</summary><p>fdisk -l muestra Disklabel type dos (MBR) o gpt; parted print muestra la Partition Table.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../securely-transferring-files-between-systems-with-scp-sftp-and-rsync-ov/">← Transferir archivos de forma segura entre sistemas con scp, </a><a href="../creating-and-deleting-gpt-partitions-with-parted-gdisk-or-fdisk-settin/">Crear y borrar particiones GPT con parted, gdisk o fdisk; es →</a></nav>
+</main>
+</body>
+</html>

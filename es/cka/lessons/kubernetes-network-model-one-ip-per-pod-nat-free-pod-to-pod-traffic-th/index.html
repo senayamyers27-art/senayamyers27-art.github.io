@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>El modelo de red de Kubernetes: una IP por Pod, tráfico en… · Lección de CKA</title>
+<meta name="description" content="Kubernetes simplifica la red para las aplicaciones estableciendo unas pocas reglas estrictas y dejando la implementación a un plugin. Entender las reglas t">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="El modelo de red de Kubernetes: una IP por Pod, tráfico en… · Lección de CKA">
+<meta property="og:description" content="Kubernetes simplifica la red para las aplicaciones estableciendo unas pocas reglas estrictas y dejando la implementación a un plugin. Entender las reglas t">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/kubernetes-network-model-one-ip-per-pod-nat-free-pod-to-pod-traffic-th/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/kubernetes-network-model-one-ip-per-pod-nat-free-pod-to-pod-traffic-th/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/kubernetes-network-model-one-ip-per-pod-nat-free-pod-to-pod-traffic-th/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>El modelo de red de Kubernetes: una IP por Pod, tráfico entre Pods sin NAT, el papel del plugin CNI y los CIDR de Pods y Services</h1>
+<article class="lbody">
+<p>Kubernetes simplifica la red para las aplicaciones estableciendo unas pocas reglas estrictas y dejando la implementación a un plugin. Entender las reglas te ayuda a razonar sobre cualquier problema de conectividad.</p>
+<p>El modelo tiene tres requisitos. Cada Pod obtiene su propia dirección IP, compartida por todos los contenedores del Pod. Cada Pod puede comunicarse con cualquier otro Pod en cualquier nodo sin traducción de direcciones de red (NAT), así que la IP de origen que ve el receptor es la IP real del Pod que envía. Y los agentes de un nodo, como el kubelet, pueden llegar a todos los Pods de ese nodo. Dentro de un Pod, los contenedores comparten un network namespace, así que se comunican por <code>localhost</code> y no deben usar el mismo puerto. Un pequeño contenedor pause (sandbox) mantiene abierto ese namespace.</p>
+<p>Kubernetes en sí no implementa estas reglas. Lo hace el plugin CNI (Container Network Interface). Cuando el kubelet crea el sandbox de un Pod, el runtime llama al plugin CNI, que crea una interfaz virtual en el network namespace del Pod, asigna una IP del rango del nodo y configura las rutas. Entre nodos, el plugin enruta el tráfico de los Pods de forma nativa (por ejemplo con BGP) o lo encapsula en un overlay como VXLAN. Sin un CNI que funcione, los Pods se quedan atascados en ContainerCreating y los nodos permanecen NotReady.</p>
+<p>Dos rangos de direcciones no deben solaparse entre sí ni con la red de tus nodos. El Pod CIDR es el rango del que toman sus IP los Pods, definido con <code>kubeadm init --pod-network-cidr</code> (se convierte en el <code>--cluster-cidr</code> del controller-manager). Con el IPAM de nodos, cada nodo recibe una porción registrada en <code>node.spec.podCIDR</code>, aunque muchos CNIs gestionan su propia asignación. El Service CIDR es el rango de las IP virtuales de los Services, definido por el <code>--service-cluster-ip-range</code> del API server; el valor por defecto de kubeadm es <code>10.96.0.0/12</code>, por eso el Service <code>kubernetes</code> suele ser 10.96.0.1 y CoreDNS suele ser 10.96.0.10.</p>
+<pre class="code" tabindex="0"><code>kubectl get pods -o wide                     # IP de los Pods y nodos
+kubectl get nodes -o jsonpath='{.items[*].spec.podCIDR}'
+grep service-cluster-ip-range /etc/kubernetes/manifests/kube-apiserver.yaml
+kubectl cluster-info dump | grep -m1 cluster-cidr</code></pre>
+<p>Las IP de los Services son distintas de las IP de los Pods: ninguna interfaz las posee y solo existen como reglas de reenvío programadas por kube-proxy (o un reemplazo como Cilium). Las IP de los Pods son direcciones reales y enrutables dentro de la red del clúster. Ten presente esa distinción: hacer ping a la IP de un Service a menudo falla aunque el Service funcione bien, mientras que hacer ping a la IP de un Pod normalmente debería funcionar.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Pod CIDR</dt><dd>El rango de direcciones del que se asignan las IP de los Pods, definido al crear el clúster.</dd><dt>Service CIDR</dt><dd>El rango de direcciones para los ClusterIP de los Services, definido por --service-cluster-ip-range.</dd><dt>Pause container (contenedor pause)</dt><dd>El contenedor sandbox que mantiene el network namespace compartido de un Pod.</dd><dt>Overlay network (red overlay)</dt><dd>Una encapsulación (como VXLAN) que transporta el tráfico de los Pods entre nodos a través de la red de los nodos.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Se construyó un clúster nuevo con un Pod CIDR de 192.168.0.0/16 mientras que los propios nodos están en 192.168.1.0/24. Los Pods de distintos nodos no pueden comunicarse y parte del tráfico de los nodos se enruta mal. Reconstruirlo con un Pod CIDR que no se solape, como 10.244.0.0/16, lo resuelve, lo que muestra por qué hay que planificar los rangos primero.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Recuerda qué componente es dueño de cada rango: el Pod CIDR lo usan el CNI y el controller-manager; el Service CIDR, el API server y kube-proxy. No deben solaparse entre sí ni con la subred de los nodos.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Necesitan los Pods NAT para comunicarse con Pods de otros nodos?</summary><p>No, el modelo de red exige comunicación entre Pods sin NAT.</p></details>
+<details class="sq"><summary>¿Dónde encuentras el Service CIDR en un clúster de kubeadm?</summary><p>En el flag --service-cluster-ip-range del manifiesto del static Pod de kube-apiserver.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../static-pods-vs-scheduler-placed-pods-what-happens-when-the-scheduler-i/">← Static Pods frente a Pods ubicados por el scheduler; qué pas</a><a href="../kube-proxy-modes-iptables-ipvs-nftables-and-how-service-virtual-ips-wo/">Modos de kube-proxy (iptables, IPVS, nftables) y cómo funcio →</a></nav>
+</main>
+</body>
+</html>

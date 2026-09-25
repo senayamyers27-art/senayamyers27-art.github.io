@@ -1976,4 +1976,4 @@ CertHub.addLessons("isc2-cc", [
    ]
   ]
  }
-]);
+], { reviewed: "2026-09-25" });

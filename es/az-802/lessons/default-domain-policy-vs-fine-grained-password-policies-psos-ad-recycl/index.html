@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Default Domain Policy frente a directivas de contraseñas e… · Lección de AZ-802</title>
+<meta name="description" content="Cada dominio necesita una directiva de contraseñas y de bloqueo de cuentas para sus cuentas de usuario. Para las cuentas de dominio, esa directiva proviene">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Default Domain Policy frente a directivas de contraseñas e… · Lección de AZ-802">
+<meta property="og:description" content="Cada dominio necesita una directiva de contraseñas y de bloqueo de cuentas para sus cuentas de usuario. Para las cuentas de dominio, esa directiva proviene">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-802/lessons/default-domain-policy-vs-fine-grained-password-policies-psos-ad-recycl/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-802/lessons/default-domain-policy-vs-fine-grained-password-policies-psos-ad-recycl/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-802/">AZ-802</a> / <a href="../">Lecciones</a> · <a href="../../../../az-802/lessons/default-domain-policy-vs-fine-grained-password-policies-psos-ad-recycl/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802</p>
+<h1>Default Domain Policy frente a directivas de contraseñas específicas (PSO); Papelera de reciclaje de AD</h1>
+<article class="lbody">
+<p>Cada dominio necesita una directiva de contraseñas y de bloqueo de cuentas para sus cuentas de usuario. Para las cuentas de dominio, esa directiva proviene de la configuración de directiva de grupo en Computer Configuration, Policies, Windows Settings, Security Settings, Account Policies, y solo surte efecto cuando el GPO está vinculado en el nivel del dominio. Por convención, reside en la Default Domain Policy. Si vinculas un GPO con configuración de contraseñas a una OU, afecta solo a las cuentas locales de los equipos de esa OU, no a los usuarios del dominio. Esa es la limitación clásica: una directiva de contraseñas por dominio.</p>
+<p>Las directivas de contraseñas específicas (fine-grained password policies) eliminan esa limitación. Un objeto de configuración de contraseñas (PSO) contiene la misma configuración (longitud mínima, complejidad, historial, antigüedad máxima y mínima, cifrado reversible, umbral de bloqueo, duración y ventana de observación) y se aplica directamente a usuarios o a grupos de seguridad globales. Los PSO residen en el Password Settings Container, bajo System, y requieren un nivel funcional de dominio de Windows Server 2008 o superior. La forma más fácil de crearlos es en Active Directory Administrative Center (ADAC) o con <code>New-ADFineGrainedPasswordPolicy</code>, y los vinculas con <code>Add-ADFineGrainedPasswordPolicySubject</code>.</p>
+<p>Cuando más de un PSO podría aplicarse, decide la precedencia. Cada PSO tiene un número de precedencia, y gana el número más bajo. Un PSO vinculado directamente a un usuario siempre supera a los PSO que llegan al usuario mediante la pertenencia a grupos. Si no se aplica ningún PSO, se aplica la directiva del dominio de la directiva de grupo. Para ver qué obtiene realmente un usuario, ejecuta <code>Get-ADUserResultantPasswordPolicy -Identity alice</code>. Un PSO vinculado a una OU no hace nada, porque los PSO se aplican solo a usuarios y grupos; la solución alternativa es un grupo sombra (shadow group) que contenga a los usuarios de la OU.</p>
+<p>Los objetos eliminados son la otra mitad de este tema. Sin la Papelera de reciclaje de AD, eliminar un objeto le quita la mayoría de sus atributos (por ejemplo, las pertenencias a grupos) y lo convierte en una marca de exclusión (tombstone); recuperarlo por completo significa una restauración autoritativa desde una copia de seguridad con el DC arrancado en el Modo de restauración de servicios de directorio. La Papelera de reciclaje de AD, disponible a partir del nivel funcional de bosque de Windows Server 2008 R2, conserva los objetos eliminados con todos sus atributos durante la vida útil de objetos eliminados (de forma predeterminada, igual que la vida útil de marcas de exclusión, 180 días en los bosques modernos), así que puedes restaurarlos en línea.</p>
+<p>Habilitar la Papelera de reciclaje es un cambio unidireccional: una vez activada, no se puede desactivar. La habilitas en ADAC o con PowerShell, y debe replicarse a todos los DC antes de que los objetos eliminados a partir de ese momento estén protegidos; los objetos eliminados antes de habilitarla no se pueden recuperar de esta manera.</p>
+<pre class="code" tabindex="0"><code>Enable-ADOptionalFeature 'Recycle Bin Feature' -Scope ForestOrConfigurationSet -Target corp.contoso.com
+Get-ADObject -Filter 'samaccountname -eq &quot;jdoe&quot;' -IncludeDeletedObjects | Restore-ADObject</code></pre>
+<p>Si se eliminó una OU completa, restaura primero la OU y luego sus objetos secundarios, porque un objeto secundario no puede restaurarse dentro de un primario que sigue eliminado. ADAC muestra un contenedor Deleted Objects donde puedes elegir Restore o Restore To, lo que a menudo es más fácil que PowerShell en un laboratorio.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>PSO</dt><dd>Password Settings Object (objeto de configuración de contraseñas): una directiva específica de contraseñas y bloqueo aplicada a usuarios o a grupos de seguridad globales.</dd><dt>Precedence (precedencia)</dt><dd>El atributo del PSO que resuelve los conflictos; gana el valor más bajo, y un PSO vinculado directamente supera a los vinculados por grupo.</dd><dt>Resultant password policy (directiva de contraseñas resultante)</dt><dd>La única directiva que realmente se aplica a un usuario, mostrada por Get-ADUserResultantPasswordPolicy.</dd><dt>AD Recycle Bin (Papelera de reciclaje de AD)</dt><dd>Una característica opcional del bosque que conserva todos los atributos de los objetos eliminados para que puedan restaurarse en línea.</dd><dt>Tombstone (marca de exclusión)</dt><dd>Un objeto eliminado despojado de la mayoría de sus atributos, que se conserva solo para que la eliminación pueda replicarse antes de la recolección de elementos no utilizados.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Seguridad exige contraseñas de 16 caracteres para los administradores, mientras que todos los demás mantienen 12. El administrador crea un PSO con precedencia 10 y longitud mínima 16, lo vincula al grupo global Tier0-Admins y confirma con Get-ADUserResultantPasswordPolicy que los administradores obtienen el PSO y los usuarios normales siguen obteniendo la Default Domain Policy.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Una directiva de contraseñas vinculada a una OU no afecta a los usuarios del dominio, y los PSO no se pueden vincular a OU. Recuerda también que la Papelera de reciclaje necesita el nivel funcional de bosque 2008 R2 y no se puede deshabilitar una vez habilitada.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Dos PSO con precedencia 5 y 20 se aplican a un usuario a través de grupos. ¿Cuál gana?</summary><p>El PSO con precedencia 5, porque gana el número más bajo (a menos que haya otro PSO vinculado directamente al usuario).</p></details>
+<details class="sq"><summary>Un PSO está vinculado a la OU Sales pero no tiene efecto. ¿Por qué?</summary><p>Los PSO se aplican solo a usuarios y grupos de seguridad globales, no a OU; usa un grupo sombra que contenga a los usuarios de la OU.</p></details>
+<details class="sq"><summary>¿Qué debes restaurar primero cuando se eliminaron una OU completa y sus usuarios?</summary><p>La propia OU, y luego los objetos secundarios que contiene.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AZ-802 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-802/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../users-groups-domain-local-global-universal-ous-and-delegation-of-contr/">← Usuarios, grupos (locales de dominio, globales, universales)</a><a href="../hybrid-identity-entra-connect-sync-including-staging-mode-vs-entra-clo/">Identidad híbrida: Entra Connect Sync (incluido el modo de e →</a></nav>
+</main>
+</body>
+</html>

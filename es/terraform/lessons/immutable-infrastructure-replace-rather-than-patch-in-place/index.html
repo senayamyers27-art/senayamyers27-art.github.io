@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Infraestructura inmutable: reemplazar en lugar de parchear… · Lección de Terraform Associate</title>
+<meta name="description" content="En un modelo mutable, mantienes los servidores funcionando durante mucho tiempo y los cambias en el lugar: inicias sesión, aplicas parches, editas archivos">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Infraestructura inmutable: reemplazar en lugar de parchear… · Lección de Terraform Associate">
+<meta property="og:description" content="En un modelo mutable, mantienes los servidores funcionando durante mucho tiempo y los cambias en el lugar: inicias sesión, aplicas parches, editas archivos">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/terraform/lessons/immutable-infrastructure-replace-rather-than-patch-in-place/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/terraform/lessons/immutable-infrastructure-replace-rather-than-patch-in-place/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../terraform/">Terraform Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../terraform/lessons/immutable-infrastructure-replace-rather-than-patch-in-place/" hreflang="en" lang="en">English</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004)</p>
+<h1>Infraestructura inmutable: reemplazar en lugar de parchear en el lugar</h1>
+<article class="lbody">
+<p>En un modelo mutable, mantienes los servidores funcionando durante mucho tiempo y los cambias en el lugar: inicias sesión, aplicas parches, editas archivos de configuración, actualizas software. Con los meses, cada servidor acumula su propio historial de cambios, y dos servidores que empezaron idénticos divergen poco a poco. A veces se les llama snowflake servers (servidores copo de nieve) porque no hay dos iguales, y reconstruir uno exactamente se vuelve difícil.</p>
+<p>La infraestructura inmutable invierte esto. Una vez que un componente está desplegado, no lo modificas. Cuando algo necesita cambiar, construyes una versión nueva, la despliegas junto a la anterior o en su lugar, y destruyes la anterior. Cada instancia en ejecución se construye a partir de una definición conocida y versionada, así que lo que corre en producción es exactamente lo que se probó.</p>
+<p>Terraform admite este patrón de forma natural. Muchos argumentos de recursos no se pueden cambiar en un objeto en vivo; cambiarlos fuerza el reemplazo, que el plan marca con <code>-/+</code> y la nota de que el cambio fuerza el reemplazo. Para una máquina virtual, cambiar el ID de la imagen es un ejemplo típico. El flujo de trabajo habitual es construir (bake) una imagen de máquina nueva con Packer o una herramienta similar, actualizar la variable del ID de imagen en Terraform y aplicar. Terraform destruye la instancia anterior y crea una nueva.</p>
+<p>El orden del reemplazo importa para la disponibilidad. De forma predeterminada, Terraform destruye el objeto anterior antes de crear el nuevo. Agregar <code>lifecycle { create_before_destroy = true }</code> invierte eso: el objeto nuevo se crea primero, y el anterior se destruye solo después de que el nuevo se haya creado con éxito. Combinado con un balanceador de carga, un grupo de auto scaling o un despliegue gradual (rolling deployment), esto da actualizaciones sin tiempo de inactividad o casi sin él.</p>
+<pre class="code" tabindex="0"><code>resource &quot;aws_instance&quot; &quot;web&quot; {
+  ami           = var.image_id
+  instance_type = &quot;t3.small&quot;
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}</code></pre>
+<p>Los beneficios incluyen consistencia, un rollback más fácil (volver a desplegar la imagen anterior), menos deriva de configuración y una superficie de ataque más pequeña, porque nadie necesita iniciar sesión en los servidores de producción para cambiarlos. Los parches de seguridad se aplican reconstruyendo las imágenes y reemplazando las instancias. Los costos son que los datos deben vivir fuera de las partes reemplazables, en bases de datos, almacenamiento de objetos o volúmenes conectados, y que tu pipeline debe poder construir y desplegar imágenes nuevas rápidamente. Terraform no obliga a la inmutabilidad; las actualizaciones en el lugar siguen disponibles para los argumentos que las admiten.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Immutable infrastructure (infraestructura inmutable)</dt><dd>Una práctica en la que los componentes desplegados nunca se modifican; los cambios se hacen reemplazándolos por versiones nuevas.</dd><dt>Mutable infrastructure (infraestructura mutable)</dt><dd>Servidores que se actualizan y parchean en el lugar durante su vida útil.</dd><dt>Snowflake server (servidor copo de nieve)</dt><dd>Un servidor cuya configuración ha derivado hasta volverse única y difícil de reproducir.</dd><dt>Golden image (imagen dorada)</dt><dd>Una imagen de máquina preconstruida y versionada que contiene el sistema operativo y el software, usada para lanzar instancias idénticas.</dd><dt>create_before_destroy</dt><dd>Un ajuste de lifecycle que hace que Terraform cree el reemplazo antes de destruir el original.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Se publica un parche crítico de OpenSSL. En lugar de iniciar sesión en 50 servidores, el equipo reconstruye su golden image con Packer, actualiza el ID de imagen en Terraform y aplica. Las instancias se reemplazan detrás del balanceador de carga con <code>create_before_destroy</code>, y ahora todos los servidores ejecutan la misma imagen parcheada.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Debes saber que el orden de reemplazo predeterminado de Terraform es destruir y luego crear, y que <code>create_before_destroy</code> lo invierte. En la salida del plan, <code>-/+</code> significa reemplazar (destruir y luego crear), mientras que <code>+/-</code> significa crear y luego destruir.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo se aplica un parche en un modelo de infraestructura inmutable?</summary><p>Construyendo una imagen o artefacto nuevo con el parche y reemplazando los componentes en ejecución, no modificándolos en el lugar.</p></details>
+<details class="sq"><summary>¿Cuál es el orden predeterminado de Terraform cuando un recurso debe reemplazarse, y cómo lo cambias?</summary><p>Destruir el objeto anterior y luego crear el nuevo; configura <code>lifecycle { create_before_destroy = true }</code> para crear primero el nuevo.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Terraform Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../terraform/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../terraform-vs-configuration-management-tools-provisioning-infrastructur/">← Terraform frente a las herramientas de gestión de configurac</a><a href="../installing-terraform-and-pinning-its-version-with-required-version/">Instalar Terraform y fijar su versión con `required_version` →</a></nav>
+</main>
+</body>
+</html>

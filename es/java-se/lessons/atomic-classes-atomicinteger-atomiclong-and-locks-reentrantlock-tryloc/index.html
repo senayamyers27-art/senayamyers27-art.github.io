@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Clases atómicas (AtomicInteger, AtomicLong) y locks (Reent… · Lección de OCP Java</title>
+<meta name="description" content="El paquete java.util.concurrent.atomic ofrece clases como AtomicInteger, AtomicLong, AtomicBoolean y AtomicReference que realizan actualizaciones de una so">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Clases atómicas (AtomicInteger, AtomicLong) y locks (Reent… · Lección de OCP Java">
+<meta property="og:description" content="El paquete java.util.concurrent.atomic ofrece clases como AtomicInteger, AtomicLong, AtomicBoolean y AtomicReference que realizan actualizaciones de una so">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/java-se/lessons/atomic-classes-atomicinteger-atomiclong-and-locks-reentrantlock-tryloc/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/java-se/lessons/atomic-classes-atomicinteger-atomiclong-and-locks-reentrantlock-tryloc/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../java-se/">OCP Java</a> / <a href="../">Lecciones</a> · <a href="../../../../java-se/lessons/atomic-classes-atomicinteger-atomiclong-and-locks-reentrantlock-tryloc/" hreflang="en" lang="en">English</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25)</p>
+<h1>Clases atómicas (AtomicInteger, AtomicLong) y locks (ReentrantLock, tryLock)</h1>
+<article class="lbody">
+<p>El paquete <code>java.util.concurrent.atomic</code> ofrece clases como <code>AtomicInteger</code>, <code>AtomicLong</code>, <code>AtomicBoolean</code> y <code>AtomicReference</code> que realizan actualizaciones de una sola variable de forma atómica sin locks explícitos. Se apoyan en instrucciones de hardware de comparar e intercambiar (compare-and-swap, CAS): una actualización tiene éxito solo si el valor no ha cambiado desde que se leyó, y en caso contrario se reintenta. También tienen una visibilidad similar a volatile, así que todos los hilos ven el valor más reciente.</p>
+<p>Conoce los nombres de los métodos y lo que devuelven. <code>incrementAndGet()</code> suma uno y devuelve el valor nuevo (como <code>++x</code>), mientras que <code>getAndIncrement()</code> devuelve el valor anterior (como <code>x++</code>). Las versiones de decremento y suma siguen el mismo patrón: <code>decrementAndGet</code>, <code>getAndDecrement</code>, <code>addAndGet(n)</code>, <code>getAndAdd(n)</code>. <code>get()</code> y <code>set()</code> leen y escriben. <code>compareAndSet(expected, newValue)</code> establece el valor solo si actualmente es igual a expected y devuelve un boolean. <code>updateAndGet(x -&gt; x * 2)</code> y <code>accumulateAndGet(5, Integer::sum)</code> aplican una función de forma atómica, reintentando si hace falta, así que la función debería estar libre de efectos secundarios.</p>
+<pre class="code" tabindex="0"><code>AtomicInteger hits = new AtomicInteger();
+hits.incrementAndGet();          // 1
+int old = hits.getAndAdd(10);    // old = 1, ahora 11
+hits.compareAndSet(11, 0);       // true, ahora 0
+hits.updateAndGet(x -&gt; x + 5);   // 5</code></pre>
+<p>Los atómicos protegen una sola variable. Cuando un invariante abarca varias variables, como mover dinero entre dos saldos, necesitas un lock. <code>ReentrantLock</code> en <code>java.util.concurrent.locks</code> implementa la interfaz <code>Lock</code> y proporciona la misma exclusión mutua que synchronized, con más control. La regla es llamar a <code>lock()</code> antes del bloque try y a <code>unlock()</code> en finally, porque a diferencia de synchronized nada libera el lock automáticamente.</p>
+<pre class="code" tabindex="0"><code>private final Lock lock = new ReentrantLock();
+void transfer(Account a, Account b, int amt) {
+    lock.lock();
+    try { a.withdraw(amt); b.deposit(amt); }
+    finally { lock.unlock(); }
+}</code></pre>
+<p>El control adicional trata sobre todo de no esperar para siempre. <code>tryLock()</code> intenta adquirir el lock inmediatamente y devuelve true o false sin bloquearse. <code>tryLock(1, TimeUnit.SECONDS)</code> espera hasta ese tiempo y lanza <code>InterruptedException</code>. Cuando tryLock devuelve false no debes llamar a unlock, y deberías hacer otra cosa, como reintentar más tarde. <code>lockInterruptibly()</code> espera pero puede interrumpirse. <code>new ReentrantLock(true)</code> crea un lock justo (fair) que concede el acceso aproximadamente en orden de llegada, a cierto costo de rendimiento.</p>
+<p>Reentrante significa que el hilo que tiene el lock puede adquirirlo de nuevo; cada <code>lock()</code> incrementa un contador de retenciones, y el lock se libera solo después de un número igual de llamadas a <code>unlock()</code>. Llamar a <code>unlock()</code> sobre un lock que el hilo actual no tiene lanza <code>IllegalMonitorStateException</code>. Para datos con muchas lecturas, <code>ReentrantReadWriteLock</code> permite que muchos lectores compartan el acceso mientras los escritores obtienen acceso exclusivo.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>AtomicInteger</dt><dd>Un envoltorio de int con operaciones atómicas sin locks como incrementAndGet y compareAndSet.</dd><dt>Compare-and-swap (CAS)</dt><dd>Una operación atómica de hardware que actualiza un valor solo si todavía es igual a un valor esperado.</dd><dt>ReentrantLock</dt><dd>Una implementación explícita de Lock que el hilo que la tiene puede volver a adquirir, y que se libera con las llamadas unlock correspondientes.</dd><dt>tryLock</dt><dd>Un método de Lock que intenta adquirir el lock sin bloquearse, o dentro de un timeout, y devuelve si tuvo éxito.</dd><dt>IllegalMonitorStateException</dt><dd>Se lanza cuando un hilo libera un lock que no tiene.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un limitador de tasa cuenta las peticiones con un contador AtomicLong, mientras que un sistema de reservas que debe actualizar a la vez un mapa de asientos y un libro de pagos protege ambos con un solo ReentrantLock y usa tryLock con timeout para que una petición atascada falle rápido en lugar de quedarse colgada.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> incrementAndGet devuelve el valor nuevo y getAndIncrement el anterior. Libera siempre en finally, y solo después de un lock o tryLock exitoso; liberar un lock que no tienes lanza IllegalMonitorStateException.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Si un AtomicInteger contiene 5, ¿qué devuelve getAndIncrement() y cuál es el valor nuevo?</summary><p>Devuelve 5 y el valor pasa a ser 6.</p></details>
+<details class="sq"><summary>¿Qué devuelve tryLock() si otro hilo tiene el lock?</summary><p>false, inmediatamente, sin esperar.</p></details>
+<details class="sq"><summary>Un hilo llama dos veces a lock() sobre un ReentrantLock. ¿Cuántas llamadas a unlock() lo liberan?</summary><p>Dos; el contador de retenciones debe volver a cero.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia OCP Java gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../java-se/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../race-conditions-synchronized-blocks-and-methods-and-visibility/">← Condiciones de carrera, bloques y métodos synchronized, y vi</a><a href="../concurrent-collections-concurrenthashmap-copyonwritearraylist-blocking/">Colecciones concurrentes: ConcurrentHashMap, CopyOnWriteArra →</a></nav>
+</main>
+</body>
+</html>

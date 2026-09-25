@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RBAC: Roles, ClusterRoles, RoleBindings, ClusterRoleBindin… · Lección de CKA</title>
+<meta name="description" content="El control de acceso basado en roles (RBAC) decide qué puede hacer una identidad autenticada. Los permisos siempre son aditivos: no existen reglas de deneg">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="RBAC: Roles, ClusterRoles, RoleBindings, ClusterRoleBindin… · Lección de CKA">
+<meta property="og:description" content="El control de acceso basado en roles (RBAC) decide qué puede hacer una identidad autenticada. Los permisos siempre son aditivos: no existen reglas de deneg">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/rbac-roles-clusterroles-rolebindings-clusterrolebindings-aggregated-an/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/rbac-roles-clusterroles-rolebindings-clusterrolebindings-aggregated-an/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/rbac-roles-clusterroles-rolebindings-clusterrolebindings-aggregated-an/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>RBAC: Roles, ClusterRoles, RoleBindings, ClusterRoleBindings, roles agregados e integrados, usuarios mediante CertificateSigningRequests y kubectl auth can-i</h1>
+<article class="lbody">
+<p>El control de acceso basado en roles (RBAC) decide qué puede hacer una identidad autenticada. Los permisos siempre son aditivos: no existen reglas de denegación, así que un usuario solo puede hacer lo que algún rol le otorga. Cada regla enumera API groups, recursos y verbos como get, list, watch, create, update, patch y delete.</p>
+<p>Hay cuatro objetos. Un Role otorga permisos dentro de un namespace. Un ClusterRole es de alcance de clúster: puede cubrir recursos a nivel de clúster como nodes y PersistentVolumes, o ser un conjunto reutilizable de permisos de namespace. Un RoleBinding otorga un Role o un ClusterRole a sujetos (users, groups o ServiceAccounts) dentro de un namespace. Un ClusterRoleBinding otorga un ClusterRole en todo el clúster. Vincular un ClusterRole con un RoleBinding es un patrón común: defines 'leer pods' una vez y lo otorgas por namespace.</p>
+<pre class="code" tabindex="0"><code>kubectl create role pod-reader -n dev --verb=get,list,watch --resource=pods
+kubectl create rolebinding jane-read -n dev --role=pod-reader --user=jane
+kubectl create clusterrolebinding ci-view --clusterrole=view --serviceaccount=ci:deployer
+kubectl auth can-i list pods -n dev --as=jane
+kubectl auth can-i --list --as=system:serviceaccount:ci:deployer -n ci</code></pre>
+<p>Kubernetes incluye ClusterRoles integrados: <code>cluster-admin</code> (todo), <code>admin</code> (casi todo en un namespace, incluido RBAC ahí), <code>edit</code> (leer y escribir la mayoría de los objetos, pero no roles ni bindings) y <code>view</code> (solo lectura, excluyendo Secrets). Varios de estos son ClusterRoles agregados. Un ClusterRole agregado tiene un <code>aggregationRule</code> con selectores de etiquetas, y el controller manager incorpora automáticamente las reglas de cualquier ClusterRole que tenga una etiqueta coincidente, como <code>rbac.authorization.k8s.io/aggregate-to-view: &quot;true&quot;</code>. Así es como el instalador de un CRD puede extender el rol view a sus nuevos recursos.</p>
+<p>Kubernetes no tiene objetos de usuario. Un usuario normal es simplemente quien presenta un certificado de cliente firmado por la CA del clúster; el common name (CN) del certificado es el nombre de usuario y los campos de organización (O) son los grupos. Para crear uno, genera una clave y una solicitud de firma de certificado con openssl (por ejemplo <code>-subj &quot;/CN=jane/O=dev&quot;</code>), envuélvela en un objeto CertificateSigningRequest con <code>signerName: kubernetes.io/kube-apiserver-client</code> y <code>usages: [client auth]</code>, y pon el CSR codificado en base64 en <code>spec.request</code>. Luego ejecuta <code>kubectl certificate approve jane</code>, lee el certificado emitido desde <code>.status.certificate</code>, decodifícalo y agrégalo a un kubeconfig con <code>kubectl config set-credentials</code> y <code>set-context</code>.</p>
+<p>Verifica con <code>kubectl auth can-i</code>. Usar <code>--as</code> suplanta otra identidad, y <code>--as-group</code> agrega grupos, así que puedes demostrar que un binding funciona sin cambiar de kubeconfig.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Role / ClusterRole</dt><dd>Conjuntos de reglas de permisos, de namespace o de alcance de clúster respectivamente.</dd><dt>RoleBinding / ClusterRoleBinding</dt><dd>Objetos que otorgan un rol a users, groups o ServiceAccounts, en un namespace o en todo el clúster.</dd><dt>Aggregated ClusterRole (ClusterRole agregado)</dt><dd>Un ClusterRole cuyas reglas se ensamblan automáticamente a partir de otros ClusterRoles que coinciden con un selector de etiquetas.</dd><dt>CertificateSigningRequest</dt><dd>Un objeto de API que le pide a un firmante, como el signer kube-apiserver-client, que emita un certificado.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una desarrolladora llamada Jane necesita ver y borrar Pods solo en el namespace <code>qa</code>. Le emites un certificado mediante un CSR con CN=jane, creas un Role con get, list y delete sobre pods en qa, lo vinculas con un RoleBinding y lo confirmas con <code>kubectl auth can-i delete pods -n qa --as=jane</code> (yes) y <code>-n prod</code> (no).</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Un RoleBinding que referencia un ClusterRole igual solo otorga acceso en el namespace del RoleBinding. Recuerda también que, al suplantar, los sujetos ServiceAccount se escriben como system:serviceaccount:&lt;namespace&gt;:&lt;name&gt;.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Puede RBAC expresar 'todo excepto Secrets'?</summary><p>No con una regla de denegación; RBAC es solo aditivo, así que debes otorgar exactamente los recursos que quieres.</p></details>
+<details class="sq"><summary>¿Qué determina el nombre de usuario y los grupos de un usuario basado en certificado?</summary><p>El CN del certificado es el nombre de usuario y cada campo O es un grupo.</p></details>
+<details class="sq"><summary>¿Cómo verificas si el ServiceAccount builder del namespace ci puede crear Deployments ahí?</summary><p><code>kubectl auth can-i create deployments -n ci --as=system:serviceaccount:ci:builder</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../highly-available-control-planes-stacked-vs-external-etcd-quorum-load-b/">← Control planes de alta disponibilidad: etcd stacked vs exter</a><a href="../node-maintenance-cordon-drain-uncordon-and-poddisruptionbudgets/">Mantenimiento de nodos: cordon, drain, uncordon y PodDisrupt →</a></nav>
+</main>
+</body>
+</html>

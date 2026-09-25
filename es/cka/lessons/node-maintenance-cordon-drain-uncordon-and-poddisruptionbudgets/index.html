@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mantenimiento de nodos: cordon, drain, uncordon y PodDisru… · Lección de CKA</title>
+<meta name="description" content="Los nodos necesitan mantenimiento: parches del kernel, actualizaciones del kubelet, cambios de hardware. Kubernetes te da tres comandos para sacar un nodo ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Mantenimiento de nodos: cordon, drain, uncordon y PodDisru… · Lección de CKA">
+<meta property="og:description" content="Los nodos necesitan mantenimiento: parches del kernel, actualizaciones del kubelet, cambios de hardware. Kubernetes te da tres comandos para sacar un nodo ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/node-maintenance-cordon-drain-uncordon-and-poddisruptionbudgets/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/node-maintenance-cordon-drain-uncordon-and-poddisruptionbudgets/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/node-maintenance-cordon-drain-uncordon-and-poddisruptionbudgets/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Mantenimiento de nodos: cordon, drain, uncordon y PodDisruptionBudgets</h1>
+<article class="lbody">
+<p>Los nodos necesitan mantenimiento: parches del kernel, actualizaciones del kubelet, cambios de hardware. Kubernetes te da tres comandos para sacar un nodo de servicio de forma ordenada y volver a incorporarlo.</p>
+<p><code>kubectl cordon node01</code> marca el nodo como no programable. Establece <code>spec.unschedulable: true</code>, que aparece como <code>SchedulingDisabled</code> en <code>kubectl get nodes</code>. Los Pods existentes siguen ejecutándose; solo se mantienen alejados los Pods nuevos. Úsalo cuando quieras evitar que llegue trabajo nuevo a un nodo mientras investigas.</p>
+<p><code>kubectl drain node01</code> hace cordon del nodo y luego desaloja (evict) sus Pods para que sus controladores los recreen en otro lugar. Drain se niega a continuar en algunas situaciones, y los flags que anulan esas verificaciones son materia de examen. Los Pods de un DaemonSet no se pueden mover (el DaemonSet los recrearía de inmediato), así que agregas <code>--ignore-daemonsets</code> para dejarlos donde están. Los Pods que usan volúmenes emptyDir pierden esos datos al ser desalojados, así que drain pide <code>--delete-emptydir-data</code> como confirmación. Los Pods sueltos que no gestiona ningún controlador se borrarían para siempre, así que drain exige <code>--force</code> para ellos. Los static Pods no se desalojan en absoluto.</p>
+<p>Cuando termina el trabajo, <code>kubectl uncordon node01</code> vuelve a hacer el nodo programable. Ten en cuenta que uncordon no devuelve los Pods existentes; los Pods nuevos, y los reprogramados por otras razones, lo irán usando gradualmente.</p>
+<p>Drain usa la Eviction API en lugar de un borrado simple, y los desalojos respetan los PodDisruptionBudgets (PDBs). Un PDB indica cuántos Pods que coinciden con un selector deben seguir activos durante interrupciones voluntarias como los drains: ya sea <code>minAvailable</code> o <code>maxUnavailable</code>, como número o porcentaje. Si desalojar un Pod violara el presupuesto, el desalojo se rechaza y drain sigue reintentando, lo que puede parecer que drain está colgado. Es el PDB protegiendo tu aplicación; espera hasta que los Pods de reemplazo estén Ready en otro lugar.</p>
+<pre class="code" tabindex="0"><code>kubectl create pdb web-pdb --selector=app=web --min-available=2
+kubectl get pdb   # columna ALLOWED DISRUPTIONS
+kubectl drain node01 --ignore-daemonsets --delete-emptydir-data --timeout=120s</code></pre>
+<p>Los PDBs no protegen contra interrupciones involuntarias como la caída de un nodo, y un PDB con minAvailable igual al número de réplicas significa cero interrupciones permitidas, así que los drains se bloquearán para siempre. Si ves <code>Cannot evict pod as it would violate the pod's disruption budget</code>, revisa <code>kubectl get pdb</code> antes de recurrir a <code>--disable-eviction</code>, que omite los PDBs y debería ser un último recurso deliberado.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Cordon (acordonar)</dt><dd>Marca un nodo como no programable sin tocar los Pods en ejecución.</dd><dt>Drain (vaciar)</dt><dd>Hace cordon de un nodo y desaloja sus Pods para que se reprogramen en otro lugar.</dd><dt>PodDisruptionBudget (presupuesto de interrupción)</dt><dd>Una política que limita cuántos de los Pods seleccionados pueden estar caídos a la vez por interrupciones voluntarias.</dd><dt>Eviction API (API de desalojo)</dt><dd>La API que usa drain para quitar Pods, y que respeta los PodDisruptionBudgets.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Haces drain de node02 para una actualización del kernel y el comando se detiene en un Pod de un Deployment de 3 réplicas cuyo PDB exige minAvailable 3. <code>kubectl get pdb</code> muestra 0 interrupciones permitidas. Tras acordarlo con el equipo de la aplicación, cambias el PDB a minAvailable 2; el desalojo se completa, el Pod se reinicia en node03 y el drain termina.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El examen a menudo quiere <code>kubectl drain &lt;node&gt; --ignore-daemonsets</code> (más --delete-emptydir-data si hace falta). Si drain da error por Pods gestionados por un DaemonSet, olvidaste --ignore-daemonsets; si se queja de Pods no gestionados, necesita --force.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cuál es la diferencia entre cordon y drain?</summary><p>Cordon solo bloquea la programación de nuevos Pods; drain además desaloja los Pods existentes del nodo.</p></details>
+<details class="sq"><summary>¿Por qué podría parecer que kubectl drain está colgado?</summary><p>Un desalojo violaría un PodDisruptionBudget, así que drain sigue reintentando hasta que el presupuesto lo permita.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../rbac-roles-clusterroles-rolebindings-clusterrolebindings-aggregated-an/">← RBAC: Roles, ClusterRoles, RoleBindings, ClusterRoleBindings</a><a href="../helm-repo-add-update-upgrade-install-version-values-and-kustomize-kube/">Helm (repo add/update, upgrade --install, --version, values) →</a></nav>
+</main>
+</body>
+</html>

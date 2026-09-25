@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Solución de problemas: log stream de App Service, registro… · Lección de AI-200</title>
+<meta name="description" content="Cuando algo se rompe, la primera pregunta siempre es dónde están los registros. Cada plataforma de proceso de este examen tiene sus propias fuentes de regi">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Solución de problemas: log stream de App Service, registro… · Lección de AI-200">
+<meta property="og:description" content="Cuando algo se rompe, la primera pregunta siempre es dónde están los registros. Cada plataforma de proceso de este examen tiene sus propias fuentes de regi">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/troubleshooting-app-service-log-stream-container-apps-console-and-syst/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/troubleshooting-app-service-log-stream-container-apps-console-and-syst/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/troubleshooting-app-service-log-stream-container-apps-console-and-syst/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Solución de problemas: log stream de App Service, registros de consola y del sistema de Container Apps, y registros de invocaciones de Functions</h1>
+<article class="lbody">
+<p>Cuando algo se rompe, la primera pregunta siempre es dónde están los registros. Cada plataforma de proceso de este examen tiene sus propias fuentes de registros en tiempo real e históricos, y conocerlas ahorra tiempo en los laboratorios y en el examen.</p>
+<p>En App Service, el log stream muestra la salida de los registros en tiempo real en el portal o con <code>az webapp log tail</code>. Para un contenedor personalizado en Linux, los registros del contenedor (todo lo que tu app escribe en stdout y stderr) se capturan cuando está habilitado el registro de aplicaciones en el sistema de archivos, en App Service logs; actívalo con <code>az webapp log config --docker-container-logging filesystem</code>. Así, el log stream muestra la salida de tu app junto con los mensajes de la plataforma sobre el inicio del contenedor, como las descargas de imágenes y la sonda de inicio esperando a que el contenedor responda en su puerto, que es justo donde aparece un <code>WEBSITES_PORT</code> incorrecto. El sitio de Kudu (SCM) y la página Diagnose and solve problems agregan archivos de registro, el historial de reinicios del contenedor y comprobaciones guiadas. Para consultas a largo plazo, envía configuraciones de diagnóstico como AppServiceConsoleLogs y AppServiceHTTPLogs a un área de trabajo de Log Analytics.</p>
+<pre class="code" tabindex="0"><code>az webapp log config -g rg -n orders-web --docker-container-logging filesystem
+az webapp log tail -g rg -n orders-web
+
+az containerapp logs show -g rg -n orders --type console --follow
+az containerapp logs show -g rg -n orders --type system
+az containerapp exec -g rg -n orders --command sh</code></pre>
+<p>Container Apps separa dos tipos de registros. Los registros de consola son el stdout y el stderr de tu contenedor: errores de la aplicación, seguimientos de pila e instrucciones print. Los registros del sistema los genera la plataforma: aprovisionamiento de revisiones, errores al descargar imágenes, fallas de las sondas, eventos de escalado, problemas con secretos o identidades y reinicios de contenedores. Si una revisión nunca queda lista, mira primero los registros del sistema; si se ejecuta pero devuelve errores, mira los registros de consola. Ambos se transmiten en vivo con <code>az containerapp logs show</code> (agrega <code>--follow</code>) o con el Log stream del portal, y ambos se almacenan en el área de trabajo de Log Analytics del entorno, en las tablas ContainerAppConsoleLogs_CL y ContainerAppSystemLogs_CL, donde los consultas con KQL. <code>az containerapp exec</code> abre un shell en una réplica en ejecución para hacer comprobaciones interactivas, y <code>az containerapp revision list</code> muestra el estado de aprovisionamiento y de ejecución de cada revisión. Los jobs tienen los mismos registros más el historial de ejecuciones.</p>
+<p>En Azure Functions, la vista Invocations de cada función (en Monitor, en el portal) enumera las ejecuciones recientes con su éxito o error, su duración y las líneas de registro escritas durante esa invocación, respaldadas por Application Insights. Al seleccionar una invocación se muestran sus registros y su excepción. Para la salida en vivo, el log stream del portal (Live Metrics de App Insights o los registros del sistema de archivos) y <code>func azure functionapp logstream &lt;APP_NAME&gt;</code> transmiten los registros a medida que ocurren. En Application Insights, las ejecuciones de funciones aparecen en requests, y tus llamadas a <code>logging</code> aparecen en traces con el ID de invocación, así que KQL puede encontrar cada línea de registro de una ejecución fallida. host.json controla los niveles de registro por categoría; si faltan registros que esperabas, comprueba que el nivel de <code>Function</code> o de tu categoría no esté demasiado alto y que el muestreo no los haya descartado.</p>
+<p>Un flujo confiable de solución de problemas: comprueba si la plataforma inició tu código (registros del sistema y de inicio), luego si tu código falló (registros de consola, de invocaciones y de excepciones), luego si falló una dependencia (dependencies en Application Insights) y, por último, si la causa fue la identidad o la configuración (errores 403, configuraciones faltantes, referencias de Key Vault sin resolver).</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Log stream (secuencia de registros)</dt><dd>Una vista en tiempo real de la salida de registros de una app en el portal o en la CLI.</dd><dt>Console logs (registros de consola)</dt><dd>En Container Apps, la salida stdout y stderr de tus contenedores.</dd><dt>System logs (registros del sistema)</dt><dd>En Container Apps, los eventos generados por la plataforma, como aprovisionamiento, descargas de imágenes, fallas de sondas y escalado.</dd><dt>Invocations view (vista de invocaciones)</dt><dd>La página de supervisión de Functions que enumera las ejecuciones recientes con su estado, duración y registros de Application Insights.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una revisión nueva de Container Apps se queda en estado de error. El registro de consola está vacío, así que el ingeniero revisa los registros del sistema, que muestran un error al descargar la imagen: unauthorized. A la identidad asignada por el usuario de la app nunca se le había asignado AcrPull. Después de la asignación del rol y de reiniciar la revisión, los registros del sistema muestran una descarga correcta y el registro de consola muestra que la app se inicia en el puerto 8000.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Container Apps: los problemas de inicio, descarga de imágenes, sondas y escalado están en los registros del sistema; los errores de la aplicación están en los registros de consola. Los contenedores de App Service necesitan que se habilite el registro en el sistema de archivos para que el log stream muestre la salida del contenedor.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Una revisión de una container app nunca queda lista y los registros de consola están vacíos. ¿Dónde deberías buscar?</summary><p>En los registros del sistema, que registran los errores de aprovisionamiento, de descarga de imágenes y de las sondas de la plataforma.</p></details>
+<details class="sq"><summary>¿Dónde puedes ver los registros de una ejecución fallida específica de una Azure Function?</summary><p>En la vista Invocations de la función, respaldada por Application Insights, o consultando traces y requests de esa invocación.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../alerts-metric-vs-log-search-alerts-and-action-groups/">← Alertas: alertas de métricas vs alertas de búsqueda de regis</a></nav>
+</main>
+</body>
+</html>

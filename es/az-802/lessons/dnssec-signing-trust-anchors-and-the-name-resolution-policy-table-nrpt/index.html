@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Firma DNSSEC, anclajes de confianza y la Tabla de directiv… · Lección de AZ-802</title>
+<meta name="description" content="El DNS clásico no tiene forma de demostrar que una respuesta es auténtica, por lo que los atacantes que pueden inyectar respuestas falsificadas (envenenami">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Firma DNSSEC, anclajes de confianza y la Tabla de directiv… · Lección de AZ-802">
+<meta property="og:description" content="El DNS clásico no tiene forma de demostrar que una respuesta es auténtica, por lo que los atacantes que pueden inyectar respuestas falsificadas (envenenami">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-802/lessons/dnssec-signing-trust-anchors-and-the-name-resolution-policy-table-nrpt/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-802/lessons/dnssec-signing-trust-anchors-and-the-name-resolution-policy-table-nrpt/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-802/">AZ-802</a> / <a href="../">Lecciones</a> · <a href="../../../../az-802/lessons/dnssec-signing-trust-anchors-and-the-name-resolution-policy-table-nrpt/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802</p>
+<h1>Firma DNSSEC, anclajes de confianza y la Tabla de directivas de resolución de nombres (NRPT)</h1>
+<article class="lbody">
+<p>El DNS clásico no tiene forma de demostrar que una respuesta es auténtica, por lo que los atacantes que pueden inyectar respuestas falsificadas (envenenamiento de caché o suplantación) pueden redirigir a los usuarios a servidores maliciosos. Las Extensiones de seguridad de DNS (DNSSEC) solucionan esto agregando firmas digitales a los datos de la zona. Un resolvedor que valida DNSSEC puede confirmar que una respuesta realmente provino del propietario de la zona y no fue alterada, y puede demostrar que un nombre no existe. DNSSEC no cifra las consultas; proporciona autenticidad e integridad.</p>
+<p>Firmar una zona agrega nuevos tipos de registros. Los registros RRSIG contienen la firma de cada conjunto de registros. Los registros DNSKEY publican las claves públicas de la zona. Los registros NSEC o NSEC3 proporcionan la denegación autenticada de existencia, y NSEC3 aplica hash a los nombres para que los atacantes no puedan simplemente recorrer la zona (zone walking) para enumerar todos los nombres. Los registros DS (firmante de delegación) residen en la zona primaria y contienen un hash de la clave de la zona secundaria, enlazando la cadena de confianza de la primaria a la secundaria. Normalmente se usan dos tipos de claves: la clave de firma de claves (KSK) firma solo el conjunto de registros DNSKEY, y la clave de firma de zona (ZSK) firma el resto de la zona. Mantenerlas separadas te permite rotar la ZSK, que cambia con frecuencia, sin actualizar la zona primaria.</p>
+<p>En el DNS de Windows Server firmas una zona con DNS Manager (clic con el botón derecho en la zona, DNSSEC, Sign the Zone) o con <code>Invoke-DnsServerZoneSign</code>. Un servidor DNS es el Key Master de la zona; genera y administra las claves y se encarga de la rotación automática de claves. En las zonas integradas en AD, los datos firmados se replican a través de AD, y las actualizaciones dinámicas siguen funcionando porque los servidores firman los registros en línea a medida que cambian. Comprueba el resultado con <code>Resolve-DnsName www.corp.contoso.com -DnssecOk</code>, que devuelve los registros RRSIG.</p>
+<p>La validación necesita un punto de partida de confianza, llamado anclaje de confianza (trust anchor). Normalmente es un registro DNSKEY o DS de una zona, configurado en el servidor DNS que valida; luego el servidor sigue la cadena de firmas hacia abajo. En internet, la clave de la zona raíz sirve como anclaje. Para las zonas internas, agregas a tus resolvedores anclajes de confianza para tus propias zonas firmadas. Windows puede distribuir automáticamente los anclajes de confianza de una zona firmada integrada en AD a todos los servidores DNS del bosque, una opción del asistente de firma, y aparecen en la carpeta Trust Points de DNS Manager.</p>
+<p>Los clientes Windows son resolvedores de código auxiliar (stub resolvers) que no validan: confían en su servidor DNS para validar e informar el resultado. La Tabla de directivas de resolución de nombres (NRPT) indica a los clientes cómo tratar espacios de nombres específicos. Configurada mediante directiva de grupo (Computer Configuration, Policies, Windows Settings, Name Resolution Policy), una regla de NRPT para un sufijo como <code>.corp.contoso.com</code> puede exigir la validación DNSSEC: el cliente pregunta al servidor y acepta la respuesta solo si el servidor indica que la validó correctamente. De lo contrario, el cliente trata el nombre como no resuelto. Las reglas de NRPT también pueden dirigir las consultas de un espacio de nombres a servidores DNS específicos, algo que usan DirectAccess y algunos diseños de VPN. Consulta las reglas aplicadas con <code>Get-DnsClientNrptPolicy</code>.</p>
+<p>Implementa por etapas: firma la zona, distribuye los anclajes de confianza, confirma la validación en los servidores y solo entonces exige la validación con NRPT en los clientes; de lo contrario, una validación fallida romperá la resolución de nombres para los usuarios.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>DNSSEC</dt><dd>Extensiones que agregan firmas digitales a los datos DNS para que los resolvedores puedan verificar su autenticidad e integridad.</dd><dt>RRSIG</dt><dd>Un registro que contiene la firma sobre un conjunto de registros DNS.</dd><dt>Trust anchor (anclaje de confianza)</dt><dd>Una clave pública o registro DS preconfigurado en el que un resolvedor confía como inicio de una cadena de validación DNSSEC.</dd><dt>Key Master</dt><dd>El servidor DNS responsable de generar y rotar las claves de una zona firmada.</dd><dt>NRPT</dt><dd>Name Resolution Policy Table (Tabla de directivas de resolución de nombres): reglas de cliente, entregadas por directiva de grupo, que exigen la validación DNSSEC o dirigen las consultas de espacios de nombres específicos.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Después de un incidente de phishing, Contoso firma corp.contoso.com, distribuye los anclajes de confianza a todos los servidores DNS del bosque y verifica con Resolve-DnsName -DnssecOk. Una vez confirmada la validación en los servidores, un GPO agrega una regla de NRPT que exige DNSSEC para .corp.contoso.com en todos los clientes.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> La firma se hace en la zona autoritativa; la validación la hacen los resolvedores usando anclajes de confianza; la NRPT es lo que hace que los clientes Windows exijan la validación. DNSSEC proporciona integridad, no confidencialidad.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué firma la KSK y qué firma la ZSK?</summary><p>La KSK firma el conjunto de registros DNSKEY; la ZSK firma los demás registros de la zona.</p></details>
+<details class="sq"><summary>¿Cómo exigen los clientes Windows la validación DNSSEC para un espacio de nombres?</summary><p>Mediante una regla de NRPT, normalmente implementada por directiva de grupo, que exige la validación DNSSEC para ese sufijo.</p></details>
+<details class="sq"><summary>¿Qué tipo de registro proporciona la denegación autenticada de existencia a la vez que dificulta el recorrido de la zona?</summary><p>NSEC3.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AZ-802 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-802/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../forwarders-conditional-forwarders-and-root-hints-dns-policies-and-zone/">← Reenviadores, reenviadores condicionales y sugerencias de ra</a><a href="../azure-dns-private-zones-virtual-network-links-and-auto-registration-az/">Zonas privadas de Azure DNS, vínculos de red virtual y regis →</a></nav>
+</main>
+</body>
+</html>

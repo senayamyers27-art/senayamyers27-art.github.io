@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Problemas de Services y de red: selectores, readiness y En… · Lección de CKA</title>
+<meta name="description" content="Los problemas de red parecen misteriosos hasta que sigues el camino que recorre una solicitud: Pod cliente, DNS, IP virtual del Service, reglas de kube-pro">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Problemas de Services y de red: selectores, readiness y En… · Lección de CKA">
+<meta property="og:description" content="Los problemas de red parecen misteriosos hasta que sigues el camino que recorre una solicitud: Pod cliente, DNS, IP virtual del Service, reglas de kube-pro">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/service-and-networking-problems-selectors-readiness-and-endpointslices/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/service-and-networking-problems-selectors-readiness-and-endpointslices/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/service-and-networking-problems-selectors-readiness-and-endpointslices/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Problemas de Services y de red: selectores, readiness y EndpointSlices, kube-proxy, tráfico CNI entre nodos y errores de red del sandbox</h1>
+<article class="lbody">
+<p>Los problemas de red parecen misteriosos hasta que sigues el camino que recorre una solicitud: Pod cliente, DNS, IP virtual del Service, reglas de kube-proxy, EndpointSlice, Pod de backend y la red del CNI entre nodos. Revisa cada salto en orden y la falla normalmente se vuelve evidente.</p>
+<p>Empieza por el Service y sus endpoints. <code>kubectl get endpointslices -l kubernetes.io/service-name=web</code> (o <code>kubectl describe svc web</code>, que lista los endpoints) debería mostrar las IP de los backends. Si está vacío, compara el selector del Service con las etiquetas de los Pods: <code>kubectl get svc web -o jsonpath='{.spec.selector}'</code> y <code>kubectl get pods --show-labels</code>. Un solo error de tipeo, como <code>app: web</code> frente a <code>app: webapp</code>, deja al Service sin backends. Si los Pods coinciden pero aparecen como no listos, su readiness probe está fallando; <code>kubectl describe pod</code> muestra los errores del probe. Kubernetes retiene deliberadamente el tráfico hacia los Pods que no están listos.</p>
+<p>Luego revisa los puertos. El <code>targetPort</code> del Service debe coincidir con el puerto en el que realmente escucha el contenedor. Una discrepancia da 'connection refused' aunque existan endpoints. Prueba directamente la IP del Pod y el puerto del contenedor desde un Pod temporal; si eso funciona pero el Service no, la culpa es de la definición del Service o de kube-proxy.</p>
+<p>Si los Services fallan solo desde ciertos nodos, revisa kube-proxy en ellos: <code>kubectl get pods -n kube-system -o wide -l k8s-app=kube-proxy</code> y luego sus logs. Un kube-proxy que se cae, un ConfigMap de kube-proxy roto o módulos del kernel faltantes para el modo elegido dejan a ese nodo sin reglas de Service.</p>
+<pre class="code" tabindex="0"><code>kubectl describe svc web
+kubectl get endpointslices -l kubernetes.io/service-name=web -o wide
+kubectl get pods -l app=web -o wide
+kubectl logs -n kube-system -l k8s-app=kube-proxy --tail=20
+kubectl get pods -n kube-system -o wide | grep -Ei 'calico|cilium|flannel'</code></pre>
+<p>Los problemas entre nodos apuntan al CNI. Si los Pods del mismo nodo pueden comunicarse pero los de nodos distintos no, el overlay o el enrutamiento entre nodos está roto: un Pod agente del CNI está caído en un nodo, un firewall entre nodos bloquea la encapsulación o el protocolo de enrutamiento que usa el CNI (por ejemplo, el tráfico VXLAN de Flannel sobre UDP o el BGP de Calico en TCP 179), o el Pod CIDR se solapa con la red de los nodos.</p>
+<p>Por último, los errores del sandbox. Si los Pods se quedan en ContainerCreating con eventos como 'Failed to create pod sandbox' y un mensaje de que el network plugin no está listo o no pudo configurar la red, el CNI de ese nodo no funciona. Revisa si hay un archivo de configuración en <code>/etc/cni/net.d/</code>, los binarios del plugin en <code>/opt/cni/bin/</code>, el Pod agente del CNI en ese nodo, y si el plugin se quedó sin direcciones IP en el rango del nodo.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Empty EndpointSlice (EndpointSlice vacía)</dt><dd>Un Service sin backends, normalmente por una discrepancia de selector o por Pods que no están listos.</dd><dt>Readiness probe (sonda de disponibilidad)</dt><dd>Una verificación que decide si un Pod recibe tráfico del Service.</dd><dt>Pod sandbox</dt><dd>El network namespace y el contenedor pause del Pod, configurados mediante el CNI antes de que arranquen los contenedores.</dd><dt>Cross-node traffic (tráfico entre nodos)</dt><dd>Tráfico entre Pods de distintos nodos, transportado por el overlay o el enrutamiento del CNI.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>El Service api devuelve connection refused. Su EndpointSlice lista tres IP de Pods listos en el puerto 80, pero los contenedores escuchan en el 8080. Cambiar el targetPort del Service a 8080 lo resuelve, algo que una prueba directa a PodIP:8080 ya había insinuado.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Endpoints vacíos significa selector o readiness; endpoints presentes pero conexión rechazada significa targetPort o la aplicación; funciona en un nodo pero no en otro significa kube-proxy o el CNI de ese nodo.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué es lo primero que revisas cuando un Service no tiene endpoints?</summary><p>Si su selector coincide con las etiquetas de Pods que estén Ready.</p></details>
+<details class="sq"><summary>Los Pods del mismo nodo se comunican, pero no entre nodos. ¿Cuál es el culpable probable?</summary><p>La red entre nodos del CNI: un agente que falla, tráfico de overlay o de enrutamiento bloqueado, o CIDRs que se solapan.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../events-kubectl-get-events-with-field-selectors-and-sorting/">← Eventos: kubectl get events con field selectors y ordenamien</a><a href="../dns-problems-coredns-pods-and-logs-loop-detection-with-systemd-resolve/">Problemas de DNS: Pods y logs de CoreDNS, detección de bucle →</a></nav>
+</main>
+</body>
+</html>

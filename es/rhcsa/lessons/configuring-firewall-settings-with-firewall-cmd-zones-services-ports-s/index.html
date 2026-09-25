@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Configurar el firewall con firewall-cmd: zonas, servicios,… · Lección de RHCSA</title>
+<meta name="description" content="La lección de redes trató cómo abrir servicios y puertos. El objetivo de seguridad va más allá: usar zonas y direcciones de origen para controlar quién pue">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Configurar el firewall con firewall-cmd: zonas, servicios,… · Lección de RHCSA">
+<meta property="og:description" content="La lección de redes trató cómo abrir servicios y puertos. El objetivo de seguridad va más allá: usar zonas y direcciones de origen para controlar quién pue">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/configuring-firewall-settings-with-firewall-cmd-zones-services-ports-s/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/configuring-firewall-settings-with-firewall-cmd-zones-services-ports-s/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/configuring-firewall-settings-with-firewall-cmd-zones-services-ports-s/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Configurar el firewall con firewall-cmd: zonas, servicios, puertos, orígenes, tiempo de ejecución vs. permanente</h1>
+<article class="lbody">
+<p>La lección de redes trató cómo abrir servicios y puertos. El objetivo de seguridad va más allá: usar zonas y direcciones de origen para controlar quién puede conectarse, y ser preciso con la configuración en tiempo de ejecución y la permanente. La meta es el mínimo privilegio, es decir, permitir solo lo que un servicio necesita y solo desde las redes que lo necesitan.</p>
+<p>firewalld asigna cada paquete entrante a una zona. Si la dirección de origen del paquete coincide con un origen vinculado a una zona, se aplica esa zona. Si no, se aplica la zona de la interfaz de entrada, y si la interfaz no tiene ninguna, la zona predeterminada. Las zonas predefinidas van desde <code>drop</code> (descartar todo en silencio) y <code>block</code> (rechazar todo), pasando por <code>public</code> e <code>internal</code>, hasta <code>trusted</code> (permitir todo). Cada una tiene sus propios servicios y puertos.</p>
+<p>Vincular una red de origen a una zona te permite tratar a ciertos clientes de forma distinta. Por ejemplo, permite SSH solo desde una red de administración poniendo esa red en la zona <code>internal</code> con ssh permitido, y quitando ssh de <code>public</code>.</p>
+<pre class="code" tabindex="0"><code>firewall-cmd --permanent --zone=internal --add-source=10.0.5.0/24
+firewall-cmd --permanent --zone=internal --add-service=ssh
+firewall-cmd --permanent --zone=public --remove-service=ssh
+firewall-cmd --reload
+firewall-cmd --get-active-zones
+firewall-cmd --zone=internal --list-all</code></pre>
+<p>Otros comandos de zonas: <code>--set-default-zone=name</code> cambia la predeterminada de inmediato y de forma permanente, <code>--change-interface=enp1s0 --zone=internal</code> mueve una interfaz (para las interfaces gestionadas por NetworkManager, el ajuste duradero es <code>connection.zone</code> de la conexión) y <code>--list-all-zones</code> lo muestra todo. Los servicios y puertos se añaden por zona con <code>--add-service</code> y <code>--add-port=port/proto</code>, y se quitan con las opciones <code>--remove-</code> correspondientes; <code>--query-service=http</code> responde yes o no.</p>
+<p>Tiempo de ejecución frente a permanente es el concepto que más se evalúa. Los cambios en tiempo de ejecución se aplican ahora y desaparecen al recargar o reiniciar. Los cambios permanentes se guardan pero no se aplican hasta recargar. Ambos pueden desincronizarse; <code>firewall-cmd --list-all</code> muestra el tiempo de ejecución y <code>firewall-cmd --permanent --list-all</code> muestra la configuración guardada. Una forma segura de experimentar en remoto es hacer cambios en tiempo de ejecución, probar y luego <code>--runtime-to-permanent</code>. Si te quedas sin acceso por un cambio en tiempo de ejecución, una recarga o un reinicio restaura las reglas guardadas.</p>
+<p>Cuando un servicio debe seguir siendo accesible después de reiniciar, la configuración permanente debe incluirlo. Compara siempre la salida de tiempo de ejecución y la permanente antes de terminar una tarea.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Source binding (vinculación de origen)</dt><dd>Asignar una dirección o red de origen a una zona para que los paquetes que vienen de ella usen las reglas de esa zona.</dd><dt>Default zone (zona predeterminada)</dt><dd>La zona usada para las interfaces y el tráfico no asignados a ninguna otra zona; public a menos que se cambie.</dd><dt>Runtime configuration (configuración en tiempo de ejecución)</dt><dd>Las reglas de firewall vigentes en este momento, que se pierden al recargar o reiniciar si no se guardan.</dd><dt>--runtime-to-permanent</dt><dd>Guarda la configuración actual del firewall en tiempo de ejecución como configuración permanente.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Solo la red de administración 192.168.50.0/24 puede usar la consola web en TCP 9090. Añades esa red como origen a la zona internal con cockpit permitido y quitas cockpit de public, todo con --permanent; recargas y lo confirmas con --get-active-zones y --zone=internal --list-all.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Las vinculaciones de origen tienen prioridad sobre las zonas de interfaz. Compara firewall-cmd --list-all con --permanent --list-all para asegurarte de que tus reglas en tiempo de ejecución y guardadas coinciden.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo elige firewalld una zona para un paquete entrante?</summary><p>Primero una vinculación de origen que coincida, luego la zona de la interfaz de entrada y después la zona predeterminada.</p></details>
+<details class="sq"><summary>¿Cómo guardas reglas en tiempo de ejecución que funcionan sin volver a escribirlas?</summary><p>firewall-cmd --runtime-to-permanent.</p></details>
+<details class="sq"><summary>¿Qué comando muestra las reglas guardadas de una zona, en lugar de las que están en ejecución?</summary><p>firewall-cmd --permanent --zone=name --list-all.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../locking-and-unlocking-accounts-usermod-l-passwd-l-chage-e-0/">← Bloquear y desbloquear cuentas (usermod -L, passwd -l, chage</a><a href="../managing-default-file-permissions-with-umask-shell-and-etc-login-defs/">Gestionar los permisos predeterminados de los archivos con u →</a></nav>
+</main>
+</body>
+</html>

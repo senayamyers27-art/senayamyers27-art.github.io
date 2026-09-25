@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Valores de output y valores locales · Lección de Terraform Associate</title>
+<meta name="description" content="Los valores de output y los valores locales dan nombre a expresiones, pero miran en direcciones distintas. Los outputs exponen valores de un módulo a quien">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Valores de output y valores locales · Lección de Terraform Associate">
+<meta property="og:description" content="Los valores de output y los valores locales dan nombre a expresiones, pero miran en direcciones distintas. Los outputs exponen valores de un módulo a quien">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/terraform/lessons/output-values-and-local-values/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/terraform/lessons/output-values-and-local-values/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../terraform/">Terraform Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../terraform/lessons/output-values-and-local-values/" hreflang="en" lang="en">English</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004)</p>
+<h1>Valores de output y valores locales</h1>
+<article class="lbody">
+<p>Los valores de output y los valores locales dan nombre a expresiones, pero miran en direcciones distintas. Los outputs exponen valores de un módulo a quien lo usa. Los locals nombran valores intermedios dentro de un módulo para evitar repeticiones, y no pueden establecerse desde fuera.</p>
+<pre class="code" tabindex="0"><code>output &quot;web_ip&quot; {
+  value       = aws_instance.web.public_ip
+  description = &quot;Public IP of the web server.&quot;
+}
+
+output &quot;db_password&quot; {
+  value     = random_password.db.result
+  sensitive = true
+}</code></pre>
+<p>Un bloque <code>output</code> necesita un <code>value</code>, y puede tener <code>description</code>, <code>sensitive</code>, un <code>depends_on</code> para las raras dependencias ocultas y verificaciones <code>precondition</code>. En el módulo raíz, los outputs se muestran al final de <code>terraform apply</code> y se guardan en el estado. Puedes leerlos más tarde con <code>terraform output</code>, uno de ellos con <code>terraform output web_ip</code>, la cadena sin comillas con <code>terraform output -raw web_ip</code>, y todos como JSON con <code>terraform output -json</code>. Los outputs sensibles se muestran como <code>&lt;sensitive&gt;</code> en el resumen del apply y en el listado simple de <code>terraform output</code>, pero <code>terraform output -raw</code> y <code>-json</code> los muestran en texto plano, porque el propio valor está en el estado.</p>
+<p>En un módulo hijo, los outputs son la única forma de devolver valores al módulo que lo llama. Si un módulo llamado <code>network</code> declara <code>output &quot;subnet_ids&quot;</code>, el módulo raíz usa <code>module.network.subnet_ids</code>. Todo lo que no se exporte como output es invisible fuera del módulo. Los outputs de un módulo raíz también pueden leerse desde otra configuración mediante el data source <code>terraform_remote_state</code> o, en HCP Terraform, el data source <code>tfe_outputs</code>, que es como stacks separados comparten valores como los IDs de red.</p>
+<p>Los valores locales se declaran en un bloque <code>locals</code> (en plural) y se referencian con <code>local.NAME</code> (en singular), una diferencia de escritura que al examen le gusta evaluar.</p>
+<pre class="code" tabindex="0"><code>locals {
+  name_prefix = &quot;${var.project}-${var.environment}&quot;
+  common_tags = {
+    Project     = var.project
+    Environment = var.environment
+    ManagedBy   = &quot;terraform&quot;
+  }
+}
+
+resource &quot;aws_s3_bucket&quot; &quot;logs&quot; {
+  bucket = &quot;${local.name_prefix}-logs&quot;
+  tags   = local.common_tags
+}</code></pre>
+<p>Los locals brillan cuando de otro modo la misma expresión se repetiría, o cuando dar nombre a una expresión compleja hace más claro el código. Pueden referenciar variables, recursos, data sources y otros locals. A diferencia de las variables, no pueden ser anulados por quien llama al módulo, por un archivo tfvars ni por la línea de comandos, lo que los convierte en un buen lugar para valores que deben calcularse de forma consistente. Sin embargo, abusar de ellos puede hacer que el código sea más difícil de seguir, ya que los lectores deben saltar a la definición para ver qué es un valor.</p>
+<p>Para resumir el trío: las variables son las entradas de un módulo, los locals son sus nombres de trabajo privados y los outputs son sus valores de retorno.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Output value (valor de output)</dt><dd>Un valor con nombre que exporta un módulo; se muestra en el módulo raíz y se accede como <code>module.NAME.OUTPUT</code> en los módulos hijos.</dd><dt>Local value (valor local)</dt><dd>Una expresión con nombre definida en un bloque <code>locals</code> y referenciada como <code>local.NAME</code>, que solo puede usarse dentro de su módulo.</dd><dt>terraform output</dt><dd>Comando que lee del estado los valores de output del módulo raíz, con las opciones <code>-raw</code> y <code>-json</code>.</dd><dt>terraform_remote_state</dt><dd>Data source que lee los outputs del módulo raíz del estado de otra configuración.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>La configuración de un equipo de redes exporta como output <code>private_subnet_ids</code>. La configuración de un equipo de aplicaciones lee esos outputs con un data source de remote state y usa un mapa local <code>common_tags</code> para que todos los recursos reciban las mismas etiquetas Project y Environment.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El bloque es <code>locals</code>, pero la referencia es <code>local.name</code>. Los valores de un módulo hijo solo son accesibles mediante outputs, como <code>module.NAME.OUTPUT_NAME</code>.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo lee un módulo raíz un valor producido dentro de un módulo hijo llamado <code>db</code>?</summary><p>El hijo debe declarar un output, por ejemplo <code>endpoint</code>, y el raíz lo referencia como <code>module.db.endpoint</code>.</p></details>
+<details class="sq"><summary>¿Se puede anular un valor local con <code>-var</code>?</summary><p>No. Los locals son internos del módulo; solo las variables de entrada pueden establecerse desde fuera.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Terraform Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../terraform/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../input-variables-type-default-description-sensitive-nullable-and-value/">← Variables de entrada: `type`, `default`, `description`, `sen</a><a href="../complex-types-list-map-set-object-tuple-type-conversion/">Tipos complejos: list, map, set, object, tuple; conversión d →</a></nav>
+</main>
+</body>
+</html>

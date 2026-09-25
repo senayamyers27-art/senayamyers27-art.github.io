@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Perfiles, reglas y reglas de seguridad de conexión (IPsec)… · Lección de AZ-802</title>
+<meta name="description" content="Windows Defender Firewall with Advanced Security es un firewall con estado basado en el host presente en cada Windows Server. Filtra el tráfico entrante y ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Perfiles, reglas y reglas de seguridad de conexión (IPsec)… · Lección de AZ-802">
+<meta property="og:description" content="Windows Defender Firewall with Advanced Security es un firewall con estado basado en el host presente en cada Windows Server. Filtra el tráfico entrante y ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-802/lessons/windows-defender-firewall-profiles-rules-and-connection-security-ipsec/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-802/lessons/windows-defender-firewall-profiles-rules-and-connection-security-ipsec/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-802/">AZ-802</a> / <a href="../">Lecciones</a> · <a href="../../../../az-802/lessons/windows-defender-firewall-profiles-rules-and-connection-security-ipsec/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802</p>
+<h1>Perfiles, reglas y reglas de seguridad de conexión (IPsec) de Windows Defender Firewall</h1>
+<article class="lbody">
+<p>Windows Defender Firewall with Advanced Security es un firewall con estado basado en el host presente en cada Windows Server. Filtra el tráfico entrante y saliente por servidor, lo que limita el movimiento lateral incluso dentro de una red de confianza. También alberga las reglas de seguridad de conexión, que usan IPsec para autenticar y, opcionalmente, cifrar el tráfico entre equipos.</p>
+<p>El firewall tiene tres perfiles, y cada adaptador de red usa uno según la red que detecta mediante Network Location Awareness. El perfil Domain se aplica cuando el equipo puede autenticarse ante un controlador de dominio en esa red. Private se aplica a las redes que un administrador marcó como privadas. Public se aplica a todo lo demás y debe ser el más restrictivo. Cada perfil tiene su propio estado y acciones predeterminadas, que de forma predeterminada son bloquear lo entrante (a menos que una regla lo permita) y permitir lo saliente. Compruébalos con <code>Get-NetFirewallProfile</code>. Una pista común al solucionar problemas es un servidor atascado en el perfil Public porque no pudo llegar a un DC al iniciarse.</p>
+<p>Las reglas de firewall coinciden con el tráfico por programa, puerto y protocolo, grupos de servicios predefinidos (como File and Printer Sharing) o combinaciones personalizadas, con ámbito de direcciones IP locales y remotas, perfiles y tipos de interfaz. La acción de cada regla es permitir, bloquear o permitir la conexión si es segura, lo que requiere protección IPsec. Las reglas de bloqueo tienen prioridad sobre las de permiso, así que un bloqueo explícito gana incluso si otra regla permite el mismo tráfico; la excepción es una regla de permitir si es segura con la opción de invalidar las reglas de bloqueo, usada para escáneres autorizados. Crea reglas en la consola o con PowerShell, por ejemplo <code>New-NetFirewallRule -DisplayName &quot;SQL 1433&quot; -Direction Inbound -Protocol TCP -LocalPort 1433 -RemoteAddress 10.0.5.0/24 -Action Allow -Profile Domain</code>. En un dominio, implementa las reglas por GPO; la configuración de combinación de reglas decide si también se aplican las reglas de los administradores locales. El registro en <code>pfirewall.log</code> guarda los paquetes descartados para la solución de problemas.</p>
+<p>Las reglas de seguridad de conexión indican a Windows cuándo usar IPsec (Internet Protocol security) entre hosts. Los tipos de regla son aislamiento (exigir autenticación para el tráfico según la pertenencia al dominio o el estado), exención de autenticación (omitir IPsec para los hosts que no pueden usarlo, como los DC o los servidores DHCP), servidor a servidor (proteger el tráfico entre puntos de conexión específicos), túnel (entre equipos de puerta de enlace) y personalizado. Para cada una eliges si solicitar o exigir la autenticación en las conexiones entrantes y salientes, y un método de autenticación: autenticación de equipo (y opcionalmente de usuario) con Kerberos V5 para los miembros del dominio, certificados de equipo para hosts que no pertenecen al dominio o de otro bosque, o una clave precompartida, que es débil y está pensada solo para pruebas. IPsec negocia asociaciones de seguridad en modo principal (main mode, que autentica a los pares) y modo rápido (quick mode, que protege los datos); puedes ver las activas en Monitoring, Security Associations.</p>
+<p>El diseño típico de aislamiento de dominio es: un GPO con una regla de aislamiento configurada para solicitar la autenticación durante el piloto y luego exigirla en lo entrante; exenciones para los servidores de infraestructura; y reglas de firewall de permitir si es segura en los servidores sensibles para que solo los equipos autenticados del dominio, o los miembros de un grupo específico, puedan conectarse.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Firewall profile (perfil de firewall)</dt><dd>Domain, Private o Public: un conjunto de configuraciones de firewall elegido por adaptador de red según la red detectada.</dd><dt>Allow the connection if it is secure (permitir la conexión si es segura)</dt><dd>Una acción de regla que permite el tráfico solo cuando está protegido por autenticación IPsec y, opcionalmente, cifrado.</dd><dt>Connection security rule (regla de seguridad de conexión)</dt><dd>Una regla que indica a Windows cuándo y cómo usar IPsec entre equipos, como aislamiento o servidor a servidor.</dd><dt>Authentication exemption (exención de autenticación)</dt><dd>Una regla de seguridad de conexión que exime a los hosts indicados de los requisitos de IPsec.</dd><dt>Main mode and quick mode (modo principal y modo rápido)</dt><dd>Las fases de negociación de IPsec: el modo principal autentica a los pares y el modo rápido establece la protección de los datos.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un servidor de aplicaciones financieras solo debe aceptar conexiones de los equipos del dominio del grupo Finance-PCs. El administrador crea una regla de aislamiento de dominio que exige la autenticación de equipo con Kerberos en lo entrante, y luego una regla de firewall de entrada en el puerto de la aplicación con la acción permitir si es segura y los equipos autorizados configurados en Finance-PCs. Una portátil que no pertenece al dominio en la misma subred ya no puede conectarse.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Las reglas de bloqueo ganan a las de permiso, excepto permitir si es segura con invalidar las reglas de bloqueo. La clave precompartida es solo para pruebas. El perfil Domain necesita que la máquina se autentique ante un DC en esa red.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Una regla de entrada de permiso y una regla de entrada de bloqueo coinciden con el mismo tráfico. ¿Qué ocurre?</summary><p>El tráfico se bloquea, porque las reglas de bloqueo tienen prioridad sobre las de permiso (a menos que una regla de permitir si es segura tenga activada la invalidación de las reglas de bloqueo).</p></details>
+<details class="sq"><summary>¿Qué método de autenticación IPsec es adecuado para dos servidores que no pertenecen al dominio en una DMZ de producción?</summary><p>Los certificados de equipo, porque Kerberos requiere pertenecer al dominio y las claves precompartidas son débiles y están pensadas solo para pruebas.</p></details>
+<details class="sq"><summary>El adaptador de un servidor del dominio muestra el perfil Public. ¿Qué debes comprobar?</summary><p>Si el servidor pudo llegar a un controlador de dominio y autenticarse en esa red, por ejemplo la configuración de DNS o la conectividad al iniciarse.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AZ-802 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-802/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../hardening-domain-controllers-tiered-administration-protected-users-pri/">← Refuerzo de controladores de dominio: administración por niv</a><a href="../microsoft-defender-for-servers-via-defender-for-cloud-onboarding-arc-a/">Microsoft Defender for Servers mediante Defender for Cloud:  →</a></nav>
+</main>
+</body>
+</html>

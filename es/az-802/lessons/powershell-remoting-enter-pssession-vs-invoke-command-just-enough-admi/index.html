@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Comunicación remota de PowerShell: Enter-PSSession frente … · Lección de AZ-802</title>
+<meta name="description" content="La comunicación remota de PowerShell (PowerShell remoting) te permite ejecutar comandos en otros equipos mediante Windows Remote Management (WinRM), que es">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Comunicación remota de PowerShell: Enter-PSSession frente … · Lección de AZ-802">
+<meta property="og:description" content="La comunicación remota de PowerShell (PowerShell remoting) te permite ejecutar comandos en otros equipos mediante Windows Remote Management (WinRM), que es">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-802/lessons/powershell-remoting-enter-pssession-vs-invoke-command-just-enough-admi/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-802/lessons/powershell-remoting-enter-pssession-vs-invoke-command-just-enough-admi/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-802/">AZ-802</a> / <a href="../">Lecciones</a> · <a href="../../../../az-802/lessons/powershell-remoting-enter-pssession-vs-invoke-command-just-enough-admi/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802</p>
+<h1>Comunicación remota de PowerShell: Enter-PSSession frente a Invoke-Command, archivos de funcionalidad de rol y de configuración de sesión de Just Enough Administration (JEA)</h1>
+<article class="lbody">
+<p>La comunicación remota de PowerShell (PowerShell remoting) te permite ejecutar comandos en otros equipos mediante Windows Remote Management (WinRM), que escucha en TCP 5985 para HTTP y 5986 para HTTPS. En Windows Server está habilitada de forma predeterminada; en los clientes ejecutas <code>Enable-PSRemoting</code>. En un dominio, Kerberos autentica la conexión y el tráfico de WinRM se cifra incluso sobre HTTP. Fuera de un dominio normalmente usas HTTPS o agregas los hosts a la lista TrustedHosts.</p>
+<p>Hay dos formas principales de usarla. <code>Enter-PSSession -ComputerName SRV01</code> abre una sesión interactiva de uno a uno: tu símbolo del sistema cambia a <code>[SRV01]: PS&gt;</code> y todo lo que escribes se ejecuta de forma remota hasta <code>Exit-PSSession</code>. Es ideal para la solución práctica de problemas de un servidor. <code>Invoke-Command -ComputerName SRV01,SRV02,SRV03 -ScriptBlock { Get-Service Spooler }</code> es de uno a muchos: ejecuta un bloque de script en muchas máquinas en paralelo (32 a la vez de forma predeterminada, ajustable con <code>-ThrottleLimit</code>) y devuelve objetos deserializados etiquetados con una propiedad PSComputerName. Es adecuado para la automatización y las tareas en abanico. <code>New-PSSession</code> crea sesiones persistentes que puedes reutilizar con cualquiera de los dos cmdlets, manteniendo vivas las variables entre comandos.</p>
+<p>Los objetos devueltos son instantáneas deserializadas: obtienes los valores de las propiedades, pero no los métodos activos. Y la comunicación remota tiene el problema del segundo salto: desde dentro de una sesión remota no puedes usar tus credenciales de Kerberos para llegar a una tercera máquina, como un recurso compartido de archivos, a menos que configures la delegación restringida de Kerberos basada en recursos o CredSSP. CredSSP funciona, pero envía credenciales reutilizables al host remoto, así que es preferible la delegación.</p>
+<p>Just Enough Administration (JEA) usa la comunicación remota para aplicar el privilegio mínimo. En lugar de convertir al personal de asistencia en administradores locales, publicas un punto de conexión restringido donde solo pueden ejecutar los comandos que permitas, y esos comandos se ejecutan con una cuenta virtual temporal privilegiada o con una cuenta de servicio administrada de grupo. JEA tiene dos archivos.</p>
+<p>El archivo de funcionalidad de rol (<code>.psrc</code>, creado con <code>New-PSRoleCapabilityFile</code>) define lo que puede hacer un rol: <code>VisibleCmdlets</code> (opcionalmente con parámetros y valores permitidos), <code>VisibleFunctions</code>, <code>VisibleExternalCommands</code> y <code>VisibleProviders</code>. Debe estar en una carpeta <code>RoleCapabilities</code> dentro de un módulo de PowerShell en el servidor de destino, y el nombre del archivo se convierte en el nombre del rol. El archivo de configuración de sesión (<code>.pssc</code>, creado con <code>New-PSSessionConfigurationFile</code>) define el punto de conexión: <code>SessionType = 'RestrictedRemoteServer'</code>, <code>RunAsVirtualAccount = $true</code> o <code>GroupManagedServiceAccount</code>, <code>TranscriptDirectory</code> para la auditoría y <code>RoleDefinitions</code>, que asigna grupos de AD a funcionalidades de rol.</p>
+<pre class="code" tabindex="0"><code>New-PSSessionConfigurationFile -Path .\Helpdesk.pssc -SessionType RestrictedRemoteServer `
+  -RunAsVirtualAccount -TranscriptDirectory C:\JEA\Transcripts `
+  -RoleDefinitions @{ 'CORP\Helpdesk' = @{ RoleCapabilities = 'ServiceOperator' } }
+Register-PSSessionConfiguration -Name Helpdesk -Path .\Helpdesk.pssc
+# El usuario se conecta con:
+Enter-PSSession -ComputerName SRV01 -ConfigurationName Helpdesk</code></pre>
+<p>Los usuarios conectados se ejecutan en modo NoLanguage y solo ven los comandos permitidos; <code>Get-PSSessionCapability -ConfigurationName Helpdesk -Username CORP\alice</code> muestra lo que obtendrá un usuario determinado. Prueba con <code>Test-PSSessionConfigurationFile</code> antes de registrar.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>WinRM</dt><dd>Windows Remote Management: el servicio y protocolo que transporta la comunicación remota de PowerShell en los puertos 5985 y 5986.</dd><dt>Invoke-Command</dt><dd>Ejecuta un bloque de script en uno o muchos equipos remotos en paralelo y devuelve los resultados.</dd><dt>Role capability file (archivo de funcionalidad de rol)</dt><dd>Un archivo .psrc que define los cmdlets, funciones y comandos que puede usar un rol de JEA.</dd><dt>Session configuration file (archivo de configuración de sesión)</dt><dd>Un archivo .pssc que define un punto de conexión de JEA: tipo de sesión, identidad de ejecución, transcripciones y asignaciones de grupos a roles.</dd><dt>Virtual account (cuenta virtual)</dt><dd>Una identidad temporal de administrador local creada para una sesión de JEA y descartada cuando termina.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>El personal de asistencia necesita reiniciar la cola de impresión en los servidores de archivos, pero no debe ser administrador. El administrador crea un ServiceOperator.psrc que permite Restart-Service solo con -Name Spooler, asigna CORP\Helpdesk a él en un .pssc y registra el punto de conexión en cada servidor con Invoke-Command.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Interactivo con un servidor significa Enter-PSSession; muchos servidores a la vez significa Invoke-Command. En JEA, el .psrc dice qué (comandos) y el .pssc dice quién y cómo (grupos, cuenta de ejecución, transcripciones).</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué archivo de JEA asigna un grupo de AD a un rol?</summary><p>El archivo de configuración de sesión (.pssc), en su entrada RoleDefinitions.</p></details>
+<details class="sq"><summary>¿Dónde debe colocarse un archivo de funcionalidad de rol para que JEA lo encuentre?</summary><p>En una subcarpeta RoleCapabilities de un módulo de PowerShell ubicado en una ruta de módulos del servidor de destino.</p></details>
+<details class="sq"><summary>Necesitas ejecutar el mismo comando en 200 servidores. ¿Qué cmdlet es adecuado?</summary><p>Invoke-Command, que se distribuye en paralelo con un límite de simultaneidad (throttle limit).</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AZ-802 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-802/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../windows-admin-center-desktop-vs-gateway-mode-extensions-kerberos-const/">← Windows Admin Center: modo de escritorio frente a modo de pu</a><a href="../azure-arc-enabled-servers-connected-machine-agent-azcmagent-at-scale-o/">Servidores habilitados para Azure Arc: agente Connected Mach →</a></nav>
+</main>
+</body>
+</html>

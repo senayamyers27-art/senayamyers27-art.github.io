@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Montar volúmenes con volumeMounts, mountPath, subPath y re… · Lección de CKAD</title>
+<meta name="description" content="Declarar un volumen bajo spec.volumes solo lo pone a disposición del Pod. Cada contenedor que lo necesite también debe listarlo bajo sus propios volumeMoun">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Montar volúmenes con volumeMounts, mountPath, subPath y re… · Lección de CKAD">
+<meta property="og:description" content="Declarar un volumen bajo spec.volumes solo lo pone a disposición del Pod. Cada contenedor que lo necesite también debe listarlo bajo sus propios volumeMoun">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/mounting-volumes-with-volumemounts-mountpath-subpath-and-readonly/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/mounting-volumes-with-volumemounts-mountpath-subpath-and-readonly/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/mounting-volumes-with-volumemounts-mountpath-subpath-and-readonly/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>Montar volúmenes con volumeMounts, mountPath, subPath y readOnly</h1>
+<article class="lbody">
+<p>Declarar un volumen bajo <code>spec.volumes</code> solo lo pone a disposición del Pod. Cada contenedor que lo necesite también debe listarlo bajo sus propios <code>volumeMounts</code>, enlazando el <code>name</code> del volumen con un <code>mountPath</code> dentro del contenedor. Dos contenedores pueden montar el mismo volumen en rutas diferentes, que es como comparten archivos.</p>
+<p>El <code>name</code> en <code>volumeMounts</code> debe coincidir exactamente con un nombre bajo <code>volumes</code>; un error tipográfico hace que el Pod sea rechazado con un error de validación o se quede atascado en ContainerCreating. El <code>mountPath</code> es una ruta absoluta. Si el directorio ya existe en la imagen, el volumen oculta su contenido original mientras esté montado. Montar un ConfigMap en <code>/etc</code> ocultaría todo lo demás en <code>/etc</code>, un error clásico.</p>
+<p><code>subPath</code> monta un solo archivo o subdirectorio del volumen en lugar del volumen completo. Esto resuelve el problema de ocultación: puedes colocar un archivo de configuración en un directorio existente sin tapar a sus vecinos. También permite que varios contenedores, o varios montajes, usen subdirectorios diferentes de un mismo volumen. <code>subPathExpr</code> hace lo mismo pero puede incluir variables de entorno, por ejemplo para crear un directorio por Pod usando el nombre del Pod obtenido de la downward API.</p>
+<pre class="code" tabindex="0"><code>containers:
+- name: web
+  image: nginx
+  volumeMounts:
+  - name: site-config
+    mountPath: /etc/nginx/conf.d/default.conf
+    subPath: default.conf
+    readOnly: true
+  - name: content
+    mountPath: /usr/share/nginx/html
+volumes:
+- name: site-config
+  configMap:
+    name: nginx-conf
+- name: content
+  persistentVolumeClaim:
+    claimName: web-content</code></pre>
+<p>Ten en cuenta una contrapartida: los archivos montados mediante <code>subPath</code> desde un ConfigMap o Secret no reciben actualizaciones cuando cambia el objeto de origen. Para recoger los cambios, hay que reiniciar el Pod. Los montajes de volumen completo se refrescan automáticamente tras un breve retraso.</p>
+<p><code>readOnly: true</code> en un montaje impide que el contenedor escriba en ese volumen, aunque el almacenamiento subyacente sea escribible. Es una forma sencilla de aplicar el mínimo privilegio: un servidor web que solo sirve contenido, o una app que solo lee credenciales, no debería poder modificarlos. También combina bien con <code>readOnlyRootFilesystem</code> en el security context, donde montas emptyDirs escribibles solo en las rutas que realmente necesitan escritura, como <code>/tmp</code>.</p>
+<p>Para comprobar qué está montado, usa <code>kubectl describe pod</code> (la sección Mounts de cada contenedor) o <code>kubectl exec pod -c web -- ls -la /etc/nginx/conf.d</code>. <code>kubectl explain pod.spec.containers.volumeMounts</code> lista todos los campos disponibles si olvidas alguno durante el examen.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>volumeMounts</dt><dd>Lista por contenedor que enlaza un volumen del Pod con una ruta dentro de ese contenedor.</dd><dt>mountPath</dt><dd>La ruta absoluta en el contenedor donde aparece el volumen, ocultando lo que ya hubiera allí.</dd><dt>subPath</dt><dd>Monta un solo archivo o subdirectorio de un volumen en lugar de toda su raíz.</dd><dt>readOnly (solo lectura)</dt><dd>Opción de montaje que bloquea las escrituras de ese contenedor en el volumen.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un equipo necesita una configuración personalizada de nginx, pero montar el ConfigMap en /etc/nginx/conf.d borró otros archivos incluidos. Usar <code>mountPath: /etc/nginx/conf.d/default.conf</code> con <code>subPath: default.conf</code> y <code>readOnly: true</code> reemplazó solo ese archivo y lo hizo a prueba de manipulaciones.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Un volumen necesita ambas mitades: una entrada en spec.volumes y una entrada volumeMounts correspondiente en cada contenedor. Los montajes con subPath no se actualizan automáticamente desde ConfigMaps o Secrets.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué montar un ConfigMap en /etc/app podría romper una aplicación?</summary><p>El montaje oculta todo lo que ya había en /etc/app en la imagen; usa subPath para montar un solo archivo.</p></details>
+<details class="sq"><summary>¿Qué hace readOnly: true en un volumeMount?</summary><p>Impide que ese contenedor escriba en el volumen en esa ruta.</p></details>
+<details class="sq"><summary>¿Pueden dos contenedores de un mismo Pod montar el mismo volumen en rutas diferentes?</summary><p>Sí; cada uno lo lista bajo sus propios volumeMounts con su propio mountPath.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../persistent-storage-persistentvolume-persistentvolumeclaim-storageclass/">← Almacenamiento persistente: PersistentVolume, PersistentVolu</a><a href="../deployments-and-replicasets-how-the-pod-template-labels-and-selectors/">Deployments y ReplicaSets: cómo encajan la plantilla de Pod, →</a></nav>
+</main>
+</body>
+</html>

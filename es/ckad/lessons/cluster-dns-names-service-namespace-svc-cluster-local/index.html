@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nombres DNS del clúster: &lt;service&gt;.&lt;namespace&gt;.svc.cluster… · Lección de CKAD</title>
+<meta name="description" content="Kubernetes ejecuta un servidor DNS del clúster, normalmente CoreDNS, como Pods en el namespace kube-system detrás de un Service que suele llamarse kube-dns">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Nombres DNS del clúster: &lt;service&gt;.&lt;namespace&gt;.svc.cluster… · Lección de CKAD">
+<meta property="og:description" content="Kubernetes ejecuta un servidor DNS del clúster, normalmente CoreDNS, como Pods en el namespace kube-system detrás de un Service que suele llamarse kube-dns">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/cluster-dns-names-service-namespace-svc-cluster-local/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/cluster-dns-names-service-namespace-svc-cluster-local/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/cluster-dns-names-service-namespace-svc-cluster-local/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>Nombres DNS del clúster: &lt;service&gt;.&lt;namespace&gt;.svc.cluster.local</h1>
+<article class="lbody">
+<p>Kubernetes ejecuta un servidor DNS del clúster, normalmente CoreDNS, como Pods en el namespace <code>kube-system</code> detrás de un Service que suele llamarse <code>kube-dns</code>. El kubelet configura el <code>/etc/resolv.conf</code> de cada Pod para usarlo. Como resultado, las aplicaciones encuentran los Services por nombre en lugar de por IP, y los nombres siguen funcionando cuando cambian los Pods e incluso las IPs de los Services.</p>
+<p>Cada Service recibe un nombre DNS de la forma <code>&lt;service&gt;.&lt;namespace&gt;.svc.&lt;cluster-domain&gt;</code>. El dominio del clúster es <code>cluster.local</code> por defecto, aunque los administradores pueden cambiarlo. Un Service <code>web</code> en el namespace <code>shop</code> es, por lo tanto, <code>web.shop.svc.cluster.local</code>, que resuelve a la ClusterIP del Service. Para un Service headless, el mismo nombre devuelve las IPs de sus Pods listos, y los Pods de un StatefulSet reciben nombres individuales como <code>db-0.db.shop.svc.cluster.local</code> (nombre del pod y luego el nombre del Service headless).</p>
+<p>Rara vez necesitas el nombre completo, gracias a los dominios de búsqueda. Un Pod en <code>shop</code> tiene un resolv.conf como este:</p>
+<pre class="code" tabindex="0"><code>nameserver 10.96.0.10
+search shop.svc.cluster.local svc.cluster.local cluster.local
+options ndots:5</code></pre>
+<p>Cuando el Pod busca un nombre corto, el resolver prueba agregarle cada dominio de búsqueda por turno. Así, desde dentro de <code>shop</code>, el simple <code>web</code> se convierte en <code>web.shop.svc.cluster.local</code> y se resuelve. Desde un Pod en otro namespace, <code>web</code> solo buscaría en el propio namespace de ese Pod y fallaría, así que usas <code>web.shop</code> (que coincide gracias al dominio de búsqueda <code>svc.cluster.local</code>) o el nombre completo. Esta es la trampa de DNS más común: los nombres cortos solo funcionan dentro del mismo namespace.</p>
+<p>La opción <code>ndots:5</code> significa que un nombre con menos de cinco puntos se prueba primero con los dominios de búsqueda antes de probarse tal cual. Por eso un nombre externo como <code>api.example.com</code> genera algunas búsquedas internas fallidas antes de tener éxito; un punto final (<code>api.example.com.</code>) marca un nombre como totalmente calificado y se salta la lista de búsqueda.</p>
+<p>Los Services también reciben registros SRV para los puertos con nombre, con la forma <code>_&lt;port-name&gt;._&lt;protocol&gt;.&lt;service&gt;.&lt;namespace&gt;.svc.cluster.local</code>, que algunos clientes usan para descubrir números de puerto. Los propios Pods se pueden consultar mediante un nombre basado en su IP, como <code>10-244-1-5.shop.pod.cluster.local</code>, pero las aplicaciones normalmente usan nombres de Service.</p>
+<p>Prueba el DNS desde un Pod temporal: <code>kubectl run dns --image=busybox --rm -it --restart=Never -- nslookup web.shop</code>. Una respuesta 'can't resolve' significa que el nombre del Service o el namespace están mal (o que el propio DNS está roto; revisa <code>kubectl get pods -n kube-system -l k8s-app=kube-dns</code>). Una respuesta con IP pero una conexión fallida significa que el DNS está bien y el problema está en los endpoints, los puertos o una NetworkPolicy. Recuerda que las NetworkPolicies que restringen el egress deben permitir el tráfico DNS hacia los Pods de DNS del clúster, o fallará toda búsqueda de nombres.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>CoreDNS</dt><dd>El servidor DNS que normalmente proporciona el DNS del clúster para Services y Pods.</dd><dt>Service FQDN (nombre completo del Service)</dt><dd>El nombre de Service totalmente calificado &lt;service&gt;.&lt;namespace&gt;.svc.cluster.local.</dd><dt>Search domains (dominios de búsqueda)</dt><dd>Sufijos en el resolv.conf de un Pod que permiten que nombres cortos como web se resuelvan dentro de su namespace.</dd><dt>ndots</dt><dd>Opción del resolver que indica cuántos puntos necesita un nombre para probarse primero como absoluto.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un Pod de frontend en el namespace <code>web</code> llama al host <code>catalog</code> y recibe 'name not resolved'. El Service catalog vive en el namespace <code>inventory</code>. Cambiar la configuración a <code>catalog.inventory</code> (o <code>catalog.inventory.svc.cluster.local</code>) lo resuelve, lo que se confirma con <code>nslookup catalog.inventory</code> desde un Pod de busybox.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Un nombre corto de Service solo se resuelve desde el mismo namespace. Entre namespaces, usa al menos <code>&lt;service&gt;.&lt;namespace&gt;</code>.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cuál es el nombre DNS completo del Service <code>api</code> en el namespace <code>prod</code>?</summary><p><code>api.prod.svc.cluster.local</code> (con el dominio de clúster por defecto).</p></details>
+<details class="sq"><summary>¿Por qué <code>api</code> no se resuelve desde un Pod en el namespace <code>dev</code>?</summary><p>Los dominios de búsqueda agregan primero el namespace de dev, así que busca api.dev.svc.cluster.local, que no existe.</p></details>
+<details class="sq"><summary>¿Qué devuelve el DNS para el nombre de un Service headless?</summary><p>Las IPs de sus Pods listos en lugar de una ClusterIP.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../endpointslices-and-why-an-empty-endpoint-list-means-the-selector-or-re/">← EndpointSlices y por qué una lista de endpoints vacía signif</a><a href="../kubectl-expose-kubectl-create-service-and-kubectl-port-forward/">kubectl expose, kubectl create service y kubectl port-forwar →</a></nav>
+</main>
+</body>
+</html>

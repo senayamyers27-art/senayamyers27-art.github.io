@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Configurar el acceso de superusuario: el grupo wheel, los … · Lección de RHCSA</title>
+<meta name="description" content="Los administradores no deberían iniciar sesión como root para el trabajo diario. sudo permite a los usuarios autorizados ejecutar comandos concretos como r">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Configurar el acceso de superusuario: el grupo wheel, los … · Lección de RHCSA">
+<meta property="og:description" content="Los administradores no deberían iniciar sesión como root para el trabajo diario. sudo permite a los usuarios autorizados ejecutar comandos concretos como r">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/configuring-superuser-access-the-wheel-group-etc-sudoers-d-drop-ins-an/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/configuring-superuser-access-the-wheel-group-etc-sudoers-d-drop-ins-an/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/configuring-superuser-access-the-wheel-group-etc-sudoers-d-drop-ins-an/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Configurar el acceso de superusuario: el grupo wheel, los drop-ins de /etc/sudoers.d/ y visudo</h1>
+<article class="lbody">
+<p>Los administradores no deberían iniciar sesión como root para el trabajo diario. <code>sudo</code> permite a los usuarios autorizados ejecutar comandos concretos como root (u otro usuario) usando su propia contraseña, y registra lo que ejecutaron. Eso aporta trazabilidad y te permite conceder solo los privilegios que alguien necesita. Sus reglas viven en <code>/etc/sudoers</code> y en archivos drop-in dentro de <code>/etc/sudoers.d/</code>.</p>
+<p>RHEL viene con esta regla habilitada en <code>/etc/sudoers</code>: <code>%wheel ALL=(ALL) ALL</code>. El signo de porcentaje significa un grupo. Así que la forma más rápida de dar a un usuario derechos administrativos completos es añadirlo al grupo wheel con <code>usermod -aG wheel alice</code>. Después de que alice vuelva a iniciar sesión, <code>sudo -i</code> o <code>sudo command</code> funcionan tras introducir su propia contraseña.</p>
+<p>Una regla de sudoers se lee así: quién, en qué hosts, como qué usuarios, puede ejecutar qué comandos. En <code>alice ALL=(ALL) ALL</code>, el primer ALL son los hosts, <code>(ALL)</code> son los usuarios cuya identidad puede adoptar, y el último ALL son los comandos. Añadir <code>NOPASSWD:</code> antes de la lista de comandos omite la solicitud de contraseña. Las listas de comandos deben usar rutas completas.</p>
+<pre class="code" tabindex="0"><code># /etc/sudoers.d/admins
+%sysadmins   ALL=(ALL)  ALL
+bob          ALL=(root) NOPASSWD: /usr/bin/systemctl restart httpd
+backup       ALL=(root) /usr/bin/rsync, /usr/bin/tar</code></pre>
+<p>Nunca edites los archivos sudoers con un editor normal. <code>visudo</code> abre el archivo con bloqueo y revisa la sintaxis antes de guardar; si hay un error, ofrece volver a editar en lugar de guardar un archivo roto que podría dejar a todos sin sudo. Usa <code>visudo -f /etc/sudoers.d/admins</code> para crear o editar un drop-in, y <code>visudo -c</code> para revisar todos los archivos. Los archivos drop-in mantienen tus cambios separados del archivo del proveedor, que las actualizaciones de paquetes pueden reemplazar.</p>
+<p>Reglas de los drop-in: los archivos de <code>/etc/sudoers.d/</code> no deben contener un punto ni terminar en tilde en su nombre, o sudo los ignora, así que usa nombres como <code>admins</code>, no <code>admins.conf</code>. Deben pertenecer a root con modo 0440, que visudo establece cuando los crea.</p>
+<p>Prueba como el usuario: <code>sudo -l</code> lista lo que el usuario actual puede ejecutar, y <code>sudo -l -U bob</code> ejecutado por root muestra los derechos de bob. Cuando una regla no funciona, revisa el nombre del archivo, la pertenencia al grupo (y un inicio de sesión nuevo), las rutas completas de los comandos y <code>visudo -c</code>. Los fallos se registran en el journal, donde puedes buscarlos con <code>journalctl -t sudo</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>sudo</dt><dd>Ejecuta un comando como root u otro usuario según las reglas de sudoers, registrando la acción.</dd><dt>wheel group (grupo wheel)</dt><dd>El grupo administrativo de RHEL al que la regla predeterminada de sudoers %wheel ALL=(ALL) ALL concede derechos completos de sudo.</dd><dt>visudo</dt><dd>Edita los archivos sudoers de forma segura, con bloqueo y revisión de sintaxis; -f edita un drop-in y -c revisa todos los archivos.</dd><dt>/etc/sudoers.d/</dt><dd>Un directorio de archivos sudoers drop-in que mantiene las reglas locales separadas del archivo principal.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Los miembros de sysadmins deben poder ejecutar cualquier comando como root, y el usuario deploy solo puede reiniciar httpd sin contraseña. Ejecutas visudo -f /etc/sudoers.d/local y añades %sysadmins ALL=(ALL) ALL y deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart httpd; luego visudo -c informa que los archivos se analizaron correctamente.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Usa siempre visudo; un error de sintaxis en un archivo sudoers puede quitar a todos el acceso con sudo. Y un archivo drop-in cuyo nombre contiene un punto se ignora sin avisar.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cuál es la forma más rápida de dar a alice derechos completos de sudo en RHEL?</summary><p>Añadirla al grupo wheel con usermod -aG wheel alice; obtiene los derechos en su siguiente inicio de sesión.</p></details>
+<details class="sq"><summary>¿Qué significa %devs ALL=(ALL) NOPASSWD: ALL?</summary><p>Los miembros del grupo devs pueden ejecutar cualquier comando como cualquier usuario en cualquier host sin introducir contraseña.</p></details>
+<details class="sq"><summary>¿Por qué se ignoraría /etc/sudoers.d/admins.conf?</summary><p>sudo omite los archivos drop-in cuyos nombres contienen un punto o terminan en tilde.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../account-databases-etc-passwd-etc-shadow-etc-group-id-and-getent/">← Bases de datos de cuentas: /etc/passwd, /etc/shadow, /etc/gr</a><a href="../locking-and-unlocking-accounts-usermod-l-passwd-l-chage-e-0/">Bloquear y desbloquear cuentas (usermod -L, passwd -l, chage →</a></nav>
+</main>
+</body>
+</html>

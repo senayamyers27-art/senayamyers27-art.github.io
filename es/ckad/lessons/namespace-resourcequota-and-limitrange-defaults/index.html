@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ResourceQuota del namespace y valores por defecto de Limit… · Lección de CKAD</title>
+<meta name="description" content="Los namespaces a menudo los comparten equipos o entornos, así que los administradores necesitan formas de evitar que un namespace consuma todo el clúster y">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="ResourceQuota del namespace y valores por defecto de Limit… · Lección de CKAD">
+<meta property="og:description" content="Los namespaces a menudo los comparten equipos o entornos, así que los administradores necesitan formas de evitar que un namespace consuma todo el clúster y">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/namespace-resourcequota-and-limitrange-defaults/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/namespace-resourcequota-and-limitrange-defaults/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/namespace-resourcequota-and-limitrange-defaults/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>ResourceQuota del namespace y valores por defecto de LimitRange</h1>
+<article class="lbody">
+<p>Los namespaces a menudo los comparten equipos o entornos, así que los administradores necesitan formas de evitar que un namespace consuma todo el clúster y de asegurar que cada Pod tenga una configuración de recursos razonable. ResourceQuota y LimitRange son las dos herramientas, y ambas se aplican mediante el control de admisión cuando se crean los objetos.</p>
+<p>Una ResourceQuota limita el consumo total de un namespace. Las cuotas de cómputo incluyen <code>requests.cpu</code>, <code>requests.memory</code>, <code>limits.cpu</code> y <code>limits.memory</code>, sumados sobre todos los Pods que no están en estado terminal. Las cuotas de conteo de objetos incluyen <code>pods</code>, <code>services</code>, <code>configmaps</code>, <code>secrets</code>, <code>persistentvolumeclaims</code> y la forma general <code>count/&lt;resource&gt;.&lt;group&gt;</code>, como <code>count/deployments.apps</code>. Las cuotas de almacenamiento cubren <code>requests.storage</code>. Cuando un objeto nuevo haría que el total superara la cuota, el API server lo rechaza con un error 'exceeded quota'.</p>
+<pre class="code" tabindex="0"><code>apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute
+  namespace: team-a
+spec:
+  hard:
+    requests.cpu: &quot;2&quot;
+    requests.memory: 4Gi
+    limits.cpu: &quot;4&quot;
+    limits.memory: 8Gi
+    pods: &quot;10&quot;</code></pre>
+<p>Hay un efecto secundario importante: en cuanto una cuota limita <code>requests.cpu</code> o <code>limits.memory</code> (u otros valores de cómputo), todo Pod nuevo en ese namespace debe especificar ese valor, o se rechaza con un mensaje como 'must specify limits.memory'. Con un Deployment no verás este error en el propio Deployment; el ReplicaSet no logra crear los Pods, y <code>kubectl describe rs</code> o <code>kubectl get events</code> muestran por qué. <code>kubectl describe quota -n team-a</code> muestra cada límite con sus valores Used y Hard actuales.</p>
+<p>Un LimitRange define valores por defecto y límites por objeto dentro de un namespace. Para <code>type: Container</code>, <code>defaultRequest</code> es el request que se aplica cuando un contenedor no especifica ninguno, <code>default</code> es el limit que se aplica cuando no especifica ninguno, y <code>min</code> y <code>max</code> acotan lo que un contenedor puede definir. <code>maxLimitRequestRatio</code> limita cuánto puede superar un limit a su request. Otros tipos se aplican a Pods completos o a PersistentVolumeClaims (acotando el tamaño del almacenamiento).</p>
+<pre class="code" tabindex="0"><code>apiVersion: v1
+kind: LimitRange
+metadata:
+  name: defaults
+  namespace: team-a
+spec:
+  limits:
+  - type: Container
+    defaultRequest:
+      cpu: 100m
+      memory: 128Mi
+    default:
+      cpu: 500m
+      memory: 256Mi
+    max:
+      cpu: &quot;1&quot;
+      memory: 1Gi</code></pre>
+<p>Los dos funcionan bien juntos: el LimitRange completa los valores faltantes mediante admisión mutating, así que los Pods que olvidan los recursos igual cumplen el requisito de la cuota. Los cambios en LimitRange y en la cuota solo se aplican a objetos creados después; los Pods existentes conservan sus valores hasta que se recrean. Crea cuotas de forma imperativa con <code>kubectl create quota compute -n team-a --hard=requests.cpu=2,pods=10</code>; los LimitRanges no tienen generador create, así que escribe YAML. Inspecciona con <code>kubectl describe limitrange -n team-a</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>ResourceQuota</dt><dd>Límite a nivel de namespace sobre el uso total de recursos y el número de objetos.</dd><dt>LimitRange</dt><dd>Política del namespace que define recursos por defecto y mínimos/máximos por contenedor, Pod o PVC.</dd><dt>defaultRequest / default</dt><dd>Campos de LimitRange que dan el request y el limit que se aplican cuando un contenedor los omite.</dd><dt>count/&lt;resource&gt;</dt><dd>Clave de cuota que limita cuántos objetos de un tipo pueden existir en el namespace.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Después de agregar una ResourceQuota sobre limits.memory en <code>team-a</code>, un Deployment deja de crear Pods. <code>kubectl describe rs</code> muestra 'must specify limits.memory'. Agregar un LimitRange con <code>default: memory: 256Mi</code> aporta el límite faltante, y los Pods nuevos se admiten y se contabilizan en la cuota.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Una cuota de cómputo obliga a cada Pod nuevo a declarar ese recurso; un default de LimitRange es la solución habitual. Los errores de cuota de los Deployments aparecen en el ReplicaSet, no en el Deployment.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Dónde ves por qué no se crean los Pods de un Deployment bajo una cuota?</summary><p>En los eventos del ReplicaSet (<code>kubectl describe rs</code>) o en <code>kubectl get events</code>.</p></details>
+<details class="sq"><summary>¿Qué campo de LimitRange define el limit para los contenedores que no especifican uno?</summary><p><code>default</code>; <code>defaultRequest</code> define el request.</p></details>
+<details class="sq"><summary>¿Cambiar un LimitRange actualiza los Pods existentes?</summary><p>No; solo se aplica a los Pods creados después del cambio.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../resource-requests-and-limits-for-cpu-and-memory-units-m-mi-gi-qos-clas/">← Requests y limits de CPU y memoria; unidades (m, Mi, Gi); cl</a><a href="../configmaps-create-from-literals-files-and-env-files-consume-as-env-env/">ConfigMaps: crear desde literales, archivos y archivos env;  →</a></nav>
+</main>
+</body>
+</html>

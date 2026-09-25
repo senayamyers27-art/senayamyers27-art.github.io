@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Leer el estado de un Pod: Pending, ImagePullBackOff, Crash… · Lección de CKAD</title>
+<meta name="description" content="La columna STATUS de kubectl get pods es un resumen compacto de la fase del Pod y de los estados de sus contenedores. Aprender a leerla te dice dónde mirar">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Leer el estado de un Pod: Pending, ImagePullBackOff, Crash… · Lección de CKAD">
+<meta property="og:description" content="La columna STATUS de kubectl get pods es un resumen compacto de la fase del Pod y de los estados de sus contenedores. Aprender a leerla te dice dónde mirar">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/reading-pod-status-pending-imagepullbackoff-crashloopbackoff-oomkilled/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/reading-pod-status-pending-imagepullbackoff-crashloopbackoff-oomkilled/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/reading-pod-status-pending-imagepullbackoff-crashloopbackoff-oomkilled/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>Leer el estado de un Pod: Pending, ImagePullBackOff, CrashLoopBackOff, OOMKilled, Completed y códigos de salida</h1>
+<article class="lbody">
+<p>La columna STATUS de <code>kubectl get pods</code> es un resumen compacto de la fase del Pod y de los estados de sus contenedores. Aprender a leerla te dice dónde mirar a continuación y te ahorra muchas conjeturas.</p>
+<p>Pending significa que el Pod fue aceptado pero sus contenedores todavía no se están ejecutando. O no ha sido programado (no hay suficiente CPU o memoria en ningún nodo, hay un nodeSelector o taint que ningún nodo satisface, o un PVC sin vincular), o ya está programado y todavía está descargando imágenes o preparando volúmenes. <code>kubectl describe pod</code> muestra cuál: un evento FailedScheduling, o un estado ContainerCreating con eventos sobre volúmenes. Un ConfigMap o Secret faltante referenciado por el Pod suele mostrarse como ContainerCreating o CreateContainerConfigError.</p>
+<p>ErrImagePull y luego ImagePullBackOff significan que el kubelet no puede descargar la imagen: un error tipográfico en el nombre o la etiqueta de la imagen, un registry privado sin <code>imagePullSecrets</code> o ninguna ruta de red hasta el registry. BackOff significa que Kubernetes espera cada vez más entre reintentos. El texto del evento, como 'manifest unknown' o 'unauthorized', te dice cuál es el problema.</p>
+<p>CrashLoopBackOff significa que el contenedor arranca, termina, se reinicia y vuelve a terminar, con retrasos crecientes entre intentos. El problema es el propio contenedor: la aplicación da error al arrancar, el comando es incorrecto, falta un archivo o variable necesarios, o un liveness probe lo sigue matando. Revisa <code>kubectl logs --previous</code> y la sección Last State de <code>kubectl describe pod</code>, que muestra el motivo y el código de salida.</p>
+<p>OOMKilled significa que el contenedor usó más memoria que su límite, así que el kernel lo mató. Aparece como motivo de terminación en Last State, normalmente con el código de salida 137, y a menudo lleva a CrashLoopBackOff. La solución es aumentar el límite de memoria o reducir el uso de memoria de la aplicación. Completed significa que todos los contenedores terminaron con código 0, que es el estado final normal de los Pods de un Job; para un Pod de un Deployment, que debería ejecutarse indefinidamente, significa que el comando terminó cuando debía seguir ejecutándose, y como su restartPolicy es Always, el kubelet lo reinicia hasta que muestra CrashLoopBackOff.</p>
+<p>Los códigos de salida te dicen cómo terminó un proceso. 0 es éxito. 1 (u otro número pequeño) es un error general de la aplicación. 126 significa que el comando se encontró pero no se pudo ejecutar, a menudo un problema de permisos. 127 significa comando no encontrado, típicamente un error tipográfico en <code>command</code> o un binario que falta en la imagen. Los códigos mayores que 128 significan que el proceso fue terminado por una señal, donde el código es 128 más el número de la señal: 137 es 128 + 9 (SIGKILL, usado por el OOM killer o tras una terminación forzada) y 143 es 128 + 15 (SIGTERM, una detención ordenada normal).</p>
+<pre class="code" tabindex="0"><code>kubectl get pods
+kubectl describe pod api-7c9 | grep -A5 'Last State'
+kubectl get pod api-7c9 -o jsonpath='{.status.containerStatuses[0].lastState.terminated.exitCode}'</code></pre>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Pending</dt><dd>Pod aceptado pero con contenedores que aún no se ejecutan, a menudo sin programar o todavía creándose.</dd><dt>ImagePullBackOff</dt><dd>La imagen no se puede descargar y Kubernetes espera cada vez más entre reintentos.</dd><dt>CrashLoopBackOff</dt><dd>El contenedor termina repetidamente tras arrancar y se reinicia con retrasos crecientes.</dd><dt>OOMKilled</dt><dd>El contenedor fue terminado por superar su límite de memoria, normalmente con código de salida 137.</dd><dt>Exit code 128+n (código de salida 128+n)</dt><dd>Un proceso terminado por la señal n, como 137 para SIGKILL o 143 para SIGTERM.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un Pod nuevo muestra ImagePullBackOff. <code>kubectl describe pod</code> muestra 'failed to pull image &quot;ngnix:1.27&quot;: not found'. El nombre de la imagen estaba mal escrito; tras corregirlo con <code>kubectl set image</code>, el Pod arranca. Otro Pod de la misma app muestra OOMKilled con código de salida 137, así que se aumenta su límite de memoria.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Asocia cada estado con el siguiente comando: Pending e ImagePullBackOff llevan a <code>describe</code>, CrashLoopBackOff lleva a <code>logs --previous</code> y OOMKilled lleva al límite de memoria.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué suele significar el código de salida 127?</summary><p>Comando no encontrado: un comando incorrecto o un binario que falta en la imagen.</p></details>
+<details class="sq"><summary>Un contenedor muestra OOMKilled con código de salida 137. ¿Qué lo causó?</summary><p>Superó su límite de memoria y fue terminado con SIGKILL (128 + 9).</p></details>
+<details class="sq"><summary>El Pod de un Deployment muestra Completed y sigue reiniciándose. ¿Qué es lo probable que esté mal?</summary><p>Su comando se ejecuta hasta terminar en lugar de quedarse en primer plano; con restartPolicy Always el kubelet sigue reiniciando el contenedor, que pronto muestra CrashLoopBackOff.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../container-logs-kubectl-logs-with-c-f-previous-tail-since-l-and-deploy/">← Logs de contenedores: kubectl logs con -c, -f, --previous, -</a><a href="../debugging-kubectl-exec-kubectl-debug-ephemeral-containers-and-pod-copi/">Depuración: kubectl exec, kubectl debug (contenedores efímer →</a></nav>
+</main>
+</body>
+</html>

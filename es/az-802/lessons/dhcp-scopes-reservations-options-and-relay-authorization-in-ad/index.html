@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ámbitos, reservas, opciones y retransmisión DHCP; autoriza… · Lección de AZ-802</title>
+<meta name="description" content="El Protocolo de configuración dinámica de host (DHCP) entrega direcciones IP y configuraciones para que no tengas que configurar cada cliente a mano. Un cl">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Ámbitos, reservas, opciones y retransmisión DHCP; autoriza… · Lección de AZ-802">
+<meta property="og:description" content="El Protocolo de configuración dinámica de host (DHCP) entrega direcciones IP y configuraciones para que no tengas que configurar cada cliente a mano. Un cl">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-802/lessons/dhcp-scopes-reservations-options-and-relay-authorization-in-ad/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-802/lessons/dhcp-scopes-reservations-options-and-relay-authorization-in-ad/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-802/">AZ-802</a> / <a href="../">Lecciones</a> · <a href="../../../../az-802/lessons/dhcp-scopes-reservations-options-and-relay-authorization-in-ad/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802</p>
+<h1>Ámbitos, reservas, opciones y retransmisión DHCP; autorización en AD</h1>
+<article class="lbody">
+<p>El Protocolo de configuración dinámica de host (DHCP) entrega direcciones IP y configuraciones para que no tengas que configurar cada cliente a mano. Un cliente obtiene una concesión mediante cuatro mensajes, que a menudo se recuerdan como DORA: Discover (una difusión que busca cualquier servidor DHCP), Offer, Request y Acknowledge. Como Discover es una difusión, normalmente se queda en la subred local, lo que importa cuando diseñas dónde ubicar los servidores.</p>
+<p>Un ámbito (scope) es un rango de direcciones para una subred, como de 10.1.20.10 a 10.1.20.250 con máscara 255.255.255.0, más una duración de concesión. Dentro de un ámbito agregas rangos de exclusión para las direcciones que asignas de forma estática (impresoras, servidores) y reservas. Una reserva vincula una dirección específica a la dirección MAC de un cliente (en IPv4), de modo que el dispositivo siempre obtiene la misma IP y aun así recibe opciones de DHCP. En PowerShell usas <code>Add-DhcpServerv4Scope</code>, <code>Add-DhcpServerv4ExclusionRange</code> y <code>Add-DhcpServerv4Reservation</code>.</p>
+<p>Las opciones transportan configuraciones más allá de la dirección. Las que verás con más frecuencia son 003 Router (puerta de enlace predeterminada), 006 DNS Servers y 015 DNS Domain Name. Las opciones pueden establecerse en el nivel del servidor (se aplican a todos los ámbitos), en el nivel del ámbito y en el nivel de la reserva, y gana el nivel más específico, así que una opción de reserva anula una opción de ámbito, que a su vez anula una opción de servidor. Las directivas DHCP también pueden asignar opciones o rangos de direcciones según criterios como la clase de proveedor o el prefijo MAC. Establece las opciones con <code>Set-DhcpServerv4OptionValue</code>.</p>
+<p>Como los clientes hacen difusión, un servidor DHCP solo puede oír a los clientes de su propia subred, a menos que algo reenvíe la solicitud. Un agente de retransmisión DHCP (relay agent) se encarga de eso: normalmente la interfaz del enrutador (a menudo llamada dirección IP helper) o el agente de retransmisión de Routing and Remote Access en un servidor Windows. La retransmisión convierte la difusión en una unidifusión hacia el servidor DHCP y completa el campo de dirección de puerta de enlace (giaddr) con la dirección de la interfaz que la recibió. El servidor usa giaddr para elegir el ámbito de esa subred. Si los clientes de una subred remota no obtienen dirección, revisa primero la retransmisión y luego si existe un ámbito coincidente y está activo.</p>
+<p>En un dominio de Active Directory, un servidor DHCP de Windows que es miembro del dominio debe estar autorizado en AD antes de conceder direcciones. La autorización impide que un servidor no autorizado o de prueba entregue configuraciones incorrectas. Autorizar requiere de forma predeterminada pertenecer a Enterprise Admins (o derechos delegados), porque la lista reside en la partición de configuración del bosque. Autorizas con la consola DHCP o con <code>Add-DhcpServerInDC -DnsName dhcp1.contoso.com -IPAddress 10.1.0.5</code>, y enumeras los servidores autorizados con <code>Get-DhcpServerInDC</code>. Un servidor independiente, que no pertenece al dominio, comprueba si existe un servidor autorizado en la subred y deja de conceder direcciones si encuentra uno.</p>
+<p>En tu laboratorio, después de instalar el rol con <code>Install-WindowsFeature DHCP -IncludeManagementTools</code>, la consola sigue mostrando una flecha roja hacia abajo en el servidor hasta que lo autorizas. Ejecuta también el paso posterior a la instalación que crea los grupos de seguridad DHCP Administrators y DHCP Users.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Scope (ámbito)</dt><dd>Un rango de direcciones IP para una subred, con máscara de subred, duración de concesión y opciones, del cual DHCP concede direcciones.</dd><dt>Reservation (reserva)</dt><dd>Una entrada del ámbito que siempre da la misma dirección IP a un cliente identificado por su dirección MAC.</dd><dt>Exclusion range (rango de exclusión)</dt><dd>Direcciones dentro de un ámbito que DHCP nunca concederá, usadas para dispositivos configurados de forma estática.</dd><dt>DHCP relay agent (agente de retransmisión DHCP)</dt><dd>Una característica del enrutador o un servicio que reenvía las solicitudes DHCP de difusión de una subred remota a un servidor DHCP como unidifusión.</dd><dt>Authorization (autorización)</dt><dd>Registrar en AD un servidor DHCP miembro del dominio para que se le permita conceder direcciones; requiere derechos de Enterprise Admins de forma predeterminada.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una VLAN de sucursal 10.3.40.0/24 no obtiene direcciones después de crear un ámbito nuevo en el servidor DHCP central. El administrador descubre que el ámbito está bien, pero el enrutador de la sucursal no tiene configurado un IP helper. Después de agregar la retransmisión que apunta al servidor DHCP, los clientes reciben concesiones del ámbito correcto porque el enrutador marca giaddr con 10.3.40.1.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Conoce la precedencia de las opciones (reserva sobre ámbito sobre servidor) y que la autorización necesita Enterprise Admins de forma predeterminada. Si un servidor está instalado pero no entrega nada, sospecha de la autorización.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Un ámbito establece la opción DNS 006 en 10.0.0.10, pero una reserva establece 006 en 10.0.0.20. ¿Cuál obtiene el cliente reservado?</summary><p>10.0.0.20, porque las opciones de nivel de reserva anulan las de nivel de ámbito y de servidor.</p></details>
+<details class="sq"><summary>¿Cómo sabe un servidor DHCP qué ámbito usar para una solicitud que llegó a través de un agente de retransmisión?</summary><p>Lee el campo giaddr que la retransmisión completó con la dirección de su interfaz receptora y elige el ámbito cuya subred contiene esa dirección.</p></details>
+<details class="sq"><summary>Se instala un servidor DHCP nuevo miembro del dominio, tiene un ámbito activo, pero no concede direcciones. ¿Cuál es la causa probable?</summary><p>No se ha autorizado en Active Directory; autorízalo con la consola o con Add-DhcpServerInDC usando una cuenta con derechos de Enterprise Admins.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AZ-802 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-802/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../azure-dns-private-zones-virtual-network-links-and-auto-registration-az/">← Zonas privadas de Azure DNS, vínculos de red virtual y regis</a><a href="../dhcp-high-availability-failover-in-load-balance-and-hot-standby-modes/">Alta disponibilidad de DHCP: conmutación por error en modos  →</a></nav>
+</main>
+</body>
+</html>

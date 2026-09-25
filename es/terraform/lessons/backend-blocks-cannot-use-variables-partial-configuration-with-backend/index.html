@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Los bloques backend no pueden usar variables; configuració… · Lección de Terraform Associate</title>
+<meta name="description" content="Terraform inicializa el backend antes de evaluar cualquier otra cosa de la configuración, porque necesita el backend para leer el estado. En ese momento te">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Los bloques backend no pueden usar variables; configuració… · Lección de Terraform Associate">
+<meta property="og:description" content="Terraform inicializa el backend antes de evaluar cualquier otra cosa de la configuración, porque necesita el backend para leer el estado. En ese momento te">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/terraform/lessons/backend-blocks-cannot-use-variables-partial-configuration-with-backend/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/terraform/lessons/backend-blocks-cannot-use-variables-partial-configuration-with-backend/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../terraform/">Terraform Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../terraform/lessons/backend-blocks-cannot-use-variables-partial-configuration-with-backend/" hreflang="en" lang="en">English</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004)</p>
+<h1>Los bloques backend no pueden usar variables; configuración parcial con `-backend-config`</h1>
+<article class="lbody">
+<p>Terraform inicializa el backend antes de evaluar cualquier otra cosa de la configuración, porque necesita el backend para leer el estado. En ese momento temprano, las variables de entrada, los locals y los data sources todavía no se han procesado. Como resultado, un bloque <code>backend</code> no puede contener referencias como <code>var.bucket</code>, <code>local.key</code> ni ninguna otra expresión que dependa de valores de la configuración. Solo se permiten valores literales, y Terraform informa un error si intentas usar una variable ahí.</p>
+<p>Esa restricción crea un problema práctico. A menudo quieres que el mismo código use un bucket o una key distintos para cada entorno, y desde luego no quieres claves de acceso escritas de forma fija en el control de versiones. La respuesta es la configuración parcial: deja algunos o todos los argumentos del backend fuera del bloque y proporciónalos al ejecutar <code>terraform init</code>.</p>
+<p>Hay tres formas de proporcionar los valores faltantes. Puedes pasar pares clave/valor en la línea de comandos con <code>-backend-config=&quot;KEY=VALUE&quot;</code>, repitiendo el indicador para cada argumento. Puedes pasar la ruta de un archivo con <code>-backend-config=PATH</code>, donde el archivo contiene los argumentos en formato HCL (a menudo con un nombre como <code>prod.s3.tfbackend</code>). O, si ejecutas init de forma interactiva y faltan valores obligatorios, Terraform los pide. Muchos backends también leen ciertos ajustes, especialmente las credenciales, de variables de entorno.</p>
+<pre class="code" tabindex="0"><code># backend.tf
+terraform {
+  backend &quot;s3&quot; {}
+}
+
+# prod.s3.tfbackend
+bucket = &quot;example-prod-state&quot;
+key    = &quot;app/terraform.tfstate&quot;
+region = &quot;us-east-1&quot;
+
+$ terraform init -backend-config=prod.s3.tfbackend</code></pre>
+<p>Un bloque backend vacío como <code>backend &quot;s3&quot; {}</code> es válido y común; declara el tipo de backend y deja todos los ajustes para init. Terraform fusiona los valores del bloque, de los archivos y de la línea de comandos. La configuración final fusionada se guarda en <code>.terraform/terraform.tfstate</code> y en los archivos de plan guardados, así que ten en cuenta que los secretos pasados de esta forma se escriben en el disco local. Para las credenciales, las variables de entorno o la cadena de credenciales estándar de la plataforma suelen ser una mejor opción.</p>
+<p>La configuración parcial funciona bien con los pipelines de CI, que pueden llamar a <code>terraform init -backend-config=env/${ENV}.tfbackend</code> para cada entorno mientras el código de Terraform permanece idéntico. También mantiene los detalles específicos de cada entorno o sensibles fuera del código compartido. El bloque <code>cloud</code> de HCP Terraform tiene una limitación similar y, en su lugar, puede leer ajustes de variables de entorno como <code>TF_CLOUD_ORGANIZATION</code> y <code>TF_WORKSPACE</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Partial configuration (configuración parcial)</dt><dd>Dejar algunos argumentos del backend fuera del bloque backend y proporcionarlos en el momento de terraform init.</dd><dt>-backend-config</dt><dd>Un indicador de init que proporciona ajustes del backend, ya sea como pares KEY=VALUE o como la ruta a un archivo de configuración.</dd><dt>Backend configuration file (archivo de configuración del backend)</dt><dd>Un archivo HCL con argumentos del backend que se pasa con -backend-config, a menudo con el sufijo .tfbackend.</dd><dt>Early evaluation (evaluación temprana)</dt><dd>La razón por la que los backends no pueden usar variables: los backends se inicializan antes de que se evalúen las variables y los locals.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un pipeline despliega el mismo código en dev y prod. El bloque backend es solo backend &quot;azurerm&quot; {}. El job de dev ejecuta terraform init -backend-config=dev.tfbackend y el de prod usa prod.tfbackend, cada uno apuntando a una cuenta de almacenamiento y una key distintas, con credenciales que provienen de la identidad administrada del pipeline.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si una pregunta muestra var. dentro de un bloque backend, la respuesta es que no está permitido; usa en su lugar archivos -backend-config o pares clave/valor en init.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué un bloque backend no puede referenciar variables de entrada?</summary><p>El backend se inicializa antes de que Terraform evalúe las variables y los locals, así que solo se permiten valores literales.</p></details>
+<details class="sq"><summary>Nombra dos formas que acepta el indicador -backend-config.</summary><p>Un par KEY=VALUE como -backend-config=&quot;bucket=my-state&quot;, o la ruta a un archivo que contiene argumentos del backend.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Terraform Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../terraform/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../the-backend-block-inside-terraform-remote-backends-such-as-s3-azurerm/">← El bloque `backend` dentro de `terraform {}`: backends remot</a><a href="../migrating-state-between-backends-with-terraform-init-migrate-state/">Migrar el estado entre backends con `terraform init -migrate →</a></nav>
+</main>
+</body>
+</html>

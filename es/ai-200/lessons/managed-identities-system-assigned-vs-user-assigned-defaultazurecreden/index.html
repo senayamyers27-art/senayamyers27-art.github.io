@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Identidades administradas: asignadas por el sistema vs asi… · Lección de AI-200</title>
+<meta name="description" content="Las aplicaciones necesitan credenciales para llamar a los servicios de Azure, y cada secreto almacenado es algo que puede filtrarse, expirar u olvidarse en">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Identidades administradas: asignadas por el sistema vs asi… · Lección de AI-200">
+<meta property="og:description" content="Las aplicaciones necesitan credenciales para llamar a los servicios de Azure, y cada secreto almacenado es algo que puede filtrarse, expirar u olvidarse en">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/managed-identities-system-assigned-vs-user-assigned-defaultazurecreden/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/managed-identities-system-assigned-vs-user-assigned-defaultazurecreden/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/managed-identities-system-assigned-vs-user-assigned-defaultazurecreden/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Identidades administradas: asignadas por el sistema vs asignadas por el usuario; DefaultAzureCredential en azure-identity</h1>
+<article class="lbody">
+<p>Las aplicaciones necesitan credenciales para llamar a los servicios de Azure, y cada secreto almacenado es algo que puede filtrarse, expirar u olvidarse en un repositorio. Una identidad administrada (managed identity) resuelve esto: Azure crea una identidad en Microsoft Entra ID para tu recurso y gestiona sus credenciales por ti. Tu código le pide un token al punto de conexión local de la plataforma y lo usa para llamar a cualquier servicio que admita la autenticación de Microsoft Entra, como Key Vault, Storage, Service Bus, Cosmos DB, Azure SQL y PostgreSQL.</p>
+<p>Una identidad asignada por el sistema (system-assigned) se habilita en un solo recurso, como una web app, una function app o una container app, y comparte su ciclo de vida. Se crea con el recurso, se elimina cuando se elimina el recurso y no se puede compartir. Es la opción más simple cuando un recurso necesita sus propios permisos.</p>
+<p>Una identidad asignada por el usuario (user-assigned) es un recurso independiente de Azure que creas y luego asocias a uno o más recursos. Existe hasta que la eliminas. Elígela cuando varios recursos deban compartir los mismos permisos (por ejemplo, diez container apps que necesitan AcrPull), cuando quieras asignar roles antes de que exista el recurso de proceso (para evitar el problema del huevo y la gallina en la primera implementación) o cuando los recursos se vuelvan a crear con frecuencia y no quieras rehacer las asignaciones de roles. Un recurso puede tener ambos tipos y varias identidades asignadas por el usuario.</p>
+<p>Recuerda que una identidad por sí sola no concede nada. Debes asignarle roles, como Key Vault Secrets User o Azure Service Bus Data Sender, en el ámbito correcto.</p>
+<p>En Python, el paquete <code>azure-identity</code> proporciona <code>DefaultAzureCredential</code>, una credencial que prueba una cadena de métodos en orden hasta que uno funciona. Revisa las variables de entorno en busca de una entidad de servicio (service principal), luego la identidad de carga de trabajo (workload identity, para Kubernetes), luego la identidad administrada y después las herramientas de desarrollo, como los inicios de sesión de Azure CLI, Azure PowerShell y Azure Developer CLI. Por eso, el mismo código usa tu cuenta de <code>az login</code> en tu laptop y la identidad administrada en Azure, sin cambios en el código.</p>
+<pre class="code" tabindex="0"><code>from azure.identity import DefaultAzureCredential, ManagedIdentityCredential
+from azure.keyvault.secrets import SecretClient
+
+credential = DefaultAzureCredential()
+# para una identidad asignada por el usuario: define AZURE_CLIENT_ID en la configuración de la app, o
+# credential = ManagedIdentityCredential(client_id=&quot;&lt;client-id&gt;&quot;)
+secrets = SecretClient(vault_url=VAULT_URL, credential=credential)
+db_password = secrets.get_secret(&quot;db-password&quot;).value</code></pre>
+<p>Cuando un recurso tiene una identidad asignada por el usuario, la credencial debe saber qué identidad usar. Define la variable de entorno <code>AZURE_CLIENT_ID</code> con el client ID de la identidad, pasa <code>managed_identity_client_id</code> a <code>DefaultAzureCredential</code> o usa directamente <code>ManagedIdentityCredential(client_id=...)</code>. Olvidar esto es una razón común de errores de autenticación cuando una app tiene más de una identidad. En producción, algunos equipos usan una credencial específica, como <code>ManagedIdentityCredential</code>, para evitar alternativas inesperadas y que los errores sean más claros. Crea la credencial y los clientes del SDK una sola vez y reutilízalos, ya que almacenan los tokens en caché.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>System-assigned identity (identidad asignada por el sistema)</dt><dd>Una identidad administrada ligada al ciclo de vida de un recurso y que se elimina con él.</dd><dt>User-assigned identity (identidad asignada por el usuario)</dt><dd>Un recurso de identidad administrada independiente que se puede asociar a muchos recursos y que sobrevive a ellos.</dd><dt>DefaultAzureCredential</dt><dd>Una credencial de azure-identity que prueba en orden el entorno, la workload identity, la identidad administrada y los inicios de sesión de desarrollador.</dd><dt>AZURE_CLIENT_ID</dt><dd>La variable de entorno que le indica a azure-identity qué identidad administrada asignada por el usuario usar.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un equipo ejecuta doce container apps que leen del mismo Key Vault y descargan del mismo registro. En lugar de habilitar doce identidades asignadas por el sistema y hacer veinticuatro asignaciones de roles, crean una identidad asignada por el usuario, le asignan AcrPull y Key Vault Secrets User, la asocian a cada app y definen AZURE_CLIENT_ID. Su código de Python usa DefaultAzureCredential sin cambios en las laptops y en Azure.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Compartida entre recursos o creada antes que el recurso significa asignada por el usuario; ciclo de vida ligado a un solo recurso significa asignada por el sistema. Con una identidad asignada por el usuario, define AZURE_CLIENT_ID para que DefaultAzureCredential elija la correcta.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué le pasa a una identidad asignada por el sistema cuando se elimina su web app?</summary><p>También se elimina, porque comparte el ciclo de vida del recurso; sus asignaciones de roles dejan de funcionar y quedan como entradas huérfanas hasta que las quites.</p></details>
+<details class="sq"><summary>¿Por qué el mismo código con DefaultAzureCredential funciona en local y en Azure?</summary><p>Prueba varias fuentes de credenciales en orden; en local encuentra tu inicio de sesión de desarrollador y en Azure encuentra la identidad administrada.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../configuration-and-deployment-app-settings-local-settings-json-host-jso/">← Configuración e implementación: configuración de la app, loc</a><a href="../azure-rbac-data-plane-roles-key-vault-secrets-user-service-bus-data-se/">Roles de RBAC de Azure del plano de datos: Key Vault Secrets →</a></nav>
+</main>
+</body>
+</html>

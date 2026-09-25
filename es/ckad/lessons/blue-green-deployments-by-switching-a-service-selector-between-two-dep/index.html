@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Despliegues blue/green cambiando el selector de un Service… · Lección de CKAD</title>
+<meta name="description" content="Un despliegue blue/green (azul/verde) ejecuta dos versiones completas de una aplicación lado a lado. Blue es la versión en producción que recibe tráfico; g">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Despliegues blue/green cambiando el selector de un Service… · Lección de CKAD">
+<meta property="og:description" content="Un despliegue blue/green (azul/verde) ejecuta dos versiones completas de una aplicación lado a lado. Blue es la versión en producción que recibe tráfico; g">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/blue-green-deployments-by-switching-a-service-selector-between-two-dep/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/blue-green-deployments-by-switching-a-service-selector-between-two-dep/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/blue-green-deployments-by-switching-a-service-selector-between-two-dep/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>Despliegues blue/green cambiando el selector de un Service entre dos Deployments</h1>
+<article class="lbody">
+<p>Un despliegue blue/green (azul/verde) ejecuta dos versiones completas de una aplicación lado a lado. Blue es la versión en producción que recibe tráfico; green es la versión nueva, totalmente arrancada y probada pero que aún no atiende a los usuarios. Cuando estás conforme con green, cambias todo el tráfico a ella de una vez. Si algo sale mal, vuelves atrás igual de rápido. Kubernetes no tiene un objeto especial para esto; lo construyes con dos Deployments y un Service.</p>
+<p>El truco son las etiquetas. Ambos Deployments comparten una etiqueta de aplicación como <code>app: shop</code> y se diferencian en una etiqueta de versión, por ejemplo <code>version: blue</code> y <code>version: green</code>. El selector del Service incluye ambas etiquetas, así que coincide con un solo color a la vez.</p>
+<pre class="code" tabindex="0"><code>apiVersion: v1
+kind: Service
+metadata:
+  name: shop
+spec:
+  selector:
+    app: shop
+    version: blue
+  ports:
+  - port: 80
+    targetPort: 8080</code></pre>
+<p>El proceso es así. Primero, despliega <code>shop-green</code> con la imagen nueva y las etiquetas <code>version: green</code>, a tamaño completo. Segundo, pruébalo directamente, por ejemplo a través de un segundo Service temporal como <code>shop-preview</code> o con <code>kubectl port-forward deploy/shop-green 8080</code>. Tercero, cambia el Service en producción modificando su selector: <code>kubectl patch service shop -p '{&quot;spec&quot;:{&quot;selector&quot;:{&quot;app&quot;:&quot;shop&quot;,&quot;version&quot;:&quot;green&quot;}}}'</code> o <code>kubectl edit service shop</code>. El tráfico se mueve en cuanto se actualizan los endpoints. Por último, mantén blue en ejecución un tiempo como vía de rollback, y luego escálalo a cero o elimínalo.</p>
+<p>Verifica el cambio con <code>kubectl get endpointslices -l kubernetes.io/service-name=shop</code> o <code>kubectl describe service shop</code>: las IPs de Pod listadas ahora deberían pertenecer a los Pods green, lo que puedes comparar con <code>kubectl get pods -l version=green -o wide</code>.</p>
+<p>Comparado con un rolling update, blue/green ofrece un cambio instantáneo y de una sola vez, así que los usuarios nunca ven una mezcla de versiones, y un rollback instantáneo. Los costos son el doble de recursos durante el cambio y la necesidad de que ambas versiones funcionen con la misma base de datos y demás estado compartido. Las conexiones existentes de larga duración pueden seguir yendo a los Pods antiguos hasta que se cierren, así que mantén blue vivo un rato después del cambio.</p>
+<p>Errores comunes en el examen son olvidar añadir la etiqueta distintiva a la plantilla de Pod (las etiquetas del metadata propio del Deployment no cuentan) y hacer el selector del Service tan amplio, solo <code>app: shop</code>, que coincida con ambos colores a la vez.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Blue/green deployment (despliegue azul/verde)</dt><dd>Ejecutar la versión antigua y la nueva completas lado a lado y cambiar todo el tráfico de una vez.</dd><dt>Service selector (selector del Service)</dt><dd>Consulta de etiquetas que decide qué Pods reciben el tráfico de un Service.</dd><dt>Cut-over (conmutación)</dt><dd>El momento en que el tráfico pasa de la versión antigua a la nueva.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un sitio de venta de entradas despliega <code>tickets-green</code> junto a <code>tickets-blue</code>, lo prueba mediante un port-forward y luego modifica el selector del Service <code>tickets</code> a <code>version: green</code>. Cuando aparece un bug diez minutos después, vuelven a poner el selector en blue, restaurando la versión antigua en segundos.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El cambio ocurre en el Service, no en los Deployments. Asegúrate de que la etiqueta de versión esté en la plantilla de Pod y de que el selector del Service la incluya.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué único cambio mueve el tráfico de blue a green?</summary><p>Actualizar el selector del Service para que coincida con la etiqueta de versión de los Pods green.</p></details>
+<details class="sq"><summary>¿Cómo haces rollback de una publicación blue/green?</summary><p>Vuelves a poner el selector del Service en la etiqueta blue, siempre que el Deployment blue siga en ejecución.</p></details>
+<details class="sq"><summary>¿Cuál es el principal costo de recursos de blue/green?</summary><p>Ambas versiones se ejecutan a tamaño completo al mismo tiempo durante el cambio.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../kubectl-rollout-status-history-undo-to-revision-pause-and-resume-kubec/">← kubectl rollout status, history, undo (--to-revision), pause</a><a href="../canary-releases-with-two-deployments-behind-one-service-weighted-by-re/">Canary releases con dos Deployments detrás de un Service, po →</a></nav>
+</main>
+</body>
+</html>

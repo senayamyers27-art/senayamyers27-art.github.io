@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AI Gateway en Azure API Management delante de los modelos … · Lección de SC-500</title>
+<meta name="description" content="Cuando muchas aplicaciones llaman directamente a modelos de IA, cada una necesita claves del modelo, cada una puede consumir tokens sin límite y nadie tien">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="AI Gateway en Azure API Management delante de los modelos … · Lección de SC-500">
+<meta property="og:description" content="Cuando muchas aplicaciones llaman directamente a modelos de IA, cada una necesita claves del modelo, cada una puede consumir tokens sin límite y nadie tien">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/sc-500/lessons/ai-gateway-in-azure-api-management-in-front-of-microsoft-foundry-model/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/sc-500/lessons/ai-gateway-in-azure-api-management-in-front-of-microsoft-foundry-model/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../sc-500/">SC-500</a> / <a href="../">Lecciones</a> · <a href="../../../../sc-500/lessons/ai-gateway-in-azure-api-management-in-front-of-microsoft-foundry-model/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Cloud and AI Security Engineer Associate (replaces Azure Security Engineer Associate / AZ-500) SC-500</p>
+<h1>AI Gateway en Azure API Management delante de los modelos de Microsoft Foundry: autenticación con identidad administrada, límites de tokens, registro</h1>
+<article class="lbody">
+<p>Cuando muchas aplicaciones llaman directamente a modelos de IA, cada una necesita claves del modelo, cada una puede consumir tokens sin límite y nadie tiene un registro central del uso. Azure API Management (APIM) puede actuar como puerta de enlace de IA (AI gateway) delante de los endpoints de modelos de Microsoft Foundry y Azure OpenAI para resolverlo. Los clientes llaman al endpoint de APIM; APIM aplica directivas y reenvía las solicitudes al backend del modelo. Microsoft usa el término 'AI gateway' para este conjunto de capacidades de IA generativa en APIM.</p>
+<p>Las directivas de APIM son instrucciones XML en las secciones inbound, backend, outbound y on-error de una API. Para escenarios de IA, las más importantes son las directivas de autenticación, límite de tokens, métricas de tokens, balanceo de carga y almacenamiento en caché.</p>
+<p>La autenticación se divide en dos saltos. De APIM al modelo, usa la identidad administrada de APIM en lugar de una clave de API: habilita una identidad asignada por el sistema o por el usuario en la instancia de APIM, concédele un rol como Cognitive Services OpenAI User (o el rol de usuario equivalente de Foundry) en el recurso del modelo y agrega la directiva <code>authentication-managed-identity</code> con el recurso de Cognitive Services como audiencia. Luego puedes deshabilitar por completo la autenticación basada en claves (local) en el recurso del modelo. De los clientes a APIM, exige como mínimo claves de suscripción de APIM y, preferiblemente, valida tokens de Entra con la directiva <code>validate-jwt</code> o <code>validate-azure-ad-token</code> para que cada llamador tenga una identidad. Así, ninguna aplicación tiene jamás una clave del modelo.</p>
+<p>Los límites de tokens protegen el presupuesto y la capacidad. La directiva <code>llm-token-limit</code> (y la más antigua <code>azure-openai-token-limit</code>) aplica una tasa de tokens por minuto y, opcionalmente, una cuota de tokens en un período más largo, por clave de contador, como el ID de suscripción o la IP del cliente. Las solicitudes que superan el límite reciben una respuesta 429 Too Many Requests. Puede estimar los tokens del prompt antes de enviar la solicitud, bloqueando pronto los prompts demasiado grandes. Esto protege contra el wallet abuse y contra que una sola aplicación ruidosa deje sin recursos a las demás.</p>
+<p>El registro y las métricas dan visibilidad. La directiva <code>llm-emit-token-metric</code> envía los recuentos de tokens del prompt, de la respuesta (completion) y totales a Application Insights con dimensiones personalizadas como cliente, API o usuario, para que puedas hacer refacturación interna (chargeback) y detectar anomalías. La configuración de diagnóstico de APIM puede enviar los registros de la puerta de enlace, incluido el registro de solicitudes y respuestas de LLM donde esté habilitado, a un área de trabajo de Log Analytics. Ten cuidado: registrar prompts completos puede capturar datos personales, así que aplica controles de retención y acceso.</p>
+<p>Otras funciones de la puerta de enlace incluyen grupos de backends con balanceo de carga y disyuntores (circuit breakers) entre varios despliegues de modelos o regiones, caché semántica para reutilizar respuestas a prompts similares, y directivas de seguridad de contenido que llaman a Azure AI Content Safety antes de reenviar las solicitudes. Colocar APIM en una red virtual con private endpoints hacia los modelos mantiene el tráfico privado.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>AI gateway (puerta de enlace de IA)</dt><dd>El conjunto de capacidades de Azure API Management para gobernar y proteger el acceso a los endpoints de modelos de IA.</dd><dt>authentication-managed-identity</dt><dd>Una directiva de APIM que obtiene un token de Entra usando la identidad administrada de APIM para llamar a un backend.</dd><dt>llm-token-limit</dt><dd>Una directiva de APIM que aplica tasas de tokens por minuto y cuotas de tokens por clave, devolviendo 429 cuando se superan.</dd><dt>Token metrics (métricas de tokens)</dt><dd>Recuentos de tokens de prompt, de respuesta y totales que APIM emite a Application Insights para supervisión y refacturación interna.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Cinco aplicaciones internas comparten un despliegue de Azure OpenAI, y un script descontrolado consumió el presupuesto del mes. Colocas APIM delante del modelo, concedes a la identidad administrada de APIM el rol de usuario de OpenAI, deshabilitas las claves locales en el modelo, aplicas llm-token-limit por suscripción y emites métricas de tokens a Application Insights para que el uso de cada equipo sea visible.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> La autenticación de APIM al modelo usa la identidad administrada de APIM más un rol de RBAC, lo que te permite deshabilitar las claves de API del modelo. La protección contra el uso excesivo es la directiva de límite de tokens (429 al superarlo); la visibilidad del uso es la directiva de métricas de tokens más Application Insights y Log Analytics.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo puede APIM llamar a un modelo de Foundry sin guardar una clave de API?</summary><p>Habilitando la identidad administrada de APIM, concediéndole el rol de usuario del modelo y usando la directiva authentication-managed-identity.</p></details>
+<details class="sq"><summary>¿Qué respuesta recibe un cliente cuando supera el límite de tokens configurado?</summary><p>HTTP 429 Too Many Requests.</p></details>
+<details class="sq"><summary>¿Por qué hay que tener cuidado al registrar prompts y respuestas completos?</summary><p>Pueden contener datos personales o confidenciales, así que el registro necesita controles de acceso y límites de retención.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia SC-500 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../sc-500/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../microsoft-purview-dspm-for-ai-to-find-data-overexposure-to-microsoft-3/">← Microsoft Purview DSPM for AI para detectar la sobreexposici</a><a href="../microsoft-entra-agent-id-agent-identities-conditional-access-and-acces/">Microsoft Entra Agent ID: identidades de agentes, Conditiona →</a></nav>
+</main>
+</body>
+</html>

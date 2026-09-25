@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Enrutamiento basado en políticas con route maps · Lección de ENCOR</title>
+<meta name="description" content="El enrutamiento normal solo mira la dirección de destino. El enrutamiento basado en políticas (PBR) te permite anular esa decisión con base en otros criter">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Enrutamiento basado en políticas con route maps · Lección de ENCOR">
+<meta property="og:description" content="El enrutamiento normal solo mira la dirección de destino. El enrutamiento basado en políticas (PBR) te permite anular esa decisión con base en otros criter">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/policy-based-routing-with-route-maps/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/policy-based-routing-with-route-maps/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ccnp-encor/">ENCOR</a> / <a href="../">Lecciones</a> · <a href="../../../../ccnp-encor/lessons/policy-based-routing-with-route-maps/" hreflang="en" lang="en">English</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2</p>
+<h1>Enrutamiento basado en políticas con route maps</h1>
+<article class="lbody">
+<p>El enrutamiento normal solo mira la dirección de destino. El enrutamiento basado en políticas (PBR) te permite anular esa decisión con base en otros criterios, como la dirección de origen, la aplicación o el tamaño del paquete. Podrías enviar el tráfico de invitados por un enlace de internet barato mientras el tráfico corporativo usa MPLS, o enrutar los respaldos de un servidor específico por una ruta dedicada.</p>
+<p>PBR se construye con un route map. Un route map es una lista ordenada de sentencias, cada una con un número de secuencia, una acción (permit o deny) y cláusulas <code>match</code> y <code>set</code> opcionales. Las sentencias se evalúan en orden de secuencia; se aplica la primera sentencia cuyas cláusulas match se cumplen todas. En PBR, una sentencia permit que coincide significa “aplica las acciones set”; una sentencia deny que coincide significa “no enrutes este paquete por política; usa el enrutamiento normal basado en el destino”. Los paquetes que no coinciden con ninguna sentencia también se enrutan normalmente, porque el deny implícito al final de un route map, en PBR, simplemente significa reenvío normal en lugar de descarte.</p>
+<p>Los criterios de coincidencia normalmente usan una ACL: <code>match ip address 101</code> coincide con los paquetes permitidos por la ACL 101. También puedes coincidir por longitud del paquete con <code>match length</code>. La cláusula set elige qué hacer. <code>set ip next-hop 192.0.2.1</code> envía el paquete a ese siguiente salto si está directamente conectado y es alcanzable. <code>set ip default next-hop</code> se usa solo si la tabla de enrutamiento no tiene una ruta explícita hacia el destino (aparte de la ruta predeterminada). <code>set interface</code> envía por una interfaz específica, lo mejor para enlaces punto a punto. También puedes establecer marcas, como <code>set ip precedence</code> o DSCP en algunas plataformas.</p>
+<pre class="code" tabindex="0"><code>access-list 110 permit ip 10.10.50.0 0.0.0.255 any
+!
+route-map GUEST-OUT permit 10
+ match ip address 110
+ set ip next-hop 198.51.100.1
+!
+interface GigabitEthernet0/2
+ ip policy route-map GUEST-OUT</code></pre>
+<p>La política se aplica en entrada en la interfaz por donde llega el tráfico con <code>ip policy route-map NAME</code>; actúa sobre los paquetes cuando entran, antes de la decisión de enrutamiento. El tráfico generado por el propio router no se ve afectado a menos que uses <code>ip local policy route-map NAME</code> de forma global.</p>
+<p>Un riesgo clave es dejar el tráfico en un agujero negro (black-holing): si el siguiente salto configurado falla pero su interfaz sigue arriba, PBR puede seguir enviando tráfico hacia allá. Usa <code>set ip next-hop verify-availability</code> con object tracking (por ejemplo una sonda IP SLA) para que el router vuelva al enrutamiento normal, o a otro siguiente salto, cuando el objeto rastreado se caiga. PBR también se procesa en hardware en la mayoría de los switches Catalyst, usando TCAM, pero las políticas complejas pueden consumir recursos.</p>
+<p>Verifica con <code>show route-map</code> (que muestra los contadores de coincidencias), <code>show ip policy</code> y <code>debug ip policy</code> en un laboratorio. Recuerda que las ACL usadas para PBR solo clasifican el tráfico; un deny en la ACL solo significa que ese paquete no coincide con esa sentencia.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Policy-based routing (enrutamiento basado en políticas)</dt><dd>Reenviar paquetes con base en criterios distintos al destino, definidos por un route map.</dd><dt>Route map</dt><dd>Una lista ordenada de sentencias permit o deny con cláusulas match y set.</dd><dt>set ip next-hop</dt><dd>Una acción de PBR que reenvía los paquetes que coinciden hacia un siguiente salto específico directamente conectado.</dd><dt>ip policy route-map</dt><dd>Comando de interfaz que aplica PBR a los paquetes que llegan por esa interfaz.</dd><dt>ip local policy</dt><dd>Aplica PBR al tráfico generado por el propio router.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una sucursal quiere que el Wi-Fi de invitados (10.10.50.0/24) use el enlace de banda ancha mientras todo lo demás sigue a OSPF sobre MPLS. El ingeniero hace coincidir la subred de invitados en la ACL 110, establece el gateway de banda ancha como siguiente salto con verify-availability ligado a un track de IP SLA, y aplica el route map en entrada en la subinterfaz de invitados. Cuando falla la banda ancha, el tráfico de invitados vuelve al enrutamiento normal.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> PBR se aplica en entrada en la interfaz de ingreso y se evalúa antes de la tabla de enrutamiento. Un paquete que coincide con una sentencia deny o con ninguna sentencia se enruta normalmente, no se descarta.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué le pasa a un paquete que no coincide con ninguna sentencia de un route map de PBR?</summary><p>Se reenvía usando la tabla de enrutamiento normal.</p></details>
+<details class="sq"><summary>¿Cuál es la diferencia entre set ip next-hop y set ip default next-hop?</summary><p>set ip next-hop anula la tabla de enrutamiento; set ip default next-hop se usa solo cuando no hay una ruta explícita para el destino.</p></details>
+<details class="sq"><summary>¿En qué interfaz y en qué dirección se aplica PBR?</summary><p>En entrada, en la interfaz por donde el tráfico entra al router.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia ENCOR gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ccnp-encor/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../ebgp-between-directly-connected-neighbors-neighbor-states-and-best-pat/">← eBGP entre vecinos directamente conectados: estados de vecin</a><a href="../ip-services-ntp-and-ptp-nat-and-pat-hsrp-and-vrrp/">Servicios IP: NTP y PTP, NAT y PAT, HSRP y VRRP →</a></nav>
+</main>
+</body>
+</html>

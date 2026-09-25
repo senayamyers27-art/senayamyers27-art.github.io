@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Flujos de salida de los contenedores: opciones de kubectl … · Lección de CKA</title>
+<meta name="description" content="El logging en Kubernetes parte de una convención: los contenedores deberían escribir sus logs en la salida estándar (stdout) y en el error estándar (stderr">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Flujos de salida de los contenedores: opciones de kubectl … · Lección de CKA">
+<meta property="og:description" content="El logging en Kubernetes parte de una convención: los contenedores deberían escribir sus logs en la salida estándar (stdout) y en el error estándar (stderr">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/container-output-streams-kubectl-logs-options-stdout-stderr-vs-log-fil/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/container-output-streams-kubectl-logs-options-stdout-stderr-vs-log-fil/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/container-output-streams-kubectl-logs-options-stdout-stderr-vs-log-fil/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Flujos de salida de los contenedores: opciones de kubectl logs, stdout/stderr frente a archivos de log, /var/log/pods y /var/log/containers, y streaming de logs con sidecar</h1>
+<article class="lbody">
+<p>El logging en Kubernetes parte de una convención: los contenedores deberían escribir sus logs en la salida estándar (stdout) y en el error estándar (stderr). El container runtime captura ambos flujos y los escribe en archivos del nodo, y <code>kubectl logs</code> lee esos archivos a través del kubelet. Todo lo que una aplicación escriba en un archivo dentro del sistema de archivos de su propio contenedor es invisible para kubectl logs.</p>
+<p><code>kubectl logs</code> tiene opciones que deberías conocer sin buscarlas. <code>-c &lt;container&gt;</code> elige un contenedor en un Pod con varios contenedores (sin él, kubectl usa el contenedor predeterminado o te pide que elijas), y <code>--all-containers</code> los muestra todos. <code>-p</code> o <code>--previous</code> muestra los logs de la instancia anterior, la que se cayó, de un contenedor, lo cual es esencial en CrashLoopBackOff porque la instancia actual puede no haber impreso nada todavía. <code>-f</code> sigue la salida, <code>--tail=50</code> limita las líneas, <code>--since=15m</code> limita el tiempo y <code>--timestamps</code> agrega las horas. <code>-l app=web</code> lee de los Pods que coinciden con una etiqueta, y <code>deploy/web</code> lee de un Pod de un Deployment.</p>
+<pre class="code" tabindex="0"><code>kubectl logs web-6c9 -c app --tail=100
+kubectl logs web-6c9 --previous
+kubectl logs -l app=web --all-containers --since=1h
+kubectl logs deploy/web -f
+kubectl logs web-6c9 -c app &gt; /opt/answers/web.log</code></pre>
+<p>En el nodo, el kubelet y el runtime guardan los logs en <code>/var/log/pods/&lt;namespace&gt;_&lt;pod&gt;_&lt;uid&gt;/&lt;container&gt;/</code>, con archivos numerados como <code>0.log</code> por cada reinicio del contenedor. <code>/var/log/containers/</code> contiene enlaces simbólicos con el nombre <code>&lt;pod&gt;_&lt;namespace&gt;_&lt;container&gt;-&lt;container-id&gt;.log</code> que apuntan a esos archivos; los recolectores de logs a nivel de nodo suelen seguir este directorio. El kubelet rota estos archivos por tamaño y cantidad, así que la salida muy antigua se pierde, y desaparecen cuando se borra el Pod. Cuando el API server está caído, leer estos archivos o usar <code>crictl logs</code> es la forma de ver los logs del control plane.</p>
+<p>Algunas aplicaciones solo pueden escribir en archivos. El patrón sidecar resuelve eso: agrega un segundo contenedor que comparte un volumen <code>emptyDir</code> con la aplicación y transmite el archivo a su propio stdout, para que kubectl logs y los recolectores de logs del clúster puedan verlo. Kubernetes también admite sidecars nativos, declarados como init containers con <code>restartPolicy: Always</code>, que arrancan antes que los contenedores principales y siguen ejecutándose junto a ellos.</p>
+<pre class="code" tabindex="0"><code>volumes:
+- name: logs
+  emptyDir: {}
+containers:
+- name: app
+  image: legacy-app:1.0
+  volumeMounts: [{name: logs, mountPath: /var/log/app}]
+- name: log-streamer
+  image: busybox
+  args: [/bin/sh, -c, 'tail -n+1 -F /var/log/app/app.log']
+  volumeMounts: [{name: logs, mountPath: /var/log/app}]</code></pre>
+<p>Luego <code>kubectl logs &lt;pod&gt; -c log-streamer</code> muestra el log en archivo de la aplicación. Usar un streamer separado por cada archivo de log también mantiene separados los distintos flujos, por ejemplo los logs de acceso y los de errores.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>kubectl logs --previous</dt><dd>Muestra los logs de la última instancia terminada de un contenedor.</dd><dt>/var/log/pods</dt><dd>Directorio del nodo que contiene los archivos de log de los contenedores organizados por namespace, nombre de Pod y UID.</dd><dt>/var/log/containers</dt><dd>Directorio del nodo con enlaces simbólicos a los archivos de log de los contenedores, que los agentes de logs suelen seguir.</dd><dt>Streaming sidecar (sidecar de streaming)</dt><dd>Un contenedor auxiliar que lee el archivo de log de una aplicación desde un volumen compartido y lo escribe en stdout.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una aplicación heredada escribe solo en /var/log/app/app.log, así que <code>kubectl logs</code> no muestra nada. Agregas un sidecar de busybox que comparte un emptyDir en esa ruta y ejecuta <code>tail -F</code> sobre el archivo. <code>kubectl logs legacy -c log-streamer</code> ahora muestra los mensajes de la aplicación.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> En un CrashLoopBackOff, la salida útil casi siempre está en <code>kubectl logs &lt;pod&gt; --previous</code>. En los Pods con varios contenedores, especifica siempre -c.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué kubectl logs no puede mostrar un archivo de log que una aplicación escribe dentro de su contenedor?</summary><p>kubectl logs solo devuelve lo que el contenedor escribe en stdout y stderr, que es lo que captura el runtime.</p></details>
+<details class="sq"><summary>¿Cómo puedes hacer visible ese archivo para kubectl logs sin cambiar la aplicación?</summary><p>Agrega un sidecar que comparta el directorio de logs mediante un volumen y haga tail del archivo hacia su propio stdout.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../resource-monitoring-metrics-server-kubectl-top-nodes-pods-sort-by-desc/">← Monitoreo de recursos: metrics-server, kubectl top nodes/pod</a><a href="../events-kubectl-get-events-with-field-selectors-and-sorting/">Eventos: kubectl get events con field selectors y ordenamien →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Alarmas de CloudWatch con notificaciones de SNS; logging e… · Lección de Developer Associate</title>
+<meta name="description" content="El monitoreo solo sirve si alguien se entera cuando algo sale mal. Las alarmas de CloudWatch vigilan métricas y actúan cuando cruzan un umbral, y las buena">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Alarmas de CloudWatch con notificaciones de SNS; logging e… · Lección de Developer Associate">
+<meta property="og:description" content="El monitoreo solo sirve si alguien se entera cuando algo sale mal. Las alarmas de CloudWatch vigilan métricas y actúan cuando cruzan un umbral, y las buena">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/cloudwatch-alarms-with-sns-notifications-structured-logging-and-correl/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/cloudwatch-alarms-with-sns-notifications-structured-logging-and-correl/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/cloudwatch-alarms-with-sns-notifications-structured-logging-and-correl/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Alarmas de CloudWatch con notificaciones de SNS; logging estructurado e ID de correlación</h1>
+<article class="lbody">
+<p>El monitoreo solo sirve si alguien se entera cuando algo sale mal. Las alarmas de CloudWatch vigilan métricas y actúan cuando cruzan un umbral, y las buenas prácticas de logging hacen que la investigación posterior sea rápida.</p>
+<p>Una alarma de métrica vigila una métrica (o una expresión de matemáticas de métricas) y tiene tres estados: <code>OK</code>, <code>ALARM</code> e <code>INSUFFICIENT_DATA</code>. Configuras la estadística (como Average, Sum o p99), el período, el umbral y el operador de comparación, y cuántos períodos deben superarlo: los períodos de evaluación y los puntos de datos para alarma (datapoints to alarm) te permiten exigir, por ejemplo, 3 de 5 períodos de un minuto por encima del umbral, lo que evita alertas por picos aislados. También decides cómo se tratan los datos faltantes (como incumplimiento, como no incumplimiento, ignorados o faltantes), lo cual importa para métricas como <code>Errors</code> de Lambda, que simplemente no tienen datos cuando no pasa nada. Las alarmas de detección de anomalías usan una banda aprendida del historial de la métrica en lugar de un umbral fijo. Las alarmas compuestas combinan varias alarmas con reglas AND, OR y NOT para reducir el ruido, por ejemplo alertando solo cuando tanto la tasa de errores como la latencia son altas.</p>
+<p>Las acciones de alarma se ejecutan con los cambios de estado. La acción más común es publicar en un tema de Amazon SNS, que luego entrega a correo electrónico, SMS, una función Lambda, un endpoint HTTPS o integraciones de chat. Los suscriptores de correo deben confirmar la suscripción antes de recibir mensajes, lo cual es una razón común por la que las alertas 'nunca llegan'. Si el tema de SNS está cifrado con una clave de KMS administrada por el cliente, la política de la clave debe permitir que CloudWatch la use. Otras acciones incluyen acciones de EC2 (detener, terminar, reiniciar, recuperar), políticas de Auto Scaling y OpsItems o incidentes de Systems Manager. Las alarmas también impulsan las reversiones automáticas en CodeDeploy y AppConfig.</p>
+<pre class="code" tabindex="0"><code>aws cloudwatch put-metric-alarm --alarm-name checkout-errors \
+  --namespace AWS/Lambda --metric-name Errors \
+  --dimensions Name=FunctionName,Value=checkout \
+  --statistic Sum --period 60 --evaluation-periods 5 --datapoints-to-alarm 3 \
+  --threshold 5 --comparison-operator GreaterThanThreshold \
+  --treat-missing-data notBreaching \
+  --alarm-actions arn:aws:sns:us-east-1:111122223333:oncall</code></pre>
+<p>El logging estructurado significa escribir cada entrada de log como un objeto JSON con campos consistentes (marca de tiempo, nivel, servicio, mensaje, ID de solicitud e ID de negocio relevantes) en lugar de texto libre. Los logs en JSON pueden consultarse por campo en Logs Insights, filtrarse con precisión con filtros de métricas y analizarse con otras herramientas. Lambda puede emitir sus propios logs del sistema en JSON y filtrar por nivel de log mediante su configuración de logging, y bibliotecas como Logger de Powertools for AWS Lambda agregan automáticamente contexto como el ID de solicitud y el indicador de arranque en frío.</p>
+<p>Un ID de correlación une todas las entradas de log de una solicitud de negocio a través de los servicios. Genéralo en el borde (o reutiliza uno entrante, como un encabezado de la solicitud o el ID de solicitud de API Gateway), inclúyelo en cada línea de log y pásalo hacia los servicios de destino: en encabezados HTTP, atributos de mensajes de SQS o SNS, el detail de los eventos de EventBridge y la entrada de Step Functions. Así, una sola consulta de Logs Insights que filtre por ese ID en varios grupos de logs muestra toda la historia. Los ID de traza de X-Ray cumplen un propósito similar para las trazas, y registrar el ID de traza conecta los logs con las trazas.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Metric alarm (alarma de métrica)</dt><dd>Una alarma de CloudWatch que cambia de estado cuando una métrica o expresión cruza un umbral durante un número determinado de períodos.</dd><dt>Datapoints to alarm (puntos de datos para alarma)</dt><dd>El número de puntos de datos que superan el umbral dentro de los períodos de evaluación necesarios para disparar ALARM (M de N).</dd><dt>Composite alarm (alarma compuesta)</dt><dd>Una alarma cuyo estado se calcula a partir de una regla que combina los estados de otras alarmas.</dd><dt>Structured logging (logging estructurado)</dt><dd>Escribir las entradas de log como campos consistentes y legibles por máquina, normalmente en JSON.</dd><dt>Correlation ID (ID de correlación)</dt><dd>Un identificador único que se propaga por todos los servicios que manejan una solicitud para poder vincular sus logs.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un pedido pasa de API Gateway a una función Lambda y luego, a través de SQS, a una función de cumplimiento. La primera función registra JSON con correlationId igual al ID de solicitud de la API y lo agrega como atributo del mensaje de SQS; la segunda registra el mismo ID. Cuando un cliente se queja, una sola consulta de Logs Insights en ambos grupos de logs por ese ID muestra exactamente dónde se detuvo el pedido.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Una alarma que debe notificar a personas publica en un tema de SNS; si los correos nunca llegan, comprueba que la suscripción esté confirmada. Para evitar alertas por picos aislados, usa M de N puntos de datos para alarma en lugar de un solo período.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cuáles son los tres estados de una alarma de CloudWatch?</summary><p>OK, ALARM e INSUFFICIENT_DATA.</p></details>
+<details class="sq"><summary>¿Cómo debería tratar normalmente los datos faltantes una alarma sobre Errors de Lambda, y por qué?</summary><p>Como no incumplimiento, porque la ausencia de datos simplemente significa que no hubo errores (ni invocaciones) en ese período.</p></details>
+<details class="sq"><summary>¿Cómo llevas un ID de correlación a través de una cola SQS?</summary><p>Ponlo en un atributo del mensaje (o en el cuerpo) al enviarlo, y haz que el consumidor lo lea y lo registre.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../custom-metrics-putmetricdata-cloudwatch-embedded-metric-format-high-re/">← Métricas personalizadas: PutMetricData, formato de métricas </a><a href="../lambda-performance-memory-cpu-tuning-cold-starts-provisioned-concurren/">Rendimiento de Lambda: ajuste de memoria/CPU, arranques en f →</a></nav>
+</main>
+</body>
+</html>

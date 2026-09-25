@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Errores comunes de Lambda: limitación (429), tiempos de es… · Lección de Developer Associate</title>
+<meta name="description" content="Muchas preguntas de solución de problemas describen un síntoma y un código de error. Saber qué significa cada error común de Lambda y API Gateway, y cómo s">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Errores comunes de Lambda: limitación (429), tiempos de es… · Lección de Developer Associate">
+<meta property="og:description" content="Muchas preguntas de solución de problemas describen un síntoma y un código de error. Saber qué significa cada error común de Lambda y API Gateway, y cómo s">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/common-lambda-errors-throttling-429-timeouts-accessdenied-from-the-exe/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/common-lambda-errors-throttling-429-timeouts-accessdenied-from-the-exe/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/common-lambda-errors-throttling-429-timeouts-accessdenied-from-the-exe/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Errores comunes de Lambda: limitación (429), tiempos de espera agotados, AccessDenied del rol de ejecución, respuestas proxy mal formadas (502), tiempos de espera de integración 504 de API Gateway</h1>
+<article class="lbody">
+<p>Muchas preguntas de solución de problemas describen un síntoma y un código de error. Saber qué significa cada error común de Lambda y API Gateway, y cómo se corrige, convierte estas preguntas en puntos fáciles.</p>
+<p>La limitación (throttling) ocurre cuando las invocaciones superan la concurrencia disponible: la cuota de concurrencia regional de la cuenta o la concurrencia reservada de una función. Quienes llaman de forma síncrona reciben <code>TooManyRequestsException</code> con el estado HTTP 429 (API Gateway puede devolver 429 o un 5xx a los clientes según la configuración), y la métrica <code>Throttles</code> sube. Las invocaciones asíncronas se reintentan automáticamente hasta seis horas por defecto, y los mapeos de fuentes de eventos reducen su ritmo de sondeo. Soluciones: solicitar una cuota de concurrencia de cuenta más alta, aumentar o configurar la concurrencia reservada de la función, reducir la concurrencia necesaria haciendo más rápida la función, comprobar que otra función no esté consumiendo el grupo compartido (reservar concurrencia para las funciones críticas) y hacer que los clientes reintenten con retroceso exponencial. API Gateway también devuelve 429 cuando se superan sus propios límites de limitación de etapa, de método o de plan de uso, lo cual es distinto de la limitación de Lambda.</p>
+<p>Los tiempos de espera agotados ocurren cuando una función se ejecuta más tiempo del configurado; el log muestra <code>Task timed out after N seconds</code>. El valor predeterminado es de solo 3 segundos. Mira qué está esperando la función: una API de destino lenta, una conexión a la base de datos que no se puede establecer (a menudo una función en VPC sin ruta a la base de datos o a internet), o muy poca memoria (y por lo tanto poca CPU). Soluciones: aumentar el tiempo de espera (hasta 15 minutos), aumentar la memoria, configurar tiempos de espera más cortos en los clientes para que la función falle rápido con un error claro, reutilizar conexiones o mover el trabajo largo a un procesamiento asíncrono.</p>
+<p>Los errores AccessDenied (<code>AccessDeniedException</code>, o mensajes como 'User: arn:aws:sts::...:assumed-role/my-fn-role/my-fn is not authorized to perform: dynamodb:PutItem on resource ...') significan que al rol de ejecución le falta un permiso. El mensaje te dice exactamente qué acción y qué recurso agregar. Revisa también las políticas de recursos (políticas de bucket o de claves de KMS), las denegaciones explícitas de límites de permisos o de SCP, y si se necesitan permisos de KMS para recursos cifrados. Si la función ni siquiera puede escribir logs y nada aparece en CloudWatch, al rol le faltan los permisos básicos de logging.</p>
+<p>Un 502 Bad Gateway de una integración proxy de Lambda casi siempre significa una respuesta proxy mal formada: la función devolvió algo que no es un objeto con <code>statusCode</code> y un <code>body</code> de tipo cadena, o la función lanzó un error no manejado. Los logs de ejecución de API Gateway muestran 'Malformed Lambda proxy response'. Corrige la forma de lo que se devuelve (serializa el body con <code>JSON.stringify</code> o <code>json.dumps</code>) y captura los errores para devolver respuestas 4xx o 5xx adecuadas. Un 500 con un mensaje de permisos inválidos significa que API Gateway no tiene permitido invocar la función.</p>
+<p>Un 504 Gateway Timeout de API Gateway es un tiempo de espera de integración agotado: el backend no respondió dentro del tiempo de espera de integración de API Gateway, 29 segundos por defecto. Aunque el tiempo de espera de la función Lambda sea de 5 minutos, el cliente recibe 504 cuando se alcanza el límite de la API mientras la función sigue ejecutándose. Soluciones: hacer más rápido el backend, o cambiar el diseño para que sea asíncrono: aceptar la solicitud, encolar el trabajo en SQS o iniciar una ejecución de Step Functions, devolver 202 con un ID de trabajo y dejar que el cliente sondee o reciba un callback. Las REST API regionales y privadas pueden solicitar un tiempo de espera de integración más largo, pero el diseño asíncrono es la respuesta que el examen suele buscar.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>TooManyRequestsException (429)</dt><dd>El error que se devuelve cuando una invocación de Lambda se limita porque no hay concurrencia disponible.</dd><dt>Task timed out (tarea con tiempo agotado)</dt><dd>El mensaje de log que escribe Lambda cuando una invocación supera su tiempo de espera configurado.</dd><dt>Malformed Lambda proxy response (respuesta proxy de Lambda mal formada)</dt><dd>Un error de API Gateway (que se devuelve a los clientes como 502) cuando la salida de la función de una integración proxy tiene un formato incorrecto.</dd><dt>Integration timeout (tiempo de espera de integración)</dt><dd>El tiempo máximo que API Gateway espera la respuesta de un backend, 29 segundos por defecto, después del cual devuelve 504.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un endpoint de informes devuelve errores 504 tras unos 30 segundos, aunque la función Lambda termina finalmente después de 90 segundos. El equipo cambia la API para poner una solicitud en una cola SQS y devolver 202 con un ID de informe; una función trabajadora construye el informe y el cliente sondea un endpoint de estado.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Asocia los códigos con sus causas: 429 es limitación, 502 es una respuesta proxy incorrecta o un error de la función, 504 es el backend superando el tiempo de espera de integración de API Gateway, y un AccessDenied que nombra el rol asumido es un permiso faltante en el rol de ejecución.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Una API devuelve 502 y los logs muestran 'Malformed Lambda proxy response'. ¿Cuál es la solución probable?</summary><p>Devolver un objeto con un statusCode numérico, headers opcionales y el body como cadena, y manejar las excepciones para que la función siempre devuelva esa forma.</p></details>
+<details class="sq"><summary>¿Por qué aumentar el tiempo de espera de Lambda no corrige un 504 de API Gateway?</summary><p>El tiempo de espera de integración de API Gateway (29 segundos por defecto) se alcanza primero, sin importar el tiempo de espera propio de la función.</p></details>
+<details class="sq"><summary>Menciona dos formas de resolver la limitación de Lambda.</summary><p>Solicitar una cuota de concurrencia de cuenta más alta, configurar o aumentar la concurrencia reservada, acelerar la función o hacer que los clientes reintenten con retroceso.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../root-cause-analysis-with-cloudwatch-logs-logs-insights-queries-metrics/">← Análisis de causa raíz con CloudWatch Logs, consultas de Log</a><a href="../aws-x-ray-segments-subsegments-annotations-vs-metadata-sampling-active/">AWS X-Ray: segmentos, subsegmentos, anotaciones vs metadatos →</a></nav>
+</main>
+</body>
+</html>

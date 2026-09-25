@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Compilar y subir imágenes con `az acr build` (quick tasks)… · Lección de AI-200</title>
+<meta name="description" content="No necesitas tener Docker instalado localmente para producir una imagen para Azure. ACR Tasks es un conjunto de funciones de compilación dentro de Azure Co">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Compilar y subir imágenes con `az acr build` (quick tasks)… · Lección de AI-200">
+<meta property="og:description" content="No necesitas tener Docker instalado localmente para producir una imagen para Azure. ACR Tasks es un conjunto de funciones de compilación dentro de Azure Co">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/build-and-push-images-with-az-acr-build-quick-tasks-and-acr-tasks-trig/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/build-and-push-images-with-az-acr-build-quick-tasks-and-acr-tasks-trig/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/build-and-push-images-with-az-acr-build-quick-tasks-and-acr-tasks-trig/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Compilar y subir imágenes con `az acr build` (quick tasks) y ACR Tasks activadas por commits, actualizaciones de la imagen base o programaciones</h1>
+<article class="lbody">
+<p>No necesitas tener Docker instalado localmente para producir una imagen para Azure. ACR Tasks es un conjunto de funciones de compilación dentro de Azure Container Registry que ejecuta compilaciones en cómputo administrado por Azure y sube el resultado directamente a tu registro. Esto es importante en equipos de desarrollo restringidos, en shells en la nube y en pipelines de CI donde prefieres no ejecutar un daemon de Docker.</p>
+<p>La forma más simple es una quick task (tarea rápida). <code>az acr build --registry myregistry --image orders-api:{{.Run.ID}} .</code> sube el directorio actual (el contexto de compilación, filtrado por <code>.dockerignore</code>) a ACR, compila ahí el Dockerfile, transmite el registro de compilación de vuelta a tu terminal y sube la imagen si la compilación tiene éxito. <code>{{.Run.ID}}</code> es un marcador de posición que ACR reemplaza con el ID único de la ejecución, lo que te da una etiqueta única para cada compilación. Puedes agregar <code>--file</code> para apuntar a otro Dockerfile y <code>--platform</code> para apuntar a otro sistema operativo o arquitectura.</p>
+<p>Las quick tasks son puntuales y manuales. Cuando quieres que las compilaciones ocurran automáticamente, creas una tarea con <code>az acr task create</code>. Una tarea guarda la definición de compilación (contexto, Dockerfile, nombre de la imagen) y uno o más desencadenadores (triggers). Su contexto suele ser un repositorio Git, por ejemplo la URL de un repositorio de GitHub con una rama, más un token de acceso personal para que ACR pueda leer el repositorio y registrar un webhook.</p>
+<p>Vale la pena memorizar los tres tipos de trigger. Un trigger de actualización de código fuente (trigger de commit) ejecuta la tarea cuando se sube un commit, o se abre un pull request, en la rama configurada. Un trigger de actualización de la imagen base ejecuta la tarea cuando la imagen base de la que depende la línea <code>FROM</code> de tu Dockerfile se actualiza en ACR o en un registro público, de modo que la imagen de tu app recoge automáticamente los parches del sistema operativo y del runtime. Un trigger de temporizador ejecuta la tarea según una programación definida con una expresión cron mediante <code>--schedule</code>, útil para recompilaciones nocturnas o trabajos de mantenimiento.</p>
+<pre class="code" tabindex="0"><code>az acr task create --registry myregistry --name build-orders \
+  --image orders-api:{{.Run.ID}} \
+  --context &lt;git-repo-url&gt;#main \
+  --file Dockerfile --git-access-token $PAT
+
+az acr task run --registry myregistry --name build-orders
+az acr task list-runs --registry myregistry --output table</code></pre>
+<p>Los triggers de actualización de la imagen base están habilitados de forma predeterminada al crear una tarea, y son la función que más probablemente aparezca en un escenario sobre mantener las imágenes con parches sin esfuerzo de los desarrolladores. Para flujos más complejos, una tarea de varios pasos definida en un archivo YAML (que se ejecuta con <code>az acr run</code>) puede compilar, probar y subir varias imágenes en secuencia, y también es la forma de ejecutar comandos de mantenimiento como el comando purge que se ve en la siguiente lección.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Quick task (tarea rápida)</dt><dd>Una compilación puntual en la nube iniciada con az acr build que sube el contexto, compila en ACR y sube la imagen.</dd><dt>ACR task (tarea de ACR)</dt><dd>Una definición de compilación guardada en un registro que se ejecuta automáticamente con triggers como commits, actualizaciones de la imagen base o una programación.</dd><dt>Base image update trigger (trigger de actualización de la imagen base)</dt><dd>Un trigger de ACR Tasks que recompila la imagen de tu app cuando se actualiza la imagen de su línea FROM.</dd><dt>Run ID (ID de ejecución)</dt><dd>El identificador único de cada ejecución de ACR Tasks, disponible como el marcador {{.Run.ID}} para etiquetas únicas.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un equipo de seguridad quiere que cada imagen de app se recompile cada vez que la imagen base de Python recibe un parche de seguridad, sin que los desarrolladores lo noten. El equipo de plataforma crea una tarea de ACR por app con un trigger de commit en main y el trigger predeterminado de actualización de la imagen base. Cuando se publica una imagen base con parches, ACR recompila cada imagen de app dependiente y sube una nueva etiqueta única, y el pipeline de despliegue la toma.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Relaciona el trigger con la redacción: código subido significa trigger de commit; parches del sistema operativo o del runtime en la imagen padre significan trigger de actualización de la imagen base; y cada noche o cada semana significa trigger de temporizador con una programación cron.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué hace az acr build que no hacen docker build más docker push?</summary><p>Sube el contexto de compilación y ejecuta la compilación en cómputo administrado por Azure, y luego sube la imagen a ACR, así que no se necesita un motor Docker local.</p></details>
+<details class="sq"><summary>¿Qué trigger de ACR Tasks mantiene una imagen de app con parches cuando cambia su imagen padre?</summary><p>El trigger de actualización de la imagen base, que recompila la imagen cuando se actualiza la imagen de su línea FROM.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../azure-container-registry-basic-standard-and-premium-tiers-geo-replicat/">← Azure Container Registry: niveles Basic, Standard y Premium;</a><a href="../tags-vs-digests-stable-vs-unique-tags-and-cleaning-up-old-images-with/">Etiquetas vs digests, etiquetas estables vs únicas, y limpie →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Alta disponibilidad de DHCP: conmutación por error en modo… · Lección de AZ-802</title>
+<meta name="description" content="Si tu único servidor DHCP se cae, los clientes siguen funcionando hasta que caducan sus concesiones; luego no pueden renovarlas y pierden la conectividad. ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Alta disponibilidad de DHCP: conmutación por error en modo… · Lección de AZ-802">
+<meta property="og:description" content="Si tu único servidor DHCP se cae, los clientes siguen funcionando hasta que caducan sus concesiones; luego no pueden renovarlas y pierden la conectividad. ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-802/lessons/dhcp-high-availability-failover-in-load-balance-and-hot-standby-modes/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-802/lessons/dhcp-high-availability-failover-in-load-balance-and-hot-standby-modes/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-802/">AZ-802</a> / <a href="../">Lecciones</a> · <a href="../../../../az-802/lessons/dhcp-high-availability-failover-in-load-balance-and-hot-standby-modes/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802</p>
+<h1>Alta disponibilidad de DHCP: conmutación por error en modos de equilibrio de carga y espera activa; IPAM</h1>
+<article class="lbody">
+<p>Si tu único servidor DHCP se cae, los clientes siguen funcionando hasta que caducan sus concesiones; luego no pueden renovarlas y pierden la conectividad. Los diseños antiguos dividían cada ámbito entre dos servidores (el ámbito dividido 80/20), pero cada servidor solo conocía su propia mitad. La conmutación por error de DHCP, integrada en Windows Server, es la respuesta moderna: dos servidores comparten la información completa de las concesiones de los mismos ámbitos y la mantienen sincronizada.</p>
+<p>Una relación de conmutación por error vincula exactamente dos servidores DHCP para uno o más ámbitos IPv4 (la conmutación por error no abarca los ámbitos IPv6). Los servidores se replican entre sí los datos de concesiones, autenticados con un secreto compartido opcional. La creas en la consola DHCP con Configure Failover sobre un ámbito, o con <code>Add-DhcpServerv4Failover</code>, y la compruebas con <code>Get-DhcpServerv4Failover</code>. La configuración de los ámbitos, como las opciones y las reservas, no se sincroniza continuamente después de la creación, así que después de cambiarla replicas con Replicate Scope o <code>Invoke-DhcpServerv4FailoverReplication</code>.</p>
+<p>Hay dos modos. El modo de equilibrio de carga (load balance) es el predeterminado: ambos servidores atienden activamente a los clientes, dividiendo las solicitudes según un porcentaje (50/50 a menos que lo cambies). Es adecuado para servidores en el mismo sitio. El modo de espera activa (hot standby) tiene un servidor activo y uno en espera. El servidor en espera conserva un porcentaje de reserva de direcciones (5 por ciento de forma predeterminada) que puede entregar de inmediato si el servidor activo deja de responder, y toma el control por completo después de que se declara caído al asociado. La espera activa es adecuada para un diseño de centro y sucursales en el que un servidor central respalda a varios servidores de sucursal, ya que un único servidor puede ser el asociado en espera en varias relaciones.</p>
+<p>Dos temporizadores importan. El tiempo máximo de adelanto del cliente (MCLT) es cuánto puede extender un servidor una concesión más allá de lo que conoce su asociado; después de que un asociado se marca como caído, el servidor superviviente espera el MCLT antes de poder tomar el control de todo el grupo de direcciones. El intervalo de cambio de estado (state switchover interval), si está configurado, pasa automáticamente un servidor de comunicación interrumpida a asociado caído después de ese tiempo; si no está configurado, un administrador debe declarar manualmente al asociado como caído. Estas configuraciones explican por qué la toma de control no es instantánea.</p>
+<p>IP Address Management (IPAM) es una característica de Windows Server que detecta y administra de forma centralizada los servidores DHCP, los servidores DNS y tu espacio de direcciones IP. Desde una sola consola puedes ver la utilización de los ámbitos, encontrar bloques de direcciones libres, administrar los ámbitos y la conmutación por error de DHCP, administrar zonas y registros DNS, y auditar qué usuario o dispositivo tenía una dirección en un momento dado usando eventos de concesiones e inicios de sesión. Los servidores administrados se configuran mediante aprovisionamiento por directiva de grupo, donde <code>Invoke-IpamGpoProvisioning</code> crea GPO que conceden acceso al servidor IPAM, o mediante la configuración manual de los mismos permisos y reglas de firewall. Instala IPAM en un servidor miembro; no se admite instalarlo en un controlador de dominio.</p>
+<p>Para el examen, recuerda: la conmutación por error es solo IPv4 y exactamente dos servidores por relación; equilibrio de carga para activo-activo en un sitio; espera activa para activo-pasivo y respaldo de sucursales; IPAM para la visibilidad centralizada y la auditoría, no para proporcionar redundancia por sí mismo.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>DHCP failover (conmutación por error de DHCP)</dt><dd>Una relación entre dos servidores DHCP que replican la información de concesiones IPv4 para que cualquiera de los dos pueda atender los mismos ámbitos.</dd><dt>Load balance mode (modo de equilibrio de carga)</dt><dd>El modo de conmutación por error predeterminado en el que ambos servidores conceden direcciones activamente, divididas según un porcentaje configurable.</dd><dt>Hot standby mode (modo de espera activa)</dt><dd>Un modo de conmutación por error con un servidor activo y uno en espera; el de espera conserva un porcentaje de reserva de direcciones para uso inmediato.</dd><dt>MCLT</dt><dd>Maximum Client Lead Time (tiempo máximo de adelanto del cliente): el período en que un servidor puede extender concesiones más allá de lo que conoce su asociado, y la espera antes de la toma de control completa tras declarar caído al asociado.</dd><dt>IPAM</dt><dd>IP Address Management: una característica de Windows Server que detecta, supervisa, administra y audita de forma centralizada DHCP, DNS y el espacio de direcciones IP.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una empresa tiene servidores DHCP en cinco sucursales y uno en el centro de datos. Cada servidor de sucursal es el servidor activo en una relación de espera activa con el servidor del centro de datos, que conserva una reserva del 5 por ciento de cada ámbito. Cuando falla un servidor de sucursal, los clientes que renuevan a través de la WAN obtienen de inmediato direcciones de la reserva, y después de marcar al asociado como caído, el servidor del centro de datos puede usar el grupo completo.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Equilibrio de carga equivale a activo-activo en el mismo sitio; espera activa equivale a activo-pasivo, típico de un servidor central que respalda sucursales. La conmutación por error nunca abarca IPv6 y nunca más de dos servidores por relación.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Cambias la opción de servidor DNS en un ámbito que está en una relación de conmutación por error. ¿Qué más debes hacer?</summary><p>Replicar el ámbito al asociado (Replicate Scope o Invoke-DhcpServerv4FailoverReplication), porque los cambios de configuración no se sincronizan automáticamente.</p></details>
+<details class="sq"><summary>¿Qué modo de conmutación por error es adecuado para que un servidor del centro de datos respalde a varios servidores DHCP de sucursal?</summary><p>La espera activa, con cada servidor de sucursal activo y el servidor del centro de datos en espera conservando una reserva de direcciones.</p></details>
+<details class="sq"><summary>¿Puedes instalar IPAM en un controlador de dominio?</summary><p>No. No se admite instalar la característica de servidor IPAM en un controlador de dominio; usa un servidor miembro.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AZ-802 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-802/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../dhcp-scopes-reservations-options-and-relay-authorization-in-ad/">← Ámbitos, reservas, opciones y retransmisión DHCP; autorizaci</a><a href="../azure-vnet-addressing-and-static-private-ips-set-on-the-nic/">Direccionamiento de VNet de Azure e IP privadas estáticas co →</a></nav>
+</main>
+</body>
+</html>

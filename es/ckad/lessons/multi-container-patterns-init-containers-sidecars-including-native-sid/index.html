@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Patrones multicontenedor: init containers, sidecars (inclu… · Lección de CKAD</title>
+<meta name="description" content="Un Pod puede contener varios contenedores. Comparten el mismo network namespace, así que se alcanzan entre sí en localhost, y pueden compartir volúmenes. E">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Patrones multicontenedor: init containers, sidecars (inclu… · Lección de CKAD">
+<meta property="og:description" content="Un Pod puede contener varios contenedores. Comparten el mismo network namespace, así que se alcanzan entre sí en localhost, y pueden compartir volúmenes. E">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/multi-container-patterns-init-containers-sidecars-including-native-sid/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/multi-container-patterns-init-containers-sidecars-including-native-sid/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/multi-container-patterns-init-containers-sidecars-including-native-sid/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>Patrones multicontenedor: init containers, sidecars (incluidos los sidecars nativos con restartPolicy: Always), adapter y ambassador</h1>
+<article class="lbody">
+<p>Un Pod puede contener varios contenedores. Comparten el mismo network namespace, así que se alcanzan entre sí en <code>localhost</code>, y pueden compartir volúmenes. Eso hace natural separar las tareas auxiliares en contenedores distintos en lugar de meterlas en la imagen de tu aplicación. El temario del CKAD espera que conozcas los patrones basados en esta idea: init containers, sidecars, adapters y ambassadors.</p>
+<p>Los init containers se listan bajo <code>spec.initContainers</code>. Se ejecutan uno a la vez, en orden, antes de que arranque cualquier contenedor normal, y cada uno debe terminar con éxito. Si uno falla, el kubelet lo reintenta según el restartPolicy del Pod, y el estado del Pod muestra <code>Init:0/2</code>, <code>Init:Error</code> o <code>Init:CrashLoopBackOff</code>. Úsalos para esperar una dependencia (por ejemplo, repetir en bucle hasta que se resuelva el nombre DNS de un Service), para descargar o generar configuración en un emptyDir compartido, o para corregir permisos en un volumen. Como terminan antes de que arranque la app, pueden usar herramientas que no quieres en la imagen principal.</p>
+<p>Un sidecar es un auxiliar que se ejecuta junto al contenedor principal durante toda la vida del Pod: enviando logs, renovando certificados o sincronizando archivos desde Git. La forma tradicional es agregar una segunda entrada bajo <code>containers</code>. La desventaja es que Kubernetes trata a todos los contenedores normales como iguales, así que en un Job el sidecar puede mantener el Pod en ejecución después de que el trabajo principal terminó, y el orden de arranque no está garantizado.</p>
+<p>Los sidecars nativos resuelven esto. Declaras el auxiliar bajo <code>initContainers</code> pero le das <code>restartPolicy: Always</code>. Kubernetes lo inicia en el orden de los init, no espera a que termine, lo mantiene en ejecución (reiniciándolo si muere) mientras corren los contenedores principales, y lo detiene cuando estos terminan. Eso significa que un enviador de logs está activo antes de que tu app escriba su primera línea, y que un Job se completa normalmente cuando el contenedor principal termina.</p>
+<pre class="code" tabindex="0"><code>spec:
+  initContainers:
+  - name: log-shipper
+    image: busybox
+    restartPolicy: Always
+    command: [&quot;sh&quot;, &quot;-c&quot;, &quot;tail -F /var/log/app/app.log&quot;]
+    volumeMounts:
+    - {name: logs, mountPath: /var/log/app}
+  containers:
+  - name: app
+    image: busybox
+    command: [&quot;sh&quot;, &quot;-c&quot;, &quot;while true; do date &gt;&gt; /var/log/app/app.log; sleep 2; done&quot;]
+    volumeMounts:
+    - {name: logs, mountPath: /var/log/app}
+  volumes:
+  - name: logs
+    emptyDir: {}</code></pre>
+<p>Un contenedor adapter transforma la salida del contenedor principal a una forma estándar, por ejemplo convirtiendo el formato de log personalizado de una aplicación o su página de estado a un formato que entienda un sistema de monitoreo. Un contenedor ambassador es un proxy local que representa a un servicio externo: la app se conecta a <code>localhost:6379</code> y el ambassador reenvía al endpoint de Redis correcto, encargándose del descubrimiento, TLS o sharding. Técnicamente ambos son sidecars; los nombres describen su función. Los adapters cambian lo que sale; los ambassadors intermedian las conexiones hacia el exterior.</p>
+<p>Para trabajar con un contenedor específico, agrega <code>-c</code>: <code>kubectl logs mypod -c log-shipper</code>, <code>kubectl exec -it mypod -c app -- sh</code>. <code>kubectl describe pod</code> lista por separado los init containers y los contenedores normales con sus estados.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Init container</dt><dd>Un contenedor que se ejecuta hasta completarse, en orden, antes de que arranquen los contenedores de la app.</dd><dt>Sidecar</dt><dd>Un contenedor auxiliar que se ejecuta junto al contenedor principal durante toda la vida del Pod.</dd><dt>Native sidecar (sidecar nativo)</dt><dd>Un init container con restartPolicy: Always, que se inicia antes y se detiene después de los contenedores principales.</dd><dt>Adapter</dt><dd>Un auxiliar que convierte la salida del contenedor principal a un formato estándar.</dd><dt>Ambassador</dt><dd>Un auxiliar que hace de proxy para las conexiones de la app hacia servicios externos a través de localhost.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una app heredada escribe logs solo en un archivo. El equipo agrega un sidecar nativo que lee el archivo desde un emptyDir compartido y lo envía a stdout, de modo que <code>kubectl logs pod -c log-shipper</code> funciona y el recolector de logs del clúster lo recoge, y un init container que espera a que se resuelva el Service de la base de datos antes de que arranque la app.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si un Pod está atascado en estado <code>Init:</code>, el problema es un init container: revísalo con <code>kubectl logs &lt;pod&gt; -c &lt;init-name&gt;</code>. Un sidecar nativo vive bajo initContainers pero tiene restartPolicy: Always.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿En qué orden se ejecutan los init containers entre sí y respecto a la app?</summary><p>Uno a la vez en el orden listado, cada uno terminando con éxito antes del siguiente, y todos antes de que arranquen los contenedores de la app (los sidecars nativos arrancan y siguen ejecutándose).</p></details>
+<details class="sq"><summary>¿Por qué los sidecars nativos son mejores que un segundo contenedor normal en un Job?</summary><p>Se detienen automáticamente después de que termina el contenedor principal, así que el Job puede completarse en lugar de quedarse colgado por un auxiliar que sigue en ejecución.</p></details>
+<details class="sq"><summary>¿Cuál es la diferencia entre un adapter y un ambassador?</summary><p>Un adapter reformatea los datos que salen de la app; un ambassador hace de proxy para las conexiones de la app hacia servicios externos.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../cronjobs-schedule-syntax-concurrencypolicy-history-limits-running-a-jo/">← CronJobs: sintaxis de schedule, concurrencyPolicy, límites d</a><a href="../ephemeral-volumes-emptydir-including-medium-memory-configmap-secret-pr/">Volúmenes efímeros: emptyDir (incluido medium: Memory) y vol →</a></nav>
+</main>
+</body>
+</html>

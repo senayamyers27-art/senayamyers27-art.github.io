@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hilos de plataforma vs hilos virtuales; Executors.newVirtu… · Lección de OCP Java</title>
+<meta name="description" content="Un hilo de plataforma (platform thread) es un envoltorio delgado sobre un hilo del sistema operativo. Ocupa ese hilo del SO durante toda su vida, incluso m">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Hilos de plataforma vs hilos virtuales; Executors.newVirtu… · Lección de OCP Java">
+<meta property="og:description" content="Un hilo de plataforma (platform thread) es un envoltorio delgado sobre un hilo del sistema operativo. Ocupa ese hilo del SO durante toda su vida, incluso m">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/java-se/lessons/platform-threads-vs-virtual-threads-executors-newvirtualthreadpertaske/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/java-se/lessons/platform-threads-vs-virtual-threads-executors-newvirtualthreadpertaske/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../java-se/">OCP Java</a> / <a href="../">Lecciones</a> · <a href="../../../../java-se/lessons/platform-threads-vs-virtual-threads-executors-newvirtualthreadpertaske/" hreflang="en" lang="en">English</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25)</p>
+<h1>Hilos de plataforma vs hilos virtuales; Executors.newVirtualThreadPerTaskExecutor()</h1>
+<article class="lbody">
+<p>Un hilo de plataforma (platform thread) es un envoltorio delgado sobre un hilo del sistema operativo. Ocupa ese hilo del SO durante toda su vida, incluso mientras espera una respuesta de la base de datos o de la red. Los hilos del SO son relativamente costosos: cada uno reserva memoria para una pila y el SO solo puede planificar eficientemente una cantidad limitada, así que tradicionalmente las aplicaciones usaban pools de hilos de tamaño fijo y compartían un número limitado de hilos entre muchas tareas.</p>
+<p>Un hilo virtual (virtual thread), definitivo desde Java 21, es un hilo ligero gestionado por la JVM en lugar del SO. La JVM ejecuta los hilos virtuales sobre un pequeño pool de hilos de plataforma llamados hilos portadores (carrier threads). Cuando un hilo virtual realiza una operación bloqueante, como leer de un socket o dormir, la JVM lo desmonta de su portador, guardando su pila en la memoria heap, y el portador queda libre para ejecutar otro hilo virtual. Cuando la operación termina, el hilo virtual se vuelve a montar, posiblemente en otro portador.</p>
+<p>El resultado es que puedes tener cantidades muy grandes de hilos virtuales, incluso millones, y escribir código bloqueante simple con un estilo de un hilo por petición sin dejar de escalar. Los hilos virtuales ayudan al rendimiento del trabajo limitado por E/S: muchas tareas que pasan la mayor parte del tiempo esperando. No hacen más rápido el código limitado por CPU, porque el número de hilos portadores, y por tanto de núcleos de CPU en uso, sigue siendo el mismo.</p>
+<pre class="code" tabindex="0"><code>try (ExecutorService ex = Executors.newVirtualThreadPerTaskExecutor()) {
+    for (int i = 0; i &lt; 10_000; i++) {
+        int id = i;
+        ex.submit(() -&gt; fetchOrder(id));   // cada tarea obtiene su propio hilo virtual nuevo
+    }
+}   // close() espera a que terminen todas las tareas enviadas</code></pre>
+<p><code>Executors.newVirtualThreadPerTaskExecutor()</code> devuelve un ExecutorService que inicia un hilo virtual nuevo por cada tarea enviada. No hay pool, porque los hilos virtuales son baratos de crear; no deberías agrupar hilos virtuales en pools ni reutilizarlos. Si necesitas limitar el acceso concurrente a un recurso escaso, como una base de datos con diez conexiones, usa un <code>Semaphore</code> en lugar de un pool pequeño. Otras formas de crear hilos virtuales son <code>Thread.ofVirtual().start(r)</code>, <code>Thread.startVirtualThread(r)</code> y <code>Thread.ofVirtual().factory()</code>.</p>
+<p>Algunas propiedades difieren de los hilos de plataforma. Los hilos virtuales siempre son hilos daemon, y llamar a <code>setDaemon(false)</code> sobre uno lanza <code>IllegalArgumentException</code>. Su prioridad está fija en normal, y <code>setPriority</code> no tiene efecto. <code>isVirtual()</code> te dice de qué tipo es un hilo. Las variables thread-local funcionan pero, con millones de hilos, las cachés pesadas por hilo en ThreadLocal desperdician memoria, que es una de las razones por las que se introdujeron los scoped values.</p>
+<p>Un hilo virtual puede quedar fijado (pinned) a su portador, lo que significa que no puede desmontarse mientras está bloqueado; históricamente esto ocurría al bloquearse dentro de un bloque <code>synchronized</code>, y todavía ocurre durante llamadas a métodos nativos. Java 24 eliminó el caso de synchronized, pero aun así debe evitarse la fijación prolongada. Para el examen, céntrate en el modelo: muchos hilos virtuales baratos para E/S bloqueante, unos pocos hilos de plataforma para el trabajo de CPU, y un hilo virtual por tarea sin pools.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Platform thread (hilo de plataforma)</dt><dd>Un hilo de Java respaldado uno a uno por un hilo del sistema operativo durante toda su vida.</dd><dt>Virtual thread (hilo virtual)</dt><dd>Un hilo ligero gestionado por la JVM que se desmonta de su portador mientras está bloqueado para que el portador pueda ejecutar otro trabajo.</dd><dt>Carrier thread (hilo portador)</dt><dd>Un hilo de plataforma sobre el que la JVM monta los hilos virtuales para ejecutarlos.</dd><dt>newVirtualThreadPerTaskExecutor</dt><dd>Un método de fábrica de Executors que devuelve un ExecutorService que inicia un hilo virtual nuevo por cada tarea.</dd><dt>Pinning (fijación)</dt><dd>Un estado en el que un hilo virtual bloqueado no puede desmontarse de su portador, lo que reduce la escalabilidad.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un servicio web que llama a tres APIs lentas por cada petición pasa de un pool fijo de 200 hilos a un executor de un hilo virtual por tarea. Bajo carga maneja muchas más peticiones concurrentes con el mismo hardware, porque las peticiones en espera ya no ocupan hilos del sistema operativo.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Los hilos virtuales mejoran la escalabilidad de las tareas bloqueantes con mucha E/S, no la velocidad bruta de CPU. No los agrupes en pools; limita el acceso a recursos escasos con un Semaphore. Siempre son hilos daemon.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cambiar a hilos virtuales un trabajo de redimensionar imágenes limitado por CPU hará que termine más rápido?</summary><p>Por lo general no. Los hilos virtuales ayudan cuando las tareas esperan E/S; el trabajo limitado por CPU depende del número de núcleos.</p></details>
+<details class="sq"><summary>¿Qué ocurre cuando un hilo virtual se bloquea en una lectura de red?</summary><p>La JVM lo desmonta de su hilo portador, que puede entonces ejecutar otros hilos virtuales hasta que la lectura termine.</p></details>
+<details class="sq"><summary>¿Por qué no deberías crear un pool fijo de 10 hilos virtuales para limitar las llamadas a la base de datos?</summary><p>Los hilos virtuales están pensados para crearse por tarea y no agruparse en pools; usa un Semaphore para limitar la concurrencia.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia OCP Java gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../java-se/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../creating-threads-with-runnable-thread-and-the-thread-builder-api/">← Crear hilos con Runnable, Thread y la API Thread.Builder</a><a href="../executorservice-callable-and-future-shutdown-awaittermination-close/">ExecutorService, Callable y Future; shutdown, awaitTerminati →</a></nav>
+</main>
+</body>
+</html>

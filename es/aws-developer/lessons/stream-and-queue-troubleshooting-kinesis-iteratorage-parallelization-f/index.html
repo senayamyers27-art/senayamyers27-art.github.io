@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Solución de problemas de streams y colas: IteratorAge de K… · Lección de Developer Associate</title>
+<meta name="description" content="Cuando el consumidor de un stream o una cola se atrasa o sigue fallando, los mensajes se acumulan y los datos llegan tarde. El examen describe estos síntom">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Solución de problemas de streams y colas: IteratorAge de K… · Lección de Developer Associate">
+<meta property="og:description" content="Cuando el consumidor de un stream o una cola se atrasa o sigue fallando, los mensajes se acumulan y los datos llegan tarde. El examen describe estos síntom">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/stream-and-queue-troubleshooting-kinesis-iteratorage-parallelization-f/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/stream-and-queue-troubleshooting-kinesis-iteratorage-parallelization-f/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/stream-and-queue-troubleshooting-kinesis-iteratorage-parallelization-f/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Solución de problemas de streams y colas: IteratorAge de Kinesis, factor de paralelización, colas de mensajes fallidos de SQS y redrive</h1>
+<article class="lbody">
+<p>Cuando el consumidor de un stream o una cola se atrasa o sigue fallando, los mensajes se acumulan y los datos llegan tarde. El examen describe estos síntomas mediante métricas específicas, y necesitas saber qué significa cada una y qué ajuste lo corrige.</p>
+<p>Para Kinesis Data Streams y DynamoDB Streams consumidos por Lambda, la métrica clave es <code>IteratorAge</code>: la antigüedad del último registro del lote cuando Lambda lo procesó, es decir, qué tan atrasado está el consumidor respecto al tiempo real. (Kinesis por su parte informa <code>GetRecords.IteratorAgeMilliseconds</code>.) Una antigüedad del iterador que crece de forma constante significa que los registros llegan más rápido de lo que se procesan, o que el procesamiento está bloqueado. Los registros que siguen sin procesarse más allá del período de retención del stream se pierden, así que una antigüedad del iterador en aumento es urgente.</p>
+<p>Causas comunes y soluciones: la función está fallando en un lote y, como el procesamiento de streams es ordenado por shard, Lambda sigue reintentando ese lote y el shard se detiene. Revisa la métrica <code>Errors</code> y los logs, y luego configura el número máximo de reintentos, la antigüedad máxima del registro, la división del lote ante error de la función, las respuestas parciales de lote y un destino on-failure para que un registro malo no pueda bloquear el shard indefinidamente. Si la función simplemente es lenta, optimízala o aumenta su memoria. Si no hay suficiente paralelismo, aumenta el factor de paralelización en el mapeo de fuente de eventos (de 1 hasta 10), lo que permite a Lambda procesar hasta esa cantidad de lotes de cada shard simultáneamente, manteniendo el orden para los registros con la misma clave de partición. Los tamaños de lote y las ventanas de agrupación más grandes reducen la sobrecarga por invocación. Agregar shards aumenta el rendimiento tanto para productores como para consumidores. Cuando varias aplicaciones leen el mismo stream y compiten por el rendimiento de lectura compartido, el enhanced fan-out da a cada consumidor registrado su propio rendimiento de lectura dedicado por shard.</p>
+<p>Del lado del productor, <code>ProvisionedThroughputExceededException</code> o <code>WriteProvisionedThroughputExceeded</code> significa que se superó la capacidad de escritura de un shard, a menudo porque una clave de partición mal elegida envía la mayoría de los registros a un único shard caliente. Usa una clave de partición de mayor cardinalidad, agrega shards (o usa el modo bajo demanda) y reintenta con retroceso.</p>
+<p>En SQS, vigila <code>ApproximateNumberOfMessagesVisible</code> (el atraso) y <code>ApproximateAgeOfOldestMessage</code> (cuánto tiempo lleva esperando el mensaje más antiguo). Si estos valores suben, los consumidores son demasiado lentos, están fallando o no se están ejecutando. En los consumidores Lambda, revisa los errores y la limitación de la función y su ajuste de concurrencia máxima en el mapeo de fuente de eventos. Asegúrate también de que el tiempo de visibilidad de la cola sea holgadamente más largo que el tiempo de espera de la función (AWS recomienda al menos seis veces el tiempo de espera de la función para las fuentes de eventos de Lambda); de lo contrario, los mensajes reaparecen y se procesan dos veces mientras el primer intento sigue en curso.</p>
+<p>Una cola de mensajes fallidos atrapa los mensajes que fallan repetidamente. La política de redrive de la cola de origen nombra la DLQ y el <code>maxReceiveCount</code>; cuando un mensaje se ha recibido más veces que ese número sin eliminarse, SQS lo mueve a la DLQ. La DLQ debe ser del mismo tipo que la de origen (una cola FIFO necesita una DLQ FIFO) y estar en la misma cuenta y región, y su período de retención debe ser más largo que el de la de origen, porque en las colas estándar se conserva la marca de tiempo original de encolado cuando un mensaje se mueve. Una redrive allow policy en la DLQ controla qué colas de origen pueden usarla. Una vez que hayas corregido el error, el redrive de la DLQ mueve los mensajes de vuelta a la cola de origen (o a otra cola) para reprocesarlos, desde la consola o con la API <code>StartMessageMoveTask</code>. Crea siempre una alarma sobre la profundidad de la DLQ, o las fallas pasarán desapercibidas.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>IteratorAge (antigüedad del iterador)</dt><dd>La métrica que muestra la antigüedad de los registros que se procesan de un stream, lo que indica qué tan atrasado está un consumidor.</dd><dt>Parallelization factor (factor de paralelización)</dt><dd>Un ajuste del mapeo de fuente de eventos (de 1 a 10) para lotes simultáneos por shard, que conserva el orden por clave de partición.</dd><dt>Enhanced fan-out</dt><dd>Una función de Kinesis que da a cada consumidor registrado un rendimiento de lectura dedicado por shard.</dd><dt>maxReceiveCount</dt><dd>El número de veces que se puede recibir un mensaje de SQS antes de que la política de redrive lo mueva a la DLQ.</dd><dt>DLQ redrive (reenvío desde la DLQ)</dt><dd>Mover los mensajes de una cola de mensajes fallidos de vuelta a una cola de origen para reprocesarlos después de una corrección.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>El IteratorAge de una función de clickstream sube de segundos a horas. Los logs no muestran errores, pero la duración es alta y el stream tiene solo cuatro shards. El equipo configura el factor de paralelización en 5, así que cada shard lo procesan hasta cinco invocaciones simultáneas, y la antigüedad del iterador vuelve a estar cerca de cero.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> ¿IteratorAge en aumento? Busca errores que bloqueen un shard (corrígelos con la división del lote, límites de reintento o respuestas parciales de lote) o poco paralelismo (aumenta el factor de paralelización o agrega shards). ¿Mensajes de SQS procesados dos veces? Tiempo de visibilidad más corto que el tiempo de procesamiento.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué indica un IteratorAge que aumenta constantemente?</summary><p>Que el consumidor se está atrasando respecto al stream, porque es demasiado lento o está bloqueado por lotes que fallan, con riesgo de perder datos cuando los registros expiren.</p></details>
+<details class="sq"><summary>¿Cómo mantiene el orden el aumento del factor de paralelización?</summary><p>Los registros con la misma clave de partición se siguen procesando en orden; solo las claves distintas dentro de un shard se procesan simultáneamente.</p></details>
+<details class="sq"><summary>Después de corregir un error, ¿cómo reprocesas los mensajes que están en una DLQ de SQS?</summary><p>Usa el redrive de la DLQ (desde la consola o con StartMessageMoveTask) para moverlos de vuelta a la cola de origen.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../lambda-performance-memory-cpu-tuning-cold-starts-provisioned-concurren/">← Rendimiento de Lambda: ajuste de memoria/CPU, arranques en f</a><a href="../dynamodb-optimization-hot-partitions-key-design-on-demand-vs-provision/">Optimización de DynamoDB: particiones calientes, diseño de c →</a></nav>
+</main>
+</body>
+</html>

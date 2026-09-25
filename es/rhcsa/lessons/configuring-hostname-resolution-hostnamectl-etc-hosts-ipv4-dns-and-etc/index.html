@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Configurar la resolución de nombres de host: hostnamectl, … · Lección de RHCSA</title>
+<meta name="description" content="Este objetivo abarca dos trabajos relacionados: darle a la máquina su propio nombre y hacer que pueda convertir nombres en direcciones. Ambos son tareas ru">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Configurar la resolución de nombres de host: hostnamectl, … · Lección de RHCSA">
+<meta property="og:description" content="Este objetivo abarca dos trabajos relacionados: darle a la máquina su propio nombre y hacer que pueda convertir nombres en direcciones. Ambos son tareas ru">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/configuring-hostname-resolution-hostnamectl-etc-hosts-ipv4-dns-and-etc/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/configuring-hostname-resolution-hostnamectl-etc-hosts-ipv4-dns-and-etc/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/configuring-hostname-resolution-hostnamectl-etc-hosts-ipv4-dns-and-etc/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Configurar la resolución de nombres de host: hostnamectl, /etc/hosts, ipv4.dns y /etc/resolv.conf</h1>
+<article class="lbody">
+<p>Este objetivo abarca dos trabajos relacionados: darle a la máquina su propio nombre y hacer que pueda convertir nombres en direcciones. Ambos son tareas rutinarias del examen, y un sistema que no puede resolver nombres hará fallar tareas posteriores como los montajes NFS, la sincronización de la hora y los repositorios.</p>
+<p>El nombre de host estático se guarda en <code>/etc/hostname</code> y se establece con <code>hostnamectl set-hostname server1.example.com</code>, que actualiza el archivo y el sistema en ejecución a la vez, así que no hace falta reiniciar. Ejecuta <code>hostnamectl</code> o <code>hostname</code> para comprobarlo. Usa el nombre de dominio completo (FQDN, fully qualified domain name) cuando la tarea te dé uno.</p>
+<p>La resolución de nombres usa las fuentes listadas en la línea <code>hosts:</code> de <code>/etc/nsswitch.conf</code>, normalmente primero <code>files</code> y luego <code>dns</code>. <code>files</code> significa <code>/etc/hosts</code>, una lista sencilla de direcciones seguidas de nombres y alias. Las entradas ahí surten efecto de inmediato y tienen prioridad sobre DNS para esos nombres, lo que resulta práctico en laboratorios e instalaciones pequeñas.</p>
+<pre class="code" tabindex="0"><code># /etc/hosts
+127.0.0.1      localhost localhost.localdomain
+192.168.10.20  server1.example.com server1
+192.168.10.30  server2.example.com server2</code></pre>
+<p>Los servidores DNS (Domain Name System) se listan en <code>/etc/resolv.conf</code> como líneas <code>nameserver</code>, y <code>search</code> lista los dominios que se añaden a los nombres cortos. En RHEL, NetworkManager escribe este archivo a partir de las conexiones activas, así que las ediciones manuales se sobrescriben cuando se activa una conexión. Configura el DNS en la conexión.</p>
+<pre class="code" tabindex="0"><code>nmcli con mod static1 ipv4.dns '192.168.10.1 192.168.10.2'
+nmcli con mod static1 ipv4.dns-search example.com
+nmcli con mod static1 ipv4.ignore-auto-dns yes   # con DHCP, usar solo estos
+nmcli con up static1
+cat /etc/resolv.conf</code></pre>
+<p>Con DHCP, el servidor normalmente también proporciona servidores DNS; <code>ipv4.ignore-auto-dns yes</code> hace que el perfil use solo los servidores que listaste. Usa <code>+ipv4.dns</code> para añadir un servidor a la lista existente. Después de cualquier cambio, prueba con <code>getent hosts name</code>, que usa el mismo orden de búsqueda que las aplicaciones, incluido <code>/etc/hosts</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>hostnamectl</dt><dd>La herramienta que muestra y establece el nombre de host del sistema, escribiendo el nombre estático en /etc/hostname.</dd><dt>/etc/hosts</dt><dd>Un archivo local de asociaciones de direcciones a nombres que por defecto se consulta antes que DNS.</dd><dt>/etc/resolv.conf</dt><dd>El archivo del resolvedor que lista los nameserver y los dominios de búsqueda, generado por NetworkManager en RHEL.</dd><dt>ipv4.dns</dt><dd>La propiedad de conexión de NetworkManager que contiene las direcciones de los servidores DNS de ese perfil.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Estableces el nombre de host con hostnamectl set-hostname servera.lab.example.com, luego añades el DNS 172.25.250.254 con nmcli con mod en la conexión activa y la reactivas. Ahora /etc/resolv.conf lista ese nameserver, y getent hosts classroom.lab.example.com devuelve una dirección.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> No arregles el DNS editando /etc/resolv.conf directamente en RHEL; NetworkManager lo reescribe. Establece ipv4.dns en la conexión y actívala de nuevo.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué comando establece el nombre de host de forma permanente sin reiniciar?</summary><p>hostnamectl set-hostname name.</p></details>
+<details class="sq"><summary>¿Qué archivo decide si /etc/hosts se revisa antes que DNS?</summary><p>/etc/nsswitch.conf, en su línea hosts:.</p></details>
+<details class="sq"><summary>¿Por qué desaparecen tus ediciones manuales de /etc/resolv.conf?</summary><p>NetworkManager lo regenera a partir de los ajustes DNS de las conexiones; configura ipv4.dns con nmcli.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../bringing-connections-up-and-down-and-making-them-autoconnect-nmcli-con/">← Activar y desactivar conexiones y hacer que se conecten auto</a><a href="../checking-addresses-routes-and-name-resolution-ip-addr-ip-route-ping-ge/">Comprobar direcciones, rutas y resolución de nombres: ip add →</a></nav>
+</main>
+</body>
+</html>

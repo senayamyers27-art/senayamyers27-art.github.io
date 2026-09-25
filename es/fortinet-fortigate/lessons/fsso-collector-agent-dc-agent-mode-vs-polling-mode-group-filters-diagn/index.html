@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FSSO: collector agent, modo DC agent vs modo polling, filt… · Lección de FortiGate Admin</title>
+<meta name="description" content="Fortinet Single Sign-On (FSSO) es el principal método de autenticación pasiva para entornos Windows. Permite que el FortiGate aplique políticas basadas en ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="FSSO: collector agent, modo DC agent vs modo polling, filt… · Lección de FortiGate Admin">
+<meta property="og:description" content="Fortinet Single Sign-On (FSSO) es el principal método de autenticación pasiva para entornos Windows. Permite que el FortiGate aplique políticas basadas en ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/fortinet-fortigate/lessons/fsso-collector-agent-dc-agent-mode-vs-polling-mode-group-filters-diagn/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/fortinet-fortigate/lessons/fsso-collector-agent-dc-agent-mode-vs-polling-mode-group-filters-diagn/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../fortinet-fortigate/">FortiGate Admin</a> / <a href="../">Lecciones</a> · <a href="../../../../fortinet-fortigate/lessons/fsso-collector-agent-dc-agent-mode-vs-polling-mode-group-filters-diagn/" hreflang="en" lang="en">English</a></p>
+<p class="note">Fortinet NSE 4 - FortiOS 7.6 Administrator NSE4_FGT_AD-7.6</p>
+<h1>FSSO: collector agent, modo DC agent vs modo polling, filtros de grupos, `diagnose debug authd fsso list`</h1>
+<article class="lbody">
+<p>Fortinet Single Sign-On (FSSO) es el principal método de autenticación pasiva para entornos Windows. Permite que el FortiGate aplique políticas basadas en usuarios y grupos sin pedirle nada a nadie, aprendiendo quién ha iniciado sesión en Active Directory y asociando su nombre de usuario y sus grupos a su dirección IP. Entender sus componentes y modos es un objetivo central del examen.</p>
+<p>En el centro está el collector agent, un servicio de Windows que recopila la información de inicios de sesión del dominio, mantiene la lista actual de usuarios conectados y sus grupos, y reenvía esas asociaciones de usuario-IP-grupo al FortiGate. Luego el FortiGate usa esas asociaciones para que, cuando llega tráfico desde una IP, ya sepa quién es el usuario y a qué grupos pertenece.</p>
+<p>Hay dos formas en que el collector se entera de los inicios de sesión. En el modo DC agent, se instala un pequeño DC agent en cada controlador de dominio; captura los eventos de inicio de sesión en el momento en que ocurren y los envía al collector agent en tiempo real. Esto es preciso y de baja latencia, pero requiere instalar software en cada DC. En el modo polling, no se ejecuta ningún agente en los DCs; en su lugar, el collector agent (o el propio FortiGate, en el polling sin agente) lee periódicamente y de forma remota los registros de eventos de seguridad de cada controlador de dominio. El polling no necesita software en los DCs, lo que agrada a los equipos de Windows que prohíben agentes adicionales, pero agrega retraso y carga porque los inicios de sesión se descubren en cada intervalo de sondeo y no al instante. Elegir entre ambos es un escenario común: 'no se permite software en los DCs' apunta al modo polling.</p>
+<p>Los filtros de grupos deciden qué grupos de AD reporta realmente FSSO al FortiGate. Como un directorio puede contener miles de grupos, FSSO solo envía los grupos que seleccionas en el filtro de grupos del collector (o del FortiGate). Si los miembros de un grupo recién creado nunca coinciden con las políticas, la causa habitual es que el grupo no se agregó al filtro de grupos, así que su pertenencia nunca se envía. Este es un punto clásico de resolución de problemas.</p>
+<p>Para verificar lo que ha aprendido el FortiGate, <code>diagnose debug authd fsso list</code> imprime las entradas actuales de inicio de sesión FSSO que tiene el FortiGate: el usuario, la IP de origen y los grupos. Es tu primera comprobación cuando 'las políticas basadas en usuarios no coinciden', porque muestra si el FortiGate realmente ve a ese usuario y los grupos esperados.</p>
+<p>En un laboratorio instalas el collector agent, eliges un modo, agregas al filtro de grupos los grupos que necesitas y confirmas las asociaciones con el comando diagnose antes de exigir un grupo FSSO en una política.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Collector agent (agente recolector)</dt><dd>Un servicio de Windows que recopila datos de inicios de sesión y envía al FortiGate las asociaciones de usuario-IP-grupo.</dd><dt>DC agent mode (modo DC agent)</dt><dd>Un agente en cada controlador de dominio que envía los eventos de inicio de sesión al collector en tiempo real.</dd><dt>Polling mode (modo polling / sondeo)</dt><dd>El collector o el FortiGate leen periódicamente y de forma remota los registros de eventos de seguridad de los DCs, sin software en los DCs pero con más retraso.</dd><dt>Group filter (filtro de grupos)</dt><dd>La selección de grupos de AD que FSSO reporta al FortiGate; los grupos no seleccionados nunca se envían.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un equipo de Windows prohíbe instalar cualquier cosa en los controladores de dominio, así que el administrador usa el modo polling de FSSO, que lee de forma remota los registros de eventos de seguridad de los DCs en lugar de ejecutar un DC agent.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si los miembros de un grupo nuevo de AD nunca coinciden con las políticas, revisa primero el filtro de grupos de FSSO: probablemente ese grupo no está seleccionado, así que su pertenencia nunca se envía al FortiGate.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué hace el collector agent en FSSO?</summary><p>Recopila la información de inicios de sesión del dominio y reenvía al FortiGate las asociaciones de usuario-IP-grupo.</p></details>
+<details class="sq"><summary>¿Cuándo elegirías el modo polling en lugar del modo DC agent?</summary><p>Cuando no puedes instalar software en los controladores de dominio; el polling lee sus registros de eventos de seguridad de forma remota, a costa de cierto retraso.</p></details>
+<details class="sq"><summary>Los usuarios FSSO de un grupo nuevo nunca coinciden con las políticas. ¿Cuál es la causa probable?</summary><p>El grupo no está en el filtro de grupos de FSSO, así que su pertenencia nunca se envía; verifícalo con diagnose debug authd fsso list.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia FortiGate Admin gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../fortinet-fortigate/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../active-captive-portal-vs-passive-authentication-authentication-timeout/">← Autenticación activa (captive portal) vs pasiva, tiempos de </a><a href="../two-factor-authentication-with-fortitoken/">Autenticación de dos factores con FortiToken →</a></nav>
+</main>
+</body>
+</html>

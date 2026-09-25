@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rendimiento de Lambda: ajuste de memoria/CPU, arranques en… · Lección de Developer Associate</title>
+<meta name="description" content="El ajuste del rendimiento de Lambda trata de tres cosas: qué tan rápido se ejecuta cada invocación, cuánto tardan en iniciar los nuevos entornos de ejecuci">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Rendimiento de Lambda: ajuste de memoria/CPU, arranques en… · Lección de Developer Associate">
+<meta property="og:description" content="El ajuste del rendimiento de Lambda trata de tres cosas: qué tan rápido se ejecuta cada invocación, cuánto tardan en iniciar los nuevos entornos de ejecuci">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/lambda-performance-memory-cpu-tuning-cold-starts-provisioned-concurren/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/lambda-performance-memory-cpu-tuning-cold-starts-provisioned-concurren/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/lambda-performance-memory-cpu-tuning-cold-starts-provisioned-concurren/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Rendimiento de Lambda: ajuste de memoria/CPU, arranques en frío, concurrencia aprovisionada, concurrencia reservada</h1>
+<article class="lbody">
+<p>El ajuste del rendimiento de Lambda trata de tres cosas: qué tan rápido se ejecuta cada invocación, cuánto tardan en iniciar los nuevos entornos de ejecución y cómo se comparte la concurrencia. Cada una tiene una palanca específica.</p>
+<p>La memoria es el único ajuste de tamaño de cómputo: Lambda asigna potencia de CPU (y ancho de banda de red) en proporción a la memoria configurada, así que duplicar la memoria duplica aproximadamente la CPU disponible. Para el código limitado por CPU (procesamiento de imágenes, compresión, cifrado, análisis JSON de documentos grandes), aumentar la memoria a menudo reduce tanto la duración que el costo se mantiene igual o baja, porque pagas memoria multiplicada por duración. Con ajustes de memoria más altos, una función obtiene más de una CPU virtual, lo que solo ayuda si el código usa varios hilos o procesos. Usa el campo <code>Max Memory Used</code> de la línea <code>REPORT</code> para encontrar funciones con demasiada o muy poca memoria, y prueba distintos ajustes empíricamente, por ejemplo con la herramienta de código abierto AWS Lambda Power Tuning o con las recomendaciones de AWS Compute Optimizer. Las funciones basadas en Arm Graviton (arm64) suelen ofrecer una mejor relación precio-rendimiento.</p>
+<p>Un arranque en frío (cold start) ocurre cuando Lambda debe crear un nuevo entorno de ejecución: descargar tu código, iniciar el runtime y ejecutar tu código de inicialización antes del handler. Aparece como <code>Init Duration</code> en la línea <code>REPORT</code> y en X-Ray. Los arranques en frío ocurren en la primera solicitud, después de escalar, después de desplegar código nuevo y después de que un entorno estuvo inactivo y fue reclamado. Para reducirlos: mantén pequeños los paquetes de despliegue, importa solo lo que necesitas, inicializa los clientes del SDK una vez fuera del handler pero evita trabajo pesado que no se necesita en todas las rutas, elige runtimes y frameworks con arranque rápido y, para los runtimes compatibles como Java, considera Lambda SnapStart, que toma una instantánea de un entorno inicializado y se reanuda a partir de ella. Conectar una función a una VPC ya no agrega un tiempo de arranque en frío significativo como ocurría antes.</p>
+<p>La concurrencia aprovisionada preinicializa un número fijo de entornos de ejecución para que estén listos para responder de inmediato, eliminando los arranques en frío para el tráfico hasta ese número. Se configura en una versión publicada o un alias (no en <code>$LATEST</code>), cuesta dinero mientras está aprovisionada se use o no, y puede escalarse con Application Auto Scaling según una programación (para el horario laboral) o con seguimiento de objetivos sobre la utilización. Úsala para cargas de trabajo síncronas sensibles a la latencia, como API interactivas con requisitos estrictos de tiempo de respuesta. Las solicitudes por encima de la cantidad aprovisionada las atienden entornos normales bajo demanda, con arranques en frío.</p>
+<p>La concurrencia reservada trata de capacidad, no de velocidad. Aparta un número de ejecuciones simultáneas del grupo regional de la cuenta para una función, garantizando que siempre pueda escalar hasta ese nivel, y también actúa como máximo. Ese límite es útil para proteger un recurso de destino, por ejemplo limitar una función a 50 ejecuciones simultáneas para que no pueda abrir más conexiones de las que permite una base de datos relacional, o para evitar que una función descontrolada deje sin capacidad a las demás. La concurrencia reservada no tiene cargo adicional. Las invocaciones que superan la cantidad reservada se limitan.</p>
+<p>Mantén clara la distinción: la concurrencia aprovisionada sirve para eliminar los arranques en frío y cuesta más; la concurrencia reservada garantiza y limita el escalado sin costo. Una función puede tener ambas, siempre que la concurrencia aprovisionada no supere su concurrencia reservada. Específicamente para la presión de conexiones a la base de datos, Amazon RDS Proxy agrupa y comparte conexiones entre muchos entornos de Lambda.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Cold start (arranque en frío)</dt><dd>La latencia adicional cuando Lambda crea e inicializa un nuevo entorno de ejecución antes de ejecutar el handler.</dd><dt>Init Duration (duración de inicialización)</dt><dd>El campo de la línea de log REPORT que muestra cuánto tardó la inicialización en una invocación que tuvo un arranque en frío.</dd><dt>Provisioned concurrency (concurrencia aprovisionada)</dt><dd>Entornos de ejecución preinicializados en una versión o alias que eliminan los arranques en frío, facturados mientras están configurados.</dd><dt>Reserved concurrency (concurrencia reservada)</dt><dd>Un ajuste gratuito que garantiza y limita las ejecuciones simultáneas de una función.</dd><dt>Lambda SnapStart</dt><dd>Una función para los runtimes compatibles que reanuda los nuevos entornos a partir de una instantánea de uno ya inicializado para acortar los arranques en frío.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>La latencia p99 de la API de un banco se dispara cada mañana a las 9:00, cuando el tráfico aumenta y los nuevos entornos tienen arranques en frío. El equipo agrega concurrencia aprovisionada al alias live con una acción programada de Application Auto Scaling que la aumenta antes de las 9:00 y la reduce por la tarde, y configura concurrencia reservada en una función de informes para que no pueda agotar las conexiones de la base de datos.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> ¿Latencia por arranques en frío? Concurrencia aprovisionada (o SnapStart para los runtimes compatibles). ¿Proteger un sistema de destino o garantizar capacidad? Concurrencia reservada. ¿Función lenta con mucho uso de CPU? Aumenta la memoria.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué ajuste elimina los arranques en frío y qué requiere?</summary><p>La concurrencia aprovisionada, configurada en una versión publicada o un alias y facturada mientras está aprovisionada.</p></details>
+<details class="sq"><summary>¿Cómo puedes evitar que una función Lambda sature una base de datos RDS con conexiones?</summary><p>Configura la concurrencia reservada para limitar las ejecuciones simultáneas, y considera RDS Proxy para agrupar las conexiones.</p></details>
+<details class="sq"><summary>¿Por qué aumentar la memoria podría reducir el costo?</summary><p>Más memoria da más CPU, así que la función termina más rápido; como el costo es memoria por duración, el total puede mantenerse igual o bajar.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../cloudwatch-alarms-with-sns-notifications-structured-logging-and-correl/">← Alarmas de CloudWatch con notificaciones de SNS; logging est</a><a href="../stream-and-queue-troubleshooting-kinesis-iteratorage-parallelization-f/">Solución de problemas de streams y colas: IteratorAge de Kin →</a></nav>
+</main>
+</body>
+</html>

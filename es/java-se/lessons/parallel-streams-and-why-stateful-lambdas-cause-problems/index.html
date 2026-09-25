@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Streams paralelos y por qué las lambdas con estado causan … · Lección de OCP Java</title>
+<meta name="description" content="Un stream paralelo divide su fuente en partes y las procesa en varios hilos a la vez, y luego combina los resultados. Obtienes uno llamando a parallelStrea">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Streams paralelos y por qué las lambdas con estado causan … · Lección de OCP Java">
+<meta property="og:description" content="Un stream paralelo divide su fuente en partes y las procesa en varios hilos a la vez, y luego combina los resultados. Obtienes uno llamando a parallelStrea">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/java-se/lessons/parallel-streams-and-why-stateful-lambdas-cause-problems/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/java-se/lessons/parallel-streams-and-why-stateful-lambdas-cause-problems/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../java-se/">OCP Java</a> / <a href="../">Lecciones</a> · <a href="../../../../java-se/lessons/parallel-streams-and-why-stateful-lambdas-cause-problems/" hreflang="en" lang="en">English</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25)</p>
+<h1>Streams paralelos y por qué las lambdas con estado causan problemas</h1>
+<article class="lbody">
+<p>Un stream paralelo divide su fuente en partes y las procesa en varios hilos a la vez, y luego combina los resultados. Obtienes uno llamando a <code>parallelStream()</code> sobre una colección o a <code>parallel()</code> sobre un stream existente; <code>sequential()</code> vuelve al modo secuencial, e <code>isParallel()</code> te indica el modo. Como toda la canalización tiene un solo modo, gana la última llamada a <code>parallel()</code> o <code>sequential()</code>. Por defecto el trabajo se ejecuta en el ForkJoinPool común.</p>
+<p>El paralelismo cambia qué resultados son predecibles. <code>forEach</code> sobre un stream paralelo procesa los elementos en el orden en que terminen los hilos, así que imprimir <code>1 2 3 4 5</code> puede mostrar <code>3 5 1 4 2</code>. Usa <code>forEachOrdered</code> si el orden importa, a cierto costo de velocidad. <code>findAny</code> puede devolver cualquier elemento, mientras que <code>findFirst</code> sigue devolviendo el primero en orden de recorrido. Recolectar con <code>toList()</code> o <code>Collectors.toList()</code> sigue produciendo los elementos en orden de recorrido, porque cada hilo construye su propio resultado parcial y estos se fusionan en orden.</p>
+<p><code>reduce</code> en paralelo requiere las piezas correctas. El acumulador debe ser asociativo, es decir, <code>(a op b) op c</code> debe ser igual a <code>a op (b op c)</code>; la suma es asociativa, la resta no. La identidad debe ser realmente una identidad para la operación: <code>reduce(0, Integer::sum)</code> está bien, pero <code>reduce(10, Integer::sum)</code> suma 10 una vez por cada fragmento en paralelo y da una respuesta distinta a la secuencial. Una operación no asociativa da resultados que varían entre ejecuciones.</p>
+<p>Una lambda con estado (stateful) es aquella cuyo resultado depende de, o cambia, un estado externo a ella mientras el stream se ejecuta. El error clásico es agregar elementos a un ArrayList compartido desde <code>forEach</code> o <code>map</code>. ArrayList no es seguro para hilos (thread-safe), así que en paralelo puedes perder elementos, obtener duplicados o entradas null, o incluso ver una <code>ArrayIndexOutOfBoundsException</code>. Incluso con una lista sincronizada, el orden se vuelve impredecible. Contar con un <code>int[]</code> compartido o un campo no atómico tiene la misma condición de carrera.</p>
+<pre class="code" tabindex="0"><code>List&lt;Integer&gt; bad = new ArrayList&lt;&gt;();
+IntStream.range(0, 10_000).parallel().forEach(bad::add); // inseguro: el tamaño suele ser &lt; 10000
+
+List&lt;Integer&gt; good = IntStream.range(0, 10_000).parallel()
+                              .boxed().toList();         // seguro y ordenado</code></pre>
+<p>La solución es dejar que el stream haga la acumulación mediante <code>collect</code>, <code>toList</code>, <code>reduce</code> o <code>sum</code>, que están diseñados para dar a cada hilo su propio contenedor y fusionarlos de forma segura. Mantén las lambdas sin estado y libres de efectos secundarios. Recuerda también que paralelo no es automáticamente más rápido: con pocos datos, o con fuentes que se dividen mal como un LinkedList o <code>Stream.iterate</code>, el costo de dividir y fusionar puede hacerlo más lento. La E/S bloqueante dentro de un stream paralelo también puede dejar sin hilos al pool común compartido.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Parallel stream (stream paralelo)</dt><dd>Un stream cuyas operaciones se ejecutan en varios hilos, por defecto en el ForkJoinPool común.</dd><dt>forEachOrdered</dt><dd>Una operación terminal que procesa los elementos en orden de recorrido incluso en un stream paralelo.</dd><dt>Associative operation (operación asociativa)</dt><dd>Una operación donde la agrupación no importa, (a op b) op c = a op (b op c), requerida para un reduce paralelo correcto.</dd><dt>Stateful lambda (lambda con estado)</dt><dd>Una lambda que lee o modifica estado mutable compartido durante la ejecución del stream, lo cual es inseguro en paralelo.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un desarrollador acelera un reporte cambiando a parallelStream() pero mantiene results.add(row) dentro de forEach. A veces el reporte muestra 9,987 filas en lugar de 10,000. Reemplazar el efecto secundario por .map(this::toRow).toList() corrige tanto las filas faltantes como el orden.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> En las preguntas de salida con streams paralelos, el orden de forEach es impredecible, findAny es impredecible, pero collect/toList mantienen el orden de recorrido. Un reduce con un valor inicial que no es identidad da un resultado distinto en paralelo.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué List.of(1,2,3).parallelStream().forEach(System.out::print) podría no imprimir 123?</summary><p>forEach sobre un stream paralelo no garantiza el orden de recorrido; forEachOrdered sí.</p></details>
+<details class="sq"><summary>¿Es seguro reduce(0, (a, b) -&gt; a - b) para un stream paralelo?</summary><p>No. La resta no es asociativa, así que dividir el trabajo puede producir un resultado distinto.</p></details>
+<details class="sq"><summary>¿Cuál es el reemplazo seguro de agregar a un ArrayList compartido dentro de forEach?</summary><p>Usar una operación terminal de recolección como toList() o collect(Collectors.toList()).</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia OCP Java gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../java-se/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../stream-gatherers-java-24-gather-with-gatherers-windowfixed-windowslidi/">← Stream Gatherers (Java 24+): gather() con Gatherers.windowFi</a><a href="../module-info-java-module-requires-requires-transitive-exports-opens/">module-info.java: module, requires, requires transitive, exp →</a></nav>
+</main>
+</body>
+</html>

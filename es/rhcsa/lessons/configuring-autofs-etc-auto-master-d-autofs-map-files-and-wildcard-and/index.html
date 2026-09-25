@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Configurar autofs: /etc/auto.master.d/*.autofs, archivos d… · Lección de RHCSA</title>
+<meta name="description" content="autofs es el montador automático (automounter). En lugar de montar sistemas de archivos al arrancar, vigila directorios y monta un sistema de archivos en e">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Configurar autofs: /etc/auto.master.d/*.autofs, archivos d… · Lección de RHCSA">
+<meta property="og:description" content="autofs es el montador automático (automounter). En lugar de montar sistemas de archivos al arrancar, vigila directorios y monta un sistema de archivos en e">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/configuring-autofs-etc-auto-master-d-autofs-map-files-and-wildcard-and/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/configuring-autofs-etc-auto-master-d-autofs-map-files-and-wildcard-and/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/configuring-autofs-etc-auto-master-d-autofs-map-files-and-wildcard-and/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Configurar autofs: /etc/auto.master.d/*.autofs, archivos de mapa y entradas comodín (* y &amp;)</h1>
+<article class="lbody">
+<p>autofs es el montador automático (automounter). En lugar de montar sistemas de archivos al arrancar, vigila directorios y monta un sistema de archivos en el momento en que alguien accede a una ruta bajo ellos, y luego lo desmonta tras un periodo de inactividad. Es la forma estándar de dar a los usuarios directorios personales en red: nada se monta hasta que un usuario inicia sesión, y un servidor inaccesible no ralentiza el arranque.</p>
+<p>La configuración tiene tres partes. Instala y habilita el servicio con <code>dnf install autofs</code> y <code>systemctl enable --now autofs</code>. Crea una entrada en el mapa maestro, preferiblemente un archivo drop-in que termine en <code>.autofs</code> dentro de <code>/etc/auto.master.d/</code>, que nombre un directorio base y el archivo de mapa que lo controla. Luego escribe el propio archivo de mapa.</p>
+<pre class="code" tabindex="0"><code># /etc/auto.master.d/guests.autofs
+/rhome   /etc/auto.guests
+
+# /etc/auto.guests  (mapa indirecto)
+user1   -rw,sync   server1:/rhome/user1</code></pre>
+<p>Con ese mapa indirecto, autofs se adueña de <code>/rhome</code>. Acceder a <code>/rhome/user1</code> monta ahí <code>server1:/rhome/user1</code>. No crees tú mismo <code>/rhome/user1</code>; autofs crea los directorios de las claves bajo demanda, y <code>ls /rhome</code> parece vacío hasta que se accede a algo. Eso sorprende a la gente, pero es normal. Pruébalo con <code>cd /rhome/user1</code> o <code>ls /rhome/user1</code>.</p>
+<p>Los comodines permiten que una sola línea cubra a todos los usuarios. En la columna de la clave, <code>*</code> coincide con cualquier nombre, y en la ubicación <code>&amp;</code> se sustituye por la clave que coincidió. Así, la línea <code>* -rw,sync server1:/rhome/&amp;</code> significa que acceder a <code>/rhome/alice</code> monta <code>server1:/rhome/alice</code>, y <code>/rhome/bob</code> monta <code>server1:/rhome/bob</code>.</p>
+<p>Un mapa directo usa <code>/-</code> como base en el mapa maestro, y su archivo de mapa lista rutas absolutas completas como claves, por ejemplo <code>/mnt/docs -ro server1:/exports/docs</code>. Los mapas directos convienen para unos pocos puntos de montaje fijos repartidos por el árbol; los mapas indirectos convienen para muchos montajes bajo un mismo directorio padre.</p>
+<p>Después de cambiar los mapas, ejecuta <code>systemctl restart autofs</code> (o reload). Si un montaje no aparece, revisa el estado del servicio, <code>journalctl -u autofs</code>, que el nombre del archivo del mapa maestro termine en <code>.autofs</code>, que la exportación del servidor sea accesible con un <code>mount</code> manual y que no estés confundiendo los nombres del mapa maestro y del archivo de mapa. Como autofs monta bajo demanda, no hay ninguna línea en <code>/etc/fstab</code> para estas rutas.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>autofs</dt><dd>Un servicio que monta sistemas de archivos automáticamente cuando se accede a una ruta y los desmonta cuando están inactivos.</dd><dt>Master map (mapa maestro)</dt><dd>La configuración de nivel superior de autofs, en /etc/auto.master y /etc/auto.master.d/*.autofs, que asocia directorios base con archivos de mapa.</dd><dt>Indirect map (mapa indirecto)</dt><dd>Un mapa cuyas claves son nombres relativos a un directorio base indicado en el mapa maestro.</dd><dt>Wildcard entry (entrada comodín)</dt><dd>Una línea de mapa con * como clave y &amp; en la ubicación, de modo que cualquier nombre de clave corresponde a una ruta del servidor equivalente.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Los usuarios ldapuser1 a ldapuser9 necesitan que sus directorios personales de server1:/home/guests se monten bajo /home/guests. Añades /home/guests /etc/auto.guests a /etc/auto.master.d/guests.autofs, escribes * -rw,sync server1:/home/guests/&amp; en /etc/auto.guests, habilitas autofs y su - ldapuser5 llega a un directorio personal montado.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> No crees los subdirectorios bajo una base de autofs ni añadas líneas de fstab para ellos. Que un ls del directorio base salga vacío es lo esperado; prueba accediendo a la ruta completa.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>En la línea de mapa * -rw server1:/home/&amp;, ¿qué significa &amp;?</summary><p>Se sustituye por la clave con la que coincidió *, así que /base/alice monta server1:/home/alice.</p></details>
+<details class="sq"><summary>¿Qué nombre debe tener un archivo drop-in del mapa maestro?</summary><p>Debe estar en /etc/auto.master.d/ y terminar en .autofs.</p></details>
+<details class="sq"><summary>¿En qué se diferencia un mapa directo de uno indirecto en el mapa maestro?</summary><p>Un mapa directo usa /- como base y lista rutas absolutas en su archivo de mapa; un mapa indirecto nombra un directorio base y lista claves relativas.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../mounting-and-unmounting-nfs-network-file-systems-mount-t-nfs-netdev/">← Montar y desmontar sistemas de archivos de red NFS (mount -t</a><a href="../extending-existing-logical-volumes-and-their-file-systems-lvextend-r-x/">Ampliar volúmenes lógicos existentes y sus sistemas de archi →</a></nav>
+</main>
+</body>
+</html>

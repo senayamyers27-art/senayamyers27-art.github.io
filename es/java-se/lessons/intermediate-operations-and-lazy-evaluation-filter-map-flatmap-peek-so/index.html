@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Operaciones intermedias y evaluación perezosa: filter, map… · Lección de OCP Java</title>
+<meta name="description" content="Las operaciones intermedias transforman un stream en otro stream. Son perezosas (lazy): llamar a filter o map solo registra un paso en la canalización. Nin">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Operaciones intermedias y evaluación perezosa: filter, map… · Lección de OCP Java">
+<meta property="og:description" content="Las operaciones intermedias transforman un stream en otro stream. Son perezosas (lazy): llamar a filter o map solo registra un paso en la canalización. Nin">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/java-se/lessons/intermediate-operations-and-lazy-evaluation-filter-map-flatmap-peek-so/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/java-se/lessons/intermediate-operations-and-lazy-evaluation-filter-map-flatmap-peek-so/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../java-se/">OCP Java</a> / <a href="../">Lecciones</a> · <a href="../../../../java-se/lessons/intermediate-operations-and-lazy-evaluation-filter-map-flatmap-peek-so/" hreflang="en" lang="en">English</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25)</p>
+<h1>Operaciones intermedias y evaluación perezosa: filter, map, flatMap, peek, sorted, distinct, limit</h1>
+<article class="lbody">
+<p>Las operaciones intermedias transforman un stream en otro stream. Son perezosas (lazy): llamar a <code>filter</code> o <code>map</code> solo registra un paso en la canalización. Ningún elemento se procesa hasta que se ejecuta una operación terminal. Si una canalización no tiene operación terminal, ninguna de sus lambdas se ejecuta jamás, y por eso una pregunta con solo <code>peek(System.out::println)</code> y sin operación terminal no imprime nada.</p>
+<p><code>filter(Predicate)</code> conserva los elementos para los que el predicado devuelve true. <code>map(Function)</code> convierte cada elemento en exactamente un elemento nuevo, posiblemente de otro tipo. <code>flatMap(Function)</code> convierte cada elemento en un stream y luego aplana todos esos streams en uno, así que un <code>Stream&lt;List&lt;String&gt;&gt;</code> se convierte en un <code>Stream&lt;String&gt;</code> con <code>flatMap(List::stream)</code>. <code>mapToInt</code>, <code>mapToObj</code> y similares cambian entre streams de objetos y primitivos.</p>
+<p><code>distinct()</code> elimina duplicados usando <code>equals</code> (y <code>hashCode</code>). <code>sorted()</code> ordena por orden natural y requiere que los elementos sean Comparable; de lo contrario ocurre una <code>ClassCastException</code> cuando se ejecuta la operación terminal; <code>sorted(Comparator)</code> usa el orden proporcionado. <code>limit(n)</code> deja pasar como máximo n elementos y <code>skip(n)</code> descarta los primeros n. <code>peek(Consumer)</code> ejecuta una acción sobre cada elemento a medida que pasa y devuelve los mismos elementos; está pensado para depuración, no para cambiar estado.</p>
+<p>La pereza tiene un efecto visible en el orden. Los elementos fluyen por la canalización de uno en uno, en vertical, en lugar de que cada operación termine con todos los elementos antes de que empiece la siguiente. Con <code>limit</code>, el procesamiento se detiene en cuanto han pasado suficientes elementos, así que los pasos anteriores pueden ejecutarse solo sobre unos pocos elementos. Esto es también lo que permite que funcionen los streams infinitos.</p>
+<pre class="code" tabindex="0"><code>Stream.of(&quot;b&quot;, &quot;a&quot;, &quot;c&quot;, &quot;d&quot;)
+      .peek(s -&gt; System.out.print(&quot;p&quot; + s + &quot; &quot;))
+      .filter(s -&gt; !s.equals(&quot;a&quot;))
+      .map(String::toUpperCase)
+      .limit(2)
+      .forEach(s -&gt; System.out.print(s + &quot; &quot;));
+// imprime: pb B pa pc C
+// &quot;d&quot; nunca pasa por peek: limit(2) ya se había cumplido</code></pre>
+<p><code>sorted</code> y <code>distinct</code> tienen estado (stateful): deben recordar los elementos que han visto. <code>sorted</code> en particular tiene que ver todos los elementos antes de poder emitir el primero, así que en una canalización con <code>sorted</code> todos los pasos anteriores se ejecutan primero sobre todos los elementos, y <code>sorted</code> sobre un stream infinito nunca termina aunque haya un <code>limit</code> después. Pon <code>limit</code> antes de <code>sorted</code> cuando quieras ordenar solo los primeros elementos de una fuente infinita.</p>
+<p>Las operaciones intermedias nunca modifican la colección de origen. <code>list.stream().map(String::toUpperCase)</code> deja la lista sin cambios; debes recolectar el resultado en una colección nueva si quieres conservarlo.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Lazy evaluation (evaluación perezosa)</dt><dd>Las operaciones intermedias se ejecutan solo cuando una operación terminal hace pasar los elementos por la canalización.</dd><dt>flatMap</dt><dd>Asocia cada elemento a un stream y concatena los streams resultantes en un único stream.</dd><dt>Stateful operation (operación con estado)</dt><dd>Una operación intermedia como sorted o distinct que debe llevar registro de los elementos que ya ha visto.</dd><dt>Short-circuiting operation (operación de cortocircuito)</dt><dd>Una operación como limit que puede terminar sin procesar todos los elementos.</dd><dt>peek</dt><dd>Una operación intermedia que ejecuta una acción sobre cada elemento a medida que pasa, principalmente para depuración.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un analizador de logs lee millones de líneas pero solo necesita las primeras cinco líneas de error. Como los streams son perezosos, lines().filter(l -&gt; l.contains(&quot;ERROR&quot;)).limit(5) deja de leer en cuanto encuentra cinco coincidencias en lugar de recorrer todo el archivo.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Rastrea las preguntas de salida elemento por elemento, no operación por operación, y revisa si hay alguna operación terminal. Cuidado también con sorted sobre un stream infinito, que se cuelga aunque haya un limit después.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué imprime Stream.of(1, 2, 3).peek(System.out::println);?</summary><p>Nada. No hay operación terminal, así que la canalización perezosa nunca se ejecuta.</p></details>
+<details class="sq"><summary>¿Cómo conviertes un List&lt;List&lt;Integer&gt;&gt; en un Stream&lt;Integer&gt;?</summary><p>listOfLists.stream().flatMap(List::stream).</p></details>
+<details class="sq"><summary>¿Por qué Stream.iterate(1, n -&gt; n + 1).sorted().limit(3).toList() nunca termina?</summary><p>sorted debe ver todos los elementos antes de emitir alguno, y la fuente es infinita.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia OCP Java gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../java-se/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../creating-streams-collections-stream-of-intstream-range-rangeclosed-str/">← Crear streams: colecciones, Stream.of, IntStream.range/range</a><a href="../terminal-operations-foreach-reduce-collect-count-findfirst-anymatch-to/">Operaciones terminales: forEach, reduce, collect, count, fin →</a></nav>
+</main>
+</body>
+</html>

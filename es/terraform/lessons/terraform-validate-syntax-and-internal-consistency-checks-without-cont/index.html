@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>`terraform validate`: verificaciones de sintaxis y consist… · Lección de Terraform Associate</title>
+<meta name="description" content="terraform validate comprueba si una configuración es sintácticamente válida e internamente consistente. Responde a la pregunta: ¿podría Terraform entender ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="`terraform validate`: verificaciones de sintaxis y consist… · Lección de Terraform Associate">
+<meta property="og:description" content="terraform validate comprueba si una configuración es sintácticamente válida e internamente consistente. Responde a la pregunta: ¿podría Terraform entender ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/terraform/lessons/terraform-validate-syntax-and-internal-consistency-checks-without-cont/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/terraform/lessons/terraform-validate-syntax-and-internal-consistency-checks-without-cont/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../terraform/">Terraform Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../terraform/lessons/terraform-validate-syntax-and-internal-consistency-checks-without-cont/" hreflang="en" lang="en">English</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004)</p>
+<h1>`terraform validate`: verificaciones de sintaxis y consistencia interna sin contactar las APIs de los providers</h1>
+<article class="lbody">
+<p><code>terraform validate</code> comprueba si una configuración es sintácticamente válida e internamente consistente. Responde a la pregunta: ¿podría Terraform entender este código en absoluto? No responde si el cambio de infraestructura tendrá éxito, porque nunca contacta servicios remotos, ni las APIs de los providers ni el estado remoto.</p>
+<p>¿Qué detecta validate? Errores de sintaxis, como una llave de cierre faltante o una cadena sin comillas. Referencias a cosas que no existen, como <code>var.region</code> cuando no se declaró ningún bloque <code>variable &quot;region&quot;</code>, o <code>aws_instance.web.ip</code> cuando el atributo tiene otro nombre. Argumentos obligatorios faltantes y argumentos desconocidos para un tipo de recurso. Discrepancias de tipos, como pasar una cadena donde se espera una lista. Uso no válido de meta-argumentos, como usar <code>count</code> y <code>for_each</code> juntos en el mismo recurso.</p>
+<p>Para comprobar los argumentos de los recursos, validate necesita los schemas de los providers, lo que significa que el directorio debe inicializarse primero con <code>terraform init</code> para que los providers estén instalados. No necesita credenciales, no necesita valores para las variables de entrada y no lee el estado. Eso lo hace rápido y seguro de ejecutar en cualquier lugar, incluso en un job de CI en cada commit o como verificación en el editor.</p>
+<pre class="code" tabindex="0"><code>$ terraform validate
+Success! The configuration is valid.
+
+$ terraform validate
+Error: Reference to undeclared input variable
+  on main.tf line 4: region = var.regoin</code></pre>
+<p>¿Qué no detecta validate? Todo lo que requiera hablar con el mundo real. Un ID de imagen de máquina no válido, un nombre de bucket que ya usa otra persona, permisos insuficientes, un límite de cuota o una región que no ofrece un servicio pasarán la validación y solo aparecerán en el plan o el apply. Algunas verificaciones del lado del provider sí se ejecutan durante el plan, porque en ese momento los providers pueden validar los argumentos contra la API. Así que validate es un primer filtro rápido, no una garantía.</p>
+<p>Usa <code>terraform validate -json</code> para obtener resultados legibles por máquina, que los editores y las herramientas de CI pueden analizar. <code>terraform plan</code> también realiza la validación, pero además actualiza el estado y calcula los cambios, así que es más lento y necesita credenciales. Agrega bloques <code>validation</code> personalizados a las variables y bloques <code>precondition</code> o <code>postcondition</code> a los recursos cuando quieras reglas específicas de tu organización, y recuerda que <code>terraform fmt</code> es una verificación separada de estilo, no de validez.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>terraform validate</dt><dd>Comando que comprueba la sintaxis y la consistencia interna de la configuración sin contactar servicios remotos.</dd><dt>Internal consistency (consistencia interna)</dt><dd>Si las referencias, los nombres de argumentos, los tipos y los argumentos obligatorios de la configuración concuerdan entre sí y con los schemas de los providers.</dd><dt>Provider schema (esquema del provider)</dt><dd>La lista del provider de tipos de recursos, argumentos y tipos, que validate necesita y que se obtiene con <code>terraform init</code>.</dd><dt>-json</dt><dd>Opción que muestra los resultados de la validación en un formato legible por máquina.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un pipeline de CI ejecuta <code>terraform fmt -check</code> y <code>terraform validate</code> en cada push sin ninguna credencial de la nube. Un commit que escribe mal la referencia a una variable falla en segundos, mucho antes de que alguien pida un plan contra producción.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Validate no contacta las APIs de los providers ni el estado remoto, y no necesita valores de variables, pero sí necesita <code>terraform init</code> primero. Errores como un ID de imagen inexistente solo se detectan en el plan o el apply.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿<code>terraform validate</code> detectará una referencia a una variable no declarada?</summary><p>Sí. Las referencias no declaradas son un error de consistencia interna que se detecta sin ninguna llamada a la API.</p></details>
+<details class="sq"><summary>¿<code>terraform validate</code> detectará que un tipo de instancia elegido no se ofrece en tu región?</summary><p>No. Eso requiere contactar la API del provider, algo que validate nunca hace; aparecería en el plan o el apply.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Terraform Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../terraform/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../terraform-init-backend-setup-provider-and-module-download-upgrade-migr/">← `terraform init`: configuración del backend, descarga de pro</a><a href="../terraform-plan-refresh-diff-and-symbols-saved-plans-with-out/">`terraform plan`: refresh, diff y símbolos (`+`, `-`, `~`, ` →</a></nav>
+</main>
+</body>
+</html>

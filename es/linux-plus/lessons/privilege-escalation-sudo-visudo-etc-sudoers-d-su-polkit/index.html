@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Escalada de privilegios: sudo, visudo, /etc/sudoers.d, su,… · Lección de Linux+</title>
+<meta name="description" content="Iniciar sesión como root para el trabajo diario es riesgoso: cada error de tipeo se ejecuta con todo el poder y las acciones no quedan vinculadas a una per">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Escalada de privilegios: sudo, visudo, /etc/sudoers.d, su,… · Lección de Linux+">
+<meta property="og:description" content="Iniciar sesión como root para el trabajo diario es riesgoso: cada error de tipeo se ejecuta con todo el poder y las acciones no quedan vinculadas a una per">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/linux-plus/lessons/privilege-escalation-sudo-visudo-etc-sudoers-d-su-polkit/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/linux-plus/lessons/privilege-escalation-sudo-visudo-etc-sudoers-d-su-polkit/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../linux-plus/">Linux+</a> / <a href="../">Lecciones</a> · <a href="../../../../linux-plus/lessons/privilege-escalation-sudo-visudo-etc-sudoers-d-su-polkit/" hreflang="en" lang="en">English</a></p>
+<p class="note">CompTIA Linux+ XK0-006</p>
+<h1>Escalada de privilegios: sudo, visudo, /etc/sudoers.d, su, polkit</h1>
+<article class="lbody">
+<p>Iniciar sesión como root para el trabajo diario es riesgoso: cada error de tipeo se ejecuta con todo el poder y las acciones no quedan vinculadas a una persona. En su lugar, los administradores usan cuentas normales y elevan privilegios solo cuando es necesario. Linux+ evalúa las herramientas para esto, y también lo llama escalada de privilegios (privilege escalation), un término que en los informes de seguridad también significa que un atacante obtiene más derechos de los previstos.</p>
+<p><code>su</code> (substitute user) cambia a otra cuenta, root de forma predeterminada, y pide la contraseña de la cuenta de destino. <code>su -</code> (o <code>su -l</code>) inicia un shell de inicio de sesión completo con el entorno del destino, que normalmente es lo que quieres; <code>su</code> a secas conserva gran parte de tu entorno actual. <code>su - alice</code> te convierte en alice, y <code>su -c 'command'</code> ejecuta un solo comando. La desventaja es que todos los que necesitan root deben conocer la contraseña de root, y las acciones se registran como root.</p>
+<p><code>sudo</code> permite a los usuarios autorizados ejecutar comandos como root (u otro usuario) usando su propia contraseña, y registra cada comando. <code>sudo comando</code> ejecuta un comando, <code>sudo -i</code> abre un shell de inicio de sesión de root, <code>sudo -u postgres psql</code> ejecuta como otro usuario, <code>sudo -l</code> lista lo que tienes permitido ejecutar y <code>sudo -k</code> olvida las credenciales en caché. Las credenciales se guardan en caché por un tiempo breve después de una solicitud exitosa. Los comandos se registran en el log de autenticación o en el journal.</p>
+<p>Las reglas viven en <code>/etc/sudoers</code>, y solo deberías editarlo con <code>visudo</code>, que bloquea el archivo y revisa la sintaxis antes de guardar; un archivo sudoers roto puede dejar sin acceso a todos los administradores. El formato de las reglas es <code>quién dónde=(como_quién) qué</code>: <code>alice ALL=(ALL) ALL</code> permite a alice ejecutar cualquier cosa como cualquiera. Un <code>%</code> significa un grupo: <code>%wheel ALL=(ALL) ALL</code> en sistemas de la familia RHEL y <code>%sudo ALL=(ALL:ALL) ALL</code> en sistemas de la familia Debian dan a los miembros derechos completos de sudo, por eso agregar un usuario a wheel o a sudo lo convierte en administrador. <code>NOPASSWD:</code> omite la solicitud de contraseña, lo cual es cómodo para la automatización pero debilita la seguridad. El mínimo privilegio significa otorgar solo comandos específicos, con rutas completas: <code>%webops ALL=(root) /usr/bin/systemctl restart nginx</code>. Los alias (<code>User_Alias</code>, <code>Cmnd_Alias</code>) mantienen legibles las políticas grandes.</p>
+<p>En lugar de editar el archivo principal, coloca archivos separados en <code>/etc/sudoers.d/</code>, editados con <code>visudo -f /etc/sudoers.d/webops</code>. Esto mantiene los cambios modulares y compatibles con la gestión de configuración. Los archivos ahí no deben contener un punto ni terminar en <code>~</code>, o se ignoran, y deberían tener el modo 0440.</p>
+<p>Ten cuidado con los comandos que otorgas: permitir con sudo un editor, un paginador, un shell o herramientas como <code>find</code> o <code>tar</code> puede permitir que un usuario escape a un shell completo de root. Los revisores de seguridad buscan en las reglas de sudo exactamente estas vías de escape, así como scripts escribibles que se llaman mediante sudo.</p>
+<p>polkit (antes PolicyKit) es un framework separado que autoriza a procesos sin privilegios a realizar acciones privilegiadas específicas a través de servicios del sistema, como un usuario de escritorio que administra conexiones de red o <code>systemctl</code> y <code>timedatectl</code> pidiendo autenticación de administrador. Las reglas se escriben en archivos JavaScript en <code>/etc/polkit-1/rules.d/</code>, y <code>pkexec</code> ejecuta un programa como otro usuario bajo el control de polkit. Mantén polkit actualizado; en el pasado se han encontrado vulnerabilidades graves en él.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>sudo</dt><dd>Ejecuta un comando como otro usuario (root de forma predeterminada) según las reglas de sudoers, con autenticación por usuario y registro.</dd><dt>visudo</dt><dd>Edita de forma segura los archivos sudoers con bloqueo y verificación de sintaxis.</dd><dt>/etc/sudoers.d</dt><dd>Directorio de archivos sudoers drop-in para reglas modulares.</dd><dt>su -</dt><dd>Cambia a otro usuario con un entorno de inicio de sesión completo, y requiere la contraseña de ese usuario.</dd><dt>polkit</dt><dd>Un framework de autorización que permite a procesos sin privilegios solicitar acciones privilegiadas específicas a los servicios del sistema.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>El equipo de operaciones web necesita reiniciar nginx, pero no debería tener root completo. Ejecutas visudo -f /etc/sudoers.d/webops y agregas %webops ALL=(root) /usr/bin/systemctl restart nginx, /usr/bin/systemctl reload nginx. Un miembro del equipo ejecuta sudo -l para confirmar los comandos permitidos, y cada uso aparece en los logs con su propio nombre.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Elige siempre visudo (o visudo -f para un drop-in) en lugar de editar sudoers con un editor normal, y recuerda que un % en sudoers significa un grupo.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cuál es la diferencia entre su - y sudo -i?</summary><p>su - requiere la contraseña del destino (root); sudo -i usa la contraseña del propio usuario que lo invoca y está permitido por las reglas de sudoers, con registro.</p></details>
+<details class="sq"><summary>¿Qué significa %wheel ALL=(ALL) ALL?</summary><p>Los miembros del grupo wheel pueden ejecutar cualquier comando como cualquier usuario en cualquier host.</p></details>
+<details class="sq"><summary>¿Por qué es riesgoso otorgar acceso sudo a vim?</summary><p>Un editor puede abrir un shell, así que un usuario podría escapar a un shell completo de root en lugar de solo editar archivos.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Linux+ gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../linux-plus/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../ssh-hardening-key-based-auth-ssh-copy-id-sshd-config-permitrootlogin-p/">← Endurecimiento de SSH: autenticación por claves, ssh-copy-id</a><a href="../authentication-pam-modules-pam-faillock-pam-pwquality-ldap-sssd-kerber/">Autenticación: módulos PAM (pam_faillock, pam_pwquality), LD →</a></nav>
+</main>
+</body>
+</html>

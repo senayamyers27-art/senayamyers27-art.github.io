@@ -158,6 +158,8 @@ ${lab.deliverable}
     <div class="panel">${done.map(l => `<div class="row"><div class="grow"><a href="#${esc(l.id)}"><strong>${esc(l.title)}</strong></a><br><span class="note">${esc(l.track)} · finished ${new Date(lp[l.id].done).toLocaleDateString()}</span><p class="resume" style="margin:6px 0 0">${esc(l.resume)}</p></div></div>`).join("")}</div>`
     : `<div class="status">No finished labs yet. Mark a lab complete and it shows up here with its resume bullet.</div>`}
     ${done.length ? rolesSummary(done) : ""}
+    ${trackBadges(lp)}
+    ${done.length ? resumeBuilder() : ""}
     ${doing.length ? `<h2>In progress</h2><div class="labgrid">${doing.map(l => card(l)).join("")}</div>` : ""}
     ${nextUp.length ? `<h2>Good next labs</h2><div class="labgrid">${nextUp.map(l => card(l)).join("")}</div>` : ""}
     <h2>Publish it</h2>
@@ -168,6 +170,42 @@ ${lab.deliverable}
       <li><strong>Pin the repository</strong> on your GitHub profile and link it from your resume and LinkedIn "Featured" section.</li>
       <li><strong>Resume:</strong> add a "Home lab and projects" section and paste 4–6 of the bullets above, strongest first.</li>
     </ol>`;
+  }
+  // A badge for every lab track the person has finished.
+  function trackBadges(lp) {
+    const rows = TRACKS.map(t => { const ls = all().filter(l => l.track === t); return { t, n: ls.length, d: ls.filter(l => labStatus(l, lp).state === "done").length }; }).filter(r => r.n);
+    return `<h2>Track badges</h2><p class="note">Finish every lab in a track to earn a badge you can share.</p>
+    <div class="panel">${rows.map(r => `<div class="row"><div class="grow"><strong>${esc(r.t)}</strong><br><span class="note">${r.d} of ${r.n} labs</span></div>${r.d === r.n ? `<button type="button" class="btn sm" data-lact="trackbadge" data-track="${esc(r.t)}">Download badge</button>` : `<span class="note">${Math.round(100 * r.d / r.n)}%</span>`}</div>`).join("")}</div>`;
+  }
+  // Certifications with saved progress, for the resume: in progress, or plan complete.
+  function studiedCerts() {
+    return Object.values(CertHub.certs).map(c => {
+      let p = null; try { p = JSON.parse(CertHub.store.get("certhub:v1:" + c.id) || "null"); } catch (e) {}
+      if (!p || !((p.history || []).length || Object.keys(p.read || {}).length || Object.values(p.checks || {}).some(Boolean))) return null;
+      return { c, examDate: p.examDate };
+    }).filter(Boolean);
+  }
+  function resumeBuilder() {
+    const roles = nice().roles;
+    return `<h2>Resume builder</h2>
+    <p class="note">Builds a resume section from your finished labs and the certifications you're studying. Nothing leaves your browser.</p>
+    <div class="panel resumeb">
+      <label for="rb-name">Your name (optional)</label><input type="text" id="rb-name" autocomplete="name">
+      <label for="rb-role">Target role</label><select id="rb-role">${roles.map(r => `<option value="${esc(r.id)}">${esc(r.name)}</option>`).join("")}</select>
+      <div class="btns"><button type="button" class="btn" data-lact="resumecopy">Copy resume section</button><button type="button" class="btn ghost no-framed" data-lact="resumedl">Download (.md)</button></div>
+    </div>`;
+  }
+  function resumeMarkdown() {
+    const lp = loadLabProgress(), done = all().filter(l => labStatus(l, lp).state === "done");
+    const name = (document.getElementById("rb-name") || {}).value || "", roleId = (document.getElementById("rb-role") || {}).value;
+    const role = nice().roles.find(r => r.id === roleId) || { name: "IT professional", titles: "" };
+    const tracks = [...new Set(done.map(l => l.track))];
+    const certs = studiedCerts();
+    return [name ? `# ${name}\n` : "",
+      "## Summary", `Aspiring ${role.name.toLowerCase()} professional with hands-on home-lab experience in ${tracks.join(", ").toLowerCase() || "IT"}. Completed ${done.length} documented lab project${done.length === 1 ? "" : "s"}${certs.length ? ` and preparing for ${certs.map(x => x.c.short).join(", ")}` : ""}.`, "",
+      certs.length ? "## Certifications" : "", ...certs.map(x => `- ${x.c.vendor ? x.c.vendor + " " : ""}${x.c.short} (${x.c.exam}) — in progress${x.examDate ? `, target ${x.examDate}` : ""}`), certs.length ? "" : "",
+      "## Home lab and projects", ...done.map(l => `- ${l.resume}`), "",
+      role.titles ? `<!-- Job titles to search for: ${role.titles} -->` : ""].filter((x, i, a) => !(x === "" && a[i - 1] === "")).join("\n").trim() + "\n";
   }
   function portfolioMarkdown() {
     const lp = loadLabProgress();
@@ -211,6 +249,9 @@ ${lab.deliverable}
     if (a === "copywriteup") { flushNotes(); return ui.copy(writeup(current), "lab write-up"); }
     if (a === "copybullets") { const lp = loadLabProgress(); return ui.copy(all().filter(l => labStatus(l, lp).state === "done").map(l => `- ${l.resume}`).join("\n"), "resume bullets"); }
     if (a === "copyportfolio") return ui.copy(portfolioMarkdown(), "portfolio");
+    if (a === "resumecopy") return ui.copy(resumeMarkdown(), "resume section");
+    if (a === "resumedl") return CertHub.downloadFile("resume-section.md", resumeMarkdown(), "text/markdown");
+    if (a === "trackbadge") { const t = b.dataset.track, n = all().filter(l => l.track === t).length; return CertHub.makeBadge({ title: t, line1: "Lab track complete", line2: `${n} hands-on labs, documented in a portfolio`, file: `${t.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-labs-badge.png` }); }
     if (a === "done") {
       flushNotes();
       const { p, s } = prog();

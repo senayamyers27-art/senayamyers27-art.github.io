@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Contenedores personalizados de App Service en Linux: WEBSI… · Lección de AI-200</title>
+<meta name="description" content="Azure App Service (Web Apps) puede ejecutar tu propia imagen de contenedor en Linux en lugar de un runtime de lenguaje integrado. Obtienes las funciones ad">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Contenedores personalizados de App Service en Linux: WEBSI… · Lección de AI-200">
+<meta property="og:description" content="Azure App Service (Web Apps) puede ejecutar tu propia imagen de contenedor en Linux en lugar de un runtime de lenguaje integrado. Obtienes las funciones ad">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/app-service-custom-containers-on-linux-websites-port-continuous-deploy/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/app-service-custom-containers-on-linux-websites-port-continuous-deploy/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/app-service-custom-containers-on-linux-websites-port-continuous-deploy/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Contenedores personalizados de App Service en Linux: WEBSITES_PORT, implementación continua y ranuras de implementación</h1>
+<article class="lbody">
+<p>Azure App Service (Web Apps) puede ejecutar tu propia imagen de contenedor en Linux en lugar de un runtime de lenguaje integrado. Obtienes las funciones administradas de App Service, como dominios personalizados, certificados TLS, escalado automático, autenticación y ranuras de implementación, mientras controlas todo el runtime a través de tu Dockerfile. Creas una eligiendo contenedor como opción de publicación y apuntándola a una imagen, por ejemplo <code>az webapp create --plan myplan --name orders-web -g rg --container-image-name myregistry.azurecr.io/orders-api:20260914.3</code>.</p>
+<p>El front end de App Service recibe el tráfico en los puertos 80 y 443 y lo reenvía a tu contenedor. Necesita saber en qué puerto escucha tu app dentro del contenedor. Intenta detectar los puertos comunes, pero la forma confiable es la configuración de la app <code>WEBSITES_PORT</code>. Si tu proceso de gunicorn se enlaza al 8000, establece <code>WEBSITES_PORT=8000</code>. Una discrepancia es una de las causas más comunes de un contenedor que se inicia pero nunca supera la sonda de inicio, lo que aparece en los registros como que el contenedor no responde a los pings HTTP. Entre las configuraciones relacionadas están <code>WEBSITES_CONTAINER_START_TIME_LIMIT</code>, que da más tiempo a los contenedores que tardan en iniciar, y <code>WEBSITES_ENABLE_APP_SERVICE_STORAGE</code>, que controla si se monta el almacenamiento compartido <code>/home</code>.</p>
+<pre class="code" tabindex="0"><code>az webapp config appsettings set -g rg -n orders-web --settings WEBSITES_PORT=8000
+az webapp log tail -g rg -n orders-web</code></pre>
+<p>La implementación continua (continuous deployment) para contenedores significa que App Service descarga la imagen y se reinicia automáticamente cuando se sube una imagen nueva. En el Deployment Center activas la implementación continua, y App Service expone una URL de webhook; con ACR, el portal puede crear un webhook del registro por ti, de modo que un push al repositorio y la etiqueta configurados hace que App Service descargue la imagen nueva. Como el desencadenante es un push a una etiqueta específica, este patrón suele usar una etiqueta estable por entorno. Como alternativa, un pipeline de CI/CD (GitHub Actions o Azure Pipelines) puede subir una etiqueta única y luego actualizar la referencia de imagen de la app, lo que deja un historial más claro.</p>
+<p>Las ranuras de implementación (deployment slots) son apps activas con sus propios nombres de host, como <code>orders-web-staging</code>, que comparten el plan de App Service. Requieren el nivel Standard o superior. Despliegas una imagen nueva en la ranura de staging, la precalientas y la pruebas, y luego haces un intercambio (swap). Un swap intercambia el contenido y la mayoría de las configuraciones de las ranuras, y App Service precalienta la ranura de origen antes de enrutar el tráfico de producción, así que los usuarios no ven tiempo de inactividad. Si algo sale mal, vuelves a intercambiar. Las configuraciones marcadas como configuraciones de ranura (sticky, fijas) se quedan con la ranura, que es como staging conserva su propia cadena de conexión a la base de datos. También puedes enrutar un porcentaje del tráfico de producción a una ranura para hacer pruebas en producción.</p>
+<p>La autenticación para descargar sigue la lección anterior: prefiere una identidad administrada con AcrPull, y recuerda que cada ranura es su propio recurso con su propia identidad y configuración.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>WEBSITES_PORT</dt><dd>Una configuración de app de App Service que le indica a la plataforma en qué puerto escucha el contenedor personalizado.</dd><dt>Continuous deployment (implementación continua, contenedores)</dt><dd>Una configuración que hace que App Service descargue la imagen y se reinicie cuando un webhook del registro informa de una imagen nueva para la etiqueta configurada.</dd><dt>Deployment slot (ranura de implementación)</dt><dd>Una instancia activa separada de una app, con su propio nombre de host, que se puede intercambiar con producción.</dd><dt>Slot setting (configuración de ranura)</dt><dd>Una configuración de app o cadena de conexión marcada como fija para que se quede con su ranura durante un swap.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una imagen de Flask funciona localmente en el puerto 5000, pero en App Service el registro muestra que el sitio no responde a los pings y se reinicia. Establecer WEBSITES_PORT=5000 lo soluciona. Luego el equipo agrega una ranura de staging, habilita en ella la implementación continua desde la etiqueta de staging del registro, prueba ahí cada imagen nueva y hace el swap a producción cuando pasan las verificaciones.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si un contenedor personalizado se inicia pero App Service informa que no responde en el puerto esperado, la solución es la configuración de app WEBSITES_PORT, no un cambio de EXPOSE en el Dockerfile.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Tu contenedor escucha en el 8080 y App Service lo sigue reiniciando. ¿Qué deberías configurar?</summary><p>La configuración de app WEBSITES_PORT=8080 para que el front end reenvíe el tráfico al puerto en el que realmente escucha la app.</p></details>
+<details class="sq"><summary>¿Qué nivel mínimo necesitan las ranuras de implementación, y cómo evitas que una cadena de conexión exclusiva de staging se mueva durante un swap?</summary><p>Standard o superior; marca la cadena de conexión como configuración de ranura para que se quede fija en su ranura.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../pull-images-without-passwords-managed-identity-with-the-acrpull-role-i/">← Descargar imágenes sin contraseñas: identidad administrada c</a><a href="../azure-container-apps-environments-ingress-external-vs-internal-secrets/">Azure Container Apps: entornos, ingress (externo vs interno) →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Respaldo y restauración: tar, gzip/xz/bzip2, rsync, dd, cpio · Lección de Linux+</title>
+<meta name="description" content="Los respaldos solo sirven si puedes restaurar a partir de ellos, así que conviene entender qué captura cada herramienta y cómo recuperar los datos. Linux+ ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Respaldo y restauración: tar, gzip/xz/bzip2, rsync, dd, cpio · Lección de Linux+">
+<meta property="og:description" content="Los respaldos solo sirven si puedes restaurar a partir de ellos, así que conviene entender qué captura cada herramienta y cómo recuperar los datos. Linux+ ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/linux-plus/lessons/backup-and-restore-tar-gzip-xz-bzip2-rsync-dd-cpio/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/linux-plus/lessons/backup-and-restore-tar-gzip-xz-bzip2-rsync-dd-cpio/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../linux-plus/">Linux+</a> / <a href="../">Lecciones</a> · <a href="../../../../linux-plus/lessons/backup-and-restore-tar-gzip-xz-bzip2-rsync-dd-cpio/" hreflang="en" lang="en">English</a></p>
+<p class="note">CompTIA Linux+ XK0-006</p>
+<h1>Respaldo y restauración: tar, gzip/xz/bzip2, rsync, dd, cpio</h1>
+<article class="lbody">
+<p>Los respaldos solo sirven si puedes restaurar a partir de ellos, así que conviene entender qué captura cada herramienta y cómo recuperar los datos. Linux+ evalúa las herramientas clásicas de línea de comandos y sus opciones clave, y espera que elijas la adecuada para cada escenario.</p>
+<p><code>tar</code> (tape archive) agrupa archivos y directorios en un solo archivo conservando rutas, permisos y propiedad. Los modos principales son <code>-c</code> crear, <code>-x</code> extraer y <code>-t</code> listar el contenido, con <code>-f</code> para nombrar el archivo y <code>-v</code> para una salida detallada. La compresión se agrega con una opción: <code>-z</code> para gzip (<code>.tar.gz</code> o <code>.tgz</code>), <code>-j</code> para bzip2 (<code>.tar.bz2</code>) y <code>-J</code> para xz (<code>.tar.xz</code>). Así, <code>tar -czvf etc-backup.tar.gz /etc</code> crea un respaldo comprimido, <code>tar -tzf etc-backup.tar.gz</code> lo lista y <code>tar -xzvf etc-backup.tar.gz -C /restore</code> lo extrae en el directorio que elijas. Cuando extraes como root, tar restaura por defecto los permisos y la propiedad guardados; un usuario común puede agregar <code>-p</code> para conservar los permisos guardados en lugar de aplicar su umask.</p>
+<p>Los compresores también funcionan solos sobre archivos individuales. <code>gzip archivo</code> produce <code>archivo.gz</code> y elimina el original; <code>gunzip</code> o <code>gzip -d</code> lo revierten. <code>bzip2</code> normalmente comprime más pero es más lento, y <code>xz</code> suele dar la salida más pequeña a costa de más tiempo de CPU y memoria. Cada uno tiene una herramienta equivalente para leer texto comprimido sin extraerlo: <code>zcat</code>, <code>bzcat</code>, <code>xzcat</code>. El equilibrio general que debes recordar es: gzip el más rápido, xz el más pequeño.</p>
+<p><code>rsync</code> sincroniza archivos entre directorios o hosts copiando solo lo que cambió, lo que lo hace ideal para respaldos repetidos. <code>rsync -av /srv/ backup01:/backups/srv/</code> copia en modo archivo (recursivo, conservando permisos, fechas, enlaces y propiedad) a través de SSH. <code>--delete</code> elimina en el destino los archivos que ya no existen en el origen, creando un espejo exacto, y <code>-n</code> (<code>--dry-run</code>) muestra lo que sucedería. Una barra final en el origen significa 'copiar el contenido de este directorio' en lugar del directorio en sí, un detalle que aparece a menudo en los exámenes.</p>
+<p><code>dd</code> copia bloques en bruto, ignorando por completo los sistemas de archivos. <code>dd if=/dev/sda of=/backup/sda.img bs=4M status=progress</code> crea una imagen de un disco completo, e intercambiar <code>if</code> y <code>of</code> lo restaura. También se usa para escribir imágenes de instalación en unidades USB. Como sobrescribe el dispositivo de salida sin preguntar, confirma primero los nombres de dispositivo con <code>lsblk</code>. Las imágenes de sistemas de archivos montados y cambiantes pueden quedar inconsistentes, así que crea imágenes de dispositivos desmontados o con instantánea.</p>
+<p><code>cpio</code> (copy in, copy out) es un archivador más antiguo que lee de stdin la lista de archivos a archivar, por lo que se combina naturalmente con <code>find</code>: <code>find /etc | cpio -ov &gt; etc.cpio</code> crea un archivo y <code>cpio -idv &lt; etc.cpio</code> lo extrae. Todavía te lo encuentras porque las imágenes initramfs y el contenido de los paquetes RPM usan el formato cpio.</p>
+<p>Sea cual sea la herramienta, sigue las prácticas básicas de respaldo: mantén más de una copia, guarda al menos una lejos del sistema original y prueba las restauraciones con regularidad.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>tar</dt><dd>Herramienta de archivado que agrupa archivos conservando los metadatos; -c crear, -x extraer, -t listar, -f archivo, con -z/-j/-J para gzip/bzip2/xz.</dd><dt>rsync</dt><dd>Herramienta de sincronización incremental de archivos que transfiere solo las diferencias, localmente o por SSH.</dd><dt>dd</dt><dd>Herramienta de copia a nivel de bloques usada para imágenes de disco y para escribir dispositivos en bruto; if= entrada, of= salida.</dd><dt>cpio</dt><dd>Archivador que recibe listas de archivos por stdin, comúnmente combinado con find; se usa en initramfs y en el contenido de los RPM.</dd><dt>xz</dt><dd>Un compresor que normalmente logra mayor compresión que gzip o bzip2 a costa de la velocidad.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Cada noche, una tarea de cron ejecuta rsync -a --delete /var/www/ backup01:/backups/www/ para que el servidor de respaldo tenga un espejo exacto, y una vez por semana tar -cJf /archive/www-$(date +%F).tar.xz /var/www crea un archivo comprimido de ese momento. Cuando un desarrollador borra un directorio por error, lo restauras en minutos desde la copia de rsync de la noche anterior.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Relaciona con cuidado las letras de tar: z es gzip, j es bzip2, J es xz; y c, x y t son crear, extraer y listar.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué comando lista el contenido de backup.tar.bz2 sin extraerlo?</summary><p>tar -tjf backup.tar.bz2.</p></details>
+<details class="sq"><summary>¿Cuál es la diferencia entre rsync -a /data/ dest/ y rsync -a /data dest/?</summary><p>Con la barra final, el contenido de /data se copia dentro de dest; sin ella, se crea el propio directorio data dentro de dest.</p></details>
+<details class="sq"><summary>¿Por qué dd es riesgoso y cómo reduces el riesgo?</summary><p>Sobrescribe el dispositivo de salida sin confirmación; verifica los nombres de dispositivo con lsblk y revisa dos veces if= y of= antes de ejecutarlo.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Linux+ gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../linux-plus/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../shell-operations-redirection-pipes-environment-variables-grep-sed-awk/">← Operaciones en el shell: redirección, tuberías, variables de</a><a href="../virtualization-kvm-qemu-libvirt-and-virsh-virt-install-qcow2-vs-raw-im/">Virtualización: KVM/QEMU, libvirt y virsh, virt-install, imá →</a></nav>
+</main>
+</body>
+</html>

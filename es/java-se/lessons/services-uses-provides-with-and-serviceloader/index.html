@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Servicios: uses, provides ... with y ServiceLoader · Lección de OCP Java</title>
+<meta name="description" content="Un servicio permite que un módulo use una implementación sin saber, en tiempo de compilación, qué módulo la proporciona. Es el mecanismo de plugins integra">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Servicios: uses, provides ... with y ServiceLoader · Lección de OCP Java">
+<meta property="og:description" content="Un servicio permite que un módulo use una implementación sin saber, en tiempo de compilación, qué módulo la proporciona. Es el mecanismo de plugins integra">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/java-se/lessons/services-uses-provides-with-and-serviceloader/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/java-se/lessons/services-uses-provides-with-and-serviceloader/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../java-se/">OCP Java</a> / <a href="../">Lecciones</a> · <a href="../../../../java-se/lessons/services-uses-provides-with-and-serviceloader/" hreflang="en" lang="en">English</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25)</p>
+<h1>Servicios: uses, provides ... with y ServiceLoader</h1>
+<article class="lbody">
+<p>Un servicio permite que un módulo use una implementación sin saber, en tiempo de compilación, qué módulo la proporciona. Es el mecanismo de plugins integrado de Java. Hay cuatro roles: el tipo de servicio (normalmente una interfaz) en un paquete exportado, el consumidor que lo usa, uno o más módulos proveedores que lo implementan, y <code>java.util.ServiceLoader</code>, que encuentra los proveedores en tiempo de ejecución. Esto mantiene al consumidor débilmente acoplado: puedes agregar o quitar un JAR proveedor del module path sin recompilar el consumidor.</p>
+<p>El módulo consumidor declara <code>uses</code> con la interfaz del servicio, y requiere el módulo que define la interfaz. Un módulo proveedor declara <code>provides &lt;interfaz&gt; with &lt;clase de implementación&gt;</code>. La clase de implementación no necesita estar en un paquete exportado, lo que la mantiene oculta para todos excepto para el ServiceLoader. El proveedor también debe requerir el módulo que contiene la interfaz.</p>
+<pre class="code" tabindex="0"><code>// module com.pay.api
+module com.pay.api { exports com.pay.api; }            // contiene la interfaz PaymentGateway
+
+// proveedor
+module com.pay.stripe {
+    requires com.pay.api;
+    provides com.pay.api.PaymentGateway with com.pay.stripe.internal.StripeGateway;
+}
+
+// consumidor
+module com.shop.app {
+    requires com.pay.api;
+    uses com.pay.api.PaymentGateway;
+}</code></pre>
+<p>En el código del consumidor, <code>ServiceLoader.load(PaymentGateway.class)</code> devuelve un ServiceLoader que es Iterable sobre las instancias de los proveedores, así que un bucle for-each crea y devuelve cada implementación. <code>findFirst()</code> devuelve un <code>Optional&lt;PaymentGateway&gt;</code>, vacío si no hay ninguno. <code>stream()</code> devuelve un <code>Stream&lt;ServiceLoader.Provider&lt;PaymentGateway&gt;&gt;</code>; cada Provider tiene <code>type()</code> para inspeccionar la clase sin instanciarla y <code>get()</code> para crear la instancia. Eso te permite filtrar proveedores por anotación o por clase antes de crear ninguno.</p>
+<p>La clase proveedora debe tener un constructor public sin argumentos o un método public static sin argumentos llamado <code>provider()</code> que devuelva una instancia. Si el módulo consumidor olvida la directiva <code>uses</code>, llamar a <code>ServiceLoader.load</code> para ese servicio lanza un <code>ServiceConfigurationError</code>. La carga ocurre de forma perezosa y el loader guarda las instancias en caché; <code>reload()</code> limpia la caché.</p>
+<p>Para el código en el class path, el mecanismo antiguo sigue funcionando: un archivo de texto llamado <code>META-INF/services/</code> seguido del nombre completamente calificado de la interfaz, que lista los nombres de las clases de implementación. Los JAR modulares usan <code>provides</code> en su lugar. El examen espera que sepas qué módulo declara cada directiva: <code>uses</code> en el consumidor, <code>provides ... with</code> en el proveedor, y <code>exports</code> del paquete de la interfaz en el módulo de la API.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Service interface (interfaz de servicio)</dt><dd>El tipo, normalmente una interfaz en un paquete exportado, del que dependen los consumidores y que implementan los proveedores.</dd><dt>uses</dt><dd>Una directiva de módulo en el consumidor que declara que busca implementaciones de un servicio con ServiceLoader.</dd><dt>provides ... with</dt><dd>Una directiva de módulo en el proveedor que nombra la interfaz del servicio y la clase de implementación que lo proporciona.</dd><dt>ServiceLoader</dt><dd>La clase que descubre e instancia proveedores de servicios en tiempo de ejecución mediante load, iteración, findFirst o stream.</dd><dt>ServiceLoader.Provider</dt><dd>Un manejador de un proveedor que expone type() sin instanciarlo y get() para crear la instancia.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un editor de fotos define una interfaz de servicio ImageFilter. Cada filtro se distribuye como su propio módulo que provee ImageFilter con su clase. El editor llama a ServiceLoader.load(ImageFilter.class).stream() para listar los filtros disponibles en su menú, así que un filtro nuevo aparece simplemente al poner su JAR en el module path.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Ten claro a quién pertenece cada directiva: uses va en el consumidor, provides ... with va en el proveedor, y el paquete de la interfaz debe exportarlo quien la define. El paquete de la implementación no necesita exportarse.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué módulo declara uses com.pay.api.PaymentGateway?</summary><p>El módulo consumidor que llama a ServiceLoader.load(PaymentGateway.class).</p></details>
+<details class="sq"><summary>¿Qué devuelve ServiceLoader.findFirst() cuando no se encuentra ningún proveedor?</summary><p>Un Optional vacío.</p></details>
+<details class="sq"><summary>¿Qué debe tener una clase proveedora para que ServiceLoader pueda crearla?</summary><p>Un constructor public sin argumentos o un método public static provider().</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia OCP Java gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../java-se/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../module-info-java-module-requires-requires-transitive-exports-opens/">← module-info.java: module, requires, requires transitive, exp</a><a href="../module-path-vs-class-path-named-automatic-and-unnamed-modules/">Module path vs class path; módulos con nombre, automáticos y →</a></nav>
+</main>
+</body>
+</html>

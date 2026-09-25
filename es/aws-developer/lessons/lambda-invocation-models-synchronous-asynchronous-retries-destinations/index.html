@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Modelos de invocación de Lambda: síncrono, asíncrono (rein… · Lección de Developer Associate</title>
+<meta name="description" content="La forma en que se invoca una función Lambda decide quién reintenta cuando hay una falla y adónde van a parar los errores. Hay tres modelos, y muchas pregu">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Modelos de invocación de Lambda: síncrono, asíncrono (rein… · Lección de Developer Associate">
+<meta property="og:description" content="La forma en que se invoca una función Lambda decide quién reintenta cuando hay una falla y adónde van a parar los errores. Hay tres modelos, y muchas pregu">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/lambda-invocation-models-synchronous-asynchronous-retries-destinations/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/lambda-invocation-models-synchronous-asynchronous-retries-destinations/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/lambda-invocation-models-synchronous-asynchronous-retries-destinations/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Modelos de invocación de Lambda: síncrono, asíncrono (reintentos, destinos, DLQ) y mapeos de fuentes de eventos (SQS, Kinesis, DynamoDB Streams, respuestas parciales de lote)</h1>
+<article class="lbody">
+<p>La forma en que se invoca una función Lambda decide quién reintenta cuando hay una falla y adónde van a parar los errores. Hay tres modelos, y muchas preguntas del examen dependen discretamente de cuál está en juego.</p>
+<p>La invocación síncrona (<code>InvocationType</code> <code>RequestResponse</code>) significa que quien llama espera a que la función termine y recibe el resultado o el error. API Gateway, Application Load Balancer, los disparadores de Amazon Cognito y una llamada directa a <code>aws lambda invoke</code> son síncronos. Lambda no reintenta por su cuenta; lo decide quien llama. Si la función lanza un error, API Gateway devuelve un error al cliente, y es trabajo del cliente reintentar.</p>
+<p>La invocación asíncrona (<code>InvocationType</code> <code>Event</code>) coloca el evento en una cola interna de Lambda y regresa de inmediato con HTTP 202. Las notificaciones de eventos de Amazon S3, SNS y EventBridge invocan funciones de esta forma. Si la función devuelve un error, Lambda la reintenta dos veces más por defecto (configurable a 0, 1 o 2 reintentos), con esperas entre intentos, y conserva los eventos en la cola hasta seis horas por defecto (antigüedad máxima del evento configurable). Cuando fallan todos los intentos, el evento puede ir a una cola de mensajes fallidos (una cola SQS o un tema SNS que recibe solo la carga útil del evento) o, la opción más nueva y completa, a un destino on-failure. Los destinos también pueden enrutar los resultados exitosos: los destinos on-success y on-failure pueden ser SQS, SNS, Lambda, EventBridge (y S3 para fallas), y reciben el registro de invocación, incluidos los detalles de la respuesta o del error. Como los eventos pueden entregarse más de una vez, los manejadores asíncronos deben ser idempotentes.</p>
+<p>Los mapeos de fuentes de eventos (event source mappings) son para fuentes basadas en sondeo: SQS, Kinesis Data Streams, DynamoDB Streams, Amazon MQ, Amazon MSK y Apache Kafka. Aquí el servicio Lambda ejecuta sondeadores que leen registros en lotes e invocan tu función de forma síncrona con cada lote. Los ajustes incluyen el tamaño de lote, la ventana de agrupación y, para los streams, la posición inicial y el factor de paralelización.</p>
+<p>El comportamiento ante errores varía según la fuente. En SQS, un lote fallido no se elimina, así que los mensajes vuelven a ser visibles tras el tiempo de visibilidad de la cola y se reintentan hasta que tienen éxito o alcanzan el <code>maxReceiveCount</code> de la cola y pasan a la DLQ propia de la cola (configurada en la cola, no en la función). En Kinesis y DynamoDB Streams, un lote que falla bloquea ese shard, porque los registros deben procesarse en orden, y Lambda lo reintenta hasta que tiene éxito o los registros expiran. Los mapeos de streams te permiten limitar esto con el número máximo de reintentos, la antigüedad máxima del registro, la división del lote ante error de la función (bisect batch on function error) y un destino on-failure que recibe los detalles de los registros descartados.</p>
+<p>Las respuestas parciales de lote evitan reprocesar los registros exitosos. Habilita <code>ReportBatchItemFailures</code> en el mapeo de fuente de eventos y devuelve los ID solo de los elementos fallidos; Lambda reintenta entonces solo esos (en los streams, a partir del primer número de secuencia fallido).</p>
+<pre class="code" tabindex="0"><code>def handler(event, context):
+    failures = []
+    for record in event['Records']:
+        try:
+            process(record)
+        except Exception:
+            failures.append({'itemIdentifier': record['messageId']})
+    return {'batchItemFailures': failures}</code></pre>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Synchronous invocation (invocación síncrona)</dt><dd>Quien llama espera la respuesta de la función; los reintentos son responsabilidad de quien llama.</dd><dt>Asynchronous invocation (invocación asíncrona)</dt><dd>Lambda encola el evento, devuelve 202 de inmediato y reintenta las fallas por su cuenta antes de enviarlas a una DLQ o a un destino.</dd><dt>Lambda destination (destino de Lambda)</dt><dd>Un destino (SQS, SNS, Lambda, EventBridge, o S3 para fallas) que recibe un registro del éxito o la falla de una invocación asíncrona o de stream.</dd><dt>Event source mapping (mapeo de fuente de eventos)</dt><dd>Un recurso de Lambda que sondea una cola o un stream e invoca la función con lotes de registros.</dd><dt>ReportBatchItemFailures</dt><dd>Un ajuste del mapeo de fuente de eventos que permite a la función devolver solo los registros fallidos para que los exitosos no se reintenten.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una carga en S3 dispara de forma asíncrona una función que redimensiona imágenes. Las imágenes corruptas hacen que lance un error, así que Lambda reintenta dos veces y luego envía el registro de invocación, con el mensaje de error y el evento original, a una cola SQS configurada como destino on-failure que el equipo revisa cada mañana.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Una DLQ configurada en la función Lambda solo se aplica a las invocaciones asíncronas. Para una fuente de eventos SQS, configura la política de redrive y la DLQ en la propia cola de origen.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué modelo de invocación usa S3 y qué pasa cuando la función falla?</summary><p>Asíncrono; Lambda reintenta hasta dos veces más por defecto y luego envía el evento a una DLQ o a un destino on-failure si están configurados.</p></details>
+<details class="sq"><summary>¿Por qué un solo registro malo puede detener una función disparada por Kinesis?</summary><p>Los lotes de un stream se procesan en orden por shard, así que Lambda sigue reintentando el lote que falla hasta que tiene éxito o expira, a menos que configures límites de reintento, la división ante error o respuestas parciales de lote.</p></details>
+<details class="sq"><summary>¿Qué devuelve una función para informar fallas parciales de lote?</summary><p>Un objeto con batchItemFailures que enumera el itemIdentifier (ID de mensaje o número de secuencia) de cada registro fallido.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../lambda-configuration-memory-timeout-15-minute-max-ephemeral-tmp-storag/">← Configuración de Lambda: memoria, tiempo de espera (máximo d</a><a href="../lambda-coding-practices-initializing-sdk-clients-and-connections-outsi/">Buenas prácticas de código en Lambda: inicializar clientes d →</a></nav>
+</main>
+</body>
+</html>

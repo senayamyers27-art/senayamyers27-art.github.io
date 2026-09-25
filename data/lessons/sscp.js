@@ -3172,4 +3172,4 @@ CertHub.addLessons("sscp", [
    ]
   ]
  }
-]);
+], { reviewed: "2026-09-25" });

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mensajería y streaming: SQS estándar vs FIFO (grupos de me… · Lección de Developer Associate</title>
+<meta name="description" content="AWS ofrece varios servicios para mover mensajes entre componentes, y el examen espera que elijas el correcto a partir de unas pocas pistas: orden, duplicad">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Mensajería y streaming: SQS estándar vs FIFO (grupos de me… · Lección de Developer Associate">
+<meta property="og:description" content="AWS ofrece varios servicios para mover mensajes entre componentes, y el examen espera que elijas el correcto a partir de unas pocas pistas: orden, duplicad">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/messaging-and-streaming-sqs-standard-vs-fifo-message-groups-deduplicat/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/messaging-and-streaming-sqs-standard-vs-fifo-message-groups-deduplicat/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/messaging-and-streaming-sqs-standard-vs-fifo-message-groups-deduplicat/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Mensajería y streaming: SQS estándar vs FIFO (grupos de mensajes, deduplicación, tiempo de visibilidad, long polling), fan-out con SNS, reglas y Scheduler de EventBridge, Kinesis Data Streams</h1>
+<article class="lbody">
+<p>AWS ofrece varios servicios para mover mensajes entre componentes, y el examen espera que elijas el correcto a partir de unas pocas pistas: orden, duplicados, número de consumidores, reproducción (replay) y enrutamiento.</p>
+<p>Amazon SQS es una cola basada en extracción (pull): los productores envían mensajes y los consumidores los sondean, y cada mensaje lo procesa un consumidor y luego se elimina. Las colas estándar ofrecen un rendimiento muy alto con entrega al menos una vez y orden de mejor esfuerzo, así que ocasionalmente puedes ver duplicados o mensajes fuera de orden. Las colas FIFO (sus nombres deben terminar en <code>.fifo</code>) garantizan el orden primero en entrar, primero en salir y el procesamiento exactamente una vez dentro de una ventana de deduplicación de cinco minutos, con menor rendimiento. El orden en FIFO es por grupo de mensajes: los mensajes con el mismo <code>MessageGroupId</code> se entregan en orden, un grupo a la vez, mientras que grupos distintos pueden procesarse en paralelo. La deduplicación usa un <code>MessageDeduplicationId</code> que tú proporcionas o la deduplicación basada en contenido, que calcula un hash del cuerpo del mensaje.</p>
+<p>Cuando un consumidor recibe un mensaje de SQS, el mensaje no se elimina; se vuelve invisible durante el tiempo de visibilidad (visibility timeout, 30 segundos por defecto). El consumidor debe llamar a <code>DeleteMessage</code> antes de que termine ese tiempo, o el mensaje reaparece y otro consumidor podría procesarlo de nuevo. Si el procesamiento tarda más, aumenta el tiempo de visibilidad o llama a <code>ChangeMessageVisibility</code>. El long polling (configurar <code>WaitTimeSeconds</code> hasta 20 segundos en <code>ReceiveMessage</code>, o el tiempo de espera de recepción de la cola) hace que la llamada espere a que lleguen mensajes en lugar de regresar vacía de inmediato, lo que reduce las respuestas vacías y el costo. El short polling es el valor predeterminado.</p>
+<p>Amazon SNS es publicación/suscripción basada en empuje (push): un mensaje publicado en un tema se envía a cada suscriptor (colas SQS, funciones Lambda, endpoints HTTP, correo electrónico, SMS). SNS por sí mismo no almacena mensajes para leerlos después. Las políticas de filtro de suscripción permiten que cada suscriptor reciba solo los mensajes cuyos atributos (o cuerpo) coinciden. Los temas FIFO de SNS pueden entregar en orden a colas FIFO de SQS.</p>
+<p>Amazon EventBridge es un bus de eventos con enrutamiento basado en contenido. Las reglas seleccionan eventos mediante patrones de eventos (por ejemplo, source <code>aws.s3</code> y un nombre de bucket específico) y los envían a destinos como Lambda, Step Functions, SQS u otro bus. Recibe eventos de servicios de AWS, de tus propias aplicaciones mediante <code>PutEvents</code> y de socios SaaS compatibles, y puede archivar y reproducir eventos. Para trabajo basado en tiempo, EventBridge Scheduler crea programaciones únicas o recurrentes (expresiones cron o rate) que invocan destinos, con soporte de zonas horarias y su propia configuración de reintentos y DLQ; las reglas programadas en un bus de eventos son la forma más antigua de hacerlo.</p>
+<p>Amazon Kinesis Data Streams sirve para datos de streaming ordenados, reproducibles y de alto volumen, como flujos de clics (clickstreams) o telemetría de IoT. Un stream está formado por shards; cada registro tiene una clave de partición que decide su shard, y el orden está garantizado dentro de un shard. Los registros permanecen en el stream durante el período de retención (24 horas por defecto, ampliable), así que varios consumidores pueden leer los mismos datos de forma independiente y reprocesarlos. La capacidad se administra con shards aprovisionados o con el modo bajo demanda (on-demand).</p>
+<p>Guía rápida de elección: para desacoplar trabajo con un consumidor por mensaje, usa SQS; si necesitas orden estricto o cero duplicados, SQS FIFO; un mensaje para muchos suscriptores, SNS (normalmente hacia SQS); enrutar por contenido del evento o desde SaaS y servicios de AWS, EventBridge; un stream ordenado en tiempo real con varios consumidores y reproducción, Kinesis.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Visibility timeout (tiempo de visibilidad)</dt><dd>El período posterior a la recepción de un mensaje de SQS durante el cual está oculto para otros consumidores; reaparece si no se elimina a tiempo.</dd><dt>Message group ID (ID de grupo de mensajes)</dt><dd>El atributo de las colas FIFO que define un grupo ordenado; los mensajes del mismo grupo se procesan estrictamente en orden.</dd><dt>Long polling (sondeo largo)</dt><dd>Una llamada a ReceiveMessage que espera hasta 20 segundos a que haya mensajes, reduciendo las respuestas vacías y el costo.</dd><dt>Event pattern (patrón de eventos)</dt><dd>El filtro JSON de una regla de EventBridge que selecciona qué eventos se envían a los destinos de la regla.</dd><dt>Shard (fragmento)</dt><dd>La unidad de capacidad y de orden en un stream de datos de Kinesis; los registros con la misma clave de partición van al mismo shard.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un banco procesa las transacciones de cuentas mediante una cola FIFO de SQS, usando el número de cuenta como MessageGroupId. Las transacciones de una cuenta se aplican estrictamente en orden, mientras que miles de cuentas distintas se procesan en paralelo, y el MessageDeduplicationId evita que un envío reintentado debite dos veces.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Que distintos consumidores procesen dos veces los mensajes suele significar que el tiempo de visibilidad es más corto que el tiempo de procesamiento. Muchas respuestas vacías de ReceiveMessage y un costo alto apuntan a habilitar el long polling.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo puede una cola FIFO de SQS mantener el orden por cliente y aun así escalar?</summary><p>Usa el ID del cliente como MessageGroupId; el orden se mantiene dentro de cada grupo mientras que grupos distintos se procesan en paralelo.</p></details>
+<details class="sq"><summary>¿Cuál es la diferencia entre la entrega de SNS y la de SQS?</summary><p>SNS empuja cada mensaje a todos los suscriptores y no lo conserva; SQS almacena los mensajes hasta que un único consumidor los sondea, procesa y elimina.</p></details>
+<details class="sq"><summary>¿Qué servicio permite que varias aplicaciones lean y reproduzcan el mismo stream ordenado de registros?</summary><p>Kinesis Data Streams, porque los registros se conservan durante el período de retención y cada consumidor lleva su propia posición.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../resilient-code-retries-with-exponential-backoff-and-jitter-idempotency/">← Código resiliente: reintentos con retroceso exponencial y ji</a><a href="../aws-step-functions-standard-vs-express-workflows-retry-catch-task-toke/">AWS Step Functions: flujos de trabajo Standard vs Express, r →</a></nav>
+</main>
+</body>
+</html>

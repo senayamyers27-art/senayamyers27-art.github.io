@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Amazon S3 desde el código: carga multiparte, clases de alm… · Lección de Developer Associate</title>
+<meta name="description" content="Amazon S3 almacena objetos (archivos más metadatos) en buckets, direccionados por clave. Como desarrollador, principalmente llamas a PutObject, GetObject, ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Amazon S3 desde el código: carga multiparte, clases de alm… · Lección de Developer Associate">
+<meta property="og:description" content="Amazon S3 almacena objetos (archivos más metadatos) en buckets, direccionados por clave. Como desarrollador, principalmente llamas a PutObject, GetObject, ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/amazon-s3-from-code-multipart-upload-storage-classes-and-lifecycle-eve/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/amazon-s3-from-code-multipart-upload-storage-classes-and-lifecycle-eve/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/amazon-s3-from-code-multipart-upload-storage-classes-and-lifecycle-eve/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Amazon S3 desde el código: carga multiparte, clases de almacenamiento y ciclo de vida, notificaciones de eventos</h1>
+<article class="lbody">
+<p>Amazon S3 almacena objetos (archivos más metadatos) en buckets, direccionados por clave. Como desarrollador, principalmente llamas a <code>PutObject</code>, <code>GetObject</code>, <code>ListObjectsV2</code> y <code>DeleteObject</code>, pero el examen se centra en las cargas grandes, la elección de clases de almacenamiento y la reacción a los cambios.</p>
+<p>Un solo <code>PutObject</code> puede subir hasta 5 GB. La carga multiparte (multipart upload) divide un objeto grande en partes que se suben de forma independiente y en paralelo, y luego se ensamblan. Es obligatoria por encima de 5 GB y se recomienda para objetos de más de unos 100 MB. El flujo es <code>CreateMultipartUpload</code> (devuelve un ID de carga), <code>UploadPart</code> para cada parte (cada una obtiene un ETag; las partes miden de 5 MB a 5 GB salvo la última, con hasta 10,000 partes) y luego <code>CompleteMultipartUpload</code> con la lista de números de parte y ETags. Beneficios: mayor rendimiento, y una parte fallida puede reintentarse sola en lugar de reiniciar toda la carga. Las utilidades de transferencia de alto nivel de los SDK, y <code>aws s3 cp</code>, hacen esto automáticamente. Las cargas multiparte incompletas mantienen sus partes almacenadas (y facturadas) hasta que se abortan, así que agrega una regla de ciclo de vida para abortar las cargas incompletas después de algunos días.</p>
+<p>Para cargas rápidas desde clientes lejanos, S3 Transfer Acceleration enruta los datos a través de las ubicaciones perimetrales (edge locations) de CloudFront. Para descargas, las lecturas por rango de bytes (el encabezado <code>Range</code>) recuperan partes de un objeto en paralelo o reanudan una descarga fallida.</p>
+<p>Las clases de almacenamiento equilibran el costo con la velocidad y el patrón de acceso. S3 Standard es para datos a los que se accede con frecuencia. S3 Intelligent-Tiering mueve automáticamente los objetos entre niveles de acceso según el uso, lo cual es bueno cuando los patrones son desconocidos. S3 Standard-IA (Infrequent Access) y S3 One Zone-IA cuestan menos de almacenar, pero cobran por recuperación; One Zone-IA guarda los datos en una sola zona de disponibilidad, así que úsala solo para datos que se puedan volver a crear. S3 Glacier Instant Retrieval, Glacier Flexible Retrieval y Glacier Deep Archive son para archivos históricos; las dos últimas requieren una solicitud de restauración que tarda de minutos a horas antes de poder leer los datos. Configuras la clase por objeto con el parámetro <code>StorageClass</code>.</p>
+<p>La configuración de ciclo de vida automatiza esto con reglas delimitadas por prefijo o etiqueta: las acciones de transición mueven los objetos a clases más baratas después de un número de días (por ejemplo, Standard-IA a los 30 días, Glacier Flexible Retrieval a los 90), y las acciones de expiración eliminan objetos, versiones anteriores no actuales en buckets con control de versiones o cargas multiparte incompletas.</p>
+<p>Las notificaciones de eventos de S3 se disparan cuando los objetos se crean, eliminan, restauran o replican, y pueden filtrarse por prefijo y sufijo de clave (por ejemplo <code>uploads/</code> y <code>.jpg</code>). Los destinos son Lambda, SQS y SNS; la política de recursos del destino debe permitir que S3 lo invoque o le envíe mensajes. Como alternativa, habilita la entrega de eventos de S3 a EventBridge para obtener un filtrado más completo y muchos más destinos. Las notificaciones suelen entregarse en segundos y ocasionalmente pueden entregarse más de una vez, así que los manejadores deben ser idempotentes. Evita escribir la salida en el mismo prefijo que dispara la función, lo que crea un bucle de invocaciones.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Multipart upload (carga multiparte)</dt><dd>Subir un objeto como partes cargadas por separado que S3 ensambla; obligatoria por encima de 5 GB y recomendada para archivos grandes.</dd><dt>Lifecycle rule (regla de ciclo de vida)</dt><dd>Una configuración del bucket que transiciona los objetos a otras clases de almacenamiento o los hace expirar después de períodos definidos.</dd><dt>S3 Intelligent-Tiering</dt><dd>Una clase de almacenamiento que mueve automáticamente los objetos entre niveles de acceso según la frecuencia con que se accede a ellos.</dd><dt>Event notification (notificación de eventos)</dt><dd>Una función de S3 que envía eventos a nivel de objeto a Lambda, SQS, SNS o EventBridge, opcionalmente filtrados por prefijo y sufijo.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una plataforma de video sube archivos de 20 GB desde una aplicación móvil. Usa carga multiparte con partes de 100 MB en paralelo, así que una conexión caída solo reintenta una parte. Una notificación ObjectCreated filtrada por el sufijo .mp4 envía un mensaje a una cola SQS que consumen los trabajadores de transcodificación, y una regla de ciclo de vida mueve los originales a Glacier Flexible Retrieval después de 90 días.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Las cargas de más de 5 GB deben usar carga multiparte. Recuerda la regla de ciclo de vida para abortar cargas multiparte incompletas cuando una pregunta plantee por qué los costos de almacenamiento siguen creciendo sin objetos visibles.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué tres llamadas a la API componen una carga multiparte?</summary><p>CreateMultipartUpload, UploadPart para cada parte y luego CompleteMultipartUpload (o AbortMultipartUpload para cancelar).</p></details>
+<details class="sq"><summary>¿Qué clase de almacenamiento es adecuada para datos con patrones de acceso impredecibles?</summary><p>S3 Intelligent-Tiering, que mueve automáticamente los objetos entre niveles según el acceso.</p></details>
+<details class="sq"><summary>¿Qué debe estar configurado para que S3 invoque una función Lambda al subir un archivo?</summary><p>Una configuración de notificación de eventos en el bucket y una política basada en recursos en la función que permita a s3.amazonaws.com invocarla.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../dynamodb-partition-and-sort-keys-query-vs-scan-lsi-vs-gsi-rcu-wcu-math/">← DynamoDB: claves de partición y de ordenamiento, Query vs Sc</a><a href="../caching-strategies-with-elasticache-lazy-loading-write-through-ttls-ch/">Estrategias de caché con ElastiCache: lazy loading, write-th →</a></nav>
+</main>
+</body>
+</html>

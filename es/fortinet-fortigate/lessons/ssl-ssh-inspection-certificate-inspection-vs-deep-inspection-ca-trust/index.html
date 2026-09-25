@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Inspección SSL/SSH: certificate inspection vs deep inspect… · Lección de FortiGate Admin</title>
+<meta name="description" content="Hoy en día la mayor parte del tráfico está cifrado con TLS, así que un firewall que no puede ver dentro de HTTPS está ciego ante gran parte de lo que deber">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Inspección SSL/SSH: certificate inspection vs deep inspect… · Lección de FortiGate Admin">
+<meta property="og:description" content="Hoy en día la mayor parte del tráfico está cifrado con TLS, así que un firewall que no puede ver dentro de HTTPS está ciego ante gran parte de lo que deber">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/fortinet-fortigate/lessons/ssl-ssh-inspection-certificate-inspection-vs-deep-inspection-ca-trust/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/fortinet-fortigate/lessons/ssl-ssh-inspection-certificate-inspection-vs-deep-inspection-ca-trust/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../fortinet-fortigate/">FortiGate Admin</a> / <a href="../">Lecciones</a> · <a href="../../../../fortinet-fortigate/lessons/ssl-ssh-inspection-certificate-inspection-vs-deep-inspection-ca-trust/" hreflang="en" lang="en">English</a></p>
+<p class="note">Fortinet NSE 4 - FortiOS 7.6 Administrator NSE4_FGT_AD-7.6</p>
+<h1>Inspección SSL/SSH: certificate inspection vs deep inspection, confianza en la CA, exenciones, certificate pinning, manejo de certificados no confiables</h1>
+<article class="lbody">
+<p>Hoy en día la mayor parte del tráfico está cifrado con TLS, así que un firewall que no puede ver dentro de HTTPS está ciego ante gran parte de lo que debería filtrar. FortiGate ofrece dos niveles de inspección SSL, y elegir entre ellos, además de manejar los efectos secundarios de los certificados, es el concepto de inspección de contenido más importante del examen.</p>
+<p>Certificate inspection es el nivel ligero. No descifra la sesión; lee solo las partes del handshake TLS que ya son visibles, principalmente el Server Name Indication (SNI) y el certificado del servidor (que contiene el nombre de host). A partir de eso puede aplicar filtrado web por categoría e identificar muchas aplicaciones. Pero como nunca ve la carga cifrada, no puede escanear archivos en busca de virus, no puede ver la ruta completa de la URL y no puede aplicar acciones detalladas dentro de una aplicación. Es rápida y no provoca advertencias de certificado.</p>
+<p>Deep inspection (inspección SSL completa) realmente descifra el tráfico. El FortiGate actúa como intermediario (man-in-the-middle): termina la sesión TLS del cliente, descifra e inspecciona el contenido y luego lo vuelve a cifrar hacia el servidor, presentándole al cliente un certificado que volvió a firmar con la propia autoridad de certificación (CA) del FortiGate. Esto expone todo (archivos para el antivirus, URLs completas, acciones de aplicaciones), así que es necesario para AV, content disarm, control de aplicaciones detallado y filtrado por ruta de URL. Cuando el AV detecta malware por HTTP pero no por HTTPS, la solución es cambiar esa política a deep inspection.</p>
+<p>El costo de deep inspection es la confianza. Como ahora el cliente recibe un certificado firmado por la CA del FortiGate en lugar de la CA real del sitio, los navegadores muestran advertencias a menos que confíen en la CA del FortiGate. La implementación correcta es distribuir la CA del FortiGate (o una CA subordinada empresarial) a todos los clientes mediante GPO o MDM, para que los certificados refirmados sean de confianza sin mostrar avisos, y no importar el certificado de cada sitio web.</p>
+<p>Hay dos casos especiales importantes. Las exenciones te permiten omitir el descifrado para categorías o direcciones elegidas, por ejemplo no descifrar nunca sitios de banca en línea o de salud por razones de privacidad y legales, mientras sigues aplicando deep inspection a todo lo demás. Certificate pinning ocurre cuando una aplicación está programada para aceptar solo su propio certificado esperado; esa aplicación rechaza el certificado refirmado por el FortiGate y deja de funcionar bajo deep inspection, así que exentas los destinos de esa aplicación. FortiGate también tiene un ajuste para manejar certificados de servidor no confiables (allow, block o ignore) cuando el certificado del servidor real es inválido en sí mismo.</p>
+<p>En un laboratorio habilitas deep inspection, importas la CA del FortiGate en un navegador y comparas el certificado del sitio antes y después para ver en acción el refirmado.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Certificate inspection (inspección de certificados)</dt><dd>Inspección SSL que lee solo el handshake (SNI y certificado) sin descifrar, lo que permite identificar categorías y aplicaciones, pero no escanear la carga.</dd><dt>Deep inspection (inspección profunda)</dt><dd>Inspección SSL completa que descifra, inspecciona y vuelve a cifrar el tráfico usando la CA del FortiGate; necesaria para AV e inspección detallada.</dd><dt>CA trust distribution (distribución de confianza en la CA)</dt><dd>Enviar a los clientes la CA de firma del FortiGate (mediante GPO/MDM) para que los certificados refirmados sean de confianza y cesen las advertencias.</dd><dt>Certificate pinning (fijación de certificados)</dt><dd>Una aplicación que acepta solo su propio certificado esperado y rechaza el refirmado por el FortiGate, lo que requiere una exención de inspección.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>El antivirus detecta EICAR por HTTP pero no por HTTPS porque la política usa certificate inspection; cambiar a deep inspection permite que el FortiGate descifre la carga y que el escaneo AV detecte el archivo también por HTTPS.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Solo deep inspection puede escanear la carga (AV, URLs completas, acciones dentro de las aplicaciones). Certificate inspection solo ve el SNI/certificado. Y los clientes deben confiar en la CA del FortiGate, o cada sitio mostrará una advertencia.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué puede hacer certificate inspection y qué se le escapa?</summary><p>Lee el SNI y el certificado para identificar categorías y aplicaciones, pero no puede descifrar la carga, así que no puede escanear archivos ni ver URLs completas ni acciones dentro de las aplicaciones.</p></details>
+<details class="sq"><summary>Después de habilitar deep inspection, todos los usuarios ven advertencias de certificado. ¿Cuál es la solución?</summary><p>Distribuir la CA de firma del FortiGate a todos los clientes (GPO o MDM) para que los certificados refirmados sean de confianza.</p></details>
+<details class="sq"><summary>¿Por qué una aplicación móvil con certificate pinning deja de funcionar bajo deep inspection?</summary><p>Acepta solo su propio certificado esperado y rechaza el refirmado por el FortiGate; exenta del descifrado los destinos de la aplicación.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia FortiGate Admin gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../fortinet-fortigate/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../two-factor-authentication-with-fortitoken/">← Autenticación de dos factores con FortiToken</a><a href="../inspection-modes-flow-based-vs-proxy-based-set-per-policy-profile-base/">Modos de inspección: flow-based vs proxy-based, definidos po →</a></nav>
+</main>
+</body>
+</html>

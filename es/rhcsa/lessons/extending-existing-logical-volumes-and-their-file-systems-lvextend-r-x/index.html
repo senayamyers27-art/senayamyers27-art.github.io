@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ampliar volúmenes lógicos existentes y sus sistemas de arc… · Lección de RHCSA</title>
+<meta name="description" content="Ampliar el almacenamiento sin tiempo de inactividad es uno de los principales beneficios de LVM (Logical Volume Manager). Un volumen lógico (LV) toma espac">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Ampliar volúmenes lógicos existentes y sus sistemas de arc… · Lección de RHCSA">
+<meta property="og:description" content="Ampliar el almacenamiento sin tiempo de inactividad es uno de los principales beneficios de LVM (Logical Volume Manager). Un volumen lógico (LV) toma espac">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/extending-existing-logical-volumes-and-their-file-systems-lvextend-r-x/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/extending-existing-logical-volumes-and-their-file-systems-lvextend-r-x/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/extending-existing-logical-volumes-and-their-file-systems-lvextend-r-x/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Ampliar volúmenes lógicos existentes y sus sistemas de archivos (lvextend -r, xfs_growfs, resize2fs)</h1>
+<article class="lbody">
+<p>Ampliar el almacenamiento sin tiempo de inactividad es uno de los principales beneficios de LVM (Logical Volume Manager). Un volumen lógico (LV) toma espacio de su grupo de volúmenes (VG), que reúne uno o más volúmenes físicos (PV). Ampliar significa dos cosas: hacer más grande el LV y luego hacer que el sistema de archivos que contiene use el espacio nuevo. Si olvidas el segundo paso, <code>df</code> sigue mostrando el tamaño anterior.</p>
+<p>Primero revisa el espacio libre del grupo de volúmenes con <code>vgs</code> (la columna VFree) o <code>vgdisplay</code>. Si no hay suficiente, añade un disco o una partición: <code>pvcreate /dev/vdc</code> y luego <code>vgextend vg1 /dev/vdc</code>. Después amplía el LV. <code>-L</code> establece el tamaño en unidades (<code>-L 2G</code> lo deja en 2 GiB en total, <code>-L +500M</code> añade 500 MiB), mientras que <code>-l</code> trabaja en extensiones (<code>-l +100%FREE</code> toma todo el espacio restante del VG).</p>
+<pre class="code" tabindex="0"><code>vgs                                  # revisar VFree
+lvextend -r -L +500M /dev/vg1/data   # ampliar el LV y el sistema de archivos a la vez
+df -h /data                          # confirmar el nuevo tamaño</code></pre>
+<p>La opción <code>-r</code> (<code>--resizefs</code>) es la opción más sencilla y segura: después de ampliar el LV, llama por ti a la herramienta de sistema de archivos correcta. Si la olvidaste, amplía tú mismo el sistema de archivos. Para XFS, ejecuta <code>xfs_growfs</code> sobre el punto de montaje, por ejemplo <code>xfs_growfs /data</code>; XFS debe estar montado para ampliarse. Para ext4, ejecuta <code>resize2fs /dev/vg1/data</code>, que amplía ext4 en línea mientras está montado.</p>
+<pre class="code" tabindex="0"><code>lvextend -L +1G /dev/vg1/data   # solo el LV
+xfs_growfs /data                # XFS: pasar el punto de montaje
+resize2fs /dev/vg1/data         # ext4: pasar el dispositivo</code></pre>
+<p>Presta atención a cómo se expresa el tamaño en las tareas. Ampliar a 800 MiB significa el tamaño total, <code>-L 800M</code>; añadir 800 MiB significa <code>-L +800M</code>. Ten en cuenta también que los tamaños son aproximados: LVM redondea a extensiones completas (4 MiB por defecto), y los evaluadores suelen aceptar un rango. Verifica con <code>lvs</code> para el volumen y <code>df -h</code> para el sistema de archivos; ambos deben mostrar el nuevo tamaño.</p>
+<p>El swap en un LV es un caso especial: haz <code>swapoff</code>, <code>lvextend</code>, vuelve a ejecutar <code>mkswap</code> (lo que cambia el UUID, así que actualiza fstab) y luego <code>swapon</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>lvextend</dt><dd>Aumenta el tamaño de un volumen lógico, opcionalmente redimensionando su sistema de archivos con -r.</dd><dt>xfs_growfs</dt><dd>Amplía un sistema de archivos XFS montado para que ocupe todo su dispositivo; recibe el punto de montaje.</dd><dt>resize2fs</dt><dd>Redimensiona un sistema de archivos ext2, ext3 o ext4; puede ampliar en línea y reducir sin montar.</dd><dt>Physical extent (extensión física)</dt><dd>La unidad de tamaño fijo (4 MiB por defecto) en la que LVM asigna espacio, así que los tamaños de LV se redondean a múltiplos de ella.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>El volumen /data (XFS en /dev/vg1/data) debe crecer de 1 GiB a 1,5 GiB. vgs muestra 2 GiB libres, así que ejecutas lvextend -r -L 1.5G /dev/vg1/data. lvs muestra 1.50g y df -h /data informa aproximadamente 1.5G, así que ambas capas quedan listas sin desmontar.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El fallo más común es ampliar el LV pero no el sistema de archivos. Usa lvextend -r siempre, y revisa df -h, no solo lvs, antes de continuar.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cuál es la diferencia entre lvextend -L 2G y -L +2G?</summary><p>-L 2G establece el tamaño total en 2 GiB; -L +2G añade 2 GiB al tamaño actual.</p></details>
+<details class="sq"><summary>¿Qué argumento recibe xfs_growfs y cuál recibe resize2fs?</summary><p>xfs_growfs recibe el punto de montaje del sistema de archivos XFS montado; resize2fs recibe la ruta del dispositivo.</p></details>
+<details class="sq"><summary>El grupo de volúmenes no tiene espacio libre. ¿Qué haces antes de lvextend?</summary><p>Inicializar un disco o partición nuevo con pvcreate y añadirlo al grupo con vgextend.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../configuring-autofs-etc-auto-master-d-autofs-map-files-and-wildcard-and/">← Configurar autofs: /etc/auto.master.d/*.autofs, archivos de </a><a href="../xfs-can-grow-but-not-shrink-ext4-can-do-both-when-unmounted/">XFS puede crecer pero no reducirse; ext4 puede hacer ambas c →</a></nav>
+</main>
+</body>
+</html>

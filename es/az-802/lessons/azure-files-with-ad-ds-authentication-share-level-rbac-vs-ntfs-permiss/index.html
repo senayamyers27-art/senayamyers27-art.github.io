@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Azure Files con autenticación de AD DS; RBAC de nivel de r… · Lección de AZ-802</title>
+<meta name="description" content="De forma predeterminada, montas un recurso compartido de archivos de Azure con la clave de la cuenta de almacenamiento, que es como una única contraseña to">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Azure Files con autenticación de AD DS; RBAC de nivel de r… · Lección de AZ-802">
+<meta property="og:description" content="De forma predeterminada, montas un recurso compartido de archivos de Azure con la clave de la cuenta de almacenamiento, que es como una única contraseña to">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-802/lessons/azure-files-with-ad-ds-authentication-share-level-rbac-vs-ntfs-permiss/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-802/lessons/azure-files-with-ad-ds-authentication-share-level-rbac-vs-ntfs-permiss/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-802/">AZ-802</a> / <a href="../">Lecciones</a> · <a href="../../../../az-802/lessons/azure-files-with-ad-ds-authentication-share-level-rbac-vs-ntfs-permiss/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802</p>
+<h1>Azure Files con autenticación de AD DS; RBAC de nivel de recurso compartido frente a permisos NTFS</h1>
+<article class="lbody">
+<p>De forma predeterminada, montas un recurso compartido de archivos de Azure con la clave de la cuenta de almacenamiento, que es como una única contraseña todopoderosa. Para un uso real como servidor de archivos, quieres que los usuarios se conecten con su identidad normal de dominio y obtengan permisos por usuario. Azure Files admite el acceso basado en identidades sobre SMB con Active Directory Domain Services (AD DS) local, Microsoft Entra Domain Services o Microsoft Entra Kerberos para identidades híbridas. Esta lección se centra en AD DS.</p>
+<p>Habilitar la autenticación de AD DS significa crear una identidad para la cuenta de almacenamiento en tu dominio. Normalmente usas el módulo de PowerShell AzFilesHybrid y ejecutas <code>Join-AzStorageAccount</code> desde una máquina unida al dominio, lo que crea una cuenta de equipo (o una cuenta de inicio de sesión de servicio) que representa la cuenta de almacenamiento en una OU que elijas y configura la cuenta de almacenamiento con la información de tu dominio. Los usuarios que accederán al recurso compartido deben estar sincronizados con Microsoft Entra ID mediante Entra Connect (o Cloud Sync), porque los permisos del recurso compartido se asignan en Azure a identidades de Entra. Los clientes necesitan llegar a la cuenta de almacenamiento por el puerto TCP 445 y deben poder obtener vales de Kerberos de un DC.</p>
+<p>Luego el acceso se comprueba en dos capas, igual que en un recurso compartido tradicional de Windows. La primera capa son los permisos de nivel de recurso compartido, establecidos con el control de acceso basado en roles de Azure (RBAC). Los roles integrados son Storage File Data SMB Share Reader (lectura), Storage File Data SMB Share Contributor (lectura, escritura, eliminación) y Storage File Data SMB Share Elevated Contributor (además, cambiar permisos NTFS). Puedes asignarlos a usuarios o grupos en el recurso compartido, o configurar un permiso predeterminado de nivel de recurso compartido que se aplique a todas las identidades autenticadas, lo que es práctico cuando quieres que NTFS haga todo el trabajo detallado.</p>
+<p>La segunda capa son los permisos de nivel de directorio y archivo: las listas de control de acceso (ACL) NTFS normales de Windows. Las estableces montando el recurso compartido y usando el Explorador de archivos o <code>icacls</code>, igual que en un servidor Windows. La configuración inicial a menudo se hace montándolo una vez con la clave de la cuenta de almacenamiento, que actúa como superusuario, o mediante un usuario con el rol Elevated Contributor. Azure File Sync también conserva estas ACL.</p>
+<p>El acceso efectivo es la combinación más restrictiva de las dos capas. Un usuario con Share Contributor pero solo Read en NTFS solo puede leer; un usuario con Full Control en NTFS pero sin rol de recurso compartido no puede conectarse en absoluto. Observa la diferencia con los roles de datos normales de Azure, como Storage Blob Data Contributor, o con el rol de administración Owner: los roles del plano de administración como Owner o Contributor te permiten configurar la cuenta de almacenamiento, pero por sí solos no conceden acceso a los datos por SMB.</p>
+<p>Al solucionar problemas, comprueba en orden: que el puerto 445 sea accesible, que la cuenta de almacenamiento esté unida a AD con el dominio correcto, que el usuario esté sincronizado con Entra ID, que exista un rol de nivel de recurso compartido (o un permiso predeterminado) y luego la ACL NTFS. El cmdlet <code>Debug-AzStorageAccountAuth</code> de AzFilesHybrid ejecuta muchas de estas comprobaciones.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>AD DS authentication for Azure Files (autenticación de AD DS para Azure Files)</dt><dd>Una configuración que representa la cuenta de almacenamiento como un objeto de AD para que los usuarios del dominio puedan acceder a los recursos compartidos SMB con Kerberos.</dd><dt>Share-level permissions (permisos de nivel de recurso compartido)</dt><dd>Roles de Azure RBAC asignados en un recurso compartido de archivos que controlan si una identidad puede conectarse y con qué acceso máximo.</dd><dt>Storage File Data SMB Share Elevated Contributor</dt><dd>El rol de recurso compartido que permite leer, escribir, eliminar y modificar permisos NTFS.</dd><dt>NTFS permissions (permisos NTFS)</dt><dd>ACL de directorios y archivos aplicadas dentro del recurso compartido, establecidas con el Explorador o icacls igual que en un servidor de archivos Windows.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un administrador une una cuenta de almacenamiento a contoso.com con Join-AzStorageAccount, da al grupo sincronizado Finance-Users el rol Storage File Data SMB Share Contributor en el recurso compartido de finanzas, luego lo monta y usa icacls para que Finance-Users solo pueda modificar la carpeta Reports y leer el resto. Un usuario de finanzas asigna el recurso compartido con su propio inicio de sesión y sin clave.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Se aplican ambas capas y gana la más restrictiva. El acceso al recurso compartido es Azure RBAC sobre identidades de Entra sincronizadas; el control detallado es NTFS. Owner o Contributor en la cuenta de almacenamiento no da acceso a los datos por SMB.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué los usuarios deben estar sincronizados con Microsoft Entra ID cuando Azure Files usa autenticación de AD DS?</summary><p>Los permisos de nivel de recurso compartido son asignaciones de roles de Azure RBAC, que se conceden a identidades de Entra; luego Kerberos valida la cuenta de AD correspondiente.</p></details>
+<details class="sq"><summary>Un usuario tiene Full Control en NTFS sobre una carpeta, pero ningún rol de nivel de recurso compartido ni permiso predeterminado de recurso compartido. ¿Qué acceso obtiene?</summary><p>Ninguno; sin permiso de nivel de recurso compartido no puede acceder al recurso compartido, porque ambas capas deben permitir el acceso.</p></details>
+<details class="sq"><summary>¿Qué rol de recurso compartido permite a un usuario cambiar los permisos NTFS de los archivos?</summary><p>Storage File Data SMB Share Elevated Contributor.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AZ-802 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-802/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../azure-file-sync-sync-groups-cloud-and-server-endpoints-cloud-tiering-p/">← Azure File Sync: grupos de sincronización, puntos de conexió</a><a href="../smb-security-encryption-signing-smb-over-quic-removing-smbv1/">Seguridad de SMB: cifrado, firma, SMB over QUIC, eliminación →</a></nav>
+</main>
+</body>
+</html>

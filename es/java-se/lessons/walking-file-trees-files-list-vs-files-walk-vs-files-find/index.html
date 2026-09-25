@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Recorrer árboles de archivos: Files.list vs Files.walk vs … · Lección de OCP Java</title>
+<meta name="description" content="Tres métodos de Files devuelven un Stream&lt;Path&gt; que describe el contenido de un directorio, y la diferencia entre ellos es una pregunta común del examen. L">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Recorrer árboles de archivos: Files.list vs Files.walk vs … · Lección de OCP Java">
+<meta property="og:description" content="Tres métodos de Files devuelven un Stream&lt;Path&gt; que describe el contenido de un directorio, y la diferencia entre ellos es una pregunta común del examen. L">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/java-se/lessons/walking-file-trees-files-list-vs-files-walk-vs-files-find/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/java-se/lessons/walking-file-trees-files-list-vs-files-walk-vs-files-find/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../java-se/">OCP Java</a> / <a href="../">Lecciones</a> · <a href="../../../../java-se/lessons/walking-file-trees-files-list-vs-files-walk-vs-files-find/" hreflang="en" lang="en">English</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25)</p>
+<h1>Recorrer árboles de archivos: Files.list vs Files.walk vs Files.find</h1>
+<article class="lbody">
+<p>Tres métodos de <code>Files</code> devuelven un <code>Stream&lt;Path&gt;</code> que describe el contenido de un directorio, y la diferencia entre ellos es una pregunta común del examen. Los tres son perezosos, los tres mantienen abiertos manejadores de directorio y los tres deben usarse en try-with-resources.</p>
+<p><code>Files.list(dir)</code> devuelve las entradas que están directamente dentro de un directorio: archivos y subdirectorios, pero no el contenido de esos subdirectorios. No es recursivo, y no incluye el propio directorio. Lanza <code>NotDirectoryException</code> si la ruta no es un directorio. Piensa en él como <code>ls</code>.</p>
+<p><code>Files.walk(start)</code> recorre todo el árbol en profundidad, empezando por el propio <code>start</code> y descendiendo a cada subdirectorio. <code>Files.walk(start, maxDepth)</code> limita la profundidad: un maxDepth de 0 da solo la ruta de inicio, 1 da el inicio más sus hijos directos, y así sucesivamente. Así que <code>Files.walk(dir, 1)</code> es como <code>Files.list(dir)</code> más el propio <code>dir</code>. Por defecto walk no sigue los enlaces simbólicos; pasar <code>FileVisitOption.FOLLOW_LINKS</code> hace que los siga, y entonces un ciclo de enlaces causa una <code>FileSystemLoopException</code> envuelta en una UncheckedIOException.</p>
+<p><code>Files.find(start, maxDepth, matcher)</code> también recorre el árbol pero va filtrando mientras avanza. El matcher es un <code>BiPredicate&lt;Path, BasicFileAttributes&gt;</code>, que te da los atributos del archivo, como el tamaño, la fecha de modificación y si es un directorio, sin una llamada adicional al sistema por cada archivo. A diferencia de walk, el parámetro maxDepth es obligatorio. Usar find suele ser más eficiente que walk seguido de un filtro que llama a <code>Files.size</code> o <code>Files.isDirectory</code> en cada ruta.</p>
+<pre class="code" tabindex="0"><code>Path root = Path.of(&quot;project&quot;);
+try (Stream&lt;Path&gt; s = Files.list(root)) {
+    s.forEach(System.out::println);               // solo los hijos directos
+}
+try (Stream&lt;Path&gt; s = Files.walk(root)) {
+    long javaFiles = s.filter(p -&gt; p.toString().endsWith(&quot;.java&quot;)).count();
+}
+try (Stream&lt;Path&gt; s = Files.find(root, 10,
+        (p, attr) -&gt; attr.isRegularFile() &amp;&amp; attr.size() &gt; 1_000_000)) {
+    s.forEach(p -&gt; System.out.println(&quot;large: &quot; + p));
+}</code></pre>
+<p>Los errores que ocurren mientras se consume el stream, como un subdirectorio que no tienes permiso para leer, se lanzan como <code>UncheckedIOException</code>. Para más control, incluidas acciones antes y después de visitar cada directorio y la posibilidad de saltarse subárboles, el antiguo <code>Files.walkFileTree(start, visitor)</code> recibe un <code>FileVisitor</code>, normalmente una subclase de <code>SimpleFileVisitor</code> que sobrescribe <code>visitFile</code> y <code>postVisitDirectory</code>. Es la forma estándar de eliminar un árbol de directorios, porque cada directorio debe vaciarse antes de poder eliminarse.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Files.list</dt><dd>Devuelve un Stream&lt;Path&gt; perezoso de las entradas directas de un directorio, sin recursión.</dd><dt>Files.walk</dt><dd>Devuelve un Stream&lt;Path&gt; perezoso, en profundidad, de un árbol de directorios, incluida la ruta de inicio, opcionalmente limitado por maxDepth.</dd><dt>Files.find</dt><dd>Recorre un árbol hasta un maxDepth obligatorio y devuelve las rutas que cumplen un BiPredicate&lt;Path, BasicFileAttributes&gt;.</dd><dt>BasicFileAttributes</dt><dd>Una interfaz que expone el tamaño, las marcas de tiempo y el tipo de archivo leídos junto con la entrada del directorio.</dd><dt>FOLLOW_LINKS</dt><dd>Una FileVisitOption que hace que walk y find sigan los enlaces simbólicos.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un script de limpieza usa Files.find(logDir, 3, (p, a) -&gt; a.isRegularFile() &amp;&amp; a.lastModifiedTime().toInstant().isBefore(cutoff)) para encontrar archivos de log antiguos sin llamar a Files.getLastModifiedTime por separado para cada archivo, y luego elimina cada coincidencia.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> list es un solo nivel y excluye el directorio de inicio; walk es recursivo e incluye el directorio de inicio; find requiere maxDepth y un BiPredicate que recibe atributos. Todos devuelven streams que deben cerrarse.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Files.walk(dir) incluye el propio dir en el stream?</summary><p>Sí. La ruta de inicio es el primer elemento.</p></details>
+<details class="sq"><summary>¿Qué devuelve Files.walk(dir, 0)?</summary><p>Un stream que contiene solo dir.</p></details>
+<details class="sq"><summary>¿Cuáles son los tipos de los parámetros del matcher que se pasa a Files.find?</summary><p>Path y BasicFileAttributes, en un BiPredicate.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia OCP Java gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../java-se/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../reading-and-writing-text-with-files-readalllines-files-lines-files-wri/">← Leer y escribir texto con Files.readAllLines, Files.lines, F</a><a href="../byte-and-character-streams-bufferedreader-and-bufferedwriter/">Streams de bytes y de caracteres, BufferedReader y BufferedW →</a></nav>
+</main>
+</body>
+</html>

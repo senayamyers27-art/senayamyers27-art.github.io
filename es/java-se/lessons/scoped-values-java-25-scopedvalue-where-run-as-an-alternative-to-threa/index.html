@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scoped values (Java 25): ScopedValue.where(...).run(...) c… · Lección de OCP Java</title>
+<meta name="description" content="Las aplicaciones a menudo necesitan pasar datos de contexto, como el usuario actual o un ID de petición, a través de muchas llamadas a métodos sin agregar ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Scoped values (Java 25): ScopedValue.where(...).run(...) c… · Lección de OCP Java">
+<meta property="og:description" content="Las aplicaciones a menudo necesitan pasar datos de contexto, como el usuario actual o un ID de petición, a través de muchas llamadas a métodos sin agregar ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/java-se/lessons/scoped-values-java-25-scopedvalue-where-run-as-an-alternative-to-threa/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/java-se/lessons/scoped-values-java-25-scopedvalue-where-run-as-an-alternative-to-threa/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../java-se/">OCP Java</a> / <a href="../">Lecciones</a> · <a href="../../../../java-se/lessons/scoped-values-java-25-scopedvalue-where-run-as-an-alternative-to-threa/" hreflang="en" lang="en">English</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25)</p>
+<h1>Scoped values (Java 25): ScopedValue.where(...).run(...) como alternativa a ThreadLocal</h1>
+<article class="lbody">
+<p>Las aplicaciones a menudo necesitan pasar datos de contexto, como el usuario actual o un ID de petición, a través de muchas llamadas a métodos sin agregar un parámetro a cada método. La herramienta tradicional es <code>ThreadLocal</code>, una variable con un valor distinto por hilo. Tiene desventajas: cualquier código puede llamar a <code>set</code> en cualquier momento, así que el flujo de datos es difícil de seguir; los valores viven hasta que se eliminan explícitamente, lo que filtra datos y memoria en los pools de hilos; y los hilos hijos que heredan valores deben copiarlos. Con cantidades enormes de hilos virtuales estos costos crecen.</p>
+<p>Los scoped values (valores con alcance), definitivos en Java 25 en <code>java.lang.ScopedValue</code>, resuelven el mismo problema de otra forma. Un scoped value se enlaza a un valor durante la duración de una llamada, el alcance dinámico, y se desenlaza automáticamente cuando esa llamada retorna. Dentro del alcance, cualquier método llamado directa o indirectamente puede leerlo. Fuera del alcance no tiene valor. No hay método <code>set</code>, así que el enlace es efectivamente inmutable durante toda la llamada.</p>
+<pre class="code" tabindex="0"><code>static final ScopedValue&lt;String&gt; USER = ScopedValue.newInstance();
+
+void handle(Request req) {
+    ScopedValue.where(USER, req.user()).run(() -&gt; service());
+    // aquí USER ya no está enlazado
+}
+void service() { audit(); }
+void audit() {
+    String who = USER.isBound() ? USER.get() : &quot;anonymous&quot;;
+    System.out.println(&quot;action by &quot; + who);
+}</code></pre>
+<p>Creas una clave con <code>ScopedValue.newInstance()</code>, normalmente como campo <code>static final</code>. <code>ScopedValue.where(key, value)</code> devuelve un carrier, y <code>run(Runnable)</code> ejecuta código con el enlace activo; <code>call(...)</code> hace lo mismo para código que devuelve un resultado. Se pueden encadenar varios enlaces: <code>where(USER, u).where(REQ_ID, id).run(...)</code>. Dentro, <code>key.get()</code> devuelve el valor, <code>isBound()</code> comprueba si hay uno, y <code>orElse(other)</code> da un valor alternativo. Llamar a <code>get()</code> cuando el valor no está enlazado lanza <code>NoSuchElementException</code>.</p>
+<p>Aunque un enlace no puede cambiarse, una llamada anidada puede volver a enlazar la misma clave con su propio <code>where(...).run(...)</code>. Dentro del alcance anidado el nuevo valor es visible; cuando retorna, vuelve a ser visible el valor externo. Esto da un flujo de datos claro y en un solo sentido, de quien llama a quien es llamado, más fácil de razonar que las llamadas arbitrarias a set de ThreadLocal.</p>
+<p>Como los enlaces terminan cuando termina el alcance, no hay nada que limpiar ni riesgo de que los datos de una petición se filtren a la siguiente tarea en un hilo de un pool. Los scoped values también están diseñados para ser baratos de leer y para compartirse eficientemente con los hilos hijos creados mediante concurrencia estructurada. Elige ThreadLocal cuando el código realmente necesite una caché mutable por hilo; elige scoped values para pasar contexto de solo lectura a lo largo de un trabajo acotado.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>ScopedValue</dt><dd>Un valor enlazado durante la duración de una llamada y legible por todo el código del alcance dinámico de esa llamada, que luego se desenlaza automáticamente.</dd><dt>ScopedValue.where</dt><dd>Crea un enlace entre una clave de scoped value y un valor, seguido de run o call para ejecutar código con él.</dd><dt>Dynamic scope (alcance dinámico)</dt><dd>El conjunto de código ejecutado durante una llamada, incluidos los métodos llamados indirectamente, donde un enlace es visible.</dd><dt>ThreadLocal</dt><dd>Una variable con un valor mutable distinto por hilo que persiste hasta que se elimina.</dd><dt>Rebinding (reenlace)</dt><dd>Enlazar un scoped value ya enlazado a un valor nuevo en una llamada anidada where(...).run(...).</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un framework web enlaza el usuario autenticado con ScopedValue.where(CURRENT_USER, user).run(() -&gt; handler.handle(request)). En lo profundo, un registrador de auditoría lee CURRENT_USER.get() sin que el usuario se pase por cada capa, y el enlace desaparece cuando termina la petición.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Los scoped values no tienen método set; la única forma de cambiar el valor visible es volver a enlazarlo en un alcance anidado. get() fuera de cualquier enlace lanza NoSuchElementException, así que usa isBound u orElse cuando el valor pueda faltar.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Después de que ScopedValue.where(K, &quot;x&quot;).run(task) retorna, ¿sigue K enlazado en quien llamó?</summary><p>No. El enlace dura solo lo que dura run.</p></details>
+<details class="sq"><summary>¿Cómo le das a un scoped value un valor distinto para una parte de un cálculo?</summary><p>Volviendo a enlazarlo con una llamada anidada ScopedValue.where(K, newValue).run(...).</p></details>
+<details class="sq"><summary>¿Cuál es una ventaja de los scoped values sobre ThreadLocal en los pools de hilos?</summary><p>Los enlaces terminan automáticamente cuando termina el alcance, así que los datos no pueden filtrarse a tareas posteriores y no hay nada que eliminar.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia OCP Java gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../java-se/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../deadlock-starvation-and-livelock/">← Deadlock, inanición (starvation) y livelock</a><a href="../path-creation-and-operations-resolve-relativize-normalize-getfilename/">Creación y operaciones de Path: resolve, relativize, normali →</a></nav>
+</main>
+</body>
+</html>

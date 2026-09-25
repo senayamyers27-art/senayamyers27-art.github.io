@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ConfigMaps y Secrets: creación, consumo como env y como vo… · Lección de CKA</title>
+<meta name="description" content="Los ConfigMaps y los Secrets separan la configuración de las imágenes de contenedor. Un ConfigMap guarda datos clave-valor no sensibles; un Secret guarda v">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="ConfigMaps y Secrets: creación, consumo como env y como vo… · Lección de CKA">
+<meta property="og:description" content="Los ConfigMaps y los Secrets separan la configuración de las imágenes de contenedor. Un ConfigMap guarda datos clave-valor no sensibles; un Secret guarda v">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/configmaps-and-secrets-creation-env-and-volume-consumption-immutable-o/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/configmaps-and-secrets-creation-env-and-volume-consumption-immutable-o/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/configmaps-and-secrets-creation-env-and-volume-consumption-immutable-o/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>ConfigMaps y Secrets: creación, consumo como env y como volumen, objetos inmutables y reinicio de cargas de trabajo tras los cambios</h1>
+<article class="lbody">
+<p>Los ConfigMaps y los Secrets separan la configuración de las imágenes de contenedor. Un ConfigMap guarda datos clave-valor no sensibles; un Secret guarda valores sensibles como contraseñas, tokens y claves TLS. Sus datos solo están codificados en base64, lo cual no es cifrado, así que protege los Secrets con RBAC e, idealmente, con cifrado en reposo (encryption at rest) configurado en el API server.</p>
+<p>Créalos de forma imperativa a partir de literales, archivos o archivos env. Los Secrets genéricos son el tipo más común; los Secrets <code>tls</code> contienen un certificado y una clave; los Secrets <code>docker-registry</code> contienen credenciales para descargar imágenes.</p>
+<pre class="code" tabindex="0"><code>kubectl create configmap app-cfg --from-literal=MODE=prod --from-file=app.properties
+kubectl create secret generic db-cred --from-literal=user=app --from-literal=password='S3cure!'
+kubectl create secret tls web-tls --cert=tls.crt --key=tls.key
+kubectl get secret db-cred -o jsonpath='{.data.password}' | base64 -d</code></pre>
+<p>Los Pods los consumen de dos maneras. Como variables de entorno, puedes referenciar claves individuales con <code>env[].valueFrom.configMapKeyRef</code> o <code>secretKeyRef</code>, o importar todas las claves con <code>envFrom</code>. Como volúmenes, cada clave se convierte en un archivo dentro del directorio de montaje, lo que resulta adecuado para archivos de configuración y certificados; puedes elegir claves específicas con <code>items</code> y definir los permisos de los archivos con <code>defaultMode</code>.</p>
+<pre class="code" tabindex="0"><code>containers:
+- name: app
+  image: myapp:1.0
+  envFrom:
+  - configMapRef: {name: app-cfg}
+  env:
+  - name: DB_PASSWORD
+    valueFrom: {secretKeyRef: {name: db-cred, key: password}}
+  volumeMounts:
+  - {name: cfg, mountPath: /etc/app, readOnly: true}
+volumes:
+- name: cfg
+  configMap: {name: app-cfg}</code></pre>
+<p>Las actualizaciones se comportan distinto según el método, y esta es una distinción favorita del examen. Las variables de entorno se leen una sola vez cuando el contenedor arranca, así que cambiar el ConfigMap no afecta a un contenedor en ejecución. Los ConfigMaps y Secrets montados como volumen los refresca el kubelet después de un breve retraso, aunque la aplicación debe volver a leer el archivo para notarlo. Los volúmenes montados con <code>subPath</code> nunca se actualizan. La forma confiable de aplicar un cambio es <code>kubectl rollout restart deployment/&lt;name&gt;</code>.</p>
+<p>Definir <code>immutable: true</code> en un ConfigMap o Secret impide cambiar sus datos. Protege contra ediciones accidentales y permite que el kubelet deje de vigilarlo, lo que reduce la carga del API server en clústeres grandes. Para cambiar un objeto inmutable debes borrarlo y volver a crearlo (o crear uno nuevo con otro nombre y actualizar la carga de trabajo para que lo referencie). Si un ConfigMap o Secret referenciado no existe, el Pod se queda en ContainerCreating o muestra CreateContainerConfigError, a menos que la referencia esté marcada como <code>optional: true</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>ConfigMap</dt><dd>Un objeto que guarda configuración no confidencial como pares clave-valor.</dd><dt>Secret</dt><dd>Un objeto para datos sensibles; por defecto los valores están codificados en base64, no cifrados.</dd><dt>envFrom</dt><dd>Importa todas las claves de un ConfigMap o Secret como variables de entorno.</dd><dt>Immutable ConfigMap/Secret (inmutable)</dt><dd>Un objeto con immutable: true cuyos datos no se pueden cambiar después de crearlo.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Actualizas la clave LOG_LEVEL de un ConfigMap que un Deployment consume mediante envFrom, pero los logs siguen siendo detallados. Ejecutar <code>kubectl exec</code> con <code>env</code> muestra el valor anterior, porque las variables de entorno quedan fijas al iniciar el contenedor. <code>kubectl rollout restart deployment/api</code> incorpora el nuevo valor.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El consumo como variable de entorno nunca se actualiza en vivo; el consumo como volumen sí (excepto con subPath). Si una tarea dice 'haz que los Pods usen el nuevo valor', reinicia la carga de trabajo.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿El base64 de un Secret es una forma de cifrado?</summary><p>No, es solo una codificación; cualquiera que pueda leer el Secret puede decodificarlo.</p></details>
+<details class="sq"><summary>¿Qué error podría mostrar un Pod que referencia en env una clave inexistente de un ConfigMap?</summary><p>CreateContainerConfigError, a menos que la referencia sea opcional.</p></details>
+<details class="sq"><summary>¿Cómo cambias los datos de un ConfigMap inmutable?</summary><p>Bórralo y vuelve a crearlo, o crea un ConfigMap nuevo y apunta la carga de trabajo hacia él.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../daemonsets-and-statefulsets-from-an-operator-s-point-of-view-including/">← DaemonSets y StatefulSets desde el punto de vista del operad</a><a href="../resource-requests-and-limits-limitrange-and-resourcequota-as-admission/">Requests y limits de recursos, LimitRange y ResourceQuota co →</a></nav>
+</main>
+</body>
+</html>

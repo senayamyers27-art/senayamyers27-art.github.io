@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Escribir Dockerfiles: imágenes base, capas, builds multiet… · Lección de CKAD</title>
+<meta name="description" content="Una imagen de contenedor es un sistema de archivos empaquetado más metadatos que indican cómo iniciar tu aplicación. Un Dockerfile es la receta para constr">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Escribir Dockerfiles: imágenes base, capas, builds multiet… · Lección de CKAD">
+<meta property="og:description" content="Una imagen de contenedor es un sistema de archivos empaquetado más metadatos que indican cómo iniciar tu aplicación. Un Dockerfile es la receta para constr">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/writing-dockerfiles-base-images-layers-multi-stage-builds-entrypoint-v/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/writing-dockerfiles-base-images-layers-multi-stage-builds-entrypoint-v/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/writing-dockerfiles-base-images-layers-multi-stage-builds-entrypoint-v/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>Escribir Dockerfiles: imágenes base, capas, builds multietapa, ENTRYPOINT vs CMD</h1>
+<article class="lbody">
+<p>Una imagen de contenedor es un sistema de archivos empaquetado más metadatos que indican cómo iniciar tu aplicación. Un Dockerfile es la receta para construirla: un archivo de texto con instrucciones que el builder ejecuta de arriba hacia abajo. El examen CKAD espera que sepas leer, corregir y escribir Dockerfiles cortos, así que necesitas saber qué hace cada instrucción común y cómo se almacena el resultado.</p>
+<p>Todo Dockerfile parte de una imagen base con <code>FROM</code>, por ejemplo <code>FROM python:3.12-slim</code> o <code>FROM alpine</code>. La base aporta los archivos del sistema operativo y, a menudo, un runtime de lenguaje. Las bases más pequeñas, como las imágenes slim, alpine o distroless, implican descargas más rápidas y menos paquetes que podrían contener vulnerabilidades. Después de <code>FROM</code> normalmente usas <code>WORKDIR</code> para fijar el directorio de trabajo, <code>COPY</code> para traer los archivos fuente, <code>RUN</code> para ejecutar comandos de build como instalar dependencias, <code>ENV</code> para definir variables de entorno, <code>EXPOSE</code> para documentar un puerto de escucha y <code>USER</code> para dejar de ejecutar como root.</p>
+<p>Las instrucciones que modifican el sistema de archivos (principalmente <code>RUN</code>, <code>COPY</code> y <code>ADD</code>) crean cada una una nueva capa de solo lectura. Las capas se guardan en caché: si una instrucción y todo lo anterior no han cambiado, el builder reutiliza la capa en caché en lugar de ejecutarla de nuevo. Por eso copias el manifiesto de dependencias (como <code>requirements.txt</code> o <code>package.json</code>) e instalas las dependencias antes de copiar el resto del código fuente. Así, editar un archivo fuente solo invalida las capas posteriores y los rebuilds son rápidos. Borrar un archivo en una capa posterior no reduce el tamaño de la imagen, porque la capa anterior todavía lo contiene.</p>
+<p>Un build multietapa usa más de un <code>FROM</code> en el mismo archivo. La primera etapa tiene compiladores y herramientas de build; la etapa final parte de una imagen de runtime pequeña y copia solo el artefacto terminado con <code>COPY --from=build</code>. Las herramientas de build nunca llegan a la imagen que distribuyes, lo que la hace más pequeña y reduce su superficie de ataque.</p>
+<pre class="code" tabindex="0"><code>FROM golang:1.22 AS build
+WORKDIR /src
+COPY go.mod ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -o /app
+
+FROM alpine
+COPY --from=build /app /app
+USER 1000
+ENTRYPOINT [&quot;/app&quot;]
+CMD [&quot;--port&quot;, &quot;8080&quot;]</code></pre>
+<p><code>ENTRYPOINT</code> y <code>CMD</code> juntos definen el comando de inicio. <code>ENTRYPOINT</code> es el ejecutable que siempre corre; <code>CMD</code> aporta argumentos por defecto que son fáciles de sobrescribir. Cuando ambos están presentes, el contenedor ejecuta ENTRYPOINT seguido de CMD, así que el ejemplo anterior ejecuta <code>/app --port 8080</code>. Si ejecutas la imagen con argumentos adicionales, estos reemplazan a CMD pero mantienen ENTRYPOINT. Si solo está definido CMD, es el comando completo y cualquier argumento que pases lo reemplaza por completo.</p>
+<p>Prefiere la forma exec, un arreglo JSON como <code>[&quot;/app&quot;]</code>, en lugar de la forma shell <code>ENTRYPOINT /app</code>. La forma exec ejecuta tu programa directamente como proceso 1, así que recibe señales como SIGTERM cuando Kubernetes detiene el Pod. La forma shell lo envuelve en <code>/bin/sh -c</code>, y el shell puede no reenviar las señales, lo que provoca apagados lentos y forzados.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Base image (imagen base)</dt><dd>La imagen indicada en FROM que aporta el sistema de archivos inicial y el runtime para tu build.</dd><dt>Layer (capa)</dt><dd>Un cambio de sistema de archivos de solo lectura y en caché, producido por una instrucción como RUN o COPY.</dd><dt>Multi-stage build (build multietapa)</dt><dd>Un Dockerfile con varias etapas FROM en el que solo se copian artefactos seleccionados a la imagen final.</dd><dt>ENTRYPOINT</dt><dd>El ejecutable fijo que el contenedor ejecuta al iniciar.</dd><dt>CMD</dt><dd>Argumentos por defecto (o un comando por defecto si no hay ENTRYPOINT) que se reemplazan con los argumentos dados en tiempo de ejecución.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>La imagen de Python de un equipo tardaba cuatro minutos en reconstruirse tras cada cambio de código. Movieron <code>COPY requirements.txt .</code> y <code>RUN pip install -r requirements.txt</code> por encima de <code>COPY . .</code>, de modo que la capa de dependencias quedó en caché y los rebuilds bajaron a segundos. Pasar a un build multietapa también redujo el tamaño de la imagen final a menos de la mitad.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Recuerda la regla de combinación: ENTRYPOINT más CMD se ejecutan juntos, y los argumentos en tiempo de ejecución reemplazan solo a CMD. Las preguntas suelen pedir qué comando ejecuta realmente un contenedor.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué deberías copiar el archivo de dependencias e instalar los paquetes antes de copiar el resto del código fuente?</summary><p>Porque las capas se guardan en caché en orden; así, los cambios de código solo invalidan las capas posteriores y la lenta instalación de dependencias se reutiliza desde la caché.</p></details>
+<details class="sq"><summary>Una imagen tiene ENTRYPOINT [&quot;ping&quot;] y CMD [&quot;localhost&quot;]. ¿Qué se ejecuta si la inicias con el argumento example.com?</summary><p><code>ping example.com</code>, porque los argumentos en tiempo de ejecución reemplazan a CMD mientras ENTRYPOINT se mantiene.</p></details>
+<details class="sq"><summary>¿Qué logra un build multietapa?</summary><p>Mantiene las herramientas de build y los archivos intermedios fuera de la imagen final, haciéndola más pequeña y reduciendo la superficie de ataque.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><span></span><a href="../building-tagging-saving-and-loading-images-with-docker-or-podman-build/">Construir, etiquetar, guardar y cargar imágenes con docker o →</a></nav>
+</main>
+</body>
+</html>

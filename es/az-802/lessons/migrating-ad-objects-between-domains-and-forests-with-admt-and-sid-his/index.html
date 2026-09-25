@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Migración de objetos de AD entre dominios y bosques con AD… · Lección de AZ-802</title>
+<meta name="description" content="Las fusiones, las adquisiciones y las limpiezas suelen requerir mover usuarios, grupos y equipos de un dominio o bosque a otro. Active Directory Migration ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Migración de objetos de AD entre dominios y bosques con AD… · Lección de AZ-802">
+<meta property="og:description" content="Las fusiones, las adquisiciones y las limpiezas suelen requerir mover usuarios, grupos y equipos de un dominio o bosque a otro. Active Directory Migration ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-802/lessons/migrating-ad-objects-between-domains-and-forests-with-admt-and-sid-his/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-802/lessons/migrating-ad-objects-between-domains-and-forests-with-admt-and-sid-his/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-802/">AZ-802</a> / <a href="../">Lecciones</a> · <a href="../../../../az-802/lessons/migrating-ad-objects-between-domains-and-forests-with-admt-and-sid-his/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802</p>
+<h1>Migración de objetos de AD entre dominios y bosques con ADMT e historial de SID; niveles funcionales de dominio y bosque al actualizar los DC</h1>
+<article class="lbody">
+<p>Las fusiones, las adquisiciones y las limpiezas suelen requerir mover usuarios, grupos y equipos de un dominio o bosque a otro. Active Directory Migration Tool (ADMT) es la herramienta gratuita de Microsoft para esto. Es una herramienta antigua que no se ha desarrollado activamente en años, pero sigue siendo la respuesta de referencia para las migraciones de reestructuración en el examen. ADMT se ejecuta en un servidor miembro del dominio de destino, necesita una instancia de SQL Server para su base de datos y requiere una confianza entre el origen y el destino para poder leer del origen y escribir en el destino.</p>
+<p>El problema central es el acceso. Un usuario migrado obtiene un SID nuevo en el dominio de destino, pero los archivos, los recursos compartidos y las ACL del origen siguen haciendo referencia al SID antiguo. El historial de SID resuelve esto: ADMT copia el SID antiguo en el atributo sIDHistory de la cuenta nueva, de modo que el token de acceso del usuario contiene ambos SID y los permisos antiguos siguen funcionando durante la transición. Para migrar el historial de SID, la auditoría debe estar habilitada en ambos dominios, debe existir en el dominio de origen un grupo local con el nombre del dominio de origen seguido de tres signos de dólar (por ejemplo <code>SOURCE$$$</code>) (ADMT puede crearlo), y el filtrado de SID debe relajarse en la confianza. Elimina el historial de SID y restablece el filtrado de SID cuando termine la migración.</p>
+<p>Las contraseñas no se migran de forma predeterminada. Para conservar las contraseñas existentes de los usuarios, instalas el servicio Password Export Server (PES) en un DC del dominio de origen con una clave generada por ADMT; de lo contrario, ADMT establece contraseñas complejas nuevas y las escribe en un archivo.</p>
+<p>Un orden típico es: migrar primero los grupos (con historial de SID), luego los usuarios (para que ADMT pueda actualizar las pertenencias a grupos sobre la marcha), luego las cuentas de servicio, luego los equipos y, por último, ejecutar la traducción de seguridad, que reescribe las ACL, los perfiles locales y las pertenencias a grupos en los servidores miembro para que hagan referencia a los SID nuevos en lugar de los antiguos. Migrar equipos requiere un reinicio para unirlos al dominio de destino.</p>
+<p>Los niveles funcionales son la otra mitad de este tema. El nivel funcional de dominio (DFL) y el nivel funcional de bosque (FFL) establecen qué características de AD están disponibles y qué sistemas operativos de DC están permitidos. Un nivel solo puede ser tan alto como el DC más antiguo de su ámbito, así que lo elevas después de que todos los DC más antiguos hayan desaparecido. Por ejemplo, las directivas de contraseñas específicas necesitan al menos el DFL 2008 y la Papelera de reciclaje necesita el FFL 2008 R2. Windows Server 2025 introdujo un nuevo nivel funcional por primera vez en años, mientras que varias versiones recientes reutilizaron el nivel de Windows Server 2016. Las versiones más nuevas de DC también requieren que el bosque existente esté en un nivel mínimo antes de poder promoverse, así que compruébalo antes de empezar.</p>
+<p>La ruta de actualización habitual no es una actualización en el lugar del sistema operativo de los DC. En su lugar, agrega DC nuevos que ejecuten la nueva versión (la promoción ejecuta automáticamente la preparación de esquema y de dominio de adprep si usas una cuenta de Schema Admins y Enterprise Admins), mueve a ellos los roles FSMO, actualiza la configuración de DNS y DHCP que apunta a los DC antiguos, degrada los DC antiguos y luego eleva el DFL y el FFL con <code>Set-ADDomainMode</code> y <code>Set-ADForestMode</code>. Antes de agregar DC modernos, SYSVOL ya debe replicarse con DFS Replication en lugar del antiguo File Replication Service (FRS).</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>ADMT</dt><dd>Active Directory Migration Tool: migra usuarios, grupos, equipos y cuentas de servicio entre dominios o bosques.</dd><dt>SID history (historial de SID)</dt><dd>El atributo sIDHistory que guarda los SID anteriores de una cuenta para que los permisos antiguos sobre recursos sigan funcionando después de la migración.</dd><dt>Security translation (traducción de seguridad)</dt><dd>Paso de ADMT que reemplaza los SID antiguos por los nuevos en las ACL, los perfiles y las pertenencias a grupos de los recursos.</dd><dt>Password Export Server</dt><dd>Un servicio instalado en un DC de origen que permite a ADMT migrar las contraseñas de los usuarios.</dd><dt>Functional level (nivel funcional)</dt><dd>Configuración de todo el dominio o bosque que desbloquea características de AD y limita qué versiones del sistema operativo de DC pueden estar presentes.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Después de adquirir Fabrikam, Contoso crea una confianza de bosque, relaja el filtrado de SID, instala PES en un DC de Fabrikam y usa ADMT para migrar los grupos y luego los usuarios con historial de SID y contraseñas. Los usuarios conservan el acceso a los servidores de archivos de Fabrikam hasta que la traducción de seguridad actualiza las ACL, después de lo cual se borra el historial de SID y se vuelve a habilitar el filtrado.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El historial de SID mantiene el acceso funcionando; la traducción de seguridad lo hace permanente. Los niveles funcionales dependen del DC más antiguo, y elevarlos normalmente es unidireccional, así que las preguntas del tipo '¿todavía podemos agregar un DC con Server 2012 R2?' dependen del nivel actual.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué migrar los grupos antes que los usuarios con ADMT?</summary><p>Para que, cuando se muevan los usuarios, ADMT pueda agregarlos a los grupos de destino ya migrados y conservar la pertenencia.</p></details>
+<details class="sq"><summary>¿Qué tres requisitos previos respaldan la migración del historial de SID?</summary><p>La auditoría habilitada en ambos dominios, el grupo local SOURCE$$$ en el dominio de origen y el filtrado de SID relajado en la confianza (además de derechos de administrador en ambos).</p></details>
+<details class="sq"><summary>Todavía tienes un DC con Windows Server 2012 R2. ¿Puedes elevar el nivel funcional de dominio a Windows Server 2016?</summary><p>No. El nivel no puede superar la versión del DC más antiguo del dominio; primero degrada o actualiza ese DC.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AZ-802 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-802/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../group-policy-processing-lsdou-enforced-and-block-inheritance-security/">← Procesamiento de directivas de grupo (LSDOU), Enforced y Blo</a><a href="../windows-admin-center-desktop-vs-gateway-mode-extensions-kerberos-const/">Windows Admin Center: modo de escritorio frente a modo de pu →</a></nav>
+</main>
+</body>
+</html>

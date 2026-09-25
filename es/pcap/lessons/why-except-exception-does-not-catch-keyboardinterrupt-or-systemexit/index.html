@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Por qué except Exception no atrapa KeyboardInterrupt ni Sy… · Lección de PCAP</title>
+<meta name="description" content="Es tentador envolver todo un programa en try con except Exception: para que nunca se caiga. Eso funciona para los errores comunes, pero dos eventos importa">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Por qué except Exception no atrapa KeyboardInterrupt ni Sy… · Lección de PCAP">
+<meta property="og:description" content="Es tentador envolver todo un programa en try con except Exception: para que nunca se caiga. Eso funciona para los errores comunes, pero dos eventos importa">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/pcap/lessons/why-except-exception-does-not-catch-keyboardinterrupt-or-systemexit/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/pcap/lessons/why-except-exception-does-not-catch-keyboardinterrupt-or-systemexit/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../pcap/">PCAP</a> / <a href="../">Lecciones</a> · <a href="../../../../pcap/lessons/why-except-exception-does-not-catch-keyboardinterrupt-or-systemexit/" hreflang="en" lang="en">English</a></p>
+<p class="note">PCAP – Certified Associate Python Programmer PCAP-31-03</p>
+<h1>Por qué except Exception no atrapa KeyboardInterrupt ni SystemExit</h1>
+<article class="lbody">
+<p>Es tentador envolver todo un programa en <code>try</code> con <code>except Exception:</code> para que nunca se caiga. Eso funciona para los errores comunes, pero dos eventos importantes pasan de largo por ese manejador, a propósito. Entender por qué depende de la jerarquía de excepciones vista antes.</p>
+<p><code>KeyboardInterrupt</code> se lanza cuando el usuario presiona Ctrl+C (o la tecla de interrupción equivalente) en la terminal. <code>SystemExit</code> la lanza <code>sys.exit()</code> cuando un programa pide terminar, opcionalmente con un código de salida. Ninguna de las dos representa un error de programación. Son peticiones para detenerse, y los diseñadores de Python las colocaron directamente bajo <code>BaseException</code>, al lado de <code>Exception</code> y no debajo de ella. Como <code>except</code> coincide solo con la clase nombrada y sus subclases, <code>except Exception</code> no coincide con ellas, así que un programa con un manejador de errores amplio todavía puede ser interrumpido por el usuario y todavía puede salir limpiamente cuando se le indica. <code>GeneratorExit</code> está en el mismo lugar por razones similares.</p>
+<pre class="code" tabindex="0"><code>import sys
+try:
+    sys.exit(3)
+except Exception:
+    print('caught by Exception')   # no se imprime
+except SystemExit as e:
+    print('exit requested:', e.code)   # exit requested: 3</code></pre>
+<p>Un <code>except:</code> sin clase o <code>except BaseException:</code> sí las atrapa. Justamente por eso un <code>except</code> sin clase es riesgoso: un bucle como <code>while True: try: ... except: pass</code> se vuelve imposible de detener con Ctrl+C, porque cada interrupción se traga y el bucle simplemente continúa. Si de verdad debes atrapar todo, por ejemplo para registrar algo antes de salir, relanza después con un <code>raise</code> sin argumentos para que la interrupción o la salida sí ocurran.</p>
+<p>Cuando sí quieras responder a Ctrl+C, atrapa <code>KeyboardInterrupt</code> explícitamente: imprime un mensaje breve, guarda el trabajo y termina. Cuando el código llama a <code>sys.exit()</code>, la excepción <code>SystemExit</code> desenrolla la pila como cualquier otra excepción, así que los bloques <code>finally</code> y las sentencias <code>with</code> siguen ejecutando su limpieza al salir. El atributo <code>code</code> de la excepción contiene el valor pasado a <code>sys.exit()</code>.</p>
+<p>Para el examen, el patrón a reconocer es una pregunta que lanza uno de estos eventos dentro de un <code>try</code> que solo tiene <code>except Exception</code> y pregunta qué pasa. La respuesta es que el manejador no se ejecuta y el evento se propaga, terminando el programa (después de cualquier <code>finally</code>). La lección práctica es atrapar las excepciones más específicas que puedas, usar <code>Exception</code> como último recurso para errores y no tocar <code>BaseException</code> a menos que relances.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>KeyboardInterrupt</dt><dd>Se lanza cuando el usuario presiona la tecla de interrupción (Ctrl+C); hereda directamente de BaseException.</dd><dt>SystemExit</dt><dd>La lanza sys.exit(); su atributo code contiene el código de salida.</dd><dt>except Exception</dt><dd>Un manejador amplio para errores comunes que excluye deliberadamente las señales de salida e interrupción.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un script de monitoreo de larga duración atrapa Exception dentro de su bucle para que una sola lectura incorrecta no lo detenga. Cuando el operador presiona Ctrl+C, KeyboardInterrupt pasa por alto ese manejador y el script se detiene como se espera.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> KeyboardInterrupt, SystemExit y GeneratorExit heredan de BaseException, no de Exception. Solo un except sin clase o except BaseException (o la clase específica) las atrapa.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿except Exception atrapará la excepción lanzada por sys.exit()?</summary><p>No. sys.exit() lanza SystemExit, que deriva de BaseException, no de Exception.</p></details>
+<details class="sq"><summary>¿Por qué es difícil detener un bucle infinito que contiene try/except: pass?</summary><p>El except sin clase se traga KeyboardInterrupt, así que Ctrl+C se atrapa y el bucle continúa.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia PCAP gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../pcap/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../assert-and-assertionerror/">← assert y AssertionError</a><a href="../defining-your-own-exception-classes-and-adding-attributes-to-them/">Definir tus propias clases de excepción y agregarles atribut →</a></nav>
+</main>
+</body>
+</html>

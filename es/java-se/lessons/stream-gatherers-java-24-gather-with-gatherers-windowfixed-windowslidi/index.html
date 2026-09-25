@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stream Gatherers (Java 24+): gather() con Gatherers.window… · Lección de OCP Java</title>
+<meta name="description" content="Los Stream Gatherers se finalizaron en Java 24. Agregan una nueva operación intermedia, Stream.gather(Gatherer), que te permite conectar transformaciones p">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Stream Gatherers (Java 24+): gather() con Gatherers.window… · Lección de OCP Java">
+<meta property="og:description" content="Los Stream Gatherers se finalizaron en Java 24. Agregan una nueva operación intermedia, Stream.gather(Gatherer), que te permite conectar transformaciones p">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/java-se/lessons/stream-gatherers-java-24-gather-with-gatherers-windowfixed-windowslidi/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/java-se/lessons/stream-gatherers-java-24-gather-with-gatherers-windowfixed-windowslidi/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../java-se/">OCP Java</a> / <a href="../">Lecciones</a> · <a href="../../../../java-se/lessons/stream-gatherers-java-24-gather-with-gatherers-windowfixed-windowslidi/" hreflang="en" lang="en">English</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25)</p>
+<h1>Stream Gatherers (Java 24+): gather() con Gatherers.windowFixed, windowSliding, fold, scan</h1>
+<article class="lbody">
+<p>Los Stream Gatherers se finalizaron en Java 24. Agregan una nueva operación intermedia, <code>Stream.gather(Gatherer)</code>, que te permite conectar transformaciones personalizadas que las operaciones integradas no pueden expresar, como agrupar elementos vecinos en ventanas o emitir totales acumulados. Así como <code>collect</code> con un Collector es una operación terminal flexible, <code>gather</code> con un Gatherer es una operación intermedia flexible: el stream continúa después.</p>
+<p>Un Gatherer puede transformar elementos uno a uno, uno a muchos, muchos a uno o muchos a muchos, puede mantener estado entre elementos y puede detenerse antes. Internamente se describe con hasta cuatro funciones: un inicializador que crea el estado privado, un integrador que recibe cada elemento (y puede enviar resultados hacia adelante), un combinador opcional para uso en paralelo y un finalizador opcional que puede emitir resultados finales después del último elemento. Para el examen rara vez escribes uno tú mismo; usas los integrados en <code>java.util.stream.Gatherers</code>.</p>
+<p><code>Gatherers.windowFixed(n)</code> agrupa los elementos en listas consecutivas, sin solaparse, de tamaño n; la última lista puede ser más corta. <code>Stream.of(1,2,3,4,5).gather(Gatherers.windowFixed(2))</code> produce [1, 2], [3, 4], [5]. <code>Gatherers.windowSliding(n)</code> produce ventanas solapadas que avanzan un elemento a la vez: <code>windowSliding(3)</code> sobre 1..5 da [1, 2, 3], [2, 3, 4], [3, 4, 5]. Si el stream tiene menos de n elementos, windowSliding emite una ventana que los contiene a todos. Ambos dan como resultado un <code>Stream&lt;List&lt;T&gt;&gt;</code>, y un tamaño de ventana menor que 1 lanza <code>IllegalArgumentException</code>.</p>
+<p><code>Gatherers.fold(initial, folder)</code> es un gatherer de muchos a uno: empieza con el valor que proporciona el Supplier, combina cada elemento en orden y emite un solo resultado al final, produciendo un stream de un elemento. Se parece a <code>reduce</code>, pero sigue funcionando en medio de una canalización y el tipo del resultado puede diferir del tipo de los elementos. <code>Gatherers.scan(initial, scanner)</code> es similar pero emite cada resultado intermedio, dando un total acumulado. Scan no emite el valor inicial por sí solo.</p>
+<pre class="code" tabindex="0"><code>Stream.of(1, 2, 3, 4)
+      .gather(Gatherers.scan(() -&gt; 0, (acc, x) -&gt; acc + x))
+      .toList();                               // [1, 3, 6, 10]
+
+Stream.of(1, 2, 3, 4)
+      .gather(Gatherers.fold(() -&gt; &quot;&quot;, (acc, x) -&gt; acc + x))
+      .findFirst();                            // Optional[1234]
+
+IntStream.rangeClosed(1, 7).boxed()
+         .gather(Gatherers.windowFixed(3))
+         .toList();                            // [[1, 2, 3], [4, 5, 6], [7]]</code></pre>
+<p>Los gatherers se pueden componer: <code>g1.andThen(g2)</code> construye un gatherer a partir de dos, y puedes llamar a <code>gather</code> varias veces en una canalización. Observa que <code>gather</code> está definido en <code>Stream&lt;T&gt;</code>, no en IntStream, así que llama primero a <code>boxed()</code> cuando partas de un stream primitivo. También existe <code>Gatherers.mapConcurrent(maxConcurrency, mapper)</code>, que ejecuta una función de mapeo de forma concurrente en hilos virtuales manteniendo la salida en el orden de recorrido.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Gatherer</dt><dd>Un objeto que describe una operación intermedia de stream personalizada mediante un inicializador, un integrador, un combinador y un finalizador.</dd><dt>windowFixed</dt><dd>Un gatherer integrado que agrupa los elementos en listas de tamaño fijo sin solaparse, con una última lista posiblemente más corta.</dd><dt>windowSliding</dt><dd>Un gatherer integrado que emite listas solapadas de tamaño fijo, avanzando un elemento a la vez.</dd><dt>fold</dt><dd>Un gatherer integrado que combina todos los elementos en un solo resultado emitido cuando termina el stream.</dd><dt>scan</dt><dd>Un gatherer integrado que emite el resultado acumulado después de cada elemento, como una suma acumulativa.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un trabajo de monitoreo calcula un promedio móvil de tres lecturas de muestras de CPU con gather(Gatherers.windowSliding(3)).map(w -&gt; average(w)), y envía métricas a un servidor en lotes de 100 usando gather(Gatherers.windowFixed(100)).</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Distingue fold de scan por el tamaño de la salida: fold emite un elemento al final, scan emite uno por cada elemento de entrada. En las ventanas, fixed no se solapa y su última ventana puede ser corta; sliding se solapa.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué produce Stream.of(&quot;a&quot;,&quot;b&quot;,&quot;c&quot;,&quot;d&quot;,&quot;e&quot;).gather(Gatherers.windowFixed(2)).toList()?</summary><p>[[a, b], [c, d], [e]].</p></details>
+<details class="sq"><summary>¿Qué emite scan(() -&gt; 10, (a, x) -&gt; a + x) para los elementos 1 y 2?</summary><p>11 y luego 13; el valor inicial 10 no se emite por sí solo.</p></details>
+<details class="sq"><summary>¿gather es una operación intermedia o terminal?</summary><p>Intermedia: devuelve un Stream nuevo, así que todavía se necesita una operación terminal.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia OCP Java gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../java-se/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../optional-of-ofnullable-map-orelse-orelseget-orelsethrow/">← Optional: of, ofNullable, map, orElse, orElseGet, orElseThro</a><a href="../parallel-streams-and-why-stateful-lambdas-cause-problems/">Streams paralelos y por qué las lambdas con estado causan pr →</a></nav>
+</main>
+</body>
+</html>

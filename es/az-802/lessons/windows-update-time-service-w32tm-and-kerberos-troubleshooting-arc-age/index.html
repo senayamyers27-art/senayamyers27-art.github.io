@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Solución de problemas de Windows Update, del servicio de h… · Lección de AZ-802</title>
+<meta name="description" content="Esta lección agrupa cuatro áreas comunes de solución de problemas: actualizaciones que fallan, relojes que se desfasan, fallas de autenticación de Kerberos">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Solución de problemas de Windows Update, del servicio de h… · Lección de AZ-802">
+<meta property="og:description" content="Esta lección agrupa cuatro áreas comunes de solución de problemas: actualizaciones que fallan, relojes que se desfasan, fallas de autenticación de Kerberos">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-802/lessons/windows-update-time-service-w32tm-and-kerberos-troubleshooting-arc-age/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-802/lessons/windows-update-time-service-w32tm-and-kerberos-troubleshooting-arc-age/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-802/">AZ-802</a> / <a href="../">Lecciones</a> · <a href="../../../../az-802/lessons/windows-update-time-service-w32tm-and-kerberos-troubleshooting-arc-age/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802</p>
+<h1>Solución de problemas de Windows Update, del servicio de hora (w32tm) y de Kerberos; solución de problemas del agente y las extensiones de Arc (azcmagent check)</h1>
+<article class="lbody">
+<p>Esta lección agrupa cuatro áreas comunes de solución de problemas: actualizaciones que fallan, relojes que se desfasan, fallas de autenticación de Kerberos (a menudo causadas por los relojes) y agentes de Azure Arc que dejan de informar.</p>
+<p>Cuando Windows Update falla, lee primero el código de error en Settings o en Azure Update Manager y luego revisa los registros. <code>Get-WindowsUpdateLog</code> combina los archivos de seguimiento de las actualizaciones en un <code>WindowsUpdate.log</code> legible en tu escritorio. El registro System y el registro operativo WindowsUpdateClient también registran las instalaciones y las fallas. Confirma que los servicios Windows Update (wuauserv) y Background Intelligent Transfer Service (BITS) pueden ejecutarse y que el servidor puede llegar a su origen de actualizaciones, ya sea Microsoft Update o un servidor WSUS configurado por directiva de grupo. Si se sospecha una corrupción del almacén de componentes, ejecuta <code>DISM /Online /Cleanup-Image /RestoreHealth</code> seguido de <code>sfc /scannow</code>. Como último recurso, detén los servicios de actualización y renombra la carpeta SoftwareDistribution para que Windows reconstruya su caché de descargas.</p>
+<p>La hora importa porque Kerberos rechaza las solicitudes cuando los relojes del cliente y del servidor difieren en más de la tolerancia máxima, cinco minutos de forma predeterminada. En un bosque de AD, la hora fluye por una jerarquía: los miembros se sincronizan con un DC de su dominio, los DC se sincronizan con el emulador de PDC de su dominio, y el emulador de PDC del dominio raíz del bosque es la fuente autoritativa, que configuras para sincronizarse con una fuente externa confiable, por ejemplo <code>w32tm /config /manualpeerlist:&quot;time.example.org&quot; /syncfromflags:manual /reliable:yes /update</code>. Comprobaciones útiles son <code>w32tm /query /status</code> y <code>w32tm /query /source</code> (con qué me estoy sincronizando), <code>w32tm /resync</code> y <code>w32tm /stripchart /computer:dc01</code> (desfase respecto a otro equipo). Un error clásico es un DC virtualizado que sincroniza la hora con su host de Hyper-V mediante el servicio de integración de sincronización de hora en lugar de la jerarquía del dominio; si el origen de un DC muestra el host de VM, corrígelo.</p>
+<p>Para los problemas de Kerberos, revisa primero la hora, luego el DNS (los clientes deben encontrar los DC mediante registros SRV) y luego los nombres de entidad de seguridad de servicio (SPN). <code>klist</code> muestra los vales que tiene un usuario y <code>klist purge</code> los borra para que puedas volver a probar después de los cambios, como una nueva pertenencia a un grupo. Los SPN duplicados o faltantes provocan fallas de autenticación o el recurso a NTLM; encuentra los duplicados con <code>setspn -X</code> y consulta con <code>setspn -Q</code>. En los DC, los eventos de seguridad 4768 (TGT solicitado), 4769 (vale de servicio solicitado) y 4771 (falló la autenticación previa) revelan los códigos de error.</p>
+<p>Los servidores habilitados para Azure Arc ejecutan el agente Connected Machine, cuya herramienta de línea de comandos es <code>azcmagent</code>. <code>azcmagent show</code> informa el estado del agente, el id. del recurso y si está Connected o Disconnected. <code>azcmagent check</code> prueba la conectividad de red con los puntos de conexión de Azure que necesitan el agente y las extensiones, lo que expone rápidamente un bloqueo del firewall o del proxy. <code>azcmagent logs</code> recopila los registros en un zip para su análisis. Los registros del agente se encuentran en <code>C:\ProgramData\AzureConnectedMachineAgent\Log</code> (por ejemplo <code>himds.log</code> y <code>azcmagent.log</code>), y los registros de las extensiones en <code>C:\ProgramData\GuestConfig\extension_logs</code>. Comprueba que se estén ejecutando los servicios Azure Hybrid Instance Metadata Service (himds), Guest Configuration Arc Service y Guest Configuration Extension Service. Si el servidor usa un proxy, configúralo con <code>azcmagent config set proxy.url</code> seguido de la dirección de tu proxy. Una extensión con errores, como Azure Monitor Agent, a menudo solo necesita quitarse y volver a instalarse desde el portal después de corregir el problema subyacente.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Get-WindowsUpdateLog</dt><dd>Un cmdlet que convierte los archivos de seguimiento de Windows Update en un WindowsUpdate.log legible.</dd><dt>PDC emulator (forest root) (emulador de PDC de la raíz del bosque)</dt><dd>La fuente de hora autoritativa de un bosque de AD, que debe sincronizarse con una fuente de hora externa confiable.</dd><dt>w32tm</dt><dd>La herramienta de línea de comandos para configurar, consultar y volver a sincronizar el servicio de hora de Windows.</dd><dt>klist</dt><dd>Un comando que enumera o purga los vales de Kerberos almacenados en caché para la sesión de inicio actual.</dd><dt>azcmagent check</dt><dd>Un comando del agente de Arc que prueba la conectividad con los puntos de conexión de Azure requeridos por el agente y sus extensiones.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Los usuarios de un sitio no pueden acceder a los recursos compartidos de archivos y ven errores de Kerberos. En su DC, w32tm /query /source muestra 'VM IC Time Synchronization Provider' y el reloj tiene un desfase de siete minutos. El administrador desactiva el servicio de integración de sincronización de hora de Hyper-V para esa VM de DC, vuelve a sincronizar con la jerarquía del dominio con w32tm /resync y, después de ejecutar klist purge en un cliente, el acceso funciona.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Una falla de Kerberos más un desfase de reloj de más de 5 minutos es un escenario clásico del examen; la solución es la jerarquía de hora anclada en el emulador de PDC de la raíz del bosque. Para el estado desconectado de Arc, ejecuta primero azcmagent show y azcmagent check.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué DC debe sincronizar la hora con una fuente externa en un bosque de AD?</summary><p>El emulador de PDC del dominio raíz del bosque.</p></details>
+<details class="sq"><summary>Un servidor Arc aparece como Disconnected en el portal. ¿Qué comando prueba si puede llegar a los puntos de conexión de Azure requeridos?</summary><p>azcmagent check.</p></details>
+<details class="sq"><summary>Se agregó un usuario a un grupo, pero sigue sin poder acceder a un recurso. ¿Qué paso rápido de Kerberos ayuda sin cerrar sesión?</summary><p>Ejecutar klist purge para borrar los vales en caché, de modo que se soliciten vales nuevos con la pertenencia a grupos actualizada.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AZ-802 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-802/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../troubleshooting-connectivity-and-name-resolution-test-netconnection-re/">← Solución de problemas de conectividad y resolución de nombre</a><a href="../azure-vm-troubleshooting-boot-diagnostics-serial-console-run-command-r/">Solución de problemas de máquinas virtuales de Azure: diagnó →</a></nav>
+</main>
+</body>
+</html>

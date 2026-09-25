@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Triggers comunes: HTTP (niveles de autorización), timer (N… · Lección de AI-200</title>
+<meta name="description" content="El trigger HTTP convierte una función en un punto de conexión web en una ruta bajo /api/ de forma predeterminada. Su nivel de autorización controla si se r">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Triggers comunes: HTTP (niveles de autorización), timer (N… · Lección de AI-200">
+<meta property="og:description" content="El trigger HTTP convierte una función en un punto de conexión web en una ruta bajo /api/ de forma predeterminada. Su nivel de autorización controla si se r">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/common-triggers-http-auth-levels-timer-six-field-ncrontab-service-bus/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/common-triggers-http-auth-levels-timer-six-field-ncrontab-service-bus/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/common-triggers-http-auth-levels-timer-six-field-ncrontab-service-bus/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Triggers comunes: HTTP (niveles de autorización), timer (NCRONTAB de seis campos), Service Bus, Cosmos DB, Blob y Event Grid</h1>
+<article class="lbody">
+<p>El trigger HTTP convierte una función en un punto de conexión web en una ruta bajo <code>/api/</code> de forma predeterminada. Su nivel de autorización controla si se requiere una clave. <code>ANONYMOUS</code> no necesita clave. <code>FUNCTION</code> requiere una clave específica de la función o una clave de host, que se pasa en el encabezado <code>x-functions-key</code> o en el parámetro de consulta <code>code</code>. <code>ADMIN</code> requiere la clave maestra. Las claves no son autenticación de usuarios; para usuarios reales, coloca delante App Service Authentication (Easy Auth), API Management o tu propia validación de tokens. En local, las claves no se exigen.</p>
+<p>El trigger de temporizador (timer) se ejecuta según una programación escrita en NCRONTAB, un formato cron de seis campos: <code>{second} {minute} {hour} {day} {month} {day-of-week}</code>. El campo adicional de segundos al principio es la principal diferencia con el cron de Unix de cinco campos, y es el detalle favorito del examen. <code>0 */5 * * * *</code> se ejecuta cada cinco minutos; <code>0 30 9 * * 1-5</code> se ejecuta a las 9:30 los días laborables. Las horas están en UTC de forma predeterminada. Una función de temporizador puede definir <code>run_on_startup</code> (evítalo en producción, ya que los reinicios provocan ejecuciones adicionales) y usa un bloqueo singleton para que solo una instancia ejecute cada ocurrencia.</p>
+<pre class="code" tabindex="0"><code>@app.timer_trigger(schedule=&quot;0 0 2 * * *&quot;, arg_name=&quot;timer&quot;, run_on_startup=False)
+def nightly(timer: func.TimerRequest):
+    if timer.past_due:
+        logging.warning(&quot;Running late&quot;)
+
+@app.service_bus_queue_trigger(arg_name=&quot;msg&quot;, queue_name=&quot;orders&quot;, connection=&quot;ServiceBusConn&quot;)
+def handle_order(msg: func.ServiceBusMessage):
+    logging.info(msg.get_body().decode())
+
+@app.event_grid_trigger(arg_name=&quot;event&quot;)
+def on_event(event: func.EventGridEvent):
+    logging.info(&quot;%s %s&quot;, event.event_type, event.subject)</code></pre>
+<p>El trigger de Service Bus (<code>service_bus_queue_trigger</code>, o <code>service_bus_topic_trigger</code> con un nombre de suscripción) recibe los mensajes en modo peek-lock. Si la función tiene éxito, el runtime completa el mensaje; si lanza una excepción, el mensaje se abandona y se reintenta hasta que el max delivery count lo envía a la cola de mensajes fallidos. El runtime renueva los bloqueos durante las ejecuciones largas, y host.json controla la simultaneidad.</p>
+<p>El trigger de Cosmos DB se ejecuta sobre el change feed del contenedor, como se vio antes. Necesita un contenedor de leases, entrega lotes de documentos modificados y no ve las eliminaciones en el modo latest version.</p>
+<p>El trigger de Blob se activa cuando se agrega o actualiza un blob en una ruta de contenedor. La implementación clásica sondea (polling) el contenedor y puede tardar en detectar blobs nuevos en planes de tipo consumo y con contenedores grandes. El enfoque recomendado para baja latencia y confiabilidad es el trigger de blob basado en Event Grid (<code>source=&quot;EventGrid&quot;</code> en el decorador v2, respaldado por una suscripción de Event Grid), y el plan Flex Consumption solo admite esta forma basada en eventos. Los recibos de blob (blob receipts) almacenados en la cuenta de almacenamiento del host evitan procesar el mismo blob dos veces.</p>
+<p>El trigger de Event Grid recibe los eventos que envía una suscripción de Event Grid cuyo destino es la función. El runtime gestiona automáticamente el protocolo de validación del webhook, y puedes filtrar a nivel de la suscripción para que la función solo se ejecute con los eventos relevantes. Elígelo para reaccionar a eventos de recursos de Azure o a eventos de temas personalizados.</p>
+<p>Al elegir: solicitud/respuesta significa HTTP; programación significa timer; mensajes de negocio confiables significan Service Bus; cambios en la base de datos significan Cosmos DB; archivos nuevos significan Blob (preferiblemente con origen Event Grid); y eventos de recursos de Azure significan Event Grid.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Authorization level (nivel de autorización)</dt><dd>Configuración del trigger HTTP (anonymous, function o admin) que decide qué clave, si la hay, debe proporcionar quien llama.</dd><dt>NCRONTAB</dt><dd>El formato cron de seis campos que usan los triggers de temporizador, que empieza con un campo de segundos.</dd><dt>Past due (atrasado)</dt><dd>Un indicador del temporizador que señala que la ejecución programada ocurrió más tarde de lo previsto, por ejemplo después de una interrupción.</dd><dt>Event Grid-based blob trigger (trigger de blob basado en Event Grid)</dt><dd>Un trigger de blob que usa notificaciones de Event Grid en lugar de sondeo para lograr menor latencia.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una limpieza nocturna que debía ejecutarse una vez a las 2:00 se ejecutaba sesenta veces cada noche porque un desarrollador escribió * 0 2 * * *, donde el * del campo inicial de segundos significa cada segundo del minuto 2:00. Reescribirla como 0 0 2 * * * corrigió la programación. El mismo equipo cambió un trigger de blob lento basado en sondeo al origen Event Grid, y el procesamiento empezó a los pocos segundos de cada subida.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Las programaciones del timer tienen seis campos, con los segundos primero (0 */5 * * * * es cada cinco minutos). La autorización FUNCTION necesita una clave en x-functions-key o en code; no es autenticación de usuarios.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Escribe una expresión NCRONTAB para todos los días a las 06:15 UTC.</summary><p>0 15 6 * * *, con los campos segundo, minuto, hora, día, mes y día de la semana.</p></details>
+<details class="sq"><summary>¿Qué le pasa a un mensaje de un trigger de Service Bus cuando la función lanza una excepción?</summary><p>El mensaje se abandona y se reintenta; después de superar el max delivery count se mueve a la cola de mensajes fallidos.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../azure-functions-python-v2-model-function-app-py-decorators-triggers-an/">← Modelo v2 de Python de Azure Functions: function_app.py, dec</a><a href="../hosting-plans-flex-consumption-premium-and-dedicated-cold-starts-scale/">Planes de hospedaje: Flex Consumption, Premium y Dedicated;  →</a></nav>
+</main>
+</body>
+</html>

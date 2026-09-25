@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Modos de kube-proxy (iptables, IPVS, nftables) y cómo func… · Lección de CKA</title>
+<meta name="description" content="El ClusterIP de un Service es virtual: ninguna máquina lo posee y ningún proceso escucha en él. En cambio, kube-proxy en cada nodo vigila los Services y la">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Modos de kube-proxy (iptables, IPVS, nftables) y cómo func… · Lección de CKA">
+<meta property="og:description" content="El ClusterIP de un Service es virtual: ninguna máquina lo posee y ningún proceso escucha en él. En cambio, kube-proxy en cada nodo vigila los Services y la">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/kube-proxy-modes-iptables-ipvs-nftables-and-how-service-virtual-ips-wo/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/kube-proxy-modes-iptables-ipvs-nftables-and-how-service-virtual-ips-wo/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/kube-proxy-modes-iptables-ipvs-nftables-and-how-service-virtual-ips-wo/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Modos de kube-proxy (iptables, IPVS, nftables) y cómo funcionan las IP virtuales de los Services</h1>
+<article class="lbody">
+<p>El ClusterIP de un Service es virtual: ninguna máquina lo posee y ningún proceso escucha en él. En cambio, kube-proxy en cada nodo vigila los Services y las EndpointSlices y programa el kernel del nodo para que los paquetes enviados a ClusterIP:puerto se reescriban (NAT de destino) hacia una de las IP de los Pods de backend que están listos. Como todos los nodos tienen las mismas reglas, un Pod cliente en cualquier lugar puede llegar a cualquier Service.</p>
+<p>kube-proxy admite varios modos en Linux. En el modo <code>iptables</code>, durante mucho tiempo el predeterminado, crea cadenas en la tabla nat: <code>KUBE-SERVICES</code> coincide con el ClusterIP y el puerto, salta a una cadena por Service <code>KUBE-SVC-...</code> que elige un backend con probabilidad aleatoria, y una cadena por endpoint <code>KUBE-SEP-...</code> realiza el DNAT. Es confiable, pero la evaluación de reglas crece con el número de Services, así que los clústeres muy grandes ven actualizaciones más lentas.</p>
+<p>En el modo <code>ipvs</code>, kube-proxy usa el balanceador de carga IP Virtual Server del kernel. Crea una interfaz dummy, <code>kube-ipvs0</code>, que contiene los ClusterIPs, y servidores virtuales IPVS con servidores reales para cada Pod. IPVS usa tablas hash, escala mejor con muchos Services y ofrece varios algoritmos de planificación como round robin y least connections. Necesita los módulos del kernel de IPVS y se inspecciona con <code>ipvsadm -Ln</code>.</p>
+<p>En el modo <code>nftables</code>, kube-proxy programa el framework nftables, más nuevo, en lugar de iptables. Busca combinar un buen rendimiento a escala con el modelo familiar al estilo de iptables, y es la dirección hacia la que avanza el proyecto. Se inspecciona con <code>nft list table ip kube-proxy</code>. Qué modos están disponibles y cuál se recomienda depende de tus versiones de Kubernetes y del kernel, así que revisa la documentación de la versión que ejecutas.</p>
+<p>En los clústeres de kubeadm, kube-proxy se ejecuta como un DaemonSet en kube-system y lee su configuración del ConfigMap <code>kube-proxy</code>. El campo <code>mode</code> selecciona el modo; un valor vacío significa el predeterminado de la plataforma. Después de editar el ConfigMap, reinicia el DaemonSet para que los Pods tomen el cambio.</p>
+<pre class="code" tabindex="0"><code>kubectl -n kube-system get cm kube-proxy -o yaml | grep mode
+kubectl -n kube-system rollout restart ds kube-proxy
+kubectl -n kube-system logs ds/kube-proxy | head   # muestra el proxier en uso
+sudo iptables -t nat -L KUBE-SERVICES -n | grep &lt;cluster-ip&gt;</code></pre>
+<p>Como el ClusterIP es solo una regla DNAT para puertos específicos, <code>ping &lt;ClusterIP&gt;</code> normalmente falla aunque el Service funcione. Prueba con el puerto real del Service, por ejemplo con <code>curl</code> o <code>nc -zv</code>. Algunos CNIs, como Cilium, pueden reemplazar por completo a kube-proxy con programas eBPF; en ese caso puede que no exista ningún DaemonSet de kube-proxy y las reglas vivan en mapas eBPF.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>ClusterIP</dt><dd>Una IP virtual para un Service, implementada como reglas de reenvío y no como una interfaz real.</dd><dt>iptables mode (modo iptables)</dt><dd>Modo de kube-proxy que usa cadenas NAT (KUBE-SERVICES, KUBE-SVC, KUBE-SEP) para reenviar el tráfico de los Services.</dd><dt>IPVS mode (modo IPVS)</dt><dd>Modo de kube-proxy que usa el balanceador de carga basado en hash IP Virtual Server del kernel.</dd><dt>nftables mode (modo nftables)</dt><dd>Modo de kube-proxy que programa las reglas con el framework nftables.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un Service funciona desde node01 pero no desde node02. En node02, el Pod de kube-proxy está en CrashLoopBackOff después de que alguien puso <code>mode: ipvsx</code> en el ConfigMap. Corregir el error de tipeo y reiniciar el DaemonSet restaura las reglas en node02 y el Service responde desde ambos nodos.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> No uses ping para probar un ClusterIP; prueba el puerto. Si un nodo no puede llegar a los Services mientras los demás sí, sospecha primero del Pod de kube-proxy de ese nodo.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Dónde se configura el modo de kube-proxy en un clúster de kubeadm?</summary><p>En el campo mode del ConfigMap kube-proxy en kube-system.</p></details>
+<details class="sq"><summary>¿Por qué normalmente falla un ping a un ClusterIP?</summary><p>El ClusterIP solo existe como reglas de reenvío para puertos específicos; nada responde ICMP en él.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../kubernetes-network-model-one-ip-per-pod-nat-free-pod-to-pod-traffic-th/">← El modelo de red de Kubernetes: una IP por Pod, tráfico entr</a><a href="../service-types-clusterip-nodeport-30000-32767-loadbalancer-cloud-contro/">Tipos de Service: ClusterIP, NodePort (30000–32767), LoadBal →</a></nav>
+</main>
+</body>
+</html>

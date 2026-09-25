@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IAM para aplicaciones: roles de ejecución, perfiles de ins… · Lección de Developer Associate</title>
+<meta name="description" content="Las aplicaciones necesitan permisos igual que las personas, y AWS Identity and Access Management (IAM) los proporciona mediante roles. Un rol es una identi">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="IAM para aplicaciones: roles de ejecución, perfiles de ins… · Lección de Developer Associate">
+<meta property="og:description" content="Las aplicaciones necesitan permisos igual que las personas, y AWS Identity and Access Management (IAM) los proporciona mediante roles. Un rol es una identi">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/iam-for-applications-execution-roles-instance-profiles-ecs-task-roles/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/iam-for-applications-execution-roles-instance-profiles-ecs-task-roles/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/iam-for-applications-execution-roles-instance-profiles-ecs-task-roles/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>IAM para aplicaciones: roles de ejecución, perfiles de instancia, roles de tarea de ECS, políticas de mínimo privilegio, evaluación de políticas (gana la denegación explícita)</h1>
+<article class="lbody">
+<p>Las aplicaciones necesitan permisos igual que las personas, y AWS Identity and Access Management (IAM) los proporciona mediante roles. Un rol es una identidad con políticas de permisos pero sin contraseña ni claves de acceso de larga duración; quien tiene permitido asumirlo obtiene credenciales temporales de AWS Security Token Service (STS). Darle un rol a tu código, en lugar de incrustar las claves de acceso de un usuario de IAM, es el patrón que el examen espera siempre.</p>
+<p>Cada servicio de cómputo tiene su propia forma de asociar un rol. El servicio Lambda asume un rol de ejecución de Lambda en nombre de la función; su política de confianza permite a <code>lambda.amazonaws.com</code>, y sus permisos deciden a qué puede llamar el código de la función. Como mínimo necesita permiso para escribir en CloudWatch Logs (la política administrada <code>AWSLambdaBasicExecutionRole</code>); leer de SQS o de streams mediante un mapeo de fuente de eventos también requiere los permisos de lectura correspondientes en este rol. En EC2, un rol se asocia mediante un perfil de instancia (instance profile), un contenedor del rol que la instancia expone a través del servicio de metadatos de instancia; la cadena de credenciales del SDK toma las credenciales automáticamente. En Amazon ECS, el rol de tarea (task role) da a los contenedores de la aplicación sus permisos de AWS, mientras que el rol de ejecución de tarea (task execution role), que es distinto, lo usa el agente de ECS para descargar imágenes de Amazon ECR y enviar logs. Confundir estos dos es una trampa común.</p>
+<p>Mínimo privilegio significa conceder solo las acciones y los recursos que el código realmente necesita. Una declaración de política tiene <code>Effect</code> (Allow o Deny), <code>Action</code>, <code>Resource</code> y <code>Condition</code> opcional. En lugar de <code>dynamodb:*</code> sobre <code>*</code>, concede <code>dynamodb:GetItem</code> y <code>dynamodb:PutItem</code> sobre el ARN de una sola tabla. Las condiciones restringen aún más, por ejemplo por VPC de origen, por etiqueta o exigiendo cifrado.</p>
+<pre class="code" tabindex="0"><code>{
+  &quot;Version&quot;: &quot;2012-10-17&quot;,
+  &quot;Statement&quot;: [{
+    &quot;Effect&quot;: &quot;Allow&quot;,
+    &quot;Action&quot;: [&quot;dynamodb:GetItem&quot;, &quot;dynamodb:PutItem&quot;],
+    &quot;Resource&quot;: &quot;arn:aws:dynamodb:us-east-1:111122223333:table/Orders&quot;
+  }]
+}</code></pre>
+<p>La evaluación de políticas dentro de una cuenta sigue una lógica sencilla. Toda solicitud empieza denegada implícitamente. Luego AWS reúne todas las políticas aplicables: políticas basadas en identidad, políticas basadas en recursos, límites de permisos (permissions boundaries), políticas de sesión y políticas de control de servicios (SCP) de AWS Organizations. Si alguna política aplicable tiene un <code>Deny</code> explícito que coincide, la solicitud se deniega, sin importar cuántos Allow existan. De lo contrario, si un Allow la concede (y ningún límite, SCP o política de sesión la restringe), la solicitud se permite. Si nada la permite, se mantiene la denegación implícita. Es decir: la denegación explícita gana sobre el permiso, y el permiso gana sobre la denegación implícita predeterminada.</p>
+<p>Las políticas administradas (administradas por AWS o por el cliente) son reutilizables y tienen versiones; las políticas en línea (inline) están incrustadas en un solo rol o usuario y se eliminan con él. Los límites de permisos establecen los permisos máximos que puede conceder una política basada en identidad, lo cual es útil cuando se permite a los desarrolladores crear roles para sus propias funciones. Para probar políticas, usa el simulador de políticas de IAM, y lee el mensaje de error <code>AccessDenied</code>, que a menudo nombra la acción faltante y el tipo de política que la bloqueó.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Execution role (rol de ejecución)</dt><dd>El rol de IAM que asume una función Lambda para obtener credenciales temporales con las que llamar a otros servicios de AWS.</dd><dt>Instance profile (perfil de instancia)</dt><dd>Un contenedor que asocia un rol de IAM a una instancia EC2 para que las aplicaciones que corren en ella reciban credenciales temporales.</dd><dt>ECS task role (rol de tarea de ECS)</dt><dd>El rol de IAM cuyos permisos usan los contenedores de la aplicación en una tarea de ECS, distinto del rol de ejecución de tarea.</dd><dt>Explicit deny (denegación explícita)</dt><dd>Una declaración de política con Effect Deny que anula cualquier Allow para las solicitudes que coinciden.</dd><dt>Least privilege (mínimo privilegio)</dt><dd>Conceder solo las acciones y los recursos específicos necesarios para realizar una tarea.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un servicio en contenedores en Fargate falla con AccessDenied al escribir en S3, aunque el rol de ejecución de tarea tiene AmazonS3FullAccess. El desarrollador se da cuenta de que la aplicación usa el rol de tarea, no el rol de ejecución, y en su lugar asocia al rol de tarea una política que permite s3:PutObject sobre ese único bucket.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si una pregunta muestra un Allow y un Deny para la misma acción, la respuesta es denegado. Si pregunta cómo debe obtener credenciales una aplicación en EC2, elige un rol de IAM mediante un perfil de instancia, nunca claves de acceso en la instancia.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué rol permite a un contenedor de ECS llamar a DynamoDB y cuál permite a ECS descargar la imagen desde ECR?</summary><p>El rol de tarea concede los permisos de la aplicación; el rol de ejecución de tarea permite al agente de ECS descargar imágenes y escribir logs.</p></details>
+<details class="sq"><summary>Un usuario tiene una política de identidad que permite s3:* y una SCP deniega s3:DeleteBucket. ¿Puede eliminar un bucket?</summary><p>No; la denegación explícita de la SCP anula el permiso.</p></details>
+<details class="sq"><summary>¿Qué necesita como mínimo un rol de ejecución de Lambda?</summary><p>Permiso para crear flujos de logs (log streams) y escribir eventos de log en CloudWatch Logs, como en AWSLambdaBasicExecutionRole.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../caching-strategies-with-elasticache-lazy-loading-write-through-ttls-ch/">← Estrategias de caché con ElastiCache: lazy loading, write-th</a><a href="../resource-based-policies-lambda-permissions-for-s3-sns-api-gateway-s3-b/">Políticas basadas en recursos: permisos de Lambda para S3/SN →</a></nav>
+</main>
+</body>
+</html>

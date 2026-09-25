@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rutas estáticas: `routing-options static`, next-hop, quali… · Lección de JNCIA-Junos</title>
+<meta name="description" content="Una ruta estática es una ruta que configuras a mano. No se adapta sola a las fallas como lo hace un protocolo de enrutamiento, pero es simple, predecible y">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Rutas estáticas: `routing-options static`, next-hop, quali… · Lección de JNCIA-Junos">
+<meta property="og:description" content="Una ruta estática es una ruta que configuras a mano. No se adapta sola a las fallas como lo hace un protocolo de enrutamiento, pero es simple, predecible y">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/jncia-junos/lessons/static-routes-routing-options-static-next-hop-qualified-next-hop-with/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/jncia-junos/lessons/static-routes-routing-options-static-next-hop-qualified-next-hop-with/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../jncia-junos/">JNCIA-Junos</a> / <a href="../">Lecciones</a> · <a href="../../../../jncia-junos/lessons/static-routes-routing-options-static-next-hop-qualified-next-hop-with/" hreflang="en" lang="en">English</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106</p>
+<h1>Rutas estáticas: `routing-options static`, next-hop, qualified-next-hop con preferencia (rutas flotantes), discard y reject</h1>
+<article class="lbody">
+<p>Una ruta estática es una ruta que configuras a mano. No se adapta sola a las fallas como lo hace un protocolo de enrutamiento, pero es simple, predecible y no usa sobrecarga de protocolo. Las rutas estáticas son comunes para las rutas por defecto hacia un ISP, para sitios stub con un solo enlace de subida y para caminos de respaldo. En Junos viven bajo <code>routing-options static</code> para la instancia por defecto, o bajo <code>routing-instances &lt;name&gt; routing-options static</code> para una instancia. La forma básica indica un prefijo y un siguiente salto, como se muestra a continuación.</p>
+<pre class="code" tabindex="0"><code>set routing-options static route 0.0.0.0/0 next-hop 203.0.113.1
+set routing-options static route 10.50.0.0/16 next-hop 10.1.12.2</code></pre>
+<p>Por defecto, la dirección del siguiente salto debe estar en una subred directamente conectada. Si no es alcanzable a través de una interfaz directamente conectada, la ruta permanece inactiva (oculta) porque Junos no puede resolver qué interfaz usar. Si realmente necesitas un siguiente salto a varios saltos de distancia, la opción <code>resolve</code> permite que Junos lo resuelva a través de otras rutas, pero los siguientes saltos directamente conectados son el caso normal. Las rutas estáticas tienen una preferencia por defecto de 5. Puedes listar varias sentencias <code>next-hop</code> para la misma ruta; se tratan como siguientes saltos de igual costo. Un qualified next hop, en cambio, te permite darle a distintos siguientes saltos de la misma ruta su propia preferencia (y métrica). Así construyes un camino primario y uno de respaldo dentro de una sola ruta estática:</p>
+<pre class="code" tabindex="0"><code>set routing-options static route 0.0.0.0/0 next-hop 203.0.113.1
+set routing-options static route 0.0.0.0/0 qualified-next-hop 198.51.100.1 preference 7</code></pre>
+<p>Aquí el next hop simple usa la preferencia 5 y es el preferido. Si la interfaz hacia 203.0.113.1 se cae, ese siguiente salto queda inutilizable y el qualified next hop con preferencia 7 toma el control. Una ruta estática flotante es la misma idea aplicada entre una ruta estática y un protocolo dinámico: le das a la ruta estática una preferencia más alta que la del protocolo, por ejemplo <code>set routing-options static route 10.50.0.0/16 next-hop 10.9.9.2 preference 200</code>. OSPF (10 o 150) e incluso BGP (170) ganan mientras están disponibles, y la ruta estática flota hasta volverse activa solo cuando la ruta dinámica desaparece.</p>
+<p>En lugar de un siguiente salto, una ruta estática puede apuntar a acciones especiales. <code>discard</code> descarta en silencio los paquetes que coinciden. <code>reject</code> los descarta y devuelve un mensaje ICMP destination unreachable al emisor. Ambos son útiles para enviar tráfico a un agujero negro (blackholing), por ejemplo para un prefijo resumen que anuncias, de modo que los paquetes hacia partes no usadas de él se descarten en lugar de entrar en bucle, o para detener el tráfico hacia un destino malicioso. Normalmente se prefiere discard hacia internet porque no genera mensajes ICMP que un atacante podría aprovechar o que agregan carga.</p>
+<p>Verifica con <code>show route protocol static</code> y comprueba que la ruta tenga el <code>*</code> de activa. Otras opciones que puedes ver incluyen <code>no-readvertise</code>, que evita que la ruta se exporte mediante la política de enrutamiento, y <code>retain</code>, que la mantiene en la tabla de reenvío si el proceso de enrutamiento se reinicia.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>next-hop</dt><dd>La dirección directamente conectada hacia la que reenvía una ruta estática; si no es alcanzable, la ruta no se puede usar.</dd><dt>qualified-next-hop</dt><dd>Un siguiente salto dentro de una ruta estática que tiene su propia preferencia o métrica, usado para caminos de respaldo.</dd><dt>Floating static route (ruta estática flotante)</dt><dd>Una ruta estática con una preferencia más alta que una ruta dinámica, para que se vuelva activa solo cuando la ruta dinámica desaparece.</dd><dt>discard vs reject</dt><dd>Ambos descartan los paquetes que coinciden; reject además envía un mensaje ICMP unreachable, discard se mantiene en silencio.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un router de sucursal tiene un enlace de fibra hacia el ISP principal y un enlace LTE más barato. El ingeniero configura una ruta por defecto con <code>next-hop</code> apuntando al gateway de fibra y un <code>qualified-next-hop</code> hacia el gateway LTE con preferencia 7. Cuando la interfaz de fibra se cae, la ruta por defecto usa LTE de inmediato, y vuelve a la fibra cuando esta se recupera.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Un siguiente salto estático normalmente debe estar directamente conectado, o la ruta no se volverá activa. Una preferencia más alta convierte a una ruta en respaldo, y reject se diferencia de discard solo en que envía un ICMP unreachable.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Configuras una ruta estática cuyo siguiente salto está en una red remota, y no aparece como activa. ¿Por qué?</summary><p>Junos exige por defecto que el siguiente salto sea directamente alcanzable; sin <code>resolve</code>, el siguiente salto no se puede resolver.</p></details>
+<details class="sq"><summary>¿Cómo haces una ruta estática que se use solo si OSPF pierde su ruta hacia el mismo prefijo?</summary><p>Dale a la ruta estática una preferencia más alta que la de OSPF, como <code>preference 200</code>, creando una ruta estática flotante.</p></details>
+<details class="sq"><summary>¿Cuál es la diferencia entre discard y reject?</summary><p>Ambos descartan el tráfico; reject envía un ICMP unreachable al origen, discard descarta en silencio.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia JNCIA-Junos gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../jncia-junos/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../routing-instances-virtual-router-forwarding-and-vrf-types/">← Instancias de enrutamiento: tipos virtual-router, forwarding</a><a href="../default-routes-and-summarization-aggregate-routes/">Rutas por defecto y sumarización (rutas aggregate) →</a></nav>
+</main>
+</body>
+</html>

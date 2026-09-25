@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DaemonSets y StatefulSets desde el punto de vista del oper… · Lección de CKA</title>
+<meta name="description" content="Los Deployments sirven para Pods sin estado e intercambiables. Otros dos controladores cubren los casos que ellos no: los DaemonSets, que ejecutan un Pod p">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="DaemonSets y StatefulSets desde el punto de vista del oper… · Lección de CKA">
+<meta property="og:description" content="Los Deployments sirven para Pods sin estado e intercambiables. Otros dos controladores cubren los casos que ellos no: los DaemonSets, que ejecutan un Pod p">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/daemonsets-and-statefulsets-from-an-operator-s-point-of-view-including/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/daemonsets-and-statefulsets-from-an-operator-s-point-of-view-including/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/daemonsets-and-statefulsets-from-an-operator-s-point-of-view-including/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>DaemonSets y StatefulSets desde el punto de vista del operador, incluidas las tolerations para los nodos del control plane</h1>
+<article class="lbody">
+<p>Los Deployments sirven para Pods sin estado e intercambiables. Otros dos controladores cubren los casos que ellos no: los DaemonSets, que ejecutan un Pod por nodo, y los StatefulSets, que dan a los Pods identidades y almacenamiento estables.</p>
+<p>Un DaemonSet garantiza que cada nodo elegible ejecute exactamente una copia de un Pod. Cuando un nodo se une, el DaemonSet le agrega un Pod; cuando un nodo se va, el Pod se va con él. Así se despliegan los agentes a nivel de nodo: kube-proxy, agentes de CNI, enviadores de logs, exportadores de monitoreo y plugins de nodo de CSI. Puedes limitar un DaemonSet a algunos nodos con un nodeSelector o node affinity en su plantilla de Pod. Los DaemonSets admiten las estrategias de actualización RollingUpdate (la predeterminada) y OnDelete.</p>
+<p>Los nodos del control plane en clústeres de kubeadm llevan el taint <code>node-role.kubernetes.io/control-plane:NoSchedule</code>. Un DaemonSet cuyos Pods no lo toleran omitirá esos nodos, así que <code>kubectl get ds</code> muestra menos Pods deseados que nodos tienes. Si un agente también debe ejecutarse en los nodos del control plane, agrega una toleration a la plantilla de Pod.</p>
+<pre class="code" tabindex="0"><code>spec:
+  template:
+    spec:
+      tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule</code></pre>
+<p>El controlador de DaemonSet también agrega algunas tolerations automáticamente, por ejemplo para las condiciones not-ready, unreachable y de presión, para que los agentes de nodo no sean desalojados cuando un nodo tiene problemas. No existe un atajo <code>kubectl create daemonset</code>; un truco rápido es <code>kubectl create deployment ... --dry-run=client -o yaml</code>, cambiar luego el kind a DaemonSet y quitar <code>replicas</code> y <code>strategy</code>.</p>
+<p>Un StatefulSet gestiona Pods que necesitan una identidad estable. Los Pods se nombran con un ordinal, <code>db-0</code>, <code>db-1</code>, <code>db-2</code>, y se crean en orden y, por defecto, se eliminan en orden inverso. Requiere un headless Service (indicado en <code>serviceName</code>) que da a cada Pod un nombre DNS estable como <code>db-0.db.prod.svc.cluster.local</code>. Sus <code>volumeClaimTemplates</code> crean un PersistentVolumeClaim por Pod, como <code>data-db-0</code>, y si un Pod se reprograma vuelve a adjuntar el mismo claim.</p>
+<p>En la operación, reducir la escala de un StatefulSet elimina primero los ordinales más altos y, por defecto, deja sus PVCs en su lugar para que los datos sobrevivan a un aumento de escala posterior. Los rolling updates avanzan del ordinal más alto al más bajo, y un valor de <code>partition</code> te permite actualizar solo los ordinales iguales o superiores a un número, para pruebas tipo canary. Cuando un Pod de un StatefulSet no arranca, revisa su PVC y el nodo al que está ligado su volumen, ya que el almacenamiento es la causa más común.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>DaemonSet</dt><dd>Un controlador que ejecuta una copia de un Pod en cada nodo elegible.</dd><dt>StatefulSet</dt><dd>Un controlador que da a los Pods nombres ordinales estables, DNS estable y almacenamiento persistente por Pod.</dd><dt>Headless Service</dt><dd>Un Service con clusterIP None que publica registros DNS individuales de los Pods, requerido por los StatefulSets.</dd><dt>Control plane taint (taint del control plane)</dt><dd>node-role.kubernetes.io/control-plane:NoSchedule, que mantiene los Pods ordinarios fuera de los nodos del control plane.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un DaemonSet de envío de logs muestra DESIRED 2 en un clúster de tres nodos. El nodo que falta es el del control plane, que tiene un taint. Agregar una toleration para node-role.kubernetes.io/control-plane con operator Exists sube DESIRED a 3 y aparece un Pod en cp1.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Cuando un DaemonSet tiene menos Pods que nodos, antes que nada compara los taints de los nodos (<code>kubectl describe node | grep -i taint</code>) con las tolerations y el nodeSelector de la plantilla de Pod.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué nombre DNS obtiene el Pod web-1 de un StatefulSet con serviceName web en el namespace shop?</summary><p>web-1.web.shop.svc.cluster.local.</p></details>
+<details class="sq"><summary>¿Qué les pasa por defecto a los PVCs cuando reduces la escala de un StatefulSet?</summary><p>Se conservan, así que los datos se vuelven a adjuntar si aumentas la escala otra vez.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../deployments-and-replicasets-as-self-healing-primitives-rolling-updates/">← Deployments y ReplicaSets como primitivas de autorreparación</a><a href="../configmaps-and-secrets-creation-env-and-volume-consumption-immutable-o/">ConfigMaps y Secrets: creación, consumo como env y como volu →</a></nav>
+</main>
+</body>
+</html>

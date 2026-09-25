@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Daemons clave: rpd (enrutamiento), mgd (gestión/CLI), dcd … · Lección de JNCIA-Junos</title>
+<meta name="description" content="Junos está formado por muchos procesos independientes llamados daemons, cada uno corriendo en su propio espacio de memoria protegida. El examen se enfoca e">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Daemons clave: rpd (enrutamiento), mgd (gestión/CLI), dcd … · Lección de JNCIA-Junos">
+<meta property="og:description" content="Junos está formado por muchos procesos independientes llamados daemons, cada uno corriendo en su propio espacio de memoria protegida. El examen se enfoca e">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/jncia-junos/lessons/key-daemons-rpd-routing-mgd-management-cli-dcd-interfaces-chassisd-cha/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/jncia-junos/lessons/key-daemons-rpd-routing-mgd-management-cli-dcd-interfaces-chassisd-cha/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../jncia-junos/">JNCIA-Junos</a> / <a href="../">Lecciones</a> · <a href="../../../../jncia-junos/lessons/key-daemons-rpd-routing-mgd-management-cli-dcd-interfaces-chassisd-cha/" hreflang="en" lang="en">English</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106</p>
+<h1>Daemons clave: rpd (enrutamiento), mgd (gestión/CLI), dcd (interfaces), chassisd (chasis)</h1>
+<article class="lbody">
+<p>Junos está formado por muchos procesos independientes llamados daemons, cada uno corriendo en su propio espacio de memoria protegida. El examen se enfoca en cuatro de ellos, y saber qué hace cada uno te ayuda a entender los mensajes de log, la salida de <code>show system processes</code> y lo que ocurre cuando algo falla.</p>
+<p>rpd, el daemon de protocolos de enrutamiento (routing protocol daemon), ejecuta todos los protocolos de enrutamiento: OSPF, IS-IS, BGP, RIP, además de las rutas estáticas, la política de enrutamiento y la selección de rutas. Mantiene las tablas de enrutamiento como inet.0 y entrega las rutas activas al kernel, que construye la tabla de reenvío para el PFE. Si tu adyacencia OSPF está oscilando (flapping) o una sesión BGP no se levanta, rpd es el proceso que hace el trabajo, y sus logs son donde debes mirar. Puedes reiniciarlo con <code>restart routing</code>, aunque en un router de producción esto interrumpe brevemente el enrutamiento.</p>
+<p>mgd, el daemon de gestión (management daemon), es el corazón de la interfaz de usuario. Maneja el CLI (cada sesión de CLI habla con mgd), procesa los cambios de configuración, ejecuta <code>commit</code> revisando la configuración candidata y luego notificando a los demás daemons los cambios relevantes, y sirve NETCONF y otras interfaces de automatización. Cuando escribes <code>commit check</code>, mgd valida la sintaxis y la consistencia.</p>
+<p>dcd, el daemon de control de dispositivos (device control daemon), configura y gestiona las interfaces. Cuando haces commit de cambios bajo <code>[edit interfaces]</code>, dcd los aplica: establece direcciones, MTU, encapsulación y unidades lógicas. Trabaja con el kernel para crear las entradas de interfaz que ven los demás procesos.</p>
+<p>chassisd, el daemon del chasis (chassis daemon), gestiona el hardware físico: Routing Engines, tarjetas de línea, fuentes de alimentación, ventiladores y sensores de temperatura. Detecta la inserción y extracción de hardware, enciende y apaga componentes y genera alarmas del chasis, que ves con <code>show chassis alarms</code> y <code>show chassis hardware</code>.</p>
+<p>Existen otros daemons que pueden aparecer en los logs. snmpd maneja SNMP; eventd maneja el registro del sistema (system logging) y las event policies; alarmd gestiona las alarmas en algunas plataformas. El punto arquitectónico importante es que estos procesos son independientes. Si rpd se cae, el kernel lo reinicia; el CLI (mgd) sigue funcionando y chassisd sigue gestionando el hardware, y el PFE sigue reenviando con la última tabla de reenvío que tenía. Puedes ver los procesos en ejecución con <code>show system processes extensive</code>, y reiniciar muchos daemons con comandos como <code>restart interface-control</code> (dcd) o <code>restart chassis-control</code> (chassisd). Trata los reinicios con cuidado en equipos en producción, ya que algunos son disruptivos.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>rpd</dt><dd>Routing protocol daemon (daemon de protocolos de enrutamiento): ejecuta los protocolos de enrutamiento, la política y la selección de rutas, y mantiene las tablas de enrutamiento.</dd><dt>mgd</dt><dd>Management daemon (daemon de gestión): sirve el CLI y las interfaces de automatización y procesa los commits de configuración.</dd><dt>dcd</dt><dd>Device control daemon (daemon de control de dispositivos): configura y gestiona las interfaces físicas y lógicas.</dd><dt>chassisd</dt><dd>Chassis daemon (daemon del chasis): supervisa y controla los componentes de hardware y genera las alarmas del chasis.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un router registra que un proceso se reinició inesperadamente. El ingeniero revisa <code>show system core-dumps</code> y <code>show system processes extensive</code> y ve que rpd tiene una hora de inicio reciente. Los vecinos OSPF volvieron a converger, pero las sesiones SSH, las interfaces y el hardware se mantuvieron activos y el tráfico de tránsito siguió fluyendo, lo que muestra el valor de los daemons independientes.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Asocia el daemon con el síntoma: los problemas de enrutamiento apuntan a rpd, los problemas de CLI o de commit a mgd, la configuración de interfaces a dcd y las alarmas de hardware a chassisd.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué daemon valida y aplica un commit?</summary><p>mgd, el daemon de gestión, que revisa la candidata y avisa a los demás daemons para que apliquen sus partes de la configuración.</p></details>
+<details class="sq"><summary>¿Qué daemon gestiona las fuentes de alimentación, los ventiladores y las tarjetas de línea?</summary><p>chassisd, el daemon del chasis.</p></details>
+<details class="sq"><summary>¿Qué le pasa al CLI si rpd se cae?</summary><p>Sigue funcionando, porque mgd es un proceso separado; rpd se reinicia de forma independiente.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia JNCIA-Junos gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../jncia-junos/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../packet-forwarding-engine-pfe-forwards-transit-traffic-using-the-forwar/">← Packet Forwarding Engine (PFE): reenvía el tráfico de tránsi</a><a href="../transit-traffic-vs-exception-host-bound-traffic-and-why-exception-traf/">Tráfico de tránsito vs tráfico de excepción (dirigido al hos →</a></nav>
+</main>
+</body>
+</html>

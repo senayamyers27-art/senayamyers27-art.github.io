@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Almacenamiento persistente: PersistentVolume, PersistentVo… · Lección de CKAD</title>
+<meta name="description" content="Algunos datos deben sobrevivir a cualquier Pod individual: archivos de base de datos, subidas de usuarios, cualquier cosa que no puedas perder en un reinic">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Almacenamiento persistente: PersistentVolume, PersistentVo… · Lección de CKAD">
+<meta property="og:description" content="Algunos datos deben sobrevivir a cualquier Pod individual: archivos de base de datos, subidas de usuarios, cualquier cosa que no puedas perder en un reinic">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/persistent-storage-persistentvolume-persistentvolumeclaim-storageclass/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/persistent-storage-persistentvolume-persistentvolumeclaim-storageclass/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/persistent-storage-persistentvolume-persistentvolumeclaim-storageclass/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>Almacenamiento persistente: PersistentVolume, PersistentVolumeClaim, StorageClass, modos de acceso y aprovisionamiento dinámico</h1>
+<article class="lbody">
+<p>Algunos datos deben sobrevivir a cualquier Pod individual: archivos de base de datos, subidas de usuarios, cualquier cosa que no puedas perder en un reinicio. Kubernetes separa el almacenamiento en sí de la solicitud de almacenamiento, para que los desarrolladores puedan pedir espacio sin conocer los detalles del disco que hay detrás.</p>
+<p>Un PersistentVolume (PV) es una pieza de almacenamiento del clúster, como un disco en la nube, un export NFS o una ruta local, representada como un objeto de ámbito de clúster. Un PersistentVolumeClaim (PVC) es una solicitud con namespace: &quot;Necesito 5Gi con acceso ReadWriteOnce&quot;. Kubernetes vincula (bind) una claim a un PV que satisface su tamaño, modo de acceso y storage class; la vinculación es uno a uno. Luego el Pod hace referencia a la claim por su nombre, nunca al PV directamente.</p>
+<pre class="code" tabindex="0"><code>apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data
+spec:
+  accessModes: [&quot;ReadWriteOnce&quot;]
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard
+---
+# en la spec del Pod
+volumes:
+- name: data
+  persistentVolumeClaim:
+    claimName: data</code></pre>
+<p>Los modos de acceso describen cómo puede montarse el volumen. ReadWriteOnce (RWO) permite lectura-escritura desde un solo nodo (varios Pods en ese nodo pueden compartirlo). ReadOnlyMany (ROX) permite solo lectura desde muchos nodos. ReadWriteMany (RWX) permite lectura-escritura desde muchos nodos y necesita un almacenamiento que lo soporte, como NFS. ReadWriteOncePod (RWOP) restringe el acceso de lectura-escritura a un solo Pod. Una claim solo se vincula a un PV que ofrezca el modo solicitado.</p>
+<p>Una StorageClass describe un tipo de almacenamiento, con un <code>provisioner</code> que sabe cómo crearlo y <code>parameters</code> como el tipo de disco. Con el aprovisionamiento dinámico, creas un PVC que nombra una StorageClass y el provisioner crea automáticamente un PV correspondiente. Si el PVC omite <code>storageClassName</code>, se usa la StorageClass por defecto del clúster (marcada con <code>(default)</code> en <code>kubectl get storageclass</code>). Definir <code>storageClassName: &quot;&quot;</code> pide explícitamente ninguna clase, así que solo puede vincularse un PV creado previamente sin clase. El aprovisionamiento estático significa que un administrador crea los PVs a mano con antelación.</p>
+<p>El <code>reclaimPolicy</code> indica qué le ocurre al PV cuando se elimina su claim: <code>Delete</code> elimina el almacenamiento subyacente (el valor habitual por defecto para volúmenes aprovisionados dinámicamente) y <code>Retain</code> lo conserva para una recuperación manual. Algunas clases usan <code>volumeBindingMode: WaitForFirstConsumer</code>, que retrasa el aprovisionamiento hasta que un Pod usa la claim para que el volumen se cree en la zona correcta; hasta entonces el PVC muestra Pending, lo cual es normal.</p>
+<p>Resuelve problemas con <code>kubectl get pv,pvc</code> y mira STATUS: Bound es correcto, Pending significa que no hay PV o provisioner que coincida. <code>kubectl describe pvc data</code> explica por qué. Un error común en el examen es una discrepancia en la storage class, el tamaño o el modo de acceso entre un PV y un PVC escritos a mano.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>PersistentVolume (PV)</dt><dd>Un objeto de ámbito de clúster que representa una pieza de almacenamiento real.</dd><dt>PersistentVolumeClaim (PVC)</dt><dd>Una solicitud de almacenamiento con namespace que se vincula a un PV compatible.</dd><dt>StorageClass</dt><dd>Un tipo de almacenamiento con nombre, con un provisioner usado para el aprovisionamiento dinámico.</dd><dt>Access mode (modo de acceso)</dt><dd>RWO, ROX, RWX o RWOP: cuántos nodos o Pods pueden montar el volumen y si pueden escribir.</dd><dt>Reclaim policy (política de recuperación)</dt><dd>Delete o Retain: qué ocurre con el almacenamiento de un PV después de liberarse su claim.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>En minikube, un desarrollador crea un PVC RWO de 1Gi sin storageClassName. La StorageClass por defecto aprovisiona un PV automáticamente, la claim muestra Bound, y tras eliminar y recrear el Pod los archivos escritos en el montaje siguen ahí.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Los Pods hacen referencia a PVCs, no a PVs. Para que un PV estático y un PVC se vinculen, storageClassName, el modo de acceso y la capacidad (el PV al menos tan grande como la solicitud) deben ser compatibles.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué objeto tiene namespace: el PV o el PVC?</summary><p>El PVC tiene namespace; el PV es de ámbito de clúster.</p></details>
+<details class="sq"><summary>¿Qué restringe realmente ReadWriteOnce?</summary><p>El montaje de lectura-escritura a un solo nodo; los Pods en ese mismo nodo pueden compartirlo. ReadWriteOncePod lo restringe a un solo Pod.</p></details>
+<details class="sq"><summary>Un PVC está en Pending y su StorageClass usa WaitForFirstConsumer. ¿Hay algo roto?</summary><p>No necesariamente; el aprovisionamiento espera hasta que se programe un Pod que use la claim.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../ephemeral-volumes-emptydir-including-medium-memory-configmap-secret-pr/">← Volúmenes efímeros: emptyDir (incluido medium: Memory) y vol</a><a href="../mounting-volumes-with-volumemounts-mountpath-subpath-and-readonly/">Montar volúmenes con volumeMounts, mountPath, subPath y read →</a></nav>
+</main>
+</body>
+</html>

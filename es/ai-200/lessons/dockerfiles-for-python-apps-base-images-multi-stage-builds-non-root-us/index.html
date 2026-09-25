@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dockerfiles para apps de Python: imágenes base, compilacio… · Lección de AI-200</title>
+<meta name="description" content="Un Dockerfile es la receta que convierte tu código fuente de Python en una imagen de contenedor: un paquete de solo lectura, organizado en capas, que conti">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Dockerfiles para apps de Python: imágenes base, compilacio… · Lección de AI-200">
+<meta property="og:description" content="Un Dockerfile es la receta que convierte tu código fuente de Python en una imagen de contenedor: un paquete de solo lectura, organizado en capas, que conti">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/dockerfiles-for-python-apps-base-images-multi-stage-builds-non-root-us/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/dockerfiles-for-python-apps-base-images-multi-stage-builds-non-root-us/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/dockerfiles-for-python-apps-base-images-multi-stage-builds-non-root-us/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Dockerfiles para apps de Python: imágenes base, compilaciones multietapa, usuarios no root y .dockerignore</h1>
+<article class="lbody">
+<p>Un Dockerfile es la receta que convierte tu código fuente de Python en una imagen de contenedor: un paquete de solo lectura, organizado en capas, que contiene el espacio de usuario de un sistema operativo, el runtime de Python, tus dependencias y tu código. Todos los servicios de contenedores de Azure en este examen (App Service, Container Apps, Container Apps jobs y AKS, el Azure Kubernetes Service) ejecutan imágenes construidas de esta forma, así que un Dockerfile limpio es la primera habilidad sobre la que se construye el resto del dominio.</p>
+<p>Empieza con la imagen base en la línea <code>FROM</code>. Las imágenes oficiales de Python vienen en variantes: la imagen completa basada en Debian es grande pero trae herramientas de compilación; las imágenes <code>-slim</code> eliminan la mayoría de esas herramientas y son la opción habitual para producción; las imágenes Alpine son diminutas pero usan musl en lugar de glibc, por lo que muchos wheels de Python deben compilarse desde el código fuente, lo que en la práctica suele hacer las compilaciones más lentas y las imágenes más grandes. Fija una etiqueta de versión específica (por ejemplo, una versión menor de Python más <code>-slim</code>) en lugar de <code>latest</code>, para que las recompilaciones sean predecibles.</p>
+<p>Cada instrucción (<code>RUN</code>, <code>COPY</code>, <code>ADD</code>) crea una capa, y Docker almacena las capas en caché. Ordena las instrucciones de la que cambia con menos frecuencia a la que cambia con más: copia primero <code>requirements.txt</code>, ejecuta <code>pip install --no-cache-dir -r requirements.txt</code> y solo después copia el resto de tu código. Así, un cambio de código reutiliza la capa de dependencias en caché en lugar de reinstalarlo todo.</p>
+<p>Una compilación multietapa (multi-stage build) usa más de un <code>FROM</code>. La primera etapa (el builder) tiene compiladores y cabeceras e instala los wheels en un entorno virtual; la etapa final parte de una imagen de runtime pequeña y usa <code>COPY --from=builder</code> para traer solo el entorno virtual terminado y tu código. Las herramientas de compilación, las cachés y los secretos usados durante la compilación nunca llegan a la imagen final, lo que reduce el tamaño y la superficie de ataque.</p>
+<pre class="code" tabindex="0"><code>FROM python:3.12-slim AS builder
+WORKDIR /app
+RUN python -m venv /opt/venv
+ENV PATH=/opt/venv/bin:$PATH
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+FROM python:3.12-slim
+RUN useradd --create-home appuser
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH=/opt/venv/bin:$PATH
+WORKDIR /app
+COPY . .
+USER appuser
+EXPOSE 8000
+CMD [&quot;gunicorn&quot;, &quot;-b&quot;, &quot;0.0.0.0:8000&quot;, &quot;app:app&quot;]</code></pre>
+<p>De forma predeterminada, el proceso de un contenedor se ejecuta como root. Si un atacante explota tu app, ser root dentro del contenedor facilita escapar de él o manipularlo. Crea un usuario sin privilegios y cambia a él con <code>USER</code> antes de <code>CMD</code>, como se muestra arriba. Escucha en un puerto superior a 1024, porque los usuarios que no son root no pueden enlazar puertos bajos sin capacidades adicionales.</p>
+<p>Por último, <code>.dockerignore</code> funciona como <code>.gitignore</code> para el contexto de compilación: enumera archivos que nunca se envían al builder. Excluye <code>.git</code>, <code>__pycache__</code>, los entornos virtuales, los datos de prueba y, sobre todo, los archivos <code>.env</code> o las credenciales locales. Esto acelera las compilaciones (en especial las remotas que suben el contexto, como <code>az acr build</code>) y mantiene los secretos fuera de las capas de <code>COPY . .</code>, donde cualquiera que descargue la imagen podría leerlos.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Base image (imagen base)</dt><dd>La imagen indicada en FROM sobre la que se construye tu imagen, como una imagen slim de Python.</dd><dt>Multi-stage build (compilación multietapa)</dt><dd>Un Dockerfile con varias etapas FROM en el que la etapa final copia solo los artefactos necesarios de las etapas anteriores.</dd><dt>Build context (contexto de compilación)</dt><dd>El conjunto de archivos que se envía al builder con una compilación; .dockerignore quita archivos de él.</dd><dt>Layer cache (caché de capas)</dt><dd>La reutilización que hace Docker de los resultados de instrucciones sin cambios, lo que hace que el orden de las instrucciones importe para la velocidad de compilación.</dd><dt>USER instruction (instrucción USER)</dt><dd>Define el usuario que usan las instrucciones posteriores y el contenedor en ejecución, para que la app no tenga que ejecutarse como root.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>La imagen de FastAPI de un equipo pesaba 1.1 GB y recompilaba todas las dependencias en cada commit. Cambiaron a una base slim, copiaron requirements.txt antes que el código, agregaron una etapa builder para los wheels compilados y un .dockerignore que excluía .git y .env. La imagen final bajó a unos cientos de megabytes, las recompilaciones tras cambios solo de código tardaban segundos y un escaneo de seguridad dejó de señalar un archivo .env filtrado.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si una pregunta te pide cómo mantener compiladores o secretos fuera de la imagen final, la respuesta es una compilación multietapa; si te pide cómo evitar que ciertos archivos se envíen siquiera a la compilación, la respuesta es .dockerignore.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué deberías copiar requirements.txt y ejecutar pip install antes de copiar el resto del código fuente?</summary><p>Porque las capas se almacenan en caché en orden; así, los cambios de código reutilizan la capa de dependencias en caché en lugar de reinstalar cada paquete.</p></details>
+<details class="sq"><summary>¿Qué mejora una compilación multietapa y cómo lo logra?</summary><p>El tamaño y la seguridad de la imagen: las herramientas de compilación viven solo en una etapa anterior, y la etapa final usa COPY --from para tomar solo los artefactos compilados.</p></details>
+<details class="sq"><summary>¿Por qué ejecutar la app con un USER distinto de root?</summary><p>Para limitar lo que puede hacer un atacante si la app se ve comprometida; ser root en el contenedor facilita la manipulación y los intentos de escape.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><span></span><a href="../azure-container-registry-basic-standard-and-premium-tiers-geo-replicat/">Azure Container Registry: niveles Basic, Standard y Premium; →</a></nav>
+</main>
+</body>
+</html>

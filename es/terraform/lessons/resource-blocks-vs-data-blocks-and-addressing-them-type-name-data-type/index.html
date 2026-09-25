@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bloques resource frente a bloques data, y cómo direccionar… · Lección de Terraform Associate</title>
+<meta name="description" content="Las configuraciones de Terraform se construyen principalmente con dos tipos de bloques que provienen de los providers. Un bloque resource declara un objeto">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Bloques resource frente a bloques data, y cómo direccionar… · Lección de Terraform Associate">
+<meta property="og:description" content="Las configuraciones de Terraform se construyen principalmente con dos tipos de bloques que provienen de los providers. Un bloque resource declara un objeto">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/terraform/lessons/resource-blocks-vs-data-blocks-and-addressing-them-type-name-data-type/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/terraform/lessons/resource-blocks-vs-data-blocks-and-addressing-them-type-name-data-type/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../terraform/">Terraform Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../terraform/lessons/resource-blocks-vs-data-blocks-and-addressing-them-type-name-data-type/" hreflang="en" lang="en">English</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004)</p>
+<h1>Bloques resource frente a bloques data, y cómo direccionarlos (`TYPE.NAME`, `data.TYPE.NAME`)</h1>
+<article class="lbody">
+<p>Las configuraciones de Terraform se construyen principalmente con dos tipos de bloques que provienen de los providers. Un bloque <code>resource</code> declara un objeto de infraestructura que Terraform gestiona: lo crea, lo actualiza cuando cambian los argumentos y lo destruye cuando se elimina el bloque. Un bloque <code>data</code> declara un data source: una consulta de solo lectura de información sobre algo que ya existe, que Terraform lee pero nunca crea, cambia ni destruye.</p>
+<pre class="code" tabindex="0"><code>data &quot;aws_ami&quot; &quot;ubuntu&quot; {
+  most_recent = true
+  owners      = [&quot;099720109477&quot;]
+  filter {
+    name   = &quot;name&quot;
+    values = [&quot;ubuntu/images/*-amd64-server-*&quot;]
+  }
+}
+
+resource &quot;aws_instance&quot; &quot;web&quot; {
+  ami           = data.aws_ami.ubuntu.id
+  instance_type = &quot;t3.micro&quot;
+}</code></pre>
+<p>Ambos bloques tienen dos etiquetas: el tipo, que viene del provider, y un nombre local que tú eliges. La combinación debe ser única dentro de un módulo para cada modo. El tipo determina qué argumentos se permiten; el nombre solo sirve para referirse al bloque en otras partes del código y aparece en la salida del plan y en el estado.</p>
+<p>Las direcciones son la forma de referirse a estos bloques. Un recurso gestionado se direcciona como <code>TYPE.NAME</code>, por ejemplo <code>aws_instance.web</code>, y sus atributos como <code>aws_instance.web.id</code> o <code>aws_instance.web.public_ip</code>. Un data source siempre lleva el prefijo <code>data.</code>: <code>data.TYPE.NAME</code>, por ejemplo <code>data.aws_ami.ubuntu</code>, con atributos como <code>data.aws_ami.ubuntu.id</code>. Olvidar el prefijo <code>data.</code> es un error común que <code>terraform validate</code> informa como una referencia a un recurso no declarado.</p>
+<p>Las direcciones crecen cuando usas módulos y varias instancias. Un recurso dentro de un módulo llamado <code>network</code> es <code>module.network.aws_vpc.main</code>. Un recurso con <code>count</code> tiene instancias como <code>aws_instance.web[0]</code>, y uno con <code>for_each</code> tiene instancias como <code>aws_instance.web[&quot;blue&quot;]</code>. Usas estas direcciones completas con comandos como <code>terraform state show</code>, <code>-target</code> y <code>-replace</code>.</p>
+<p>¿Cuándo se leen los data sources? Normalmente durante la planificación, para que sus resultados estén disponibles al calcular el plan. Si los argumentos de un data source dependen de valores que no se conocen hasta el apply, como el ID de un recurso que está por crearse, Terraform aplaza su lectura hasta el momento del apply y lo muestra en el plan con <code>&lt;=</code> y <code>(known after apply)</code>. Los data sources se vuelven a leer en cada plan, así que siempre reflejan la realidad actual, y sus resultados también se registran en el estado.</p>
+<p>Elegir entre ellos suele ser sencillo. Si Terraform debe ser dueño del ciclo de vida del objeto, usa un resource. Si otra cosa es su dueña, como la red de otro equipo, una imagen de máquina publicada por un proveedor o la identidad de la cuenta actual, usa un data source para consultarlo en lugar de escribir IDs de forma fija. Esto mantiene las configuraciones portables entre cuentas y regiones.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Resource block (bloque resource)</dt><dd>Declara un objeto de infraestructura que Terraform crea, actualiza y destruye.</dd><dt>Data block (data source, bloque data)</dt><dd>Declara una consulta de solo lectura de información existente que Terraform lee pero no gestiona.</dd><dt>Resource address (dirección de recurso)</dt><dd>La forma de referencia <code>TYPE.NAME</code> para los recursos y <code>data.TYPE.NAME</code> para los data sources, ampliada con rutas de módulos y claves de instancia.</dd><dt>Local name (nombre local)</dt><dd>La segunda etiqueta de un bloque resource o data, elegida por ti y única por tipo dentro de un módulo.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>En lugar de escribir de forma fija un ID de imagen de máquina que es distinto en cada región, una configuración usa <code>data &quot;aws_ami&quot; &quot;ubuntu&quot;</code> para consultar la imagen aprobada más reciente, y la instancia referencia <code>data.aws_ami.ubuntu.id</code>. Desplegar en una región nueva no requiere cambiar el código.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Los data sources se direccionan con el prefijo <code>data.</code> y Terraform nunca los destruye. Si una pregunta del examen pide cómo usar un objeto existente que Terraform no debe gestionar, la respuesta es un data source.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo referencias el atributo <code>id</code> de un data source <code>aws_vpc</code> llamado <code>shared</code>?</summary><p><code>data.aws_vpc.shared.id</code>.</p></details>
+<details class="sq"><summary>¿Qué le pasa a un data source cuando ejecutas <code>terraform destroy</code>?</summary><p>Nada en el sistema real; Terraform solo lee los data sources, así que no hay nada que destruir.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Terraform Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../terraform/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../parallelism-and-the-dependency-graph-during-apply/">← Paralelismo y el grafo de dependencias durante el apply</a><a href="../cross-resource-references-and-implicit-dependencies/">Referencias entre recursos y dependencias implícitas →</a></nav>
+</main>
+</body>
+</html>

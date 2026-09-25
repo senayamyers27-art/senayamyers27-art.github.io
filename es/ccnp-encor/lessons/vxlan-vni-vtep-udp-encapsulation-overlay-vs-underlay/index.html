@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VXLAN: VNI, VTEP, encapsulación UDP, overlay frente a unde… · Lección de ENCOR</title>
+<meta name="description" content="VXLAN (Virtual Extensible LAN) es una encapsulación que transporta tramas Ethernet de Capa 2 a través de una red IP de Capa 3. Resuelve dos problemas de la">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="VXLAN: VNI, VTEP, encapsulación UDP, overlay frente a unde… · Lección de ENCOR">
+<meta property="og:description" content="VXLAN (Virtual Extensible LAN) es una encapsulación que transporta tramas Ethernet de Capa 2 a través de una red IP de Capa 3. Resuelve dos problemas de la">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/vxlan-vni-vtep-udp-encapsulation-overlay-vs-underlay/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/vxlan-vni-vtep-udp-encapsulation-overlay-vs-underlay/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ccnp-encor/">ENCOR</a> / <a href="../">Lecciones</a> · <a href="../../../../ccnp-encor/lessons/vxlan-vni-vtep-udp-encapsulation-overlay-vs-underlay/" hreflang="en" lang="en">English</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2</p>
+<h1>VXLAN: VNI, VTEP, encapsulación UDP, overlay frente a underlay</h1>
+<article class="lbody">
+<p>VXLAN (Virtual Extensible LAN) es una encapsulación que transporta tramas Ethernet de Capa 2 a través de una red IP de Capa 3. Resuelve dos problemas de las VLAN tradicionales. Primero, el ID de VLAN de 12 bits permite solo unos 4,000 segmentos, lo cual no es suficiente para centros de datos grandes y nubes multiinquilino. Segundo, extender las VLAN a través de una red requiere trunks de Capa 2 y spanning tree, que limitan la escala y crean dominios de falla grandes. VXLAN te permite construir segmentos de Capa 2 sobre una red enrutada. Es el plano de datos de SD-Access y de la mayoría de los fabrics modernos de centros de datos.</p>
+<p>Cada segmento VXLAN se identifica con un VNI (VXLAN network identifier), un valor de 24 bits, lo que da unos 16 millones de segmentos posibles. Un VNI cumple el papel que cumple un ID de VLAN en una red tradicional. Un VNI de Capa 2 representa un segmento puenteado; un VNI de Capa 3 se usa para el tráfico enrutado entre segmentos de la misma VRF.</p>
+<p>El dispositivo que encapsula y desencapsula es el VTEP (VXLAN tunnel endpoint). Un VTEP puede ser un switch físico, como un switch leaf o un edge node de SD-Access, o un switch por software en un hipervisor. Tiene una dirección IP en el underlay, normalmente una loopback. Cuando un host envía una trama, el VTEP agrega un encabezado VXLAN de 8 bytes que contiene el VNI, luego un encabezado UDP, luego un encabezado IP externo desde su propia dirección hacia la dirección del VTEP de destino, y por último un encabezado Ethernet externo para el siguiente salto. El puerto UDP de destino estándar es 4789. El puerto UDP de origen normalmente se deriva de un hash de los encabezados de la trama interna, lo que le da al balanceo de carga de rutas múltiples de igual costo (ECMP) del underlay cierta entropía para repartir distintos flujos entre las rutas. La sobrecarga total es de unos 50 bytes, así que la MTU del underlay debe aumentarse (por ejemplo a 9000 o al menos a unos 1550) para evitar fragmentar las tramas de tamaño completo.</p>
+<p>Esto crea una separación limpia entre underlay y overlay. El underlay es la red IP física enrutada, a menudo un fabric spine-leaf que ejecuta OSPF, IS-IS o BGP, cuyo único trabajo es entregar paquetes entre las direcciones de los VTEP, idealmente con ECMP. El overlay es el conjunto de segmentos VXLAN que ven los hosts, con sus propias direcciones MAC e IP, independiente de la topología del underlay.</p>
+<p>Los VTEP también deben aprender detrás de qué VTEP remoto vive una MAC de destino, y manejar el tráfico broadcast, unicast desconocido y multicast (BUM). El enfoque original de VXLAN usaba flood-and-learn con grupos multicast en el underlay por VNI. Los fabrics modernos usan en su lugar un plano de control: BGP EVPN (Ethernet VPN) en la mayoría de los centros de datos, que anuncia la alcanzabilidad de MAC e IP entre los VTEP, o LISP en SD-Access, donde los VTEP consultan al nodo de plano de control. Un plano de control reduce la inundación y habilita funciones como los gateways anycast distribuidos.</p>
+<p>Recuerda que VXLAN por sí mismo no proporciona cifrado; es puramente una encapsulación.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>VXLAN</dt><dd>Una encapsulación que transporta tramas Ethernet dentro de UDP sobre una red IP.</dd><dt>VNI</dt><dd>VXLAN network identifier: un ID de segmento de 24 bits que permite unos 16 millones de segmentos.</dd><dt>VTEP</dt><dd>VXLAN tunnel endpoint: el dispositivo que encapsula y desencapsula el tráfico VXLAN, identificado por una dirección IP del underlay.</dd><dt>UDP 4789</dt><dd>El puerto de destino asignado por IANA para VXLAN.</dd><dt>BGP EVPN</dt><dd>Un plano de control que anuncia la alcanzabilidad de MAC e IP entre los VTEP, reduciendo el comportamiento flood-and-learn.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Dos servidores del mismo nivel de aplicación están en leaves de racks distintos. El servidor A envía una trama a la MAC del servidor B en el VNI 10100. El leaf 1, actuando como VTEP, la encapsula en UDP puerto 4789 hacia la loopback del leaf 4, los spines la enrutan usando ECMP, y el leaf 4 la desencapsula y entrega la trama original, así que ambos servidores creen que comparten una LAN.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Conoce los números: el VNI es de 24 bits (unos 16 millones de segmentos) frente a los ID de VLAN de 12 bits, VXLAN usa el puerto UDP de destino 4789 y agrega unos 50 bytes, así que aumenta la MTU del underlay.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué le agrega un VTEP a una trama Ethernet?</summary><p>Un encabezado VXLAN con el VNI, un encabezado UDP (destino 4789), un encabezado IP externo entre las direcciones de los VTEP y un encabezado Ethernet externo.</p></details>
+<details class="sq"><summary>¿Por qué el puerto UDP de origen de VXLAN suele ser variable?</summary><p>Se deriva de un hash de los encabezados de la trama interna para que el ECMP del underlay pueda repartir distintos flujos entre múltiples rutas.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia ENCOR gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ccnp-encor/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../lisp-eid-rloc-map-server-and-map-resolver-itr-and-etr/">← LISP: EID, RLOC, map server y map resolver, ITR y ETR</a><a href="../layer-2-static-and-dynamic-802-1q-trunking-dtp-allowed-vlans-and-nativ/">Capa 2: trunking 802.1Q estático y dinámico (DTP), VLAN perm →</a></nav>
+</main>
+</body>
+</html>

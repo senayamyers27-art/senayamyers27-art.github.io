@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Change feed: change feed processor con un contenedor de le… · Lección de AI-200</title>
+<meta name="description" content="El change feed (fuente de cambios) es un registro persistente y ordenado de los cambios en los elementos de un contenedor de Cosmos DB. En lugar de sondear">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Change feed: change feed processor con un contenedor de le… · Lección de AI-200">
+<meta property="og:description" content="El change feed (fuente de cambios) es un registro persistente y ordenado de los cambios en los elementos de un contenedor de Cosmos DB. En lugar de sondear">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/change-feed-change-feed-processor-with-a-lease-container-azure-functio/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/change-feed-change-feed-processor-with-a-lease-container-azure-functio/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/change-feed-change-feed-processor-with-a-lease-container-azure-functio/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Change feed: change feed processor con un contenedor de leases, trigger de Cosmos DB en Azure Functions, modo latest version vs all versions and deletes</h1>
+<article class="lbody">
+<p>El change feed (fuente de cambios) es un registro persistente y ordenado de los cambios en los elementos de un contenedor de Cosmos DB. En lugar de sondear con consultas, tu código lee lo que cambió desde la última vez que miró. Es la columna vertebral de los patrones controlados por eventos: actualizar un índice de búsqueda o vectorial cuando cambian los documentos, generar embeddings para elementos nuevos, mantener sincronizada una caché o una vista materializada, o desencadenar flujos de trabajo. Los cambios están ordenados dentro de cada valor de clave de partición, pero no entre particiones.</p>
+<p>El change feed tiene dos modos. El modo latest version (el predeterminado) entrega la versión más reciente de cada elemento creado o actualizado. Si un elemento cambia varias veces entre lecturas, puede que solo veas su estado más reciente, y las eliminaciones no aparecen en absoluto. La solución habitual es una eliminación lógica (soft delete): establecer una marca como <code>deleted: true</code> (que es una actualización que el feed sí ve) y dejar que un TTL (tiempo de vida) elimine el elemento más tarde. El modo all versions and deletes registra cada cambio, incluidas las versiones intermedias y las eliminaciones, con metadatos sobre la operación. Requiere que la cuenta use copia de seguridad continua, y solo puedes leer los cambios que estén dentro de la ventana de retención de la copia de seguridad continua.</p>
+<p>El change feed processor es una función de biblioteca (en los SDK de .NET y Java, y reutilizada conceptualmente por Azure Functions) que hace que consumir el feed sea confiable a escala. Tiene cuatro partes: el contenedor supervisado cuyos cambios lees; un contenedor de leases (concesiones) que almacena los puntos de control (hasta dónde se ha procesado cada partición) y coordina la propiedad; las instancias de cómputo, cada una con un nombre de instancia único; y el delegado, tu código controlador que procesa cada lote. Cuando agregas instancias, los leases se reequilibran para repartir el trabajo; si una instancia falla, otra toma sus leases y continúa desde el último punto de control. El procesamiento es al menos una vez (at least once), así que haz que los controladores sean idempotentes.</p>
+<p>Para los desarrolladores de Python, la forma más común de consumir el change feed es el trigger de Cosmos DB de Azure Functions, que ejecuta un change feed processor por ti. Proporcionas la conexión, la base de datos, el contenedor supervisado y el contenedor de leases; la función recibe una lista de documentos modificados.</p>
+<pre class="code" tabindex="0"><code>import azure.functions as func
+app = func.FunctionApp()
+
+@app.cosmos_db_trigger(arg_name=&quot;docs&quot;, connection=&quot;CosmosConn&quot;,
+    database_name=&quot;kb&quot;, container_name=&quot;chunks&quot;,
+    lease_container_name=&quot;leases&quot;, create_lease_container_if_not_exists=True)
+def embed_new_chunks(docs: func.DocumentList):
+    for d in docs:
+        if not d.get(&quot;embedding&quot;):
+            ...  # llama al modelo de embeddings, hace upsert del vector</code></pre>
+<p>Si varias funciones independientes supervisan el mismo contenedor, cada una necesita su propio estado de leases; comparte un contenedor de leases pero dale a cada una un prefijo de lease distinto, o usa contenedores de leases separados. De lo contrario, compiten por los mismos leases y cada una ve solo una parte de los cambios. El SDK de Python también puede leer el feed directamente con <code>container.query_items_change_feed()</code>, en cuyo caso tú administras los tokens de continuación.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Change feed (fuente de cambios)</dt><dd>Un registro ordenado y persistente de las creaciones y actualizaciones (y, en un modo, las eliminaciones) de un contenedor de Cosmos DB.</dd><dt>Lease container (contenedor de leases)</dt><dd>Un contenedor que almacena los puntos de control del change feed y la propiedad de las particiones para los processors y los triggers de Functions.</dd><dt>Latest version mode (modo latest version)</dt><dd>El modo predeterminado del change feed, que devuelve el estado más reciente de los elementos modificados y no incluye eliminaciones.</dd><dt>All versions and deletes mode (modo all versions and deletes)</dt><dd>Un modo del change feed que registra cada cambio, incluidas las eliminaciones, y requiere copia de seguridad continua.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una base de conocimiento debe mantener sus vectores al día. Una función de Python con un trigger de Cosmos DB escucha el contenedor chunks y, para cada fragmento nuevo o editado, llama al modelo de embeddings y hace upsert del vector. Los artículos eliminados no desaparecían de la búsqueda, así que el equipo cambió la eliminación para que estableciera deleted: true con un TTL, algo que el feed en modo latest version entrega como una actualización.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Las eliminaciones son invisibles en el modo latest version; responde con soft delete más TTL, o con el modo all versions and deletes (que necesita copia de seguridad continua). Dos funciones sobre un mismo contenedor necesitan prefijos de lease o contenedores separados.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué se almacena en el contenedor de leases?</summary><p>Puntos de control y registros de propiedad que indican hasta dónde se ha procesado cada rango de particiones y qué instancia lo hizo.</p></details>
+<details class="sq"><summary>¿Cómo puedes capturar las eliminaciones si debes seguir en el modo latest version?</summary><p>Usa una marca de eliminación lógica que el feed ve como una actualización, y elimina el elemento más tarde con TTL.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../cosmos-db-vector-search-container-vector-policy-path-data-type-dimensi/">← Búsqueda vectorial en Cosmos DB: directiva vectorial del con</a><a href="../azure-database-for-postgresql-flexible-server-allow-listing-and-enabli/">Azure Database for PostgreSQL flexible server: incluir en la →</a></nav>
+</main>
+</body>
+</html>

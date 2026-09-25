@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Componentes del control plane y de los nodos: kube-apiserv… · Lección de CKA</title>
+<meta name="description" content="Un clúster de Kubernetes se divide en dos roles. El control plane (plano de control) almacena el estado deseado de todo lo que hay en el clúster y toma dec">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Componentes del control plane y de los nodos: kube-apiserv… · Lección de CKA">
+<meta property="og:description" content="Un clúster de Kubernetes se divide en dos roles. El control plane (plano de control) almacena el estado deseado de todo lo que hay en el clúster y toma dec">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/control-plane-and-node-components-kube-apiserver-etcd-kube-scheduler-k/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/control-plane-and-node-components-kube-apiserver-etcd-kube-scheduler-k/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/control-plane-and-node-components-kube-apiserver-etcd-kube-scheduler-k/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Componentes del control plane y de los nodos: kube-apiserver, etcd, kube-scheduler, kube-controller-manager, kubelet, kube-proxy y container runtime</h1>
+<article class="lbody">
+<p>Un clúster de Kubernetes se divide en dos roles. El control plane (plano de control) almacena el estado deseado de todo lo que hay en el clúster y toma decisiones sobre él. Los worker nodes (nodos de trabajo) son los que realmente ejecutan tus contenedores. Casi todas las tareas de troubleshooting del CKA se reducen a saber qué componente se encarga de qué trabajo, así que vale la pena aprender este mapa antes que cualquier otra cosa.</p>
+<p>El kube-apiserver es la puerta de entrada. Todos los clientes, desde <code>kubectl</code> hasta el scheduler y el kubelet de cada nodo, se comunican con el clúster únicamente a través del API server por HTTPS (en un clúster de kubeadm, el puerto 6443). El API server autentica a quien llama, verifica la autorización (normalmente RBAC, control de acceso basado en roles), ejecuta los admission controllers que pueden rechazar o modificar una solicitud y luego persiste el objeto. Es el único componente que habla directamente con etcd.</p>
+<p>etcd es un almacén clave-valor distribuido y fuertemente consistente que guarda todo el estado del clúster: cada Pod, Service, Secret y ConfigMap. Si pierdes etcd y no tienes un backup, la configuración del clúster desaparece aunque los contenedores sigan ejecutándose por un tiempo. Por eso el backup de etcd es un objetivo propio del examen. etcd atiende a los clientes en el puerto 2379 y se comunica con sus pares en el 2380.</p>
+<p>El kube-scheduler vigila los Pods que no tienen un nodo asignado. Para cada uno, descarta los nodos que no pueden ejecutarlo (CPU insuficiente, un taint que el Pod no tolera, una regla de affinity que no coincide) y luego puntúa los restantes, para finalmente escribir el nombre del nodo elegido en el <code>spec.nodeName</code> del Pod. El scheduler no inicia contenedores; solo toma la decisión de ubicación.</p>
+<p>El kube-controller-manager ejecuta muchos bucles de control en un solo proceso: el controlador de ReplicaSet, el de Deployment, el de Node, el de Job, el de EndpointSlice, el de ServiceAccount y otros. Cada bucle compara el estado deseado con el estado real y actúa para cerrar la brecha. Si este componente está caído, no se crean nuevos Pods para los Deployments, pero los Pods existentes siguen ejecutándose.</p>
+<p>En cada nodo, el kubelet es el agente que hace realidad la parte del estado deseado que le corresponde a ese nodo. Vigila el API server buscando Pods asignados a su nodo, le pide al container runtime que descargue imágenes e inicie contenedores, ejecuta los probes y reporta de vuelta el estado de los Pods y del nodo. El kubelet es un servicio de systemd, no un Pod, así que lo inspeccionas con <code>systemctl status kubelet</code> y <code>journalctl -u kubelet</code>. El container runtime (containerd o CRI-O) hace el trabajo de bajo nivel de crear contenedores, y el kubelet se comunica con él mediante la Container Runtime Interface (CRI).</p>
+<p>kube-proxy se ejecuta en cada nodo (normalmente como un DaemonSet) y programa reglas de reenvío de paquetes para que el tráfico enviado a la IP virtual de un Service llegue a uno de los Pods que respaldan ese Service. En un clúster de kubeadm, el API server, etcd, el scheduler y el controller-manager se ejecutan como static Pods en el namespace <code>kube-system</code>, que puedes ver con <code>kubectl get pods -n kube-system</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>kube-apiserver</dt><dd>La API REST central del clúster; el único componente que lee y escribe en etcd, y con el que se comunican todos los demás componentes.</dd><dt>etcd</dt><dd>Un almacén clave-valor consistente y distribuido que guarda todo el estado del clúster.</dd><dt>kube-scheduler</dt><dd>Asigna los Pods no programados a nodos filtrando y puntuando los nodos candidatos.</dd><dt>kube-controller-manager</dt><dd>Un único binario que ejecuta muchos bucles de reconciliación, como los controladores de ReplicaSet, Node y Job.</dd><dt>kubelet</dt><dd>El agente del nodo, ejecutado por systemd, que inicia los Pods a través del container runtime y reporta su estado.</dd><dt>kube-proxy</dt><dd>El componente por nodo que programa las reglas de reenvío para las IP virtuales de los Services.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un estudiante escala un Deployment de 2 a 5 réplicas y no pasa nada: el ReplicaSet sigue mostrando 2. <code>kubectl get pods -n kube-system</code> muestra el Pod de kube-controller-manager en CrashLoopBackOff por un error de tipeo en su manifiesto de static Pod. Al corregir el manifiesto, el controlador vuelve a funcionar y los tres Pods nuevos aparecen en segundos.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Relaciona el síntoma con el componente: Pods atascados en Pending sin eventos apuntan al scheduler; réplicas que no se crean apuntan al controller-manager; kubectl rechazado en el 6443 apunta al API server; un solo nodo NotReady apunta a su kubelet o a su runtime.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cuál es el único componente que se comunica directamente con etcd?</summary><p>El kube-apiserver. Todos los demás componentes leen y escriben el estado del clúster a través del API server.</p></details>
+<details class="sq"><summary>¿Por qué no puedes ver el kubelet con <code>kubectl get pods -n kube-system</code>?</summary><p>El kubelet se ejecuta como un servicio de systemd en el host, no como un Pod, así que lo revisas con systemctl y journalctl.</p></details>
+<details class="sq"><summary>Si el scheduler está detenido, ¿qué les pasa a los Pods de un Deployment recién creado?</summary><p>El controlador de ReplicaSet igual crea los objetos Pod, pero se quedan en Pending porque nada les asigna un nodo.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><span></span><a href="../preparing-hosts-for-kubeadm-containerd-matching-systemd-cgroup-driver/">Preparar los hosts para kubeadm: containerd, cgroup driver s →</a></nav>
+</main>
+</body>
+</html>

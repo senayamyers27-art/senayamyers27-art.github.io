@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>kubectl expose, kubectl create service y kubectl port-forw… · Lección de CKAD</title>
+<meta name="description" content="Escribir YAML de Services a mano es lento y propenso a errores. kubectl ofrece dos generadores imperativos, y un tercer comando para llegar a los Pods sin ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="kubectl expose, kubectl create service y kubectl port-forw… · Lección de CKAD">
+<meta property="og:description" content="Escribir YAML de Services a mano es lento y propenso a errores. kubectl ofrece dos generadores imperativos, y un tercer comando para llegar a los Pods sin ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/kubectl-expose-kubectl-create-service-and-kubectl-port-forward/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/kubectl-expose-kubectl-create-service-and-kubectl-port-forward/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/kubectl-expose-kubectl-create-service-and-kubectl-port-forward/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>kubectl expose, kubectl create service y kubectl port-forward</h1>
+<article class="lbody">
+<p>Escribir YAML de Services a mano es lento y propenso a errores. kubectl ofrece dos generadores imperativos, y un tercer comando para llegar a los Pods sin ningún Service. Conocer sus diferencias ahorra tiempo y evita una trampa clásica con los selectores.</p>
+<p><code>kubectl expose</code> crea un Service para un recurso existente y copia su selector por ti. <code>kubectl expose deployment web --port=80 --target-port=8080</code> crea un Service ClusterIP llamado <code>web</code> cuyo selector es el selector del Deployment. Agrega <code>--type=NodePort</code> o <code>--type=LoadBalancer</code>, <code>--name=web-svc</code> para elegir un nombre y <code>--protocol=UDP</code> si hace falta. Puedes exponer un Deployment, un ReplicaSet, un Pod u otro Service. Exponer un Pod requiere que tenga etiquetas, ya que se convierten en el selector; los Pods creados con <code>kubectl run</code> reciben automáticamente una etiqueta <code>run=&lt;name&gt;</code>. Si omites <code>--target-port</code>, toma por defecto el valor de <code>--port</code>; si omites <code>--port</code>, kubectl usa el puerto de contenedor declarado en el recurso.</p>
+<pre class="code" tabindex="0"><code>kubectl expose deploy web --port=80 --target-port=8080 --type=NodePort --name=web-np
+kubectl expose pod db --port=5432
+kubectl run cache --image=redis --port=6379 --expose
+kubectl create service clusterip api --tcp=80:8080
+kubectl create service nodeport api --tcp=80:8080 --node-port=30080
+kubectl create service externalname partner --external-name=api.partner.example</code></pre>
+<p><code>kubectl create service &lt;type&gt; &lt;name&gt;</code> construye un Service desde cero con los subcomandos <code>clusterip</code>, <code>nodeport</code>, <code>loadbalancer</code> o <code>externalname</code>. <code>--tcp=80:8080</code> significa port 80, targetPort 8080. La trampa: no puede leer las etiquetas de otro objeto, así que pone el selector en <code>app=&lt;service-name&gt;</code>. Eso solo funciona si tus Pods casualmente llevan esa etiqueta. Si están etiquetados de otra forma, el Service no tiene endpoints. Usa <code>expose</code>, o genera el YAML con <code>--dry-run=client -o yaml</code> y corrige el selector antes de aplicarlo. <code>kubectl create service clusterip headless --clusterip=&quot;None&quot;</code> crea un Service headless.</p>
+<p><code>kubectl run cache --image=redis --port=6379 --expose</code> es un atajo que crea un Pod y un Service ClusterIP para él en un solo comando.</p>
+<p><code>kubectl port-forward</code> no crea ningún objeto. Abre un túnel desde tu máquina, a través del API server, hasta un Pod. <code>kubectl port-forward svc/web 8080:80</code> escucha en el puerto local 8080 y reenvía al puerto 80 del Service, que kubectl traduce al targetPort de un único Pod elegido del Service. También puedes apuntar a <code>pod/&lt;name&gt;</code> o <code>deploy/&lt;name&gt;</code>. Escucha solo en localhost a menos que pases <code>--address 0.0.0.0</code>, y se ejecuta hasta que lo detienes. Úsalo para probar una app rápidamente, o para llegar a una base de datos desde herramientas locales, sin exponer nada a la red.</p>
+<p>Después de usar cualquiera de estos, verifica: <code>kubectl get svc web-np -o wide</code> muestra el selector; <code>kubectl get endpointslices -l kubernetes.io/service-name=web-np</code> muestra los endpoints; y un curl desde un Pod temporal o a través del port-forward confirma que la aplicación responde.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>kubectl expose</dt><dd>Crea un Service para un recurso existente, copiando su selector.</dd><dt>kubectl create service</dt><dd>Crea un Service de un tipo dado desde cero, con el selector app=&lt;name&gt;.</dd><dt>--tcp=port:targetPort</dt><dd>Opción de create service que define el puerto del Service y el puerto de destino.</dd><dt>kubectl port-forward</dt><dd>Túnel temporal desde un puerto local hasta un Pod; no crea ningún Service.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una tarea dice: expón el Deployment <code>shop</code> (etiquetas <code>tier=front</code>) en el NodePort 30100, puerto 80 hacia el puerto de contenedor 8000. <code>kubectl create service nodeport shop --tcp=80:8000 --node-port=30100</code> seleccionaría <code>app=shop</code> y no coincidiría con nada, así que usas <code>kubectl expose deploy shop --type=NodePort --port=80 --target-port=8000 --dry-run=client -o yaml</code>, agregas <code>nodePort: 30100</code> y aplicas.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> <code>expose</code> copia el selector real; <code>create service</code> asume app=&lt;name&gt;. <code>expose</code> no tiene opción para un nodePort específico, así que genera el YAML y agrégalo.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué selector define <code>kubectl create service clusterip api --tcp=80:8080</code>?</summary><p><code>app=api</code>.</p></details>
+<details class="sq"><summary>¿Cómo expones el Deployment <code>web</code> como Service NodePort en el puerto 80 reenviando a 8080?</summary><p><code>kubectl expose deploy web --type=NodePort --port=80 --target-port=8080</code>.</p></details>
+<details class="sq"><summary>¿Un port-forward a un Service balancea la carga entre todos los Pods?</summary><p>No, se conecta a un único Pod detrás del Service.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../cluster-dns-names-service-namespace-svc-cluster-local/">← Nombres DNS del clúster: &lt;service&gt;.&lt;namespace&gt;.svc.cluster.l</a><a href="../networkpolicy-basics-podselector-policytypes-ingress-and-egress-rules/">Fundamentos de NetworkPolicy: podSelector, policyTypes, regl →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bloquear y desbloquear cuentas (usermod -L, passwd -l, cha… · Lección de RHCSA</title>
+<meta name="description" content="A veces una cuenta debe dejar de funcionar sin borrarse: un empleado está de licencia, el trabajo de un contratista está en pausa o sospechas que una contr">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Bloquear y desbloquear cuentas (usermod -L, passwd -l, cha… · Lección de RHCSA">
+<meta property="og:description" content="A veces una cuenta debe dejar de funcionar sin borrarse: un empleado está de licencia, el trabajo de un contratista está en pausa o sospechas que una contr">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/locking-and-unlocking-accounts-usermod-l-passwd-l-chage-e-0/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/locking-and-unlocking-accounts-usermod-l-passwd-l-chage-e-0/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/locking-and-unlocking-accounts-usermod-l-passwd-l-chage-e-0/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Bloquear y desbloquear cuentas (usermod -L, passwd -l, chage -E 0)</h1>
+<article class="lbody">
+<p>A veces una cuenta debe dejar de funcionar sin borrarse: un empleado está de licencia, el trabajo de un contratista está en pausa o sospechas que una contraseña quedó expuesta. Bloquearla mantiene intactos la cuenta, sus archivos y su UID para que puedas restaurar el acceso más tarde. RHEL ofrece dos mecanismos distintos, y entender qué bloquea realmente cada uno es el punto clave.</p>
+<p>El primero es bloquear la contraseña. <code>usermod -L alice</code> o <code>passwd -l alice</code> pone un signo de exclamación delante del hash en <code>/etc/shadow</code>. El hash ya no coincide con ninguna contraseña, así que los inicios de sesión con contraseña fallan. <code>usermod -U</code> o <code>passwd -u</code> quita la marca y restaura la contraseña anterior. <code>passwd -S alice</code> muestra el estado, con <code>LK</code> o una nota similar si la contraseña está bloqueada.</p>
+<pre class="code" tabindex="0"><code>usermod -L alice
+getent shadow alice | cut -d: -f2 | cut -c1-5   # empieza con !
+passwd -S alice
+usermod -U alice</code></pre>
+<p>La debilidad: bloquear la contraseña no bloquea los inicios de sesión que no usan la contraseña. Un usuario con una clave SSH en <code>~/.ssh/authorized_keys</code> todavía puede iniciar sesión, y otros métodos de autenticación pueden seguir funcionando. Así que bloquear la contraseña no basta para deshabilitar una cuenta por completo.</p>
+<p>El segundo mecanismo es la caducidad de la cuenta. <code>chage -E 0 alice</code> pone la fecha de caducidad en el día cero, el 1 de enero de 1970, que está en el pasado, así que la cuenta queda caducada. PAM (Pluggable Authentication Modules) revisa la caducidad de la cuenta en todos los métodos de inicio de sesión, incluidas las claves SSH, así que la cuenta no se puede usar en absoluto. Para deshacerlo, ejecuta <code>chage -E -1 alice</code>, que elimina la fecha de caducidad. <code>usermod -e</code> establece el mismo campo. También puedes combinar ambos bloqueos: <code>usermod -L -e 1 alice</code>.</p>
+<pre class="code" tabindex="0"><code>chage -E 0 alice      # caducar: bloquea todos los inicios de sesión
+chage -l alice        # Account expires: Jan 01, 1970
+chage -E -1 alice     # quitar la caducidad</code></pre>
+<p>Cambiar el shell a <code>/sbin/nologin</code> es una tercera herramienta, distinta: detiene los shells interactivos pero no la autenticación en sí. Para una deshabilitación completa, la combinación habitual es hacer caducar la cuenta y bloquear la contraseña. Revisa también los procesos en ejecución y las tareas programadas del usuario, ya que el bloqueo no detiene las sesiones existentes; <code>loginctl terminate-user alice</code> o <code>pkill -u alice</code> las terminan.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Password lock (bloqueo de contraseña)</dt><dd>Un signo de exclamación que usermod -L o passwd -l antepone al hash en shadow, y que solo bloquea la autenticación por contraseña.</dd><dt>Account expiry (caducidad de la cuenta)</dt><dd>La fecha de caducidad de shadow; chage -E 0 la pone en el pasado para que se rechace cualquier método de inicio de sesión.</dd><dt>passwd -S</dt><dd>Muestra el estado de la contraseña de una cuenta, incluido si está bloqueada.</dd><dt>chage -E -1</dt><dd>Elimina la fecha de caducidad de una cuenta, revirtiendo chage -E 0.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un desarrollador sale de licencia pero usa claves SSH. Después de usermod -L el desarrollador aún puede iniciar sesión con una clave, así que también ejecutas chage -E 0 dev1. El siguiente intento por SSH se rechaza porque la cuenta está caducada. A su regreso, chage -E -1 dev1 y usermod -U dev1 restauran el acceso.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> usermod -L y passwd -l bloquean solo los inicios de sesión con contraseña; chage -E 0 bloquea todos los métodos de inicio de sesión, incluidas las claves SSH. Elige según lo que la tarea diga que hay que impedir.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué cambia usermod -L en /etc/shadow?</summary><p>Pone un signo de exclamación al inicio del hash de la contraseña para que no pueda coincidir.</p></details>
+<details class="sq"><summary>¿Por qué un usuario bloqueado todavía puede iniciar sesión por SSH?</summary><p>El bloqueo de contraseña no afecta a la autenticación con claves; haz caducar la cuenta con chage -E 0 para bloquear todos los inicios de sesión.</p></details>
+<details class="sq"><summary>¿Cómo eliminas una fecha de caducidad establecida con chage -E 0?</summary><p>Ejecuta chage -E -1 username.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../configuring-superuser-access-the-wheel-group-etc-sudoers-d-drop-ins-an/">← Configurar el acceso de superusuario: el grupo wheel, los dr</a><a href="../configuring-firewall-settings-with-firewall-cmd-zones-services-ports-s/">Configurar el firewall con firewall-cmd: zonas, servicios, p →</a></nav>
+</main>
+</body>
+</html>

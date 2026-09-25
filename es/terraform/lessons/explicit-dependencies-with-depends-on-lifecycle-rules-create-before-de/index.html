@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dependencias explícitas con `depends_on`; reglas de `lifec… · Lección de Terraform Associate</title>
+<meta name="description" content="La mayoría de las dependencias son implícitas, creadas por referencias. A veces un recurso depende de otro sin usar ninguno de sus atributos. El ejemplo cl">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Dependencias explícitas con `depends_on`; reglas de `lifec… · Lección de Terraform Associate">
+<meta property="og:description" content="La mayoría de las dependencias son implícitas, creadas por referencias. A veces un recurso depende de otro sin usar ninguno de sus atributos. El ejemplo cl">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/terraform/lessons/explicit-dependencies-with-depends-on-lifecycle-rules-create-before-de/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/terraform/lessons/explicit-dependencies-with-depends-on-lifecycle-rules-create-before-de/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../terraform/">Terraform Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../terraform/lessons/explicit-dependencies-with-depends-on-lifecycle-rules-create-before-de/" hreflang="en" lang="en">English</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004)</p>
+<h1>Dependencias explícitas con `depends_on`; reglas de `lifecycle`: `create_before_destroy`, `prevent_destroy`, `ignore_changes`, `replace_triggered_by`</h1>
+<article class="lbody">
+<p>La mayoría de las dependencias son implícitas, creadas por referencias. A veces un recurso depende de otro sin usar ninguno de sus atributos. El ejemplo clásico es una instancia cuya aplicación, al arrancar, llama a una API de la nube usando un rol; la instancia debe esperar a que se adjunte la política de permisos del rol, pero sus argumentos nunca referencian la política. <code>depends_on</code> declara explícitamente esa dependencia oculta.</p>
+<pre class="code" tabindex="0"><code>resource &quot;aws_instance&quot; &quot;app&quot; {
+  ami                  = var.ami_id
+  instance_type        = &quot;t3.small&quot;
+  iam_instance_profile = aws_iam_instance_profile.app.name
+  depends_on           = [aws_iam_role_policy.app_s3]
+}</code></pre>
+<p><code>depends_on</code> recibe una lista de referencias a recursos, data sources o módulos, escritas como referencias sin comillas, no como cadenas. Funciona en recursos, data sources, módulos y outputs. Úsalo como último recurso y agrega un comentario que explique por qué: hace que Terraform planifique de forma más conservadora, ya que más valores pueden quedar desconocidos hasta el apply, y oculta a los lectores la verdadera razón de la dependencia.</p>
+<p>El bloque <code>lifecycle</code> es un bloque de meta-argumento anidado que cambia cómo maneja Terraform los cambios de un recurso. Tiene cuatro ajustes en los que se centra el examen.</p>
+<p><code>create_before_destroy = true</code> invierte el orden de reemplazo predeterminado: el objeto nuevo se crea primero y el anterior se destruye después, lo que reduce el tiempo de inactividad. Requiere que el recurso permita dos copias a la vez, así que los nombres que deben ser únicos a menudo necesitan un sufijo generado. <code>prevent_destroy = true</code> hace que Terraform rechace cualquier plan que destruiría el recurso, incluidos los reemplazos y <code>terraform destroy</code>, lo que protege bases de datos y objetos similares de accidentes. Solo funciona mientras el bloque esté en el código; si alguien elimina todo el bloque del recurso, el ajuste se va con él y el recurso puede destruirse.</p>
+<p><code>ignore_changes</code> lista los atributos cuyas diferencias Terraform debe ignorar después de la creación, como etiquetas aplicadas por otro sistema o un número deseado ajustado por un autoscaler. Usa <code>ignore_changes = all</code> para ignorar todos los atributos, de modo que Terraform solo cree y destruya el objeto. <code>replace_triggered_by</code> lista referencias a otros recursos gestionados o a sus atributos; cuando cualquiera de ellos cambia o se reemplaza, este recurso también se reemplaza. Es la forma declarativa de decir reconstruye esta instancia cada vez que cambie ese archivo de configuración o esa plantilla.</p>
+<pre class="code" tabindex="0"><code>lifecycle {
+  create_before_destroy = true
+  prevent_destroy       = true
+  ignore_changes        = [tags[&quot;LastScanned&quot;], desired_count]
+  replace_triggered_by  = [terraform_data.app_version]
+}</code></pre>
+<p>El bloque <code>lifecycle</code> también puede contener bloques <code>precondition</code> y <code>postcondition</code> para verificaciones personalizadas, que se cubren con las condiciones personalizadas. Los ajustes de lifecycle se procesan mientras Terraform construye el grafo de dependencias, así que <code>create_before_destroy</code>, <code>prevent_destroy</code> e <code>ignore_changes</code> solo aceptan valores literales, no variables de entrada ni expresiones calculadas.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>depends_on</dt><dd>Meta-argumento que declara una dependencia explícita que ninguna referencia a un atributo expresa.</dd><dt>create_before_destroy</dt><dd>Ajuste de lifecycle que crea el objeto de reemplazo antes de destruir el anterior.</dd><dt>prevent_destroy</dt><dd>Ajuste de lifecycle que hace fallar con un error cualquier plan que destruya el recurso.</dd><dt>ignore_changes</dt><dd>Ajuste de lifecycle que lista los atributos cuyo drift Terraform no debe intentar corregir.</dd><dt>replace_triggered_by</dt><dd>Ajuste de lifecycle que reemplaza el recurso cuando cambian los recursos o atributos referenciados.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un servicio de autoscaling cambia el <code>desired_count</code> de un servicio de contenedores a lo largo del día, y cada plan intenta restablecerlo. Agregar <code>lifecycle { ignore_changes = [desired_count] }</code> permite que el autoscaler sea dueño de ese valor mientras Terraform gestiona todo lo demás del servicio.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Usa <code>depends_on</code> solo para dependencias ocultas. Recuerda que <code>prevent_destroy</code> no impide la destrucción si se elimina todo el bloque del recurso, y que los valores de lifecycle deben ser literales, no variables.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cuándo deberías usar <code>depends_on</code>?</summary><p>Solo cuando un recurso depende de otro de una forma que ninguna referencia a un atributo expresa, como una aplicación que necesita que primero exista una política de permisos.</p></details>
+<details class="sq"><summary>¿Qué ajuste de lifecycle usarías para que Terraform deje de revertir las etiquetas que agrega otra herramienta?</summary><p><code>ignore_changes</code>, listando los atributos de etiquetas (o <code>tags</code>) que se deben ignorar.</p></details>
+<details class="sq"><summary>¿Qué hace <code>replace_triggered_by</code>?</summary><p>Fuerza el reemplazo del recurso cada vez que cambia cualquier recurso gestionado o atributo referenciado.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Terraform Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../terraform/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../count-vs-for-each-count-index-each-key-and-each-value/">← `count` frente a `for_each`, `count.index`, `each.key` y `ea</a><a href="../custom-conditions-variable-validation-precondition-and-postcondition-a/">Condiciones personalizadas: `validation` de variables, `prec →</a></nav>
+</main>
+</body>
+</html>

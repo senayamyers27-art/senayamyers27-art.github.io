@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Selectores, port vs targetPort vs nodePort y puertos con n… · Lección de CKAD</title>
+<meta name="description" content="Dos cosas deciden si un Service funciona: su selector debe coincidir con los Pods correctos, y sus números de puerto deben corresponder con el lugar donde ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Selectores, port vs targetPort vs nodePort y puertos con n… · Lección de CKAD">
+<meta property="og:description" content="Dos cosas deciden si un Service funciona: su selector debe coincidir con los Pods correctos, y sus números de puerto deben corresponder con el lugar donde ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/selectors-port-vs-targetport-vs-nodeport-named-ports/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/selectors-port-vs-targetport-vs-nodeport-named-ports/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/selectors-port-vs-targetport-vs-nodeport-named-ports/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>Selectores, port vs targetPort vs nodePort y puertos con nombre</h1>
+<article class="lbody">
+<p>Dos cosas deciden si un Service funciona: su selector debe coincidir con los Pods correctos, y sus números de puerto deben corresponder con el lugar donde la aplicación realmente escucha. La mayoría de los bugs de Services en el examen son una cosa o la otra.</p>
+<p>El <code>selector</code> es un conjunto de etiquetas. El Service apunta a todos los Pods de su namespace cuyas etiquetas incluyan todos esos pares clave-valor. Coincide con las etiquetas de los Pods, no con las del Deployment, así que revisa la plantilla del Pod. El selector es un mapa simple de igualdad; la sintaxis más rica <code>matchLabels</code>/<code>matchExpressions</code> que usan los Deployments no está disponible para los Services. Compara ambos con <code>kubectl describe svc web | grep Selector</code> y <code>kubectl get pods --show-labels</code>.</p>
+<p>Cada entrada de <code>ports</code> tiene hasta tres números. <code>port</code> es el puerto en el que escucha el propio Service, en su ClusterIP y nombre DNS; los clientes se conectan a <code>web:80</code>. <code>targetPort</code> es el puerto de los Pods al que se reenvía el tráfico, donde el contenedor realmente escucha. Si omites targetPort, toma por defecto el mismo valor que port. <code>nodePort</code> se aplica solo a Services NodePort y LoadBalancer y es el puerto que se abre en todos los nodos; si lo omites, se asigna uno del rango de puertos de nodo.</p>
+<pre class="code" tabindex="0"><code>cliente -&gt; &lt;node-ip&gt;:30080 (nodePort)
+        -&gt; &lt;service-ip&gt;:80   (port)
+        -&gt; &lt;pod-ip&gt;:8080     (targetPort, el containerPort)</code></pre>
+<p>Los contenedores pueden ponerle nombre a sus puertos: <code>ports: - name: http, containerPort: 8080</code>. Así, un Service puede usar <code>targetPort: http</code> en lugar de un número. Esto desacopla el Service del número: si una nueva versión escucha en 9090 con el mismo nombre, el Service sigue funcionando sin cambios, e incluso distintos Pods detrás de un mismo Service pueden usar números diferentes. Ten en cuenta que <code>containerPort</code> en sí es mayormente informativo: un contenedor que escucha en un puerto que no declaró igual recibe tráfico, pero un targetPort con nombre solo se resuelve si el nombre está declarado.</p>
+<pre class="code" tabindex="0"><code># Plantilla del Pod
+containers:
+- name: app
+  image: app:1.0
+  ports:
+  - name: http
+    containerPort: 8080
+---
+# Service
+spec:
+  selector:
+    app: web
+  ports:
+  - name: web
+    protocol: TCP
+    port: 80
+    targetPort: http</code></pre>
+<p>Cuando un Service expone más de un puerto, cada entrada de puerto debe tener un <code>name</code>. <code>protocol</code> es TCP por defecto; también se admiten UDP y SCTP, por ejemplo UDP para DNS. Para diagnosticar, revisa primero los endpoints (si no hay ninguno, el selector o la readiness están mal), luego prueba el puerto de destino directamente en la IP de un Pod desde un Pod temporal (si falla, el targetPort o la dirección de escucha de la app están mal) y, por último, prueba a través del nombre del Service.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>port</dt><dd>El puerto en el que escucha el Service, en su ClusterIP y nombre DNS.</dd><dt>targetPort</dt><dd>El puerto del Pod al que se reenvía el tráfico; por defecto es igual a port y puede ser un puerto con nombre.</dd><dt>nodePort</dt><dd>El puerto que se abre en todos los nodos para Services NodePort y LoadBalancer.</dd><dt>Named port (puerto con nombre)</dt><dd>Un containerPort con nombre que un Service puede referenciar como su targetPort.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Las solicitudes a <code>api:80</code> agotan el tiempo de espera aunque existen endpoints. Al revisar los Pods se ve que la app escucha en 3000, mientras que el Service tiene <code>targetPort: 80</code>. Cambiar targetPort a 3000, o nombrar el puerto del contenedor <code>http</code> y usar <code>targetPort: http</code>, lo resuelve.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> port es lo que llaman los clientes, targetPort es donde escucha el Pod, nodePort está en los nodos. Endpoints presentes pero conexiones rechazadas apunta a targetPort; sin endpoints apunta al selector o a la readiness.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Si se omite targetPort, ¿qué valor toma?</summary><p>El mismo valor que port.</p></details>
+<details class="sq"><summary>¿Por qué usar un targetPort con nombre?</summary><p>El Service sigue el nombre del puerto del contenedor, así que el número de puerto del Pod puede cambiar sin editar el Service.</p></details>
+<details class="sq"><summary>¿Un Service selecciona los Pods por las etiquetas del Deployment o por las de los Pods?</summary><p>Por las etiquetas de los Pods, tal como se definen en la plantilla del Pod.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../service-types-clusterip-nodeport-loadbalancer-externalname-and-headles/">← Tipos de Service: ClusterIP, NodePort, LoadBalancer, Externa</a><a href="../endpointslices-and-why-an-empty-endpoint-list-means-the-selector-or-re/">EndpointSlices y por qué una lista de endpoints vacía signif →</a></nav>
+</main>
+</body>
+</html>

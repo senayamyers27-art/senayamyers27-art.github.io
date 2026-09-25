@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Verificaciones de unicast reverse path forwarding (uRPF): … · Lección de JNCIA-Junos</title>
+<meta name="description" content="Los atacantes a menudo falsifican (spoof) la dirección de origen de los paquetes, por ejemplo en inundaciones de denegación de servicio, para ocultar su or">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Verificaciones de unicast reverse path forwarding (uRPF): … · Lección de JNCIA-Junos">
+<meta property="og:description" content="Los atacantes a menudo falsifican (spoof) la dirección de origen de los paquetes, por ejemplo en inundaciones de denegación de servicio, para ocultar su or">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/jncia-junos/lessons/unicast-reverse-path-forwarding-urpf-checks-strict-and-loose/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/jncia-junos/lessons/unicast-reverse-path-forwarding-urpf-checks-strict-and-loose/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../jncia-junos/">JNCIA-Junos</a> / <a href="../">Lecciones</a> · <a href="../../../../jncia-junos/lessons/unicast-reverse-path-forwarding-urpf-checks-strict-and-loose/" hreflang="en" lang="en">English</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106</p>
+<h1>Verificaciones de unicast reverse path forwarding (uRPF): strict y loose</h1>
+<article class="lbody">
+<p>Los atacantes a menudo falsifican (spoof) la dirección de origen de los paquetes, por ejemplo en inundaciones de denegación de servicio, para ocultar su origen o para que las respuestas golpeen a una víctima. Unicast reverse path forwarding (uRPF) es una defensa simple. Normalmente un router solo mira la dirección de destino de un paquete. Con uRPF habilitado en una interfaz, el router también busca la dirección de origen del paquete en su tabla de reenvío y se pregunta si ese origen es plausible. Los paquetes que fallan la verificación se descartan. Esto apoya la práctica ampliamente recomendada de filtrar el tráfico falsificado en el borde de la red.</p>
+<p>En modo strict (estricto), la dirección de origen debe ser alcanzable a través de la misma interfaz por la que llegó el paquete. En otras palabras, si el router tuviera que enviar una respuesta a ese origen, usaría esta interfaz. Un paquete que llega por una interfaz de cliente con una dirección de origen de alguna otra red falla, porque la ruta hacia ese origen apunta a otro lado. El modo strict es muy eficaz en interfaces de cliente o de acceso con una sola conexión (single-homed), donde el tráfico siempre vuelve por donde fue.</p>
+<p>En modo loose (flexible), la dirección de origen solo necesita tener una ruta en la tabla de reenvío a través de cualquier interfaz. El modo loose no verifica la interfaz de llegada, así que atrapa menos paquetes falsificados, principalmente los que usan orígenes para los que el router no tiene ninguna ruta, como el espacio de direcciones no asignado o no enrutado. Es útil donde el enrutamiento es asimétrico, por ejemplo en enlaces hacia varios proveedores, donde el modo strict descartaría tráfico legítimo. Ten en cuenta que una ruta por defecto puede hacer que casi cualquier origen parezca alcanzable, lo que debilita considerablemente el modo loose.</p>
+<p>El enrutamiento asimétrico es el principal riesgo del modo strict. Si el tráfico de una red llega por un enlace pero la mejor ruta de regreso del router hacia esa red usa otro enlace, uRPF strict descarta tráfico válido. Por defecto, Junos compara solo contra los caminos activos. La opción <code>set routing-options forwarding-table unicast-reverse-path feasible-paths</code> hace que la verificación considere todos los caminos factibles, como las rutas alternativas aprendidas por BGP, lo que reduce los descartes erróneos en diseños multihomed.</p>
+<p>La configuración es por interfaz y por familia:</p>
+<pre class="code" tabindex="0"><code>set interfaces ge-0/0/1 unit 0 family inet rpf-check
+set interfaces ge-0/0/2 unit 0 family inet rpf-check mode loose
+set interfaces ge-0/0/1 unit 0 family inet rpf-check fail-filter RPF-EXCEPTIONS</code></pre>
+<p>La primera línea habilita el modo strict (el valor por defecto). La segunda habilita el modo loose. La opción <code>fail-filter</code> nombra un firewall filter que se aplica solo a los paquetes que fallan la verificación, lo que te permite hacer excepciones, como aceptar las solicitudes DHCP que legítimamente usan un origen 0.0.0.0, o contar y registrar las fallas antes de descartarlas. La salida detallada de la interfaz, como <code>show interfaces ge-0/0/1.0 extensive</code>, muestra contadores de fallas RPF, que te dicen cuánto tráfico se está descartando. El soporte de cada plataforma y el comportamiento exacto pueden variar, así que revisa la documentación de tu hardware.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>uRPF</dt><dd>Unicast reverse path forwarding, una verificación que valida la dirección de origen de un paquete contra la tabla de reenvío para descartar tráfico falsificado.</dd><dt>Strict mode (modo strict)</dt><dd>El origen debe ser alcanzable por la misma interfaz por la que llegó el paquete.</dd><dt>Loose mode (modo loose)</dt><dd>El origen solo necesita una ruta en la tabla de reenvío a través de cualquier interfaz.</dd><dt>fail-filter</dt><dd>Un firewall filter aplicado solo a los paquetes que fallan la verificación uRPF, usado para excepciones o registro.</dd><dt>Feasible paths (caminos factibles)</dt><dd>Una opción que permite a uRPF considerar todos los caminos alternativos válidos, no solo los activos, para manejar el enrutamiento asimétrico.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un ISP habilita <code>rpf-check</code> strict en cada interfaz de cliente single-homed. Un dispositivo comprometido de un cliente empieza a enviar inundaciones con direcciones de origen aleatorias. Como esos orígenes no se enrutan de vuelta por la interfaz de ese cliente, el router los descarta, y los contadores de fallas RPF del ISP revelan a qué cliente hay que contactar.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El modo strict revisa la interfaz de llegada y conviene en bordes single-homed; el modo loose solo revisa que exista una ruta y conviene en enlaces asimétricos o multihomed. Enrutamiento asimétrico más modo strict descarta tráfico legítimo.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué uRPF strict puede descartar tráfico legítimo en un enlace multihomed?</summary><p>Con enrutamiento asimétrico, la mejor ruta de regreso hacia el origen puede usar una interfaz distinta de aquella por la que llegó el paquete.</p></details>
+<details class="sq"><summary>¿Qué sentencia de Junos habilita uRPF loose en una interfaz?</summary><p><code>set interfaces &lt;if&gt; unit &lt;n&gt; family inet rpf-check mode loose</code>.</p></details>
+<details class="sq"><summary>¿Cuál es el propósito de <code>fail-filter</code>?</summary><p>Aplicar un filtro a los paquetes que fallan la verificación, para excepciones como DHCP o para contar y registrar.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia JNCIA-Junos gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../jncia-junos/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../applying-filters-to-interfaces-input-output-and-to-lo0-to-protect-the/">← Aplicar filtros a interfaces (input/output) y a lo0 para pro</a></nav>
+</main>
+</body>
+</html>

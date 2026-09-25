@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Key Vault: secretos, claves y certificados, versiones, eli… · Lección de AI-200</title>
+<meta name="description" content="Azure Key Vault es un servicio administrado para almacenar y controlar el acceso a material confidencial, de modo que nunca tenga que estar en el código, e">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Key Vault: secretos, claves y certificados, versiones, eli… · Lección de AI-200">
+<meta property="og:description" content="Azure Key Vault es un servicio administrado para almacenar y controlar el acceso a material confidencial, de modo que nunca tenga que estar en el código, e">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/key-vault-secrets-keys-and-certificates-versions-soft-delete-and-purge/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/key-vault-secrets-keys-and-certificates-versions-soft-delete-and-purge/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/key-vault-secrets-keys-and-certificates-versions-soft-delete-and-purge/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Key Vault: secretos, claves y certificados, versiones, eliminación temporal y protección contra purga, RBAC vs directivas de acceso</h1>
+<article class="lbody">
+<p>Azure Key Vault es un servicio administrado para almacenar y controlar el acceso a material confidencial, de modo que nunca tenga que estar en el código, en archivos de configuración ni en imágenes de contenedor. Un almacén (vault) contiene tres tipos de objetos, y saber cuál es cuál responde muchas preguntas.</p>
+<p>Los secretos son valores pequeños y arbitrarios que almacenas y vuelves a leer: contraseñas, cadenas de conexión, claves de API. La app recupera el valor en sí. Las claves (keys) son claves criptográficas (RSA o de curva elíptica) que se usan para operaciones como cifrar, descifrar, firmar, verificar, encapsular (wrap) y desencapsular (unwrap). Key Vault realiza la operación, y el material de la clave privada no está pensado para salir del almacén; el nivel Premium protege las claves con HSM (módulos de seguridad de hardware), y Managed HSM es un servicio de un solo inquilino separado para requisitos más estrictos. Los certificados son certificados X.509 que Key Vault puede crear, importar, renovar automáticamente con entidades de certificación integradas y cuya expiración puede controlar; cada certificado tiene una clave y un secreto asociados en segundo plano.</p>
+<p>Cada objeto tiene versiones. Cuando defines un valor nuevo para el secreto <code>db-password</code>, Key Vault crea una versión nueva con su propio identificador y conserva las anteriores. Una solicitud sin versión devuelve la versión actual (la más reciente); una solicitud con un ID de versión devuelve exactamente esa. Las versiones hacen que la rotación sea segura y permiten revertir cambios. Los objetos también pueden tener atributos como una fecha de activación, una fecha de expiración, un indicador de habilitado, etiquetas y un tipo de contenido.</p>
+<pre class="code" tabindex="0"><code>secrets = SecretClient(vault_url=VAULT_URL, credential=DefaultAzureCredential())
+secrets.set_secret(&quot;db-password&quot;, new_value, expires_on=expiry)
+current = secrets.get_secret(&quot;db-password&quot;)
+for p in secrets.list_properties_of_secret_versions(&quot;db-password&quot;):
+    print(p.version, p.created_on, p.enabled)</code></pre>
+<p>La eliminación temporal (soft delete) protege contra la eliminación accidental o malintencionada, y ahora siempre está habilitada en los almacenes. Un almacén u objeto eliminado pasa a un estado de eliminado durante un periodo de retención que eliges entre 7 y 90 días (90 de forma predeterminada), durante el cual se puede recuperar. Durante ese tiempo su nombre queda reservado, así que crear un secreto nuevo con el mismo nombre falla hasta que recuperes o purgues el anterior. Purgar lo elimina de forma permanente antes de que termine la retención. La protección contra purga (purge protection), cuando está habilitada, bloquea por completo la purga hasta que vence el periodo de retención, incluso para los administradores. La protección contra purga no se puede desactivar una vez habilitada, y a menudo la exigen los servicios que usan claves de Key Vault para el cifrado, como las claves administradas por el cliente.</p>
+<p>Key Vault tiene dos modelos de autorización para el plano de datos. Las directivas de acceso del almacén (vault access policies) son el modelo anterior: una lista por almacén de entidades con permisos como Get y List para secretos, claves y certificados. No se pueden limitar a un solo secreto, y cualquiera con Contributor sobre el almacén puede editar las directivas y concederse acceso. Azure RBAC es el modelo recomendado: los roles del plano de datos, como Key Vault Secrets User, se asignan mediante asignaciones de roles de Azure, se pueden limitar a un secreto, clave o certificado individual, y se gobiernan y auditan como el resto del acceso en Azure. Un almacén usa un modelo u otro, según su configuración de modelo de permisos.</p>
+<p>En la operación diaria, envía los registros de diagnóstico de Key Vault a Log Analytics para auditar quién leyó qué, restringe el acceso de red con firewalls o private endpoints, y guarda los secretos en caché en tu app en lugar de leerlos en cada solicitud, ya que las solicitudes al almacén se limitan cuando la frecuencia es alta.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Secret (secreto)</dt><dd>Un valor confidencial pequeño, como una contraseña o una cadena de conexión, que una app lee de Key Vault.</dd><dt>Key (clave)</dt><dd>Una clave criptográfica almacenada en Key Vault que realiza operaciones dentro del almacén sin exponer el material privado.</dd><dt>Soft delete (eliminación temporal)</dt><dd>La retención de almacenes y objetos eliminados durante 7 a 90 días para que se puedan recuperar.</dd><dt>Purge protection (protección contra purga)</dt><dd>Una configuración que impide la eliminación permanente hasta que termina el periodo de retención; no se puede deshabilitar una vez activada.</dd><dt>Access policy (directiva de acceso)</dt><dd>El modelo de autorización heredado de Key Vault que concede permisos por almacén, a diferencia de Azure RBAC.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un script eliminó un secreto llamado api-key, y una nueva implementación que intentó volver a crearlo falló con un conflicto. Como la eliminación temporal reserva el nombre, el ingeniero recuperó el secreto eliminado, lo que restauró todas sus versiones. Luego el equipo habilitó la protección contra purga para que nadie pudiera destruir secretos de forma permanente antes de que terminara el periodo de retención, y cambió el almacén al modelo de permisos RBAC.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Los secretos son valores que lees, las claves hacen criptografía dentro del almacén y los certificados son X.509 con administración del ciclo de vida. La protección contra purga no se puede deshabilitar una vez habilitada; RBAC permite un ámbito por secreto, las directivas de acceso no.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué podría fallar la creación de un secreto con el nombre de un secreto eliminado recientemente?</summary><p>La eliminación temporal conserva el secreto eliminado y reserva su nombre hasta que se recupera, se purga o termina el periodo de retención.</p></details>
+<details class="sq"><summary>Menciona una ventaja del modelo de permisos de Azure RBAC frente a las directivas de acceso.</summary><p>Los roles se pueden limitar a secretos, claves o certificados individuales, y el acceso se gobierna de forma centralizada como los demás permisos de Azure.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../azure-rbac-data-plane-roles-key-vault-secrets-user-service-bus-data-se/">← Roles de RBAC de Azure del plano de datos: Key Vault Secrets</a><a href="../secret-rotation-and-key-vault-events-secretnearexpiry-through-event-gr/">Rotación de secretos y eventos de Key Vault (SecretNearExpir →</a></nav>
+</main>
+</body>
+</html>

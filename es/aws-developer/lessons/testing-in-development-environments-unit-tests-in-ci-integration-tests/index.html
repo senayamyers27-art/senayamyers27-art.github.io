@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pruebas en entornos de desarrollo: pruebas unitarias en CI… · Lección de Developer Associate</title>
+<meta name="description" content="Una buena estrategia de pruebas para aplicaciones en la nube combina distintos tipos de pruebas, cada uno de los cuales detecta problemas diferentes a un c">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Pruebas en entornos de desarrollo: pruebas unitarias en CI… · Lección de Developer Associate">
+<meta property="og:description" content="Una buena estrategia de pruebas para aplicaciones en la nube combina distintos tipos de pruebas, cada uno de los cuales detecta problemas diferentes a un c">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/testing-in-development-environments-unit-tests-in-ci-integration-tests/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/testing-in-development-environments-unit-tests-in-ci-integration-tests/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/testing-in-development-environments-unit-tests-in-ci-integration-tests/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Pruebas en entornos de desarrollo: pruebas unitarias en CI, pruebas de integración contra etapas desplegadas, feature flags de AppConfig y despliegue gradual de configuración</h1>
+<article class="lbody">
+<p>Una buena estrategia de pruebas para aplicaciones en la nube combina distintos tipos de pruebas, cada uno de los cuales detecta problemas diferentes a un costo diferente. El examen quiere que sepas dónde encaja cada uno y qué funciones de AWS respaldan las pruebas y publicaciones seguras.</p>
+<p>Las pruebas unitarias verifican funciones y clases individuales de forma aislada, rápidamente y sin llamadas a AWS. Para una función Lambda, estructura el código de modo que la lógica de negocio viva en funciones simples que el handler llama, y luego prueba esa lógica directamente. Las llamadas al SDK de AWS se reemplazan con mocks o stubs (por ejemplo, la biblioteca moto o botocore Stubber en Python, o un cliente simulado en JavaScript). Ejecuta las pruebas unitarias en cada commit en CI, normalmente en la fase <code>pre_build</code> o <code>build</code> de CodeBuild, y haz fallar la compilación ante cualquier falla para que el código roto nunca llegue a un entorno. Los informes de pruebas de CodeBuild muestran los resultados.</p>
+<p>La emulación local está entre las pruebas unitarias y las de integración: <code>sam local invoke</code> y <code>sam local start-api</code> ejecutan funciones en Docker con eventos de ejemplo, lo que es útil para comprobaciones rápidas del análisis de eventos y del cableado del handler. Sin embargo, la emulación no puede reproducir por completo los permisos de IAM, los límites de los servicios ni las integraciones reales.</p>
+<p>Las pruebas de integración ejercitan recursos reales desplegados, que es la única forma de detectar permisos de IAM incorrectos, disparadores mal configurados, mapeos de API Gateway o tiempos de espera. El patrón común es desplegar el stack en una etapa dedicada de desarrollo o de pruebas (un stack separado, y a menudo una cuenta separada), y luego ejecutar pruebas que llaman a su endpoint de API, ponen mensajes en sus colas o escriben en sus tablas, y verifican los resultados. Las salidas del stack, como la URL de la API, alimentan las pruebas. En CodePipeline, una etapa de pruebas después de una acción de despliegue en test ejecuta estas pruebas antes de la promoción. Las etapas de API Gateway con variables de etapa y los alias de Lambda permiten probar el mismo código en dev y test antes de prod, y las integraciones mock pueden reemplazar backends sin terminar. Limpia los stacks de prueba temporales para evitar costos.</p>
+<p>AWS AppConfig, una capacidad de AWS Systems Manager, separa los cambios de configuración de los despliegues de código. Creas una aplicación, entornos (como beta y prod) y perfiles de configuración, ya sea configuración libre (JSON, YAML o texto, almacenada en AppConfig, S3, Parameter Store y otros) o feature flags. Los feature flags te permiten publicar código con una funcionalidad desactivada, luego activarla para pruebas o para los usuarios sin volver a desplegar, y desactivarla al instante si aparecen problemas. Los validadores (un esquema JSON o una función Lambda) comprueban una configuración antes de desplegarla.</p>
+<p>Los despliegues de AppConfig aplican la configuración gradualmente usando una estrategia de despliegue, que define el tipo de crecimiento (lineal o exponencial), el factor de crecimiento, el tiempo total de despliegue y un tiempo de horneado (bake time). Durante el despliegue y el tiempo de horneado, AppConfig vigila las alarmas de CloudWatch que asocies con el entorno y revierte automáticamente la configuración si alguna se dispara. Las aplicaciones obtienen la configuración con la API de datos de AppConfig (<code>StartConfigurationSession</code> y <code>GetLatestConfiguration</code>), y las funciones Lambda suelen usar la extensión de Lambda de AppConfig, que guarda la configuración en caché y la actualiza en segundo plano.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Unit test (prueba unitaria)</dt><dd>Una prueba rápida y aislada de una sola pieza de lógica, con las dependencias externas simuladas.</dd><dt>Integration test (prueba de integración)</dt><dd>Una prueba contra recursos desplegados para verificar permisos, disparadores e interacciones reales entre servicios.</dd><dt>Feature flag (bandera de funcionalidad)</dt><dd>Un interruptor de configuración que activa o desactiva una funcionalidad en tiempo de ejecución sin volver a desplegar el código.</dd><dt>AppConfig deployment strategy (estrategia de despliegue de AppConfig)</dt><dd>Ajustes que controlan qué tan rápido se aplica un cambio de configuración y cuánto tiempo se hornea antes de completarse.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un equipo publica un nuevo motor de recomendaciones detrás de un feature flag de AppConfig que está desactivado. Después del despliegue, lo activan con una estrategia lineal de 30 minutos y una alarma sobre la tasa de errores 5xx de la API. Las tasas de error suben al 40% del despliegue, la alarma se dispara y AppConfig revierte el flag sin ningún cambio de código.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Cambiar el comportamiento de la aplicación de forma segura sin volver a desplegar código apunta a los feature flags de AppConfig con una estrategia de despliegue y reversión basada en alarmas. Las pruebas que deben verificar permisos de IAM o integraciones reales necesitan una etapa de prueba desplegada, no mocks.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué las pruebas unitarias con mocks no pueden detectar un permiso de IAM faltante?</summary><p>Los mocks nunca llaman a AWS, así que la autorización nunca se comprueba; solo las pruebas de integración contra recursos desplegados ejercitan los permisos reales.</p></details>
+<details class="sq"><summary>¿Qué dispara una reversión automática de AppConfig?</summary><p>Una alarma de CloudWatch asociada con el entorno que pasa al estado ALARM durante el despliegue o el tiempo de horneado.</p></details>
+<details class="sq"><summary>¿Cómo leen normalmente las funciones Lambda la configuración de AppConfig de forma eficiente?</summary><p>Mediante la extensión de Lambda de AppConfig, que guarda la configuración en caché localmente y la actualiza en segundo plano.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../codedeploy-appspec-yml-lifecycle-hooks-for-ec2-lambda-and-ecs-the-code/">← Hooks del ciclo de vida de appspec.yml de CodeDeploy para EC</a><a href="../root-cause-analysis-with-cloudwatch-logs-logs-insights-queries-metrics/">Análisis de causa raíz con CloudWatch Logs, consultas de Log →</a></nav>
+</main>
+</body>
+</html>

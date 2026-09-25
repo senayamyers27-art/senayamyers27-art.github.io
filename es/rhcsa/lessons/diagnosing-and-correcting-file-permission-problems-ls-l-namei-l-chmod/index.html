@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Diagnosticar y corregir problemas de permisos de archivos … · Lección de RHCSA</title>
+<meta name="description" content="Cuando un usuario recibe Permission denied, la causa es casi siempre una de unas pocas cosas: el propietario o el grupo equivocados, faltan bits de permiso">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Diagnosticar y corregir problemas de permisos de archivos … · Lección de RHCSA">
+<meta property="og:description" content="Cuando un usuario recibe Permission denied, la causa es casi siempre una de unas pocas cosas: el propietario o el grupo equivocados, faltan bits de permiso">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/diagnosing-and-correcting-file-permission-problems-ls-l-namei-l-chmod/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/diagnosing-and-correcting-file-permission-problems-ls-l-namei-l-chmod/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/diagnosing-and-correcting-file-permission-problems-ls-l-namei-l-chmod/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Diagnosticar y corregir problemas de permisos de archivos (ls -l, namei -l, chmod, chown)</h1>
+<article class="lbody">
+<p>Cuando un usuario recibe Permission denied, la causa es casi siempre una de unas pocas cosas: el propietario o el grupo equivocados, faltan bits de permiso en el archivo o falta permiso en algún directorio a lo largo de la ruta. SELinux y las ACL (listas de control de acceso) también pueden bloquear el acceso, pero empieza por los permisos estándar, porque se revisan primero y son el problema más común en el examen.</p>
+<p>Todo archivo tiene un propietario, un grupo y tres conjuntos de bits: user (propietario), group y other. <code>ls -l</code> los muestra, y <code>ls -ld dir</code> muestra el propio directorio en lugar de su contenido. Linux revisa solo un conjunto: si eres el propietario, se aplican los bits del propietario; si no, y estás en el grupo, se aplican los bits del grupo; si no, se aplican los bits de other. Eso significa que un propietario con menos derechos que other sigue limitado por los bits del propietario.</p>
+<p>Los bits significan cosas distintas en los directorios. <code>r</code> te permite listar los nombres, <code>w</code> te permite crear, borrar y renombrar entradas (junto con <code>x</code>) y <code>x</code> te permite entrar en el directorio y llegar a cualquier cosa que contenga. Para abrir <code>/srv/app/conf/app.ini</code>, necesitas <code>x</code> en cada directorio de la ruta más <code>r</code> en el archivo. <code>namei -l</code> muestra el propietario y el modo de cada componente, lo que hace fácil detectar una <code>x</code> que falta.</p>
+<pre class="code" tabindex="0"><code>namei -l /srv/app/conf/app.ini
+# f: /srv/app/conf/app.ini
+# dr-xr-xr-x root root   /
+# drwxr-xr-x root root   srv
+# drwx------ root root   app      &lt;- los otros no pueden atravesarlo
+# drwxr-xr-x app  app    conf
+# -rw-r----- app  app    app.ini</code></pre>
+<p>Corrige con el cambio más pequeño que cumpla el requisito. <code>chown user:group file</code> cambia el propietario y el grupo, <code>chgrp</code> cambia solo el grupo y <code>-R</code> actúa recursivamente. <code>chmod</code> acepta modos simbólicos como <code>g+rw</code> u <code>o-rwx</code> y modos numéricos como <code>750</code> (r=4, w=2, x=1 por conjunto). Una <code>X</code> mayúscula en <code>chmod -R g+rX</code> añade ejecución solo a los directorios y a los archivos que ya la tienen, lo que es ideal para abrir un árbol sin volver ejecutables todos los archivos.</p>
+<p>Prueba como el usuario afectado, no como root, porque root se salta las comprobaciones normales de permisos: <code>su - alice -c 'cat /srv/app/conf/app.ini'</code> o <code>sudo -u alice cat ...</code>. Si los permisos parecen correctos y el acceso sigue fallando, busca ACL con <code>getfacl</code> (un <code>+</code> después del modo en <code>ls -l</code> indica que hay una) y denegaciones de SELinux en el log de auditoría. Evita el arreglo rápido <code>chmod 777</code>; oculta el problema real y abre el archivo a todos los usuarios.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>namei -l</dt><dd>Lista cada componente de una ruta con su propietario, grupo y modo; se usa para encontrar dónde falla el recorrido.</dd><dt>Execute bit on a directory (bit de ejecución en un directorio)</dt><dd>Permiso para entrar en un directorio y acceder a sus entradas, necesario en cada directorio de una ruta.</dd><dt>chmod</dt><dd>Cambia los bits de permiso usando modos simbólicos (u+x, g-w) o numéricos (755).</dd><dt>chown</dt><dd>Cambia el propietario, y opcionalmente el grupo, de archivos con la forma user:group.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Los miembros del grupo devs no pueden leer /opt/project/notes.txt aunque el archivo es -rw-rw---- root:devs. namei -l muestra que /opt/project es drwx------, así que el grupo no puede atravesarlo. Ejecutas chgrp devs /opt/project y chmod 750 /opt/project, y ahora su - dev1 -c 'cat /opt/project/notes.txt' funciona.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Linux aplica solo la primera clase que coincide: propietario, luego grupo, luego other. Y el acceso necesita x en cada directorio padre, lo que namei -l revela con un solo comando.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Un archivo tiene modo 644 pero un usuario sigue recibiendo Permission denied al leerlo. ¿Qué revisas primero?</summary><p>Los directorios de la ruta; el usuario necesita permiso de ejecución en cada uno, lo que muestra namei -l.</p></details>
+<details class="sq"><summary>¿Qué hace chmod -R g+rX de forma distinta a g+rx?</summary><p>La X mayúscula añade ejecución solo a los directorios y a los archivos que ya tienen un bit de ejecución, así que los archivos normales no se vuelven ejecutables.</p></details>
+<details class="sq"><summary>¿Por qué debes probar el acceso como el usuario y no como root?</summary><p>Root se salta las comprobaciones de permisos estándar, así que una prueba como root no demuestra nada sobre lo que puede hacer el usuario.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../xfs-can-grow-but-not-shrink-ext4-can-do-both-when-unmounted/">← XFS puede crecer pero no reducirse; ext4 puede hacer ambas c</a><a href="../scheduling-tasks-with-at-cron-crontab-e-etc-cron-d-and-systemd-timer-u/">Programar tareas con at, cron (crontab -e, /etc/cron.d) y un →</a></nav>
+</main>
+</body>
+</html>

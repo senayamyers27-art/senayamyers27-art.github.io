@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Monitoreo de recursos: metrics-server, kubectl top nodes/p… · Lección de CKA</title>
+<meta name="description" content="Dos tipos de números describen los recursos de un clúster, y el CKA evalúa si sabes cuál es cuál. El uso real, cuánta CPU y memoria están consumiendo los c">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Monitoreo de recursos: metrics-server, kubectl top nodes/p… · Lección de CKA">
+<meta property="og:description" content="Dos tipos de números describen los recursos de un clúster, y el CKA evalúa si sabes cuál es cuál. El uso real, cuánta CPU y memoria están consumiendo los c">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/resource-monitoring-metrics-server-kubectl-top-nodes-pods-sort-by-desc/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/resource-monitoring-metrics-server-kubectl-top-nodes-pods-sort-by-desc/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/resource-monitoring-metrics-server-kubectl-top-nodes-pods-sort-by-desc/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Monitoreo de recursos: metrics-server, kubectl top nodes/pods --sort-by y los allocated resources de describe node</h1>
+<article class="lbody">
+<p>Dos tipos de números describen los recursos de un clúster, y el CKA evalúa si sabes cuál es cuál. El uso real, cuánta CPU y memoria están consumiendo los contenedores en este momento, viene de metrics-server y lo muestra <code>kubectl top</code>. Las reservas, cuánto se ha solicitado y limitado, vienen de los specs de los Pods y las muestra <code>kubectl describe node</code>.</p>
+<p>metrics-server recolecta el uso desde el endpoint de métricas de recursos de cada kubelet cada pocos segundos y lo sirve mediante la API <code>metrics.k8s.io</code>. Solo guarda en memoria los valores recientes; no es un sistema de monitoreo con historial, para eso están las herramientas al estilo de Prometheus. Si no está instalado o no está sano, <code>kubectl top</code> falla con un error de que las métricas no están disponibles. Verifica con <code>kubectl get deploy metrics-server -n kube-system</code> y <code>kubectl get apiservice v1beta1.metrics.k8s.io</code>.</p>
+<pre class="code" tabindex="0"><code>kubectl top nodes
+kubectl top nodes --sort-by=memory
+kubectl top pods -A --sort-by=cpu
+kubectl top pods -n app --containers
+kubectl top pods -l app=web --sort-by=memory --no-headers | head -1</code></pre>
+<p><code>kubectl top nodes</code> muestra la CPU en millicores y la memoria, con porcentajes sobre lo allocatable. <code>kubectl top pods</code> muestra el uso por Pod; <code>--containers</code> lo desglosa por contenedor, <code>-A</code> abarca todos los namespaces, <code>-l</code> filtra por etiqueta y <code>--sort-by=cpu</code> o <code>--sort-by=memory</code> pone primero al mayor consumidor. Una tarea común: encontrar el Pod con una etiqueta dada que más CPU usa y escribir su nombre en un archivo. Ordena, toma la primera línea y extrae el nombre, por ejemplo con <code>awk '{print $1}'</code>, y luego revisa el contenido del archivo.</p>
+<p><code>kubectl describe node &lt;name&gt;</code> muestra <code>Capacity</code> (los recursos totales de la máquina) y <code>Allocatable</code> (lo que queda para los Pods después de las reservas del sistema y del kubelet), luego una tabla de los Pods no terminados con sus requests y limits, y un resumen <code>Allocated resources</code> con los totales y los porcentajes sobre lo allocatable. Esto es lo que le importa al scheduler. Los limits pueden sumar más del 100 por ciento, lo que se llama sobreasignación (overcommitment); los requests no pueden superar lo allocatable para los Pods programados.</p>
+<p>Comparar las dos vistas explica muchos enigmas. Un nodo puede mostrar un 30 por ciento de CPU en top y aun así rechazar Pods nuevos, porque sus requests ya están al 95 por ciento. A la inversa, un nodo con requests bajos puede estar bajo una presión de memoria real si los Pods usan mucho más de lo que solicitan, lo que lleva a desalojos. Un Pod cuyo uso en top se acerca cada vez más a su límite de memoria es candidato a reinicios por OOMKilled.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>kubectl top</dt><dd>Muestra el uso actual de CPU y memoria de nodos o Pods usando metrics-server.</dd><dt>Allocatable</dt><dd>Los recursos del nodo disponibles para los Pods después de las reservas del sistema; los usa el scheduler.</dd><dt>Allocated resources (recursos asignados)</dt><dd>El resumen de describe node con el total de requests y limits de los Pods del nodo.</dd><dt>Overcommitment (sobreasignación)</dt><dd>Cuando la suma de los limits de un nodo supera su capacidad allocatable.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una tarea pide: 'Escribe en /opt/answers/top.txt el nombre del Pod con la etiqueta app=batch que más memoria usa.' Ejecutas <code>kubectl top pods -A -l app=batch --sort-by=memory --no-headers | head -1</code>, anotas la columna del nombre (la columna 2 cuando -A agrega una columna de namespace) y la escribes en el archivo con echo; luego haces cat para confirmarlo.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> kubectl top muestra el uso real; describe node muestra requests y limits. Las decisiones de programación se basan en los requests, así que 'uso bajo pero los Pods no se programan' es un problema de requests.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Dónde mirarías para ver por qué el scheduler cree que un nodo está lleno?</summary><p>En la sección Allocated resources de <code>kubectl describe node</code>, que muestra la suma de requests frente a lo allocatable.</p></details>
+<details class="sq"><summary>¿De qué depende kubectl top?</summary><p>De un metrics-server que funcione y sirva la API metrics.k8s.io.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../pending-pods-failedscheduling-messages-for-resources-taints-affinity-a/">← Pods en Pending: mensajes FailedScheduling por recursos, tai</a><a href="../container-output-streams-kubectl-logs-options-stdout-stderr-vs-log-fil/">Flujos de salida de los contenedores: opciones de kubectl lo →</a></nav>
+</main>
+</body>
+</html>

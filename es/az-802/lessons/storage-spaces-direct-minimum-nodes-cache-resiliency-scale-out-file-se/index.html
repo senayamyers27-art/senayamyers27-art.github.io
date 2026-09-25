@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Storage Spaces Direct: nodos mínimos, caché, resiliencia; … · Lección de AZ-802</title>
+<meta name="description" content="Storage Spaces Direct (S2D) construye almacenamiento de alta disponibilidad a partir de las unidades locales de cada nodo del clúster, sin una SAN comparti">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Storage Spaces Direct: nodos mínimos, caché, resiliencia; … · Lección de AZ-802">
+<meta property="og:description" content="Storage Spaces Direct (S2D) construye almacenamiento de alta disponibilidad a partir de las unidades locales de cada nodo del clúster, sin una SAN comparti">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-802/lessons/storage-spaces-direct-minimum-nodes-cache-resiliency-scale-out-file-se/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-802/lessons/storage-spaces-direct-minimum-nodes-cache-resiliency-scale-out-file-se/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-802/">AZ-802</a> / <a href="../">Lecciones</a> · <a href="../../../../az-802/lessons/storage-spaces-direct-minimum-nodes-cache-resiliency-scale-out-file-se/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802</p>
+<h1>Storage Spaces Direct: nodos mínimos, caché, resiliencia; Scale-Out File Server para datos de aplicaciones</h1>
+<article class="lbody">
+<p>Storage Spaces Direct (S2D) construye almacenamiento de alta disponibilidad a partir de las unidades locales de cada nodo del clúster, sin una SAN compartida ni un gabinete JBOD. Los nodos agrupan sus unidades a través de la red, normalmente con adaptadores de red RDMA (acceso directo a memoria remota) para una latencia baja, y presentan volúmenes compartidos de clúster (CSV) que cada nodo puede usar. Es una característica de la edición Datacenter.</p>
+<p>Un clúster S2D necesita al menos dos nodos y admite hasta dieciséis. Cada nodo necesita un conjunto compatible de unidades locales (no la unidad de arranque), y todos los servidores deben ser similares. Lo habilitas después de crear el clúster con <code>Enable-ClusterStorageSpacesDirect</code>, que reclama automáticamente las unidades aptas en un solo grupo. S2D puede implementarse de forma hiperconvergente, donde los mismos nodos ejecutan las VM de Hyper-V y el almacenamiento, o convergente (desagregada), donde el clúster S2D sirve almacenamiento por SMB a hosts de proceso separados.</p>
+<p>La caché se construye automáticamente a partir del tipo de unidad más rápido presente. Con NVMe más SSD, o SSD más HDD, las unidades más rápidas se convierten en caché y las más lentas en capacidad; cada unidad de caché se vincula a unidades de capacidad. En los sistemas híbridos con capacidad en HDD, la caché maneja tanto lecturas como escrituras; cuando la capacidad es SSD, la caché solo maneja escrituras, porque leer de SSD ya es rápido. Un sistema con un solo tipo de unidad, como todo NVMe, puede funcionar sin caché. Las unidades de caché no agregan capacidad utilizable.</p>
+<p>La resiliencia se decide al crear cada volumen. Un reflejo bidireccional guarda dos copias entre servidores, tiene una eficiencia del 50 por ciento y necesita al menos dos nodos. Un reflejo de tres vías guarda tres copias, tolera dos fallas simultáneas, tiene una eficiencia de alrededor del 33 por ciento y necesita al menos tres nodos; es la opción recomendada para cargas de trabajo sensibles al rendimiento. La paridad doble necesita al menos cuatro nodos y ofrece una mejor eficiencia que mejora con más nodos. La paridad acelerada por reflejo combina un nivel de reflejo para las escrituras con un nivel de paridad para la capacidad. Los clústeres de dos nodos pueden usar la resiliencia anidada para sobrevivir a la vez a la falla de una unidad y a la de un nodo. Crea volúmenes con <code>New-Volume -FriendlyName VM01 -FileSystem CSVFS_ReFS -StoragePoolFriendlyName S2D* -Size 2TB</code>.</p>
+<p>Scale-Out File Server (SOFS) es un rol de servidor de archivos en clúster diseñado para datos de aplicaciones, como archivos VHDX de Hyper-V y bases de datos de SQL Server. Sus recursos compartidos residen en CSV y están activos en todos los nodos simultáneamente, así que los clientes se conectan a cualquier nodo y la capacidad y el ancho de banda escalan horizontalmente. Los recursos compartidos usan la disponibilidad continua, de modo que la conmutación por error transparente de SMB mantiene vivos los identificadores abiertos cuando falla un nodo. SOFS se combina con S2D en el modelo convergente. No se recomienda para recursos compartidos de archivos de usuarios generales, que generan muchas operaciones de metadatos, como abrir, cerrar y renombrar archivos pequeños; para esos usa el rol File Server for general use.</p>
+<p>Cuando las preguntas del examen describan archivos de VM o de bases de datos en SMB sin tiempo de inactividad durante la falla de un nodo, piensa en SOFS; cuando describan unidades particulares de usuarios y recursos compartidos departamentales en un clúster, piensa en File Server for general use.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Storage Spaces Direct</dt><dd>Almacenamiento definido por software que agrupa las unidades locales de 2 a 16 nodos de clúster en volúmenes de alta disponibilidad.</dd><dt>Cache tier (nivel de caché)</dt><dd>Las unidades más rápidas de un nodo S2D, usadas automáticamente para almacenar en caché las escrituras (y también las lecturas cuando las unidades de capacidad son HDD) de las unidades de capacidad más lentas.</dd><dt>Cluster Shared Volume (volumen compartido de clúster)</dt><dd>Un volumen en clúster que todos los nodos pueden leer y escribir al mismo tiempo, usado por Hyper-V y SOFS.</dd><dt>Nested resiliency (resiliencia anidada)</dt><dd>Una opción de S2D de dos nodos que sobrevive simultáneamente a la falla de un nodo y a la de una unidad.</dd><dt>Scale-Out File Server</dt><dd>Un rol de servidor de archivos en clúster activo-activo sobre CSV para datos de aplicaciones, que usa recursos compartidos SMB de disponibilidad continua.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una empresa construye un clúster S2D hiperconvergente de cuatro nodos con caché NVMe y capacidad SSD. Las VM críticas de SQL van en un volumen de reflejo de tres vías; un gran volumen de archivo usa paridad doble. Más tarde, se conecta un clúster de proceso separado mediante un Scale-Out File Server para que sus hosts de Hyper-V almacenen los archivos VHDX en recursos compartidos de disponibilidad continua.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Mínimos: 2 nodos para S2D y reflejo bidireccional, 3 para reflejo de tres vías, 4 para paridad doble. SOFS es para datos de aplicaciones, nunca la respuesta predeterminada para las carpetas particulares de usuarios.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cuál es el número mínimo de nodos para un volumen de reflejo de tres vías en S2D?</summary><p>Tres nodos.</p></details>
+<details class="sq"><summary>En un nodo S2D con unidades NVMe y HDD, ¿qué unidades se convierten en caché?</summary><p>Las unidades NVMe, porque S2D usa automáticamente el tipo de unidad más rápido como caché de las unidades de capacidad más lentas.</p></details>
+<details class="sq"><summary>¿Por qué no se recomienda Scale-Out File Server para las carpetas particulares de usuarios?</summary><p>Las cargas de trabajo de usuarios generan muchas operaciones de metadatos sobre archivos pequeños, que SOFS maneja mal; está optimizado para archivos de aplicaciones grandes y abiertos durante mucho tiempo, como VHDX y bases de datos.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AZ-802 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-802/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../failover-clustering-validation-cluster-networks-quorum-models-and-witn/">← Clústeres de conmutación por error: validación, redes de clú</a><a href="../storage-replica-synchronous-vs-asynchronous-server-to-server-and-stret/">Storage Replica: sincrónica frente a asincrónica, de servido →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rutas definidas por el usuario: tablas de rutas, tipos de … · Lección de Azure Administrator</title>
+<meta name="description" content="Azure enruta el tráfico automáticamente con rutas del sistema (system routes), que no puedes eliminar. Cada subred recibe una ruta para el propio espacio d">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Rutas definidas por el usuario: tablas de rutas, tipos de … · Lección de Azure Administrator">
+<meta property="og:description" content="Azure enruta el tráfico automáticamente con rutas del sistema (system routes), que no puedes eliminar. Cada subred recibe una ruta para el propio espacio d">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-104/lessons/user-defined-routes-route-tables-next-hop-types-virtual-appliance-virt/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-104/lessons/user-defined-routes-route-tables-next-hop-types-virtual-appliance-virt/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-104/">Azure Administrator</a> / <a href="../">Lecciones</a> · <a href="../../../../az-104/lessons/user-defined-routes-route-tables-next-hop-types-virtual-appliance-virt/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure Administrator Associate AZ-104</p>
+<h1>Rutas definidas por el usuario: tablas de rutas, tipos de próximo salto (aplicación virtual, puerta de enlace de red virtual, internet, ninguno) y tunelización forzada</h1>
+<article class="lbody">
+<p>Azure enruta el tráfico automáticamente con rutas del sistema (system routes), que no puedes eliminar. Cada subred recibe una ruta para el propio espacio de direcciones de la VNet (próximo salto Virtual network), una ruta predeterminada 0.0.0.0/0 hacia Internet, rutas para las VNet emparejadas y rutas aprendidas de las puertas de enlace. Ciertos intervalos privados y reservados que no se usan en la VNet reciben el próximo salto None, así que el tráfico hacia ellos se descarta. Esto funciona bien hasta que quieres que el tráfico vaya a otro lugar, normalmente a través de un firewall.</p>
+<p>Las rutas definidas por el usuario (UDR) te permiten anular las rutas del sistema. Creas un recurso de tabla de rutas (route table), le agregas rutas y asocias la tabla de rutas con una o más subredes. Una tabla de rutas afecta al tráfico que sale de los recursos de las subredes a las que está asociada; nunca se asocia con una NIC ni con toda una VNet, y cada subred puede tener como máximo una tabla de rutas. La tabla de rutas debe estar en la misma región y suscripción que la VNet.</p>
+<p>Cada ruta tiene un prefijo de dirección (destino) y un tipo de próximo salto (next hop). Virtual appliance envía el tráfico a la IP privada de una aplicación virtual de red (NVA), como Azure Firewall o una VM de firewall de terceros; debes indicar esa dirección IP de próximo salto. Virtual network gateway envía el tráfico a la puerta de enlace de VPN, normalmente hacia el entorno local. Virtual network enruta el tráfico dentro de la VNet, útil para anular una regla más amplia para un intervalo específico. Internet envía el tráfico directamente a internet. None descarta el tráfico, una forma sencilla de bloquear un destino.</p>
+<p>Cuando varias rutas coinciden con un destino, Azure elige la coincidencia de prefijo más largo: una ruta /24 gana sobre una ruta /16. Si hay rutas con el mismo prefijo de orígenes diferentes, una UDR gana sobre una ruta BGP (Border Gateway Protocol) aprendida de una puerta de enlace, que a su vez gana sobre una ruta del sistema. La tabla de rutas también tiene la configuración 'Propagate gateway routes'; desactivarla impide que las rutas aprendidas por la puerta de enlace de VPN o ExpressRoute se agreguen a la subred.</p>
+<p>Una NVA reenvía tráfico que no va dirigido a ella misma, así que en su interfaz de red debes habilitar el reenvío IP (IP forwarding) en Azure (y el enrutamiento dentro de su SO). Olvidar esto es una razón común por la que el tráfico desaparece después de agregar una UDR. Una regla típica de hub-and-spoke es una UDR en cada subred radio: 0.0.0.0/0 con próximo salto Virtual appliance 10.0.1.4 (el firewall), para que todo el tráfico saliente y entre radios sea inspeccionado.</p>
+<p>La tunelización forzada (forced tunneling) significa enviar todo el tráfico con destino a internet de vuelta al entorno local para su inspección, en lugar de dejar que salga directamente de Azure. Con una puerta de enlace de VPN, creas una UDR para 0.0.0.0/0 con próximo salto Virtual network gateway (y configuras el sitio predeterminado en la puerta de enlace basada en rutas); con ExpressRoute, el entorno local anuncia una ruta predeterminada mediante BGP. Usa las rutas efectivas o la herramienta de próximo salto de Network Watcher para confirmar qué ruta sigue realmente el tráfico de una VM.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>System route (ruta del sistema)</dt><dd>Una ruta predeterminada que Azure crea automáticamente para cada subred, como el intervalo de la VNet y 0.0.0.0/0 hacia internet.</dd><dt>Route table (tabla de rutas)</dt><dd>Un recurso que contiene rutas definidas por el usuario y que se asocia con subredes para controlar el tráfico saliente.</dd><dt>Virtual appliance next hop (próximo salto de aplicación virtual)</dt><dd>Un próximo salto de ruta que reenvía el tráfico a la IP privada de una aplicación virtual de red, como un firewall.</dd><dt>Forced tunneling (tunelización forzada)</dt><dd>Enrutar todo el tráfico con destino a internet de vuelta al entorno local a través de una conexión VPN o ExpressRoute.</dd><dt>IP forwarding (reenvío IP)</dt><dd>Una configuración de NIC que permite a una VM reenviar tráfico que no va dirigido a ella, necesaria para las NVA.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Seguridad exige que todo el tráfico desde las subredes de aplicaciones hacia internet pase por Azure Firewall en 10.0.1.4. El administrador crea una tabla de rutas con 0.0.0.0/0 y próximo salto Virtual appliance 10.0.1.4 y la asocia con cada subred de aplicaciones. Una prueba con la herramienta de próximo salto de Network Watcher muestra la IP del firewall como próximo salto para un destino de internet.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Las tablas de rutas se asocian con subredes, no con NIC. Gana el prefijo más largo; en caso de empate, UDR gana sobre BGP, que gana sobre las rutas del sistema. Virtual appliance necesita una IP de próximo salto y reenvío IP en la NIC de la NVA. None descarta el tráfico.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué tipo de próximo salto descarta el tráfico hacia un destino?</summary><p>None.</p></details>
+<details class="sq"><summary>Una UDR envía el tráfico a una VM de firewall, pero el tráfico nunca llega a su destino. ¿Qué configuración de la NIC deberías revisar en la VM de firewall?</summary><p>El reenvío IP, que debe estar habilitado para que una VM reenvíe tráfico que no va dirigido a ella.</p></details>
+<details class="sq"><summary>¿Cómo fuerzas que todo el tráfico con destino a internet de las subredes de Azure vuelva al entorno local por una VPN de sitio a sitio?</summary><p>Agrega una UDR para 0.0.0.0/0 con próximo salto Virtual network gateway (tunelización forzada), con un sitio predeterminado en la puerta de enlace de VPN basada en rutas.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Azure Administrator gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-104/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../public-ip-addresses-standard-sku-static-allocation-zones/">← Direcciones IP públicas: SKU Standard, asignación estática y</a><a href="../network-security-groups-and-application-security-groups-rule-priority/">Grupos de seguridad de red y grupos de seguridad de aplicaci →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cómo `command` y `args` del Pod sobrescriben ENTRYPOINT y … · Lección de CKAD</title>
+<meta name="description" content="Kubernetes te permite cambiar cómo arranca un contenedor sin reconstruir su imagen. En la especificación de un contenedor, el campo command sobrescribe el ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Cómo `command` y `args` del Pod sobrescriben ENTRYPOINT y … · Lección de CKAD">
+<meta property="og:description" content="Kubernetes te permite cambiar cómo arranca un contenedor sin reconstruir su imagen. En la especificación de un contenedor, el campo command sobrescribe el ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/how-pod-command-and-args-override-the-image-entrypoint-and-cmd/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/how-pod-command-and-args-override-the-image-entrypoint-and-cmd/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/how-pod-command-and-args-override-the-image-entrypoint-and-cmd/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>Cómo `command` y `args` del Pod sobrescriben ENTRYPOINT y CMD de la imagen</h1>
+<article class="lbody">
+<p>Kubernetes te permite cambiar cómo arranca un contenedor sin reconstruir su imagen. En la especificación de un contenedor, el campo <code>command</code> sobrescribe el ENTRYPOINT de la imagen y el campo <code>args</code> sobrescribe su CMD. La nomenclatura confunde porque el CMD de Docker es el args de Kubernetes, así que vale la pena memorizar la equivalencia: command = ENTRYPOINT, args = CMD.</p>
+<p>Hay cuatro combinaciones. Si no defines ninguno, se ejecutan el ENTRYPOINT y el CMD de la imagen tal como se construyeron. Si defines solo <code>args</code>, se ejecuta el ENTRYPOINT de la imagen con tus args en lugar del CMD de la imagen. Si defines solo <code>command</code>, se ejecuta tu comando y el CMD de la imagen se ignora por completo (no se agrega al final). Si defines ambos, se ejecuta tu comando con tus args y los valores por defecto de la imagen se ignoran.</p>
+<p>Ambos campos son arreglos de strings, y Kubernetes no los pasa por un shell. Eso significa que <code>command: [&quot;echo $HOME&quot;]</code> no funciona como lo haría en una terminal: no hay shell que separe palabras o expanda variables. Cuando necesites funciones de shell como pipes, <code>&amp;&amp;</code>, bucles o redirecciones, invoca un shell explícitamente.</p>
+<pre class="code" tabindex="0"><code>apiVersion: v1
+kind: Pod
+metadata:
+  name: looper
+spec:
+  containers:
+  - name: app
+    image: busybox
+    command: [&quot;sh&quot;, &quot;-c&quot;]
+    args: [&quot;while true; do date; sleep 5; done&quot;]</code></pre>
+<p>Kubernetes sí expande su propia sintaxis de variables <code>$(VAR_NAME)</code> dentro de command y args, usando las variables de entorno definidas en la lista <code>env</code> del contenedor. Así, <code>args: [&quot;--port=$(PORT)&quot;]</code> funciona si <code>PORT</code> está definida en <code>env</code>. Si la variable no existe, el texto se deja tal como está escrito. Esta expansión la hace Kubernetes, no un shell.</p>
+<p>La forma más rápida de producir este YAML en el examen es la generación imperativa. <code>kubectl run looper --image=busybox --dry-run=client -o yaml -- sh -c 'while true; do date; sleep 5; done'</code> pone todo lo que va después de <code>--</code> en <code>args</code>. Agregar <code>--command</code> cambia eso: <code>kubectl run t --image=busybox --command -- sleep 3600</code> pone las palabras en <code>command</code>. Revisa el YAML generado antes de aplicarlo.</p>
+<p>Al depurar, <code>kubectl describe pod</code> muestra los Command y Args efectivos de cada contenedor, y <code>kubectl get pod &lt;name&gt; -o yaml</code> muestra exactamente lo que escribiste. Un contenedor que termina de inmediato con estado Completed o CrashLoopBackOff suele ser señal de que la sobrescritura reemplazó un comando de servidor de larga duración por algo que termina, o de que se pasó una cadena de shell sin <code>sh -c</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>command</dt><dd>Campo del contenedor que reemplaza el ENTRYPOINT de la imagen.</dd><dt>args</dt><dd>Campo del contenedor que reemplaza el CMD de la imagen.</dd><dt>$(VAR) expansion (expansión de $(VAR))</dt><dd>Sustitución que hace Kubernetes de las variables de entorno del contenedor dentro de command y args, sin usar un shell.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>El ENTRYPOINT de una imagen es <code>nginx</code> con CMD <code>-g daemon off;</code>. Una tarea te pide iniciarla en modo debug. Definir solo <code>args: [&quot;-g&quot;, &quot;daemon off;&quot;, &quot;-e&quot;, &quot;stderr&quot;]</code> mantiene el entrypoint de nginx y reemplaza solo los argumentos por defecto, sin necesidad de reconstruir la imagen.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Definir solo <code>command</code> descarta el CMD de la imagen en lugar de agregarlo al final. Y <code>--command</code> en kubectl run decide si las palabras después de <code>--</code> terminan en command o en args.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué campo de Kubernetes sobrescribe el CMD de un Dockerfile?</summary><p><code>args</code>. El campo <code>command</code> sobrescribe ENTRYPOINT.</p></details>
+<details class="sq"><summary>¿Por qué falla <code>command: [&quot;echo hello &amp;&amp; sleep 10&quot;]</code>?</summary><p>Kubernetes lo ejecuta sin shell, así que busca un programa cuyo nombre sea literalmente toda esa cadena; usa <code>[&quot;sh&quot;, &quot;-c&quot;, &quot;echo hello &amp;&amp; sleep 10&quot;]</code>.</p></details>
+<details class="sq"><summary>¿Qué define <code>kubectl run p --image=busybox -- sleep 60</code>?</summary><p>Define <code>args: [sleep, 60]</code>. La imagen busybox no tiene ENTRYPOINT, así que esos args se convierten en el comando completo que se ejecuta.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../building-tagging-saving-and-loading-images-with-docker-or-podman-build/">← Construir, etiquetar, guardar y cargar imágenes con docker o</a><a href="../choosing-a-workload-deployment-statefulset-daemonset-job-cronjob-bare/">Elegir un workload: Deployment, StatefulSet, DaemonSet, Job, →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Resiliencia y aprovisionamiento de Storage Spaces; ReFS fr… · Lección de AZ-802</title>
+<meta name="description" content="Storage Spaces es almacenamiento definido por software integrado en Windows Server. Te permite agrupar discos comunes en un grupo de almacenamiento (storag">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Resiliencia y aprovisionamiento de Storage Spaces; ReFS fr… · Lección de AZ-802">
+<meta property="og:description" content="Storage Spaces es almacenamiento definido por software integrado en Windows Server. Te permite agrupar discos comunes en un grupo de almacenamiento (storag">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-802/lessons/storage-spaces-resiliency-and-provisioning-refs-vs-ntfs-data-deduplica/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-802/lessons/storage-spaces-resiliency-and-provisioning-refs-vs-ntfs-data-deduplica/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-802/">AZ-802</a> / <a href="../">Lecciones</a> · <a href="../../../../az-802/lessons/storage-spaces-resiliency-and-provisioning-refs-vs-ntfs-data-deduplica/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802</p>
+<h1>Resiliencia y aprovisionamiento de Storage Spaces; ReFS frente a NTFS; desduplicación de datos</h1>
+<article class="lbody">
+<p>Storage Spaces es almacenamiento definido por software integrado en Windows Server. Te permite agrupar discos comunes en un grupo de almacenamiento (storage pool) y luego crear discos virtuales (llamados espacios de almacenamiento) a partir del grupo con la resiliencia que elijas. Sustituye la necesidad de una controladora RAID de hardware en un solo servidor y es la base de Storage Spaces Direct en los clústeres.</p>
+<p>Los tipos de resiliencia intercambian capacidad por protección. Simple distribuye los datos en bandas sin redundancia; es rápido, pero cualquier falla de disco pierde datos, así que úsalo solo para datos temporales. Mirror (reflejo) guarda copias: un reflejo bidireccional almacena dos copias y sobrevive a la falla de un disco (al menos dos discos), y un reflejo de tres vías almacena tres copias y sobrevive a dos fallas (al menos cinco discos en un solo servidor). Parity (paridad) almacena datos más información de paridad, como RAID 5 o 6, usando la capacidad de forma más eficiente pero con escrituras más lentas; es adecuada para datos de archivo o secuenciales. Las columnas establecen en cuántos discos se distribuye un disco virtual, lo que afecta al rendimiento y a cuántos discos agregas a la vez al ampliarlo.</p>
+<p>El aprovisionamiento puede ser fijo o fino (thin). El aprovisionamiento fijo asigna todo el espacio por adelantado. El aprovisionamiento fino te permite crear un disco virtual más grande que el espacio libre actual del grupo, asignando solo a medida que se escriben datos; debes supervisar el grupo y agregar discos antes de que se llene. También puedes marcar discos como repuestos en caliente (hot spares) o confiar en la reconstrucción a nivel de grupo. En PowerShell, <code>New-StoragePool</code>, <code>New-VirtualDisk -ResiliencySettingName Mirror -ProvisioningType Thin</code> y <code>Get-PhysicalDisk -CanPool $true</code> son los comandos principales; un disco dañado muestra el grupo como degradado mientras los datos siguen en línea.</p>
+<p>Resilient File System (ReFS) y NTFS son los dos sistemas de archivos principales. ReFS está diseñado para volúmenes grandes y para la integridad: calcula sumas de comprobación de los metadatos (y de los datos cuando las secuencias de integridad están activadas), puede reparar automáticamente la corrupción a partir de una copia en reflejo en Storage Spaces, ofrece la clonación de bloques que hace muy rápidas las combinaciones de puntos de control VHDX y usa una longitud de datos válida dispersa para que crear o ampliar archivos VHDX fijos sea casi instantáneo. Por eso se recomienda ReFS para los volúmenes de Hyper-V y de Storage Spaces Direct. NTFS sigue siendo la opción de uso general y admite características que le faltan a ReFS, como arrancar Windows, la compresión de archivos NTFS, Encrypting File System (EFS) y las cuotas de disco por usuario. No puedes convertir entre ellos en el lugar; hay que volver a formatear y copiar.</p>
+<p>La desduplicación de datos (Data Deduplication) encuentra fragmentos de datos repetidos entre los archivos de un volumen y almacena cada fragmento una sola vez, lo que puede ahorrar mucho espacio en recursos compartidos de archivos, archivos VHDX de VDI (escritorio virtual) y destinos de copia de seguridad. Funciona como posproceso: los archivos se escriben normalmente y más tarde un trabajo de optimización programado los divide en fragmentos en un almacén de fragmentos, dejando puntos de reanálisis. Otros trabajos, la recolección de elementos no utilizados y la depuración de integridad, limpian y verifican. Habilítala por volumen con <code>Enable-DedupVolume -Volume E: -UsageType Default</code> (servidor de archivos general), <code>HyperV</code> (VDI) o <code>Backup</code>. La desduplicación no es compatible con los volúmenes del sistema o de arranque y omite los archivos más recientes que una antigüedad mínima configurable. Funciona en NTFS y, en las versiones actuales, en ReFS.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Storage pool (grupo de almacenamiento)</dt><dd>Un grupo de discos físicos a partir del cual se crean los discos virtuales de Storage Spaces.</dd><dt>Two-way vs three-way mirror (reflejo bidireccional frente a de tres vías)</dt><dd>Resiliencia de reflejo que conserva dos copias (tolera la falla de un disco) o tres copias (tolera dos).</dd><dt>Thin provisioning (aprovisionamiento fino)</dt><dd>Crear un disco virtual más grande que el espacio disponible y asignar capacidad solo a medida que se escriben datos.</dd><dt>ReFS</dt><dd>Resilient File System, que calcula sumas de comprobación de los metadatos (y de los datos con secuencias de integridad), se autorrepara con los reflejos de Storage Spaces y admite la clonación rápida de bloques.</dd><dt>Data Deduplication (desduplicación de datos)</dt><dd>Una característica de posproceso que almacena una sola vez por volumen los fragmentos de datos duplicados, con los tipos de uso Default, HyperV y Backup.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un administrador que construye un host de VDI agrupa seis SSD, crea un espacio de reflejo bidireccional con aprovisionamiento fino formateado con ReFS para los archivos VHDX de los escritorios virtuales y habilita la desduplicación con el tipo de uso HyperV. Las muchas imágenes de escritorio casi idénticas se reducen drásticamente, y una falla de disco deja el grupo degradado pero en línea hasta que se reemplaza el disco.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Aprende lo que NTFS tiene y ReFS no (arranque, compresión, EFS, cuotas de disco), y nunca elijas la desduplicación para el volumen del sistema. El aprovisionamiento fino puede quedarse sin espacio real, así que necesita supervisión.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué tipo de resiliencia ofrece la mejor eficiencia de capacidad con protección y cuál es su desventaja?</summary><p>La paridad; usa la capacidad de forma eficiente, pero tiene escrituras aleatorias más lentas, así que es adecuada para cargas de trabajo de archivo o secuenciales.</p></details>
+<details class="sq"><summary>¿Por qué se recomienda ReFS para el almacenamiento de VHDX de Hyper-V?</summary><p>La clonación de bloques hace rápidas las combinaciones de puntos de control, la longitud de datos válida dispersa hace rápida la creación de VHDX fijos, y las sumas de comprobación con reparación automática protegen los volúmenes grandes.</p></details>
+<details class="sq"><summary>¿Qué tipo de uso de desduplicación es adecuado para un volumen que almacena archivos VHDX de escritorios virtuales?</summary><p>HyperV, el tipo de uso diseñado para cargas de trabajo de VDI.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AZ-802 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-802/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../file-server-resource-manager-quotas-and-file-screens-dfs-namespaces-an/">← Cuotas y filtros de archivos de File Server Resource Manager</a><a href="../failover-clustering-validation-cluster-networks-quorum-models-and-witn/">Clústeres de conmutación por error: validación, redes de clú →</a></nav>
+</main>
+</body>
+</html>

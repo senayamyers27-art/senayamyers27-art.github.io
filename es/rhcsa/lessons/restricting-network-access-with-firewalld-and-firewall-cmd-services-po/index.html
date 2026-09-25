@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Restringir el acceso de red con firewalld y firewall-cmd (… · Lección de RHCSA</title>
+<meta name="description" content="Un firewall de host decide qué conexiones de red entrantes llegan a los servicios de la máquina. RHEL usa firewalld, un servicio que gestiona por ti el fil">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Restringir el acceso de red con firewalld y firewall-cmd (… · Lección de RHCSA">
+<meta property="og:description" content="Un firewall de host decide qué conexiones de red entrantes llegan a los servicios de la máquina. RHEL usa firewalld, un servicio que gestiona por ti el fil">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/restricting-network-access-with-firewalld-and-firewall-cmd-services-po/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/restricting-network-access-with-firewalld-and-firewall-cmd-services-po/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/restricting-network-access-with-firewalld-and-firewall-cmd-services-po/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Restringir el acceso de red con firewalld y firewall-cmd (servicios, puertos, zonas, --permanent, --reload)</h1>
+<article class="lbody">
+<p>Un firewall de host decide qué conexiones de red entrantes llegan a los servicios de la máquina. RHEL usa firewalld, un servicio que gestiona por ti el filtrado de paquetes del kernel (nftables). Describes lo que quieres permitir en términos de zonas, servicios y puertos, y firewalld construye las reglas de bajo nivel. <code>firewall-cmd</code> es el cliente de línea de comandos, y firewalld debe estar en ejecución para que funcione (<code>systemctl enable --now firewalld</code>).</p>
+<p>Una zona es un nivel de confianza con su propio conjunto de servicios permitidos. Cada interfaz de red pertenece a una zona, y la zona predeterminada, normalmente <code>public</code>, se aplica a las interfaces que no están asignadas a otra. La zona <code>public</code> permite por defecto poco más que SSH, el cliente DHCPv6 y, en RHEL, el tráfico de cockpit (la consola web). Todo lo que no está permitido en la zona se rechaza.</p>
+<p>Un servicio es una definición con nombre de puertos y protocolos, como <code>http</code> (TCP 80), <code>https</code> (TCP 443), <code>nfs</code> o <code>ssh</code>. Lístalos con <code>firewall-cmd --get-services</code>. Cuando un programa usa un puerto sin definición de servicio, o un puerto no estándar, abre el propio puerto con la forma <code>port/protocol</code>, como <code>8080/tcp</code>.</p>
+<pre class="code" tabindex="0"><code>firewall-cmd --get-default-zone
+firewall-cmd --list-all                   # reglas de la zona predeterminada
+firewall-cmd --permanent --add-service=http
+firewall-cmd --permanent --add-port=8080/tcp
+firewall-cmd --permanent --remove-service=cockpit
+firewall-cmd --reload
+firewall-cmd --list-all</code></pre>
+<p>La idea clave es tiempo de ejecución (runtime) frente a permanente. Sin <code>--permanent</code>, un cambio afecta de inmediato al firewall en ejecución, pero se pierde al recargar o reiniciar. Con <code>--permanent</code>, el cambio se guarda en la configuración pero no se aplica hasta <code>firewall-cmd --reload</code>. El patrón habitual en el examen es añadir las reglas con <code>--permanent</code> y luego recargar. Como alternativa, haz cambios en tiempo de ejecución, pruébalos y guárdalo todo con <code>firewall-cmd --runtime-to-permanent</code>.</p>
+<p>Añade <code>--zone=name</code> para trabajar en una zona distinta de la predeterminada. <code>firewall-cmd --get-active-zones</code> muestra qué zonas están en uso y por qué interfaces. Termina siempre revisando <code>firewall-cmd --list-all</code> después de recargar, porque muestra el estado en tiempo de ejecución, que después de una recarga es igual al estado permanente.</p>
+<p>Recuerda que el firewall es una de varias barreras. Un cliente todavía puede quedar bloqueado porque el servicio no escucha, por SELinux o por los propios ajustes de acceso del servicio. Cuando un servicio funciona localmente pero no de forma remota, el firewall es lo primero que hay que revisar.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>firewalld</dt><dd>El servicio de firewall de RHEL que gestiona las reglas de filtrado de paquetes mediante zonas, servicios y puertos.</dd><dt>Zone (zona)</dt><dd>Un nivel de confianza con nombre que contiene los servicios y puertos permitidos, aplicado a interfaces o direcciones de origen.</dd><dt>--permanent</dt><dd>Guarda un cambio de firewall-cmd en la configuración sin aplicarlo hasta una recarga.</dd><dt>--reload</dt><dd>Recarga firewalld para que la configuración permanente pase a ser la configuración en ejecución, descartando los cambios que solo eran de tiempo de ejecución.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un servidor web debe aceptar HTTP y una aplicación de gestión en TCP 8443. Ejecutas firewall-cmd --permanent --add-service=http y --permanent --add-port=8443/tcp, luego firewall-cmd --reload. --list-all muestra los servicios, incluido http, y los puertos 8443/tcp, y un navegador en otra máquina puede llegar a ambos.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Un cambio con --permanent sin --reload todavía no hace nada; un cambio sin --permanent desaparece en la siguiente recarga o reinicio. El evaluador del examen reinicia, así que permanente más recarga es el patrón seguro.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué le pasa a una regla añadida sin --permanent cuando firewalld se recarga?</summary><p>Se pierde, porque la recarga reemplaza la configuración en ejecución por la permanente.</p></details>
+<details class="sq"><summary>¿Cómo abres el puerto TCP 8080 de forma permanente en la zona predeterminada?</summary><p>firewall-cmd --permanent --add-port=8080/tcp y luego firewall-cmd --reload.</p></details>
+<details class="sq"><summary>¿Qué comando muestra las reglas en ejecución de la zona predeterminada?</summary><p>firewall-cmd --list-all.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../configuring-network-services-to-start-automatically-at-boot/">← Configurar servicios de red para que arranquen automáticamen</a><a href="../using-nmtui-as-a-text-based-alternative-to-nmcli/">Usar nmtui como alternativa en modo texto a nmcli →</a></nav>
+</main>
+</body>
+</html>

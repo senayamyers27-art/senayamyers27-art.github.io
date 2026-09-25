@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Endurecimiento de SSH: autenticación por claves, ssh-copy-… · Lección de Linux+</title>
+<meta name="description" content="SSH (Secure Shell) es la forma en que administras casi todos los servidores Linux, lo que lo convierte en uno de los servicios más atacados de internet. Lo">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Endurecimiento de SSH: autenticación por claves, ssh-copy-… · Lección de Linux+">
+<meta property="og:description" content="SSH (Secure Shell) es la forma en que administras casi todos los servidores Linux, lo que lo convierte en uno de los servicios más atacados de internet. Lo">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/linux-plus/lessons/ssh-hardening-key-based-auth-ssh-copy-id-sshd-config-permitrootlogin-p/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/linux-plus/lessons/ssh-hardening-key-based-auth-ssh-copy-id-sshd-config-permitrootlogin-p/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../linux-plus/">Linux+</a> / <a href="../">Lecciones</a> · <a href="../../../../linux-plus/lessons/ssh-hardening-key-based-auth-ssh-copy-id-sshd-config-permitrootlogin-p/" hreflang="en" lang="en">English</a></p>
+<p class="note">CompTIA Linux+ XK0-006</p>
+<h1>Endurecimiento de SSH: autenticación por claves, ssh-copy-id, sshd_config (PermitRootLogin, PasswordAuthentication)</h1>
+<article class="lbody">
+<p>SSH (Secure Shell) es la forma en que administras casi todos los servidores Linux, lo que lo convierte en uno de los servicios más atacados de internet. Los bots automatizados prueban constantemente nombres de usuario y contraseñas comunes. Endurecer SSH significa reemplazar las contraseñas por claves, restringir quién puede iniciar sesión y mantener una configuración estricta.</p>
+<p>La autenticación basada en claves usa un par de claves. La clave privada se queda en tu estación de trabajo, idealmente protegida por una frase de contraseña (passphrase); la clave pública se coloca en el servidor, en <code>~/.ssh/authorized_keys</code> de la cuenta con la que inicias sesión. Durante el inicio de sesión, el servidor desafía al cliente a demostrar que posee la clave privada, que nunca se envía por la red. Las claves son mucho más difíciles de adivinar que las contraseñas y no se pueden robar por phishing de la misma manera. Genera un par con <code>ssh-keygen -t ed25519</code> (Ed25519 es el valor predeterminado moderno; RSA con un tamaño de clave grande también es común), lo que crea <code>~/.ssh/id_ed25519</code> y <code>~/.ssh/id_ed25519.pub</code>.</p>
+<p><code>ssh-copy-id user@server</code> agrega tu clave pública al authorized_keys del servidor y establece permisos razonables, usando tu contraseña una última vez. Los permisos importan: sshd rechaza las claves si <code>~/.ssh</code> es escribible por otros; usa 700 para <code>~/.ssh</code> y 600 para <code>authorized_keys</code> y las claves privadas. <code>ssh-agent</code> con <code>ssh-add</code> mantiene una clave descifrada en memoria para que escribas la frase de contraseña una vez por sesión. Las configuraciones del lado del cliente, como alias de host, usuarios y archivos de clave, van en <code>~/.ssh/config</code>.</p>
+<p>El demonio del servidor se configura en <code>/etc/ssh/sshd_config</code>, y muchas distribuciones también leen archivos drop-in de <code>/etc/ssh/sshd_config.d/</code>. Configuraciones clave de endurecimiento: <code>PermitRootLogin no</code> impide los inicios de sesión directos como root, para que los administradores entren con su propia cuenta y usen sudo, lo que además mejora la trazabilidad; <code>prohibit-password</code> permite root solo con claves. <code>PasswordAuthentication no</code> deshabilita por completo las contraseñas una vez que las claves funcionan, deteniendo los ataques de fuerza bruta; puede que también sea necesario deshabilitar las configuraciones relacionadas de keyboard-interactive. <code>PubkeyAuthentication yes</code> mantiene habilitadas las claves. <code>AllowUsers</code> o <code>AllowGroups</code> restringen los inicios de sesión a cuentas nombradas, <code>MaxAuthTries</code> limita los intentos por conexión, <code>LoginGraceTime</code> acorta la ventana de inicio de sesión y <code>X11Forwarding no</code> deshabilita funciones innecesarias. Cambiar <code>Port</code> reduce el ruido en los logs, pero no es seguridad real; en sistemas con SELinux, un puerto nuevo también necesita <code>semanage port -a -t ssh_port_t -p tcp &lt;port&gt;</code>, además de una regla de firewall.</p>
+<p>Aplica los cambios con seguridad. Primero ejecuta <code>sshd -t</code> para probar la sintaxis y luego <code>systemctl reload sshd</code> (la unidad se llama <code>ssh</code> en sistemas de la familia Debian). Mantén abierta tu sesión actual y prueba un nuevo inicio de sesión en una segunda terminal antes de salir; si algo está mal, todavía puedes corregirlo.</p>
+<p>Agrega controles complementarios: fail2ban puede bloquear las IP que fallan repetidamente la autenticación vigilando los logs, las reglas de firewall pueden restringir SSH a las redes de administración y se puede agregar MFA mediante PAM. Revisa <code>/var/log/secure</code> o <code>/var/log/auth.log</code>, o <code>journalctl -u sshd</code>, en busca de inicios de sesión fallidos. Por último, verifica las claves de host del servidor la primera vez que te conectas; el aviso de la huella digital (fingerprint) te protege contra ataques de intermediario (man-in-the-middle), y <code>~/.ssh/known_hosts</code> registra las claves de confianza.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Key-based authentication (autenticación por claves)</dt><dd>Inicio de sesión con un par de claves privada/pública, donde el servidor guarda la clave pública en authorized_keys.</dd><dt>ssh-copy-id</dt><dd>Copia una clave pública al authorized_keys de una cuenta remota con los permisos correctos.</dd><dt>PermitRootLogin</dt><dd>Configuración de sshd_config que controla si root puede iniciar sesión directamente (no, prohibit-password, yes).</dd><dt>PasswordAuthentication</dt><dd>Configuración de sshd_config que habilita o deshabilita los inicios de sesión con contraseña.</dd><dt>sshd -t</dt><dd>Prueba la configuración del demonio SSH en busca de errores antes de recargarlo.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una nueva VM en la nube muestra miles de intentos fallidos de contraseña de root en su log de autenticación. Creas una clave con ssh-keygen -t ed25519, ejecutas ssh-copy-id admin@vm, confirmas en una segunda terminal que el inicio de sesión con clave funciona, y luego estableces PermitRootLogin no y PasswordAuthentication no en un archivo bajo /etc/ssh/sshd_config.d/, ejecutas sshd -t y recargas sshd. Los intentos de fuerza bruta ahora fallan de inmediato.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El orden importa al endurecer: confirma que el inicio de sesión con claves funciona antes de deshabilitar PasswordAuthentication, y mantén abierta una sesión existente mientras pruebas.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>El inicio de sesión con clave falla y el log del servidor menciona propiedad o modos incorrectos. ¿Qué deberías revisar?</summary><p>Que ~/.ssh sea 700, authorized_keys sea 600 y el directorio personal no sea escribible por el grupo ni por otros, todo propiedad del usuario.</p></details>
+<details class="sq"><summary>¿Por qué PermitRootLogin no se considera una buena práctica?</summary><p>Elimina a root como objetivo directo de los atacantes y obliga a los administradores a iniciar sesión como individuos y elevar privilegios con sudo, lo cual queda registrado y es trazable.</p></details>
+<details class="sq"><summary>¿Qué comando revisa la sintaxis de sshd_config antes de recargar?</summary><p>sshd -t.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Linux+ gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../linux-plus/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../firewalls-firewalld-zones-and-permanent-ufw-nftables-iptables-basics/">← Firewalls (cortafuegos): zonas de firewalld y --permanent, u</a><a href="../privilege-escalation-sudo-visudo-etc-sudoers-d-su-polkit/">Escalada de privilegios: sudo, visudo, /etc/sudoers.d, su, p →</a></nav>
+</main>
+</body>
+</html>

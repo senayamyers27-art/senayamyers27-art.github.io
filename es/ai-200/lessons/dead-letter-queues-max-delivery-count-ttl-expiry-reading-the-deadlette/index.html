@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Colas de mensajes fallidos: número máximo de entregas, exp… · Lección de AI-200</title>
+<meta name="description" content="Cada cola de Service Bus y cada suscripción de un tema tienen una subcola secundaria llamada cola de mensajes fallidos (dead-letter queue, DLQ). Guarda los">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Colas de mensajes fallidos: número máximo de entregas, exp… · Lección de AI-200">
+<meta property="og:description" content="Cada cola de Service Bus y cada suscripción de un tema tienen una subcola secundaria llamada cola de mensajes fallidos (dead-letter queue, DLQ). Guarda los">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/dead-letter-queues-max-delivery-count-ttl-expiry-reading-the-deadlette/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/dead-letter-queues-max-delivery-count-ttl-expiry-reading-the-deadlette/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/dead-letter-queues-max-delivery-count-ttl-expiry-reading-the-deadlette/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Colas de mensajes fallidos: número máximo de entregas, expiración por TTL y lectura de la subcola $DeadLetterQueue</h1>
+<article class="lbody">
+<p>Cada cola de Service Bus y cada suscripción de un tema tienen una subcola secundaria llamada cola de mensajes fallidos (dead-letter queue, DLQ). Guarda los mensajes que no se pudieron entregar ni procesar, para que dejen de bloquear o dar vueltas en la cola principal sin perderse en silencio. No la creas tú; siempre existe, y su ruta es la ruta de la entidad seguida de <code>/$DeadLetterQueue</code>, por ejemplo <code>orders/$DeadLetterQueue</code> u <code>orders/subscriptions/billing/$DeadLetterQueue</code>.</p>
+<p>Los mensajes llegan ahí de tres formas principales. La primera, al superar el max delivery count (número máximo de entregas). En modo peek-lock, cada vez que un mensaje se entrega y no se completa (se abandona o su bloqueo expira), su contador de entregas aumenta. Cuando el contador supera el max delivery count de la entidad (el valor predeterminado es 10), Service Bus mueve el mensaje a la DLQ con el motivo <code>MaxDeliveryCountExceeded</code>. Esto te protege de los mensajes dañinos (poison messages) que fallan para siempre.</p>
+<p>La segunda, por expiración. Cada mensaje tiene un tiempo de vida (TTL), definido por mensaje o heredado de la entidad. Cuando expira, el mensaje simplemente se descarta, a menos que el envío a mensajes fallidos al expirar el mensaje (dead-lettering on message expiration) esté habilitado en la cola o suscripción, en cuyo caso pasa a la DLQ con el motivo <code>TTLExpiredException</code>. Esa configuración está desactivada de forma predeterminada, un detalle común del examen. Para las suscripciones también existe el envío a mensajes fallidos por excepciones en la evaluación de filtros.</p>
+<p>La tercera, de forma explícita desde tu código: <code>receiver.dead_letter_message(msg, reason=..., error_description=...)</code>, para mensajes que sabes que no se pueden procesar, como JSON no válido. Enviarlos explícitamente a mensajes fallidos es mejor que dejar que un mensaje incorrecto se reintente hasta agotar el contador.</p>
+<p>Los mensajes fallidos nunca expiran por sí solos ni se procesan automáticamente, así que necesitas un proceso operativo: alertas sobre el número de mensajes de la DLQ (la métrica dead-lettered message count), inspeccionar los mensajes, corregir la causa y luego reenviarlos o descartarlos. En Python, lees la DLQ solicitando la subcola de mensajes fallidos en un receptor.</p>
+<pre class="code" tabindex="0"><code>from azure.servicebus import ServiceBusSubQueue
+
+with client.get_queue_receiver(&quot;orders&quot;, sub_queue=ServiceBusSubQueue.DEAD_LETTER) as dlq:
+    for msg in dlq.receive_messages(max_message_count=20, max_wait_time=5):
+        print(msg.sequence_number, msg.dead_letter_reason,
+              msg.dead_letter_error_description, msg.delivery_count)
+        # después de corregir la causa: reenvía una copia a la cola principal y luego
+        dlq.complete_message(msg)</code></pre>
+<p>Para reenviar, crea un mensaje nuevo con el mismo cuerpo y propiedades, envíalo a la cola principal y completa la copia fallida. El Service Bus Explorer del portal también puede inspeccionar y reenviar mensajes fallidos, lo cual es práctico en laboratorios. En el caso de los temas, recuerda que cada suscripción tiene su propia DLQ, así que un consumidor de facturación que falla no afecta a envíos.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Dead-letter queue (cola de mensajes fallidos)</dt><dd>Una subcola integrada de cada cola o suscripción que guarda los mensajes que no se pudieron entregar ni procesar.</dd><dt>Max delivery count (número máximo de entregas)</dt><dd>El número de intentos de entrega tras el cual Service Bus envía automáticamente un mensaje a mensajes fallidos; 10 de forma predeterminada.</dd><dt>Poison message (mensaje dañino)</dt><dd>Un mensaje que falla en el procesamiento cada vez y que daría vueltas para siempre sin el envío a mensajes fallidos.</dd><dt>Dead-lettering on expiration (envío a mensajes fallidos al expirar)</dt><dd>Una configuración de la entidad, desactivada de forma predeterminada, que mueve los mensajes expirados a la DLQ en lugar de descartarlos.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Operaciones recibe una alerta de que la DLQ de orders contiene 40 mensajes. Un script que lee la subcola DEAD_LETTER muestra el motivo MaxDeliveryCountExceeded en todos ellos, y las descripciones de error apuntan a un campo de moneda faltante que envía un socio nuevo. Después de una corrección de código que acepta el campo, el equipo reenvía copias a la cola principal y completa los originales fallidos.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Los mensajes expirados se descartan, no se envían a mensajes fallidos, a menos que esté habilitado el envío a mensajes fallidos al expirar; los mensajes dañinos llegan a la DLQ después de superar el max delivery count (10 de forma predeterminada).</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cuál es la ruta de la cola de mensajes fallidos de una suscripción llamada audit en el tema events?</summary><p>events/subscriptions/audit/$DeadLetterQueue, ya que cada suscripción tiene su propia subcola de mensajes fallidos.</p></details>
+<details class="sq"><summary>¿Los mensajes de la DLQ expiran o se reintentan automáticamente?</summary><p>No. Permanecen hasta que los recibes y liquidas, así que necesitas supervisión y un proceso de reenvío.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../receive-modes-peek-lock-complete-abandon-dead-letter-defer-vs-receive/">← Modos de recepción: peek-lock (complete, abandon, dead-lette</a><a href="../sessions-for-ordered-processing-duplicate-detection-scheduled-messages/">Sesiones para el procesamiento ordenado, detección de duplic →</a></nav>
+</main>
+</body>
+</html>

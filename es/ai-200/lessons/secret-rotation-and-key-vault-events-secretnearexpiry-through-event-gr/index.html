@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rotación de secretos y eventos de Key Vault (SecretNearExp… · Lección de AI-200</title>
+<meta name="description" content="Los secretos de larga duración son riesgosos: cuanto más tiempo sigue siendo válida una contraseña o una clave, más oportunidades tiene de filtrarse y usar">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Rotación de secretos y eventos de Key Vault (SecretNearExp… · Lección de AI-200">
+<meta property="og:description" content="Los secretos de larga duración son riesgosos: cuanto más tiempo sigue siendo válida una contraseña o una clave, más oportunidades tiene de filtrarse y usar">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/secret-rotation-and-key-vault-events-secretnearexpiry-through-event-gr/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/secret-rotation-and-key-vault-events-secretnearexpiry-through-event-gr/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/secret-rotation-and-key-vault-events-secretnearexpiry-through-event-gr/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Rotación de secretos y eventos de Key Vault (SecretNearExpiry) mediante Event Grid</h1>
+<article class="lbody">
+<p>Los secretos de larga duración son riesgosos: cuanto más tiempo sigue siendo válida una contraseña o una clave, más oportunidades tiene de filtrarse y usarse de forma indebida. La rotación reemplaza un secreto por un valor nuevo de forma programada y retira el anterior. Si se hace a mano, a menudo se olvida; si se automatiza, se vuelve rutina. Key Vault proporciona los componentes básicos: fechas de expiración, versiones y eventos.</p>
+<p>Empieza por definir una fecha de expiración en cada secreto, que registra cuándo debe reemplazarse. Key Vault publica eventos sobre sus objetos en Event Grid mediante un tema del sistema del almacén. Los eventos de secretos importantes son <code>Microsoft.KeyVault.SecretNewVersionCreated</code> (se agregó una versión nueva), <code>Microsoft.KeyVault.SecretNearExpiry</code> (la versión actual expirará pronto; Key Vault lo genera 30 días antes de la fecha de expiración) y <code>Microsoft.KeyVault.SecretExpired</code>. Las claves y los certificados tienen eventos equivalentes, como CertificateNearExpiry.</p>
+<p>El patrón de rotación estándar: crea una suscripción de Event Grid en el tema del sistema del almacén, filtrada por <code>SecretNearExpiry</code>, con una Azure Function como controlador. Cuando llega el evento, la función lee el nombre del secreto del asunto y los datos del evento, genera o solicita una credencial nueva al servicio que la posee (por ejemplo, regenerar una clave de una cuenta de almacenamiento o restablecer la contraseña de un usuario de base de datos), escribe el valor nuevo en Key Vault como una versión nueva con una nueva fecha de expiración y deja que los consumidores lo tomen. Después, el ciclo se repite automáticamente.</p>
+<pre class="code" tabindex="0"><code>@app.event_grid_trigger(arg_name=&quot;event&quot;)
+def rotate(event: func.EventGridEvent):
+    if event.event_type != &quot;Microsoft.KeyVault.SecretNearExpiry&quot;:
+        return
+    name = event.get_json()[&quot;ObjectName&quot;]
+    new_value = regenerate_credential(name)          # llama al servicio propietario
+    secrets.set_secret(name, new_value,
+                       expires_on=datetime.now(timezone.utc) + timedelta(days=60))</code></pre>
+<p>La identidad administrada de la función necesita Key Vault Secrets Officer (para escribir versiones nuevas) más el permiso que exija el servicio propietario para restablecer la credencial. Los consumidores solo necesitan Key Vault Secrets User.</p>
+<p>Para los servicios con dos claves (cuentas de almacenamiento, claves de Cosmos DB, claves de acceso compartido de Service Bus), el enfoque de doble credencial evita el tiempo de inactividad: las apps usan la clave 1 mientras regeneras la clave 2, guardas la clave 2 en Key Vault, dejas que las apps cambien y luego regeneras la clave 1 en el siguiente ciclo. En ningún momento se invalida la clave en uso. Para sistemas con una sola credencial, crea la credencial nueva antes de revocar la anterior cuando el servicio lo permita.</p>
+<p>La rotación solo sirve si las apps cargan el valor nuevo. Haz referencia a los secretos sin versión (para usar la más reciente), guárdalos en caché por un tiempo limitado y vuelve a cargarlos cuando falle la autenticación, o apóyate en características de la plataforma: las referencias de Key Vault en App Service se actualizan periódicamente, y App Configuration puede actualizarse con una clave centinela. Las claves de Key Vault también tienen una directiva integrada de rotación automática, y los certificados pueden renovarse automáticamente, pero los secretos dependen de este patrón controlado por eventos. Mejor aún, cuando un servicio admita identidades administradas, elimina el secreto por completo.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Secret rotation (rotación de secretos)</dt><dd>Reemplazar periódicamente un secreto por un valor nuevo y retirar el anterior para limitar la exposición.</dd><dt>SecretNearExpiry</dt><dd>Un evento de Key Vault publicado mediante Event Grid 30 días antes de la fecha de expiración de un secreto.</dd><dt>SecretNewVersionCreated</dt><dd>Un evento de Key Vault que se genera cuando se crea una versión nueva de un secreto.</dd><dt>Dual-credential rotation (rotación de doble credencial)</dt><dd>Alternar entre dos claves válidas para que una pueda regenerarse mientras las apps usan la otra.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>La clave de una cuenta de almacenamiento que usa una app heredada debe rotarse cada 60 días. El equipo define una expiración de 60 días en el secreto de Key Vault y suscribe una función a SecretNearExpiry. Treinta días antes de la expiración, la función regenera la clave de almacenamiento que la app no está usando, la guarda como una versión nueva del secreto con una nueva expiración, y la app, que lee la versión más reciente cada hora, cambia sin tiempo de inactividad.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> SecretNearExpiry se activa 30 días antes de la expiración y llega a los controladores mediante Event Grid; el proceso de rotación necesita Secrets Officer, los lectores necesitan Secrets User y los consumidores deben hacer referencia al secreto sin versión para obtener los valores nuevos.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué servicio entrega las notificaciones de expiración próxima de Key Vault a tu función de rotación?</summary><p>Azure Event Grid, mediante un tema del sistema del almacén y una suscripción a eventos filtrada por SecretNearExpiry.</p></details>
+<details class="sq"><summary>¿Por qué usar dos claves al rotar las claves de una cuenta de almacenamiento?</summary><p>Las apps siguen usando una clave válida mientras se regenera la otra, así que la rotación nunca invalida la clave en uso.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../key-vault-secrets-keys-and-certificates-versions-soft-delete-and-purge/">← Key Vault: secretos, claves y certificados, versiones, elimi</a><a href="../key-vault-references-in-app-service-functions-and-container-apps-setti/">Referencias de Key Vault en la configuración de App Service, →</a></nav>
+</main>
+</body>
+</html>

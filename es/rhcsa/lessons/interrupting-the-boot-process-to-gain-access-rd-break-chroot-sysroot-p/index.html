@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Interrumpir el proceso de arranque para obtener acceso (rd… · Lección de RHCSA</title>
+<meta name="description" content="Si se pierde la contraseña de root, los modos de rescate y de emergencia no sirven porque ambos la piden. RHEL documenta un procedimiento de recuperación q">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Interrumpir el proceso de arranque para obtener acceso (rd… · Lección de RHCSA">
+<meta property="og:description" content="Si se pierde la contraseña de root, los modos de rescate y de emergencia no sirven porque ambos la piden. RHEL documenta un procedimiento de recuperación q">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/interrupting-the-boot-process-to-gain-access-rd-break-chroot-sysroot-p/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/interrupting-the-boot-process-to-gain-access-rd-break-chroot-sysroot-p/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/interrupting-the-boot-process-to-gain-access-rd-break-chroot-sysroot-p/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Interrumpir el proceso de arranque para obtener acceso (rd.break, chroot /sysroot, passwd, touch /.autorelabel)</h1>
+<article class="lbody">
+<p>Si se pierde la contraseña de root, los modos de rescate y de emergencia no sirven porque ambos la piden. RHEL documenta un procedimiento de recuperación que detiene el arranque dentro del initramfs, antes de que systemd tome el control del sistema real y antes de que se pida ninguna contraseña. Es una técnica legítima de administración y una tarea clásica del RHCSA. También muestra por qué hay que proteger el acceso físico o de consola a un servidor: cualquiera con acceso a la consola puede hacer lo mismo, por eso los centros de datos restringen el acceso a la consola y por eso se puede usar una contraseña de GRUB o el cifrado de disco para bloquearlo.</p>
+<p>El parámetro clave es <code>rd.break</code>, que entiende dracut, la herramienta que construye el initramfs. Le indica al initramfs que se detenga y te dé un shell justo antes de cambiar al sistema de archivos raíz real. En ese punto la raíz real está montada en solo lectura en <code>/sysroot</code>, y estás trabajando en el diminuto entorno del initramfs.</p>
+<pre class="code" tabindex="0"><code># GRUB: presiona e, añade rd.break al final de la línea linux, Ctrl+X
+mount -o remount,rw /sysroot
+chroot /sysroot
+passwd root                # establecer la nueva contraseña
+touch /.autorelabel
+exit                       # salir del chroot
+exit                       # continuar el arranque (o reiniciar)</code></pre>
+<p>Paso a paso: vuelve a montar <code>/sysroot</code> en lectura-escritura para poder cambiar archivos. <code>chroot /sysroot</code> hace que <code>/sysroot</code> aparezca como <code>/</code> para tu shell, de modo que comandos como <code>passwd</code> actúan sobre el <code>/etc/shadow</code> del sistema real en lugar del initramfs. Cambia la contraseña con <code>passwd</code> (o <code>passwd root</code>). Después crea el archivo vacío <code>/.autorelabel</code>.</p>
+<p>Ese último paso es el que la gente olvida, y es importante por SELinux (Security-Enhanced Linux). Durante este procedimiento la política de SELinux no está cargada, así que cuando <code>passwd</code> reemplaza <code>/etc/shadow</code>, el nuevo archivo no recibe la etiqueta de SELinux correcta. Con SELinux en modo enforcing, el sistema denegaría entonces el acceso al archivo y nadie podría iniciar sesión. <code>/.autorelabel</code> le indica al sistema que vuelva a etiquetar cada archivo con su contexto correcto en el siguiente arranque, lo que tarda unos minutos y provoca un reinicio automático adicional. No lo interrumpas.</p>
+<p>Escribir <code>exit</code> dos veces sale del chroot y luego del shell del initramfs, y el arranque continúa. Algunos sistemas necesitan editar GRUB para quitar <code>rhgb quiet</code> y ver los mensajes, y en algunas máquinas virtuales la consola está en una línea serie, pero el procedimiento es el mismo. Una alternativa que a veces se usa es arrancar con <code>init=/bin/bash</code>; en todos los casos la idea es obtener un shell de root antes de la autenticación y luego restaurar las etiquetas de SELinux.</p>
+<p>Después, verifica iniciando sesión como root con la nueva contraseña. Si el inicio de sesión falla con la contraseña correcta, probablemente se omitió el paso del reetiquetado; puedes corregirlo repitiendo el procedimiento o, desde un shell de root que funcione, con <code>restorecon -v /etc/shadow</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>rd.break</dt><dd>Parámetro del kernel que hace que el initramfs se detenga y abra un shell antes de cambiar a la raíz real.</dd><dt>/sysroot</dt><dd>Donde se monta el sistema de archivos raíz real dentro del initramfs, en solo lectura por defecto.</dd><dt>chroot</dt><dd>Ejecuta un shell tratando un directorio dado como la raíz /, aquí /sysroot.</dd><dt>/.autorelabel</dt><dd>Archivo vacío que provoca un reetiquetado completo de SELinux del sistema de archivos en el siguiente arranque.</dd><dt>dracut</dt><dd>La herramienta que construye el initramfs y entiende los parámetros del kernel rd.*.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>En un sistema del examen no se conoce la contraseña de root. Añades rd.break en GRUB, vuelves a montar /sysroot en lectura-escritura, haces chroot, ejecutas <code>passwd</code> y <code>touch /.autorelabel</code> y luego sales dos veces. El sistema se reetiqueta, se reinicia solo e inicias sesión como root con la nueva contraseña.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Recuerda el orden: remount,rw /sysroot, chroot /sysroot, passwd, touch /.autorelabel, exit, exit. Omitir el autorelabel deja /etc/shadow mal etiquetado y los inicios de sesión fallan bajo SELinux.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué debes volver a montar /sysroot antes de cambiar la contraseña?</summary><p>Está montado en solo lectura en el punto de rd.break, así que el cambio de contraseña no se podría escribir.</p></details>
+<details class="sq"><summary>¿Qué problema evita touch /.autorelabel?</summary><p>Que el nuevo /etc/shadow carezca de un contexto de SELinux correcto, lo que bloquearía los inicios de sesión cuando SELinux está en enforcing.</p></details>
+<details class="sq"><summary>¿Por qué haces chroot en /sysroot?</summary><p>Para que passwd modifique los archivos del sistema real y no el entorno del initramfs.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../booting-into-different-targets-manually-from-the-grub-menu-systemd-uni/">← Arrancar manualmente en distintos targets desde el menú de G</a><a href="../identifying-cpu-and-memory-intensive-processes-with-top-ps-aux-sort-an/">Identificar procesos que consumen mucha CPU y memoria con to →</a></nav>
+</main>
+</body>
+</html>

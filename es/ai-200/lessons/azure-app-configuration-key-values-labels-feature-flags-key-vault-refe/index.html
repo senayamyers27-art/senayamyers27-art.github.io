@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Azure App Configuration: pares clave-valor, etiquetas, mar… · Lección de AI-200</title>
+<meta name="description" content="Azure App Configuration es un servicio administrado para centralizar la configuración de las aplicaciones y las marcas de características (feature flags). ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Azure App Configuration: pares clave-valor, etiquetas, mar… · Lección de AI-200">
+<meta property="og:description" content="Azure App Configuration es un servicio administrado para centralizar la configuración de las aplicaciones y las marcas de características (feature flags). ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/azure-app-configuration-key-values-labels-feature-flags-key-vault-refe/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/azure-app-configuration-key-values-labels-feature-flags-key-vault-refe/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/azure-app-configuration-key-values-labels-feature-flags-key-vault-refe/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Azure App Configuration: pares clave-valor, etiquetas, marcas de características, referencias de Key Vault, actualización con clave centinela e instantáneas</h1>
+<article class="lbody">
+<p>Azure App Configuration es un servicio administrado para centralizar la configuración de las aplicaciones y las marcas de características (feature flags). En lugar de que cada app y cada entorno lleven sus propias copias de la configuración, las apps la cargan al iniciar desde un único almacén y pueden actualizarla en tiempo de ejecución sin volver a implementar. Complementa a Key Vault: App Configuration contiene la configuración común, mientras que los secretos se quedan en Key Vault.</p>
+<p>El elemento básico es un par clave-valor (key-value). Las claves son cadenas, a menudo jerárquicas con un separador como <code>:</code> o <code>/</code>, por ejemplo <code>Orders:MaxBatchSize</code>. Las etiquetas (labels) agregan otra dimensión: la misma clave puede tener varios valores distinguidos por etiqueta, como <code>Dev</code>, <code>Test</code> y <code>Prod</code>, o números de versión. Una app selecciona las claves que necesita con un filtro de claves y elige un filtro de etiquetas para su entorno; para recurrir a los valores sin etiqueta, carga primero las claves sin etiqueta y luego la etiqueta del entorno, para que los valores etiquetados los reemplacen. Los valores pueden tener un tipo de contenido, como JSON.</p>
+<p>Las marcas de características son pares clave-valor especiales (almacenados bajo el prefijo <code>.appconfig.featureflag/</code>) que activan o desactivan características en tiempo de ejecución. Una marca puede estar simplemente habilitada o deshabilitada, o usar filtros como un despliegue por porcentaje, una ventana de tiempo o la segmentación de usuarios y grupos específicos. Las bibliotecas de administración de características evalúan las marcas en tu código, lo que te permite publicar código oculto, habilitarlo gradualmente y apagarlo al instante si algo sale mal.</p>
+<p>App Configuration puede contener referencias de Key Vault: un par clave-valor cuyo contenido lo marca como puntero al URI de un secreto de Key Vault. App Configuration nunca lee el secreto en sí. El proveedor del cliente lo resuelve llamando a Key Vault con la credencial de la app, así que la identidad de la app necesita tanto App Configuration Data Reader como Key Vault Secrets User. Esto ofrece un solo lugar para descubrir la configuración mientras los secretos siguen protegidos.</p>
+<pre class="code" tabindex="0"><code>from azure.appconfiguration.provider import load, SettingSelector, WatchKey
+cred = DefaultAzureCredential()
+config = load(endpoint=APPCONFIG_ENDPOINT, credential=cred,
+    selects=[SettingSelector(key_filter=&quot;Orders:*&quot;, label_filter=&quot;Prod&quot;)],
+    keyvault_credential=cred,
+    refresh_on=[WatchKey(&quot;Orders:Sentinel&quot;)], refresh_interval=60,
+    feature_flag_enabled=True)
+batch = config[&quot;Orders:MaxBatchSize&quot;]
+config.refresh()   # llámalo periódicamente, p. ej. en cada solicitud; solo recarga si cambió la centinela</code></pre>
+<p>Actualizar muchas claves de forma individual es ineficiente y puede cargar un conjunto actualizado a medias. El patrón de clave centinela (sentinel key) resuelve esto: vigilas una sola clave, como <code>Orders:Sentinel</code>. Cuando terminas de actualizar un grupo de configuraciones, cambias el valor de la centinela al final. El proveedor revisa la centinela después del intervalo de actualización y solo cuando cambia vuelve a cargar juntas todas las configuraciones seleccionadas. Tu código llama a <code>refresh()</code> con regularidad; es económico hasta que pasa el intervalo. La actualización también puede basarse en eventos de Event Grid de App Configuration para recibir cambios por push.</p>
+<p>Las instantáneas (snapshots) son copias inmutables, con nombre y de un momento dado, de un conjunto de pares clave-valor elegidos con filtros. Una vez creada, una instantánea nunca cambia, así que una app que carga una instantánea obtiene exactamente la misma configuración cada vez, lo que resulta útil para implementaciones seguras y reversiones: implementa la versión 12 con la instantánea <code>release-12</code> y vuelve a la instantánea anterior si hace falta. Otras características que debes conocer: restauración de revisiones a un momento dado, importación y exportación, réplicas geográficas para la resiliencia y varios niveles de precios (entre ellos Free y Standard) con distintas cuotas y características. Por seguridad, prefiere la autenticación de Microsoft Entra con App Configuration Data Reader en lugar de las claves de acceso.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Label (etiqueta)</dt><dd>Un valor que distingue versiones de la misma clave, que se usa comúnmente para entornos como Dev y Prod.</dd><dt>Feature flag (marca de característica)</dt><dd>Un par clave-valor que activa o desactiva una característica en tiempo de ejecución, opcionalmente con filtros como porcentaje o segmentación.</dd><dt>Sentinel key (clave centinela)</dt><dd>Una sola clave vigilada cuyo cambio indica a la app que vuelva a cargar toda su configuración a la vez.</dd><dt>Snapshot (instantánea)</dt><dd>Una copia inmutable y con nombre de pares clave-valor seleccionados que siempre devuelve la misma configuración.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un equipo ejecuta un mismo conjunto de container apps en tres entornos. Guardan toda la configuración en App Configuration con las etiquetas Dev, Test y Prod, mantienen las contraseñas como referencias de Key Vault y publican un nuevo flujo de pago detrás de una marca de característica con un despliegue del 10 por ciento. Cuando cambian un lote de configuraciones de limitación, actualizan la clave centinela al final, y todas las apps cargan los valores nuevos en menos de un minuto sin reiniciarse.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Valores específicos por entorno significan etiquetas; activar o desactivar en tiempo de ejecución significa marcas de características; recargar todo de forma coherente significa clave centinela; una configuración que nunca cambia para una versión significa instantáneas. Los secretos se quedan en Key Vault, referenciados desde App Configuration.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué actualizar la clave centinela al final cuando cambias varias configuraciones?</summary><p>La app vuelve a cargar todas las configuraciones solo cuando cambia la centinela, así que obtiene el conjunto completo y coherente en lugar de una actualización parcial.</p></details>
+<details class="sq"><summary>¿Qué permisos necesita una app para resolver una referencia de Key Vault almacenada en App Configuration?</summary><p>Acceso de lectura a App Configuration (App Configuration Data Reader) y al secreto en Key Vault (Key Vault Secrets User).</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../key-vault-references-in-app-service-functions-and-container-apps-setti/">← Referencias de Key Vault en la configuración de App Service,</a><a href="../application-insights-with-the-azure-monitor-opentelemetry-distro-for-p/">Application Insights con la Azure Monitor OpenTelemetry Dist →</a></nav>
+</main>
+</body>
+</html>

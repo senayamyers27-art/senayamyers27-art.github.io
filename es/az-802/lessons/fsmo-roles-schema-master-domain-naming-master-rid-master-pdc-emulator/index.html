@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Roles FSMO (maestro de esquema, maestro de nombres de domi… · Lección de AZ-802</title>
+<meta name="description" content="Active Directory es multimaestro: cualquier DC de escritura puede aceptar la mayoría de los cambios. Unas pocas operaciones no pueden ocurrir de forma segu">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Roles FSMO (maestro de esquema, maestro de nombres de domi… · Lección de AZ-802">
+<meta property="og:description" content="Active Directory es multimaestro: cualquier DC de escritura puede aceptar la mayoría de los cambios. Unas pocas operaciones no pueden ocurrir de forma segu">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-802/lessons/fsmo-roles-schema-master-domain-naming-master-rid-master-pdc-emulator/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-802/lessons/fsmo-roles-schema-master-domain-naming-master-rid-master-pdc-emulator/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-802/">AZ-802</a> / <a href="../">Lecciones</a> · <a href="../../../../az-802/lessons/fsmo-roles-schema-master-domain-naming-master-rid-master-pdc-emulator/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802</p>
+<h1>Roles FSMO (maestro de esquema, maestro de nombres de dominio, maestro RID, emulador de PDC, maestro de infraestructura): ubicación, transferencia frente a apropiación</h1>
+<article class="lbody">
+<p>Active Directory es multimaestro: cualquier DC de escritura puede aceptar la mayoría de los cambios. Unas pocas operaciones no pueden ocurrir de forma segura en dos lugares a la vez, así que AD las asigna a DC únicos llamados titulares de roles de Operaciones de maestro único flexible (FSMO), también llamados maestros de operaciones. Hay cinco roles. Dos son de todo el bosque (uno por bosque) y tres son de todo el dominio (uno por dominio).</p>
+<p>Los roles de todo el bosque son el maestro de esquema (schema master), el único DC que puede modificar el esquema (por ejemplo, al instalar Exchange o al elevar el bosque para agregar atributos nuevos), y el maestro de nombres de dominio (domain naming master), que controla la adición y eliminación de dominios y particiones de aplicación. Los roles de todo el dominio son el maestro RID, que entrega grupos de identificadores relativos (RID) a cada DC para que cada nueva entidad de seguridad obtenga un identificador de seguridad (SID) único; el emulador de PDC (PDC emulator), que es la fuente de hora autoritativa del dominio (el PDC de la raíz del bosque debe sincronizarse con una fuente de hora externa), recibe los cambios urgentes de contraseña, procesa los bloqueos de cuentas y es el destino predeterminado para editar la directiva de grupo; y el maestro de infraestructura (infrastructure master), que actualiza las referencias a objetos de otros dominios.</p>
+<p>La guía de ubicación se desprende de lo que hace cada rol. En un entorno pequeño está bien mantener los cinco en un DC bien conectado y bien protegido. El emulador de PDC debe estar en un DC potente en un sitio central, porque los clientes y otros DC lo contactan con frecuencia. El maestro RID suele ubicarse junto con el emulador de PDC. La regla clásica dice no poner el maestro de infraestructura en un servidor de catálogo global, a menos que todos los DC del dominio sean catálogo global o que la Papelera de reciclaje de AD esté habilitada, porque un GC ya contiene todos los objetos y el maestro de infraestructura nunca vería referencias obsoletas. Usa <code>netdom query fsmo</code> o <code>Get-ADDomain</code> y <code>Get-ADForest</code> para ver dónde están los roles.</p>
+<p>Mover un rol tiene dos formas. Una transferencia es un movimiento ordenado mientras el titular actual y el nuevo están en línea: replican, se entregan el rol y no se pierde nada. Lo haces antes de un mantenimiento planificado o de retirar un servidor. Una apropiación (seize) obliga al nuevo DC a tomar el rol cuando el titular anterior ya no existe de forma permanente. Tras una apropiación, el DC anterior nunca debe volver a estar en línea tal como estaba; limpias sus metadatos y, si alguna vez lo recuperas, lo reconstruyes. Apropiarse del maestro RID en particular arriesga grupos de RID duplicados si el titular anterior reaparece.</p>
+<pre class="code" tabindex="0"><code># Transferencia (ambos DC en línea)
+Move-ADDirectoryServerOperationMasterRole -Identity DC2 -OperationMasterRole PDCEmulator,RIDMaster
+# Apropiación (el titular anterior está muerto)
+Move-ADDirectoryServerOperationMasterRole -Identity DC2 -OperationMasterRole SchemaMaster -Force</code></pre>
+<p>El mismo cmdlet hace ambos trabajos: sin <code>-Force</code> intenta una transferencia; con <code>-Force</code> se apropia del rol si la transferencia falla. La herramienta más antigua <code>ntdsutil</code> también ofrece los comandos <code>transfer</code> y <code>seize</code> bajo <code>roles</code>. Las interrupciones breves de la mayoría de los titulares de roles pasan desapercibidas, pero perder el emulador de PDC se nota rápidamente como desfase de hora, problemas de bloqueo de cuentas y retrasos en los cambios de contraseña.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>FSMO role (rol FSMO)</dt><dd>Una operación de maestro único en AD asignada a un DC por bosque o por dominio.</dd><dt>RID master (maestro RID)</dt><dd>Asigna grupos de ID relativos a los DC para que cada nuevo usuario, grupo o equipo obtenga un SID único.</dd><dt>PDC emulator (emulador de PDC)</dt><dd>Rol de todo el dominio que se encarga de la sincronización de hora, los cambios urgentes de contraseña, los bloqueos y, de forma predeterminada, la edición de GPO.</dd><dt>Transfer (transferencia)</dt><dd>Un movimiento ordenado del rol mientras el titular anterior y el nuevo están en línea.</dd><dt>Seize (apropiación)</dt><dd>Una toma forzada del rol cuando el titular anterior no está disponible de forma permanente; el DC anterior no debe regresar.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>DC1, que tiene los cinco roles, sufre una falla de la placa base y será reconstruido desde cero. El administrador se apropia de todos los roles hacia DC2 con Move-ADDirectoryServerOperationMasterRole -Force, ejecuta la limpieza de metadatos de DC1 y más tarde promueve el hardware reconstruido como un DC nuevo con un nombre nuevo.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Aprende qué roles son por bosque (esquema, nombres de dominio) y cuáles son por dominio (RID, emulador de PDC, infraestructura). Por lo tanto, un bosque con tres dominios tiene 2 + (3 x 3) = 11 roles FSMO en total.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué rol FSMO es la fuente de hora autoritativa de un dominio y gestiona los bloqueos de cuentas?</summary><p>El emulador de PDC.</p></details>
+<details class="sq"><summary>¿Cuándo debes apropiarte de un rol en lugar de transferirlo?</summary><p>Solo cuando el titular actual está fuera de línea de forma permanente y no puede recuperarse; en cualquier otro caso, transfiérelo para que ambos DC se entreguen el rol limpiamente.</p></details>
+<details class="sq"><summary>¿Cuántos roles FSMO existen en un bosque de un solo dominio?</summary><p>Cinco: maestro de esquema y maestro de nombres de dominio (de todo el bosque) más maestro RID, emulador de PDC y maestro de infraestructura (de todo el dominio).</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AZ-802 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-802/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../deploying-domain-controllers-install-addsforest-install-addsdomaincont/">← Implementación de controladores de dominio: Install-ADDSFore</a><a href="../sites-subnets-site-links-link-cost-and-bridging-replication-health-wit/">Sitios, subredes, vínculos de sitio, costo de vínculo y puen →</a></nav>
+</main>
+</body>
+</html>

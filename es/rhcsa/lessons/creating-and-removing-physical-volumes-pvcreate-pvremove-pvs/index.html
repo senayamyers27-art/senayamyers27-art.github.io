@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Crear y eliminar volúmenes físicos (pvcreate, pvremove, pvs) · Lección de RHCSA</title>
+<meta name="description" content="LVM (Logical Volume Manager) añade una capa flexible entre los discos y los sistemas de archivos. En lugar de formatear una partición directamente, reúnes ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Crear y eliminar volúmenes físicos (pvcreate, pvremove, pvs) · Lección de RHCSA">
+<meta property="og:description" content="LVM (Logical Volume Manager) añade una capa flexible entre los discos y los sistemas de archivos. En lugar de formatear una partición directamente, reúnes ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/creating-and-removing-physical-volumes-pvcreate-pvremove-pvs/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/creating-and-removing-physical-volumes-pvcreate-pvremove-pvs/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/creating-and-removing-physical-volumes-pvcreate-pvremove-pvs/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Crear y eliminar volúmenes físicos (pvcreate, pvremove, pvs)</h1>
+<article class="lbody">
+<p>LVM (Logical Volume Manager) añade una capa flexible entre los discos y los sistemas de archivos. En lugar de formatear una partición directamente, reúnes almacenamiento de uno o más dispositivos en un pool y extraes volúmenes de él, que después se pueden ampliar, mover o repartir entre discos. LVM tiene tres capas: los volúmenes físicos (PV) en la base, los grupos de volúmenes (VG) que los agrupan y los volúmenes lógicos (LV) que formateas y montas. Esta lección trata la primera capa.</p>
+<p>Un volumen físico es un dispositivo de bloques que se ha inicializado para usarse con LVM. Puede ser un disco completo (<code>/dev/vdb</code>), una partición (<code>/dev/vdb1</code>, idealmente con su tipo establecido en Linux LVM) u otros dispositivos de bloques como un arreglo RAID. Inicializarlo escribe en el dispositivo una pequeña etiqueta LVM y un área de metadatos, que lo identifica como perteneciente a LVM y más tarde registra a qué grupo de volúmenes pertenece. Su espacio se divide en extensiones físicas (physical extents), las unidades que reparte un grupo de volúmenes; su tamaño se fija cuando el dispositivo se une a un grupo de volúmenes.</p>
+<pre class="code" tabindex="0"><code>lsblk /dev/vdb                  # confirmar el dispositivo correcto y sin usar
+pvcreate /dev/vdb1 /dev/vdc1    # inicializar dos particiones
+pvs                             # lista breve
+pvdisplay /dev/vdb1             # vista detallada
+pvremove /dev/vdc1              # borrar la etiqueta LVM</code></pre>
+<p><code>pvcreate DEVICE...</code> inicializa uno o más dispositivos. Si el dispositivo ya contiene un sistema de archivos u otra firma, pvcreate avisa y pregunta antes de borrarlo, lo que es tu última oportunidad de darte cuenta de que elegiste el dispositivo equivocado. El dispositivo no debe estar montado ni en uso de ninguna otra forma.</p>
+<p><code>pvs</code> da un resumen de una línea por PV: su nombre, el VG al que pertenece (vacío si todavía no pertenece a ninguno), el formato (lvm2), los atributos, el tamaño total (PSize) y el espacio libre (PFree). <code>pvdisplay</code> muestra más detalle, incluido el tamaño de extensión y el número de extensiones físicas totales, libres y asignadas una vez que el PV pertenece a un VG. <code>lsblk</code> y <code>blkid</code> también reconocen los PV, mostrándolos con el tipo LVM2_member.</p>
+<p><code>pvremove DEVICE</code> borra la etiqueta LVM para que el dispositivo deje de ser un PV y pueda reutilizarse para otra cosa. Solo funciona si el PV no pertenece a un grupo de volúmenes. Si pertenece, primero lo quitas del grupo con <code>vgreduce VG DEVICE</code> (después de mover sus datos con <code>pvmove</code> si contiene extensiones asignadas) o eliminas todo el grupo de volúmenes. El orden lógico para desmontar la estructura es siempre de arriba abajo: desmontar y eliminar los LV, luego eliminar o reducir el VG, después eliminar el PV y, por último, borrar la partición si quieres recuperar el espacio.</p>
+<p>Inicializar un PV no es algo que veas persistido en <code>/etc/fstab</code> ni en ningún archivo de configuración; la etiqueta en el propio dispositivo es lo que LVM busca al arrancar, así que no hay nada más que configurar para que sobreviva a un reinicio.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>LVM</dt><dd>Logical Volume Manager: agrupa dispositivos de bloques en grupos de volúmenes y asigna volúmenes lógicos flexibles.</dd><dt>Physical volume (PV, volumen físico)</dt><dd>Un disco o partición inicializado con una etiqueta LVM para que pueda unirse a un grupo de volúmenes.</dd><dt>pvcreate</dt><dd>Inicializa dispositivos como volúmenes físicos.</dd><dt>pvs / pvdisplay</dt><dd>Muestran los volúmenes físicos de forma breve (pvs) o detallada (pvdisplay).</dd><dt>pvremove</dt><dd>Elimina la etiqueta LVM de un dispositivo que no está en ningún grupo de volúmenes.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Para preparar almacenamiento para un nuevo grupo de volúmenes, creas /dev/vdb1 con tipo Linux LVM y luego ejecutas <code>pvcreate /dev/vdb1</code>. <code>pvs</code> muestra /dev/vdb1 con un tamaño de unos 2g, la columna VG vacía y PFree igual a su tamaño, listo para vgcreate.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Construye LVM de abajo arriba (partición, pvcreate, vgcreate, lvcreate, mkfs, mount) y desmóntalo de arriba abajo. pvremove falla mientras un PV siga perteneciendo a un grupo de volúmenes.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué debe ocurrir antes de poder hacer pvremove de un PV que forma parte de un VG?</summary><p>Debe quitarse del VG con vgreduce (tras mover los datos con pvmove si hace falta), o eliminarse el VG.</p></details>
+<details class="sq"><summary>¿Qué columna de pvs muestra si un PV pertenece a un grupo de volúmenes?</summary><p>La columna VG; está vacía para un PV sin asignar.</p></details>
+<details class="sq"><summary>¿Puede un disco completo sin particiones ser un volumen físico?</summary><p>Sí, pvcreate funciona tanto con discos completos como con particiones.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../creating-and-deleting-gpt-partitions-with-parted-gdisk-or-fdisk-settin/">← Crear y borrar particiones GPT con parted, gdisk o fdisk; es</a><a href="../creating-volume-groups-and-assigning-physical-volumes-vgcreate-s-vgext/">Crear grupos de volúmenes y asignarles volúmenes físicos (vg →</a></nav>
+</main>
+</body>
+</html>

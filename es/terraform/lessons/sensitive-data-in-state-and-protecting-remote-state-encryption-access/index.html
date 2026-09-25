@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Datos sensibles en el estado y protección del estado remot… · Lección de Terraform Associate</title>
+<meta name="description" content="El estado de Terraform registra todos los atributos de todos los recursos y data sources que gestiona, y muchos de esos atributos son secretos: contraseñas">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Datos sensibles en el estado y protección del estado remot… · Lección de Terraform Associate">
+<meta property="og:description" content="El estado de Terraform registra todos los atributos de todos los recursos y data sources que gestiona, y muchos de esos atributos son secretos: contraseñas">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/terraform/lessons/sensitive-data-in-state-and-protecting-remote-state-encryption-access/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/terraform/lessons/sensitive-data-in-state-and-protecting-remote-state-encryption-access/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../terraform/">Terraform Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../terraform/lessons/sensitive-data-in-state-and-protecting-remote-state-encryption-access/" hreflang="en" lang="en">English</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004)</p>
+<h1>Datos sensibles en el estado y protección del estado remoto (cifrado, control de acceso)</h1>
+<article class="lbody">
+<p>El estado de Terraform registra todos los atributos de todos los recursos y data sources que gestiona, y muchos de esos atributos son secretos: contraseñas maestras de bases de datos, claves privadas generadas, tokens de acceso, cadenas de conexión. Marcar una variable o un output como <code>sensitive</code> lo oculta en pantalla, pero no lo elimina del estado. Así que debes suponer que cualquiera que pueda leer tu estado puede leer tus secretos, y proteger el estado en consecuencia.</p>
+<p>La primera defensa es simplemente dónde vive el estado. Los archivos de estado locales están sin cifrar en el disco y es fácil copiarlos o incluirlos en un commit por accidente. Los backends remotos te permiten aplicar las protecciones del servicio de almacenamiento. El cifrado en reposo está disponible en los principales backends: la opción <code>encrypt</code> del backend S3 habilita el cifrado del lado del servidor (opcionalmente con una clave KMS administrada por el cliente), Azure Storage y Google Cloud Storage cifran los datos en reposo de forma predeterminada, y HCP Terraform cifra el estado en reposo. Los backends remotos se comunican mediante TLS, lo que protege el estado en tránsito.</p>
+<p>La segunda defensa es el control de acceso. Trata el acceso de lectura al estado como equivalente al acceso de lectura a los secretos que contiene. Usa la gestión de identidades y accesos de la nube para limitar quién y qué puede leer o escribir el bucket, el contenedor o la base de datos, normalmente el rol del pipeline de CI más un pequeño grupo de administradores. En HCP Terraform, los permisos del workspace controlan quién puede leer las versiones del estado, y puedes controlar qué otros workspaces pueden leer los outputs de un workspace mediante los ajustes de compartición del estado remoto.</p>
+<p>La tercera defensa es el historial y la recuperación. Habilita el versionado de objetos en los buckets de S3 o GCS para que una sobrescritura o eliminación accidental pueda revertirse, y considera registrar el acceso al almacenamiento del estado para poder auditar quién lo leyó. HCP Terraform mantiene automáticamente un historial de versiones del estado.</p>
+<p>Por último, reduce los secretos que llegan al estado desde el principio. Usa variables y recursos efímeros para los valores que se necesitan solo durante una ejecución, argumentos de solo escritura cuando los providers los admitan y credenciales dinámicas de corta duración de un sistema como Vault. Mantén los secretos fuera de los archivos <code>.tf</code> y <code>.tfvars</code> del control de versiones, agrega los archivos de estado a <code>.gitignore</code> y ten cuidado con los comandos que muestran el estado, como <code>terraform show</code> y <code>terraform output -raw</code>, en logs de CI compartidos.</p>
+<p>Compartir outputs entre configuraciones también merece cuidado. El data source <code>terraform_remote_state</code> le da al consumidor acceso a los outputs raíz de otro estado, lo que en la práctica requiere acceso de lectura a toda esa instantánea del estado. Cuando sea posible, publica solo los valores necesarios mediante un canal dedicado, como un almacén de parámetros, o usa el data source <code>tfe_outputs</code> de HCP Terraform para leer solo los outputs.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Secrets in state (secretos en el estado)</dt><dd>El hecho de que Terraform guarda en el estado los atributos de los recursos, incluidas contraseñas y claves, en texto plano.</dd><dt>Encryption at rest (cifrado en reposo)</dt><dd>La protección del estado almacenado por parte del servicio de almacenamiento del backend, como el cifrado del lado del servidor de S3.</dd><dt>Access control (control de acceso)</dt><dd>Permisos de IAM o de la plataforma que restringen quién puede leer o escribir el almacenamiento del estado.</dd><dt>terraform_remote_state</dt><dd>Un data source que lee los outputs raíz del estado de otra configuración, lo que requiere acceso a ese estado.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una revisión de seguridad descubre que todos los desarrolladores tienen acceso de lectura al bucket de S3 que contiene el estado de producción, que incluye la contraseña de la base de datos. El equipo restringe la política del bucket al rol de despliegue y a dos administradores, habilita el versionado y el cifrado con KMS, y mueve la contraseña a un recurso efímero con un argumento de solo escritura.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> sensitive = true no es cifrado. Protege el estado con un backend remoto cifrado y con control de acceso, y mantenlo fuera del control de versiones.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Nombra dos formas de proteger el estado remoto guardado en S3.</summary><p>Habilitar el cifrado del lado del servidor (encrypt = true, opcionalmente con KMS) y restringir el acceso con políticas de IAM o del bucket; el versionado agrega la posibilidad de recuperación.</p></details>
+<details class="sq"><summary>¿Por qué el acceso de lectura al estado se trata como sensible?</summary><p>Porque el estado guarda los atributos de los recursos, incluidos los secretos, en texto plano.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Terraform Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../terraform/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../the-cloud-block-for-hcp-terraform/">← El bloque `cloud` para HCP Terraform</a><a href="../resource-drift-detecting-it-with-plan-and-apply-refresh-only-reconcili/">Drift de recursos: detectarlo con `plan` y `apply -refresh-o →</a></nav>
+</main>
+</body>
+</html>

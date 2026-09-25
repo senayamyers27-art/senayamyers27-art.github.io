@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Solución de problemas de conectividad y resolución de nomb… · Lección de AZ-802</title>
+<meta name="description" content="La mayoría de las incidencias de tipo 'el servidor está caído' son en realidad problemas de red o de resolución de nombres. Un enfoque disciplinado ahorra ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Solución de problemas de conectividad y resolución de nomb… · Lección de AZ-802">
+<meta property="og:description" content="La mayoría de las incidencias de tipo 'el servidor está caído' son en realidad problemas de red o de resolución de nombres. Un enfoque disciplinado ahorra ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-802/lessons/troubleshooting-connectivity-and-name-resolution-test-netconnection-re/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-802/lessons/troubleshooting-connectivity-and-name-resolution-test-netconnection-re/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-802/">AZ-802</a> / <a href="../">Lecciones</a> · <a href="../../../../az-802/lessons/troubleshooting-connectivity-and-name-resolution-test-netconnection-re/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802</p>
+<h1>Solución de problemas de conectividad y resolución de nombres (Test-NetConnection, Resolve-DnsName, ipconfig /flushdns)</h1>
+<article class="lbody">
+<p>La mayoría de las incidencias de tipo 'el servidor está caído' son en realidad problemas de red o de resolución de nombres. Un enfoque disciplinado ahorra tiempo: empieza con la configuración local, luego prueba la accesibilidad, luego el puerto específico, luego la resolución de nombres, y cambia una cosa a la vez. Windows Server te ofrece cmdlets de PowerShell y comandos clásicos para cada paso.</p>
+<p>Empieza con la configuración IP local. <code>ipconfig /all</code> o <code>Get-NetIPConfiguration</code> muestra la dirección, la máscara, la puerta de enlace predeterminada y los servidores DNS de cada adaptador. Las señales de alerta incluyen una dirección que empieza por 169.254 (APIPA, direccionamiento IP privado automático, lo que significa que DHCP falló), la falta de una puerta de enlace predeterminada o servidores DNS que apuntan a un resolvedor público en un miembro del dominio, lo que rompe las búsquedas de nombres de AD. En las VM de Azure, recuerda que el invitado debe usar DHCP y que la configuración proviene de la NIC y la VNet.</p>
+<p>Luego, prueba la accesibilidad. <code>Test-NetConnection</code> combina varias herramientas. Solo con un nombre, <code>Test-NetConnection srv01</code> resuelve el nombre y le hace ping. Con un puerto, <code>Test-NetConnection srv01 -Port 445</code> te dice si una conexión TCP tiene éxito (<code>TcpTestSucceeded : True</code>), lo que es mucho más útil que el ping, porque muchos servidores bloquean ICMP (Internet Control Message Protocol) mientras el puerto del servicio está abierto. <code>-TraceRoute</code> muestra la ruta, y <code>-CommonTCPPort RDP</code> o <code>SMB</code> ahorra escritura. Si el ping falla pero la prueba TCP tiene éxito, simplemente ICMP está bloqueado; si ambos fallan, revisa el enrutamiento, los firewalls y los grupos de seguridad de red. <code>tracert</code> y <code>pathping</code> son las herramientas clásicas de ruta, y <code>Get-NetTCPConnection</code> o <code>netstat -ano</code> muestran en qué puertos escucha un servidor.</p>
+<p>Para la resolución de nombres, <code>Resolve-DnsName</code> es el cmdlet preferido. <code>Resolve-DnsName srv01.contoso.com</code> usa la ruta normal del cliente; <code>-Server 10.0.0.10</code> consulta un servidor DNS específico, lo que te permite comparar servidores; <code>-Type SRV</code> o <code>-Type MX</code> busca otros tipos de registro, como <code>_ldap._tcp.dc._msdcs.contoso.com</code> para encontrar controladores de dominio; <code>-DnsOnly</code> omite otros métodos como LLMNR y NetBIOS; y <code>-NoHostsFile</code> ignora el archivo hosts. Recuerda que <code>nslookup</code> siempre consulta directamente a un servidor DNS, omitiendo la caché del cliente y el archivo hosts, así que puede no coincidir con lo que realmente ven las aplicaciones.</p>
+<p>La caché del cliente DNS almacena las respuestas recientes, incluidas las respuestas negativas (nombre no encontrado), durante el tiempo de vida (TTL) del registro. Después de corregir un registro, un cliente puede seguir usando la respuesta antigua o negativa hasta que caduque. <code>ipconfig /displaydns</code> o <code>Get-DnsClientCache</code> muestra la caché, e <code>ipconfig /flushdns</code> o <code>Clear-DnsClientCache</code> la vacía. <code>ipconfig /registerdns</code> hace que el cliente vuelva a registrar sus propios registros A y PTR, útil cuando falta el registro de un servidor. Revisa también el archivo hosts en <code>C:\Windows\System32\drivers\etc</code>, que anula el DNS, y las reglas de la tabla de directivas de resolución de nombres (NRPT) con <code>Get-DnsClientNrptPolicy</code>, que pueden enviar ciertos espacios de nombres a servidores específicos.</p>
+<p>Un buen orden para recordar: configuración, ping o prueba TCP por IP, prueba TCP por nombre y luego Resolve-DnsName contra cada servidor DNS. Si funciona por IP pero no por nombre, es DNS; si también falla por IP, es la red o el firewall.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Test-NetConnection</dt><dd>Un cmdlet de PowerShell que prueba el ping, la conectividad de puertos TCP y el seguimiento de la ruta hacia un host.</dd><dt>Resolve-DnsName</dt><dd>Un cmdlet de PowerShell para búsquedas DNS que puede dirigirse a un servidor específico, un tipo de registro o una resolución solo por DNS.</dd><dt>DNS client cache (caché del cliente DNS)</dt><dd>Respuestas DNS almacenadas localmente, incluidas las negativas, que se conservan hasta que caduca su TTL; se vacía con ipconfig /flushdns.</dd><dt>APIPA</dt><dd>Automatic Private IP Addressing (direccionamiento IP privado automático): una dirección 169.254.x.x que Windows asigna cuando DHCP falla.</dd><dt>Hosts file (archivo hosts)</dt><dd>Un archivo local que asigna nombres a IP y que tiene prioridad sobre las consultas DNS en la ruta de resolución del cliente.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Los usuarios no pueden abrir \\files01\share después de que el servidor se movió a una IP nueva. Test-NetConnection a la IP nueva en el puerto 445 tiene éxito, pero Resolve-DnsName files01 en un cliente devuelve la IP antigua. Resolve-DnsName -Server contra cada DC muestra que un servidor DNS aún tiene el registro antiguo; después de corregir la replicación y ejecutar ipconfig /flushdns en los clientes, el acceso se restablece.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Funciona por IP pero no por nombre significa DNS. Que el ping falle no demuestra que un servicio esté caído; prueba el puerto. nslookup omite la caché del cliente y el archivo hosts, así que usa Resolve-DnsName para ver lo que ven las aplicaciones.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo compruebas si un servidor remoto acepta conexiones en TCP 3389?</summary><p>Ejecuta Test-NetConnection &lt;server&gt; -Port 3389 y revisa TcpTestSucceeded.</p></details>
+<details class="sq"><summary>Un registro DNS se corrigió, pero un cliente sigue obteniendo 'nombre no encontrado'. ¿Por qué y cómo lo solucionas?</summary><p>El cliente almacenó en caché la respuesta negativa; ejecuta ipconfig /flushdns (o Clear-DnsClientCache) para borrarla.</p></details>
+<details class="sq"><summary>¿Cómo puedes pedir a un servidor DNS específico los registros SRV que localizan los controladores de dominio?</summary><p>Resolve-DnsName _ldap._tcp.dc._msdcs.contoso.com -Type SRV -Server &lt;DNS server IP&gt;.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AZ-802 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-802/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../azure-monitor-agent-data-collection-rules-vm-insights-and-log-analytic/">← Azure Monitor Agent, reglas de recopilación de datos, VM ins</a><a href="../windows-update-time-service-w32tm-and-kerberos-troubleshooting-arc-age/">Solución de problemas de Windows Update, del servicio de hor →</a></nav>
+</main>
+</body>
+</html>

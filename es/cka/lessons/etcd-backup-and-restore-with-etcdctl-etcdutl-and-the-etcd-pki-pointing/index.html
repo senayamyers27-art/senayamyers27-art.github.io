@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Backup y restauración de etcd con etcdctl/etcdutl y la PKI… · Lección de CKA</title>
+<meta name="description" content="Como etcd guarda todo el estado del clúster, un snapshot de etcd es un backup de la configuración del clúster. El CKA suele pedirte que tomes uno en una ru">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Backup y restauración de etcd con etcdctl/etcdutl y la PKI… · Lección de CKA">
+<meta property="og:description" content="Como etcd guarda todo el estado del clúster, un snapshot de etcd es un backup de la configuración del clúster. El CKA suele pedirte que tomes uno en una ru">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/etcd-backup-and-restore-with-etcdctl-etcdutl-and-the-etcd-pki-pointing/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/etcd-backup-and-restore-with-etcdctl-etcdutl-and-the-etcd-pki-pointing/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/etcd-backup-and-restore-with-etcdctl-etcdutl-and-the-etcd-pki-pointing/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Backup y restauración de etcd con etcdctl/etcdutl y la PKI de etcd; apuntar el static Pod de etcd a un directorio de datos restaurado</h1>
+<article class="lbody">
+<p>Como etcd guarda todo el estado del clúster, un snapshot de etcd es un backup de la configuración del clúster. El CKA suele pedirte que tomes uno en una ruta determinada y que más tarde restaures uno. Necesitas conocer las herramientas, los certificados y cómo volver a apuntar el static Pod de etcd.</p>
+<p><code>etcdctl</code> es el cliente que se comunica con un etcd en ejecución por la red. En un clúster de kubeadm, etcd exige TLS mutuo, así que pasas tres archivos de <code>/etc/kubernetes/pki/etcd</code>: la CA, y un certificado y una clave de cliente. La forma más sencilla de encontrar las rutas y el endpoint correctos es leerlos de <code>/etc/kubernetes/manifests/etcd.yaml</code> (mira <code>--listen-client-urls</code>, <code>--trusted-ca-file</code>, <code>--cert-file</code> y <code>--key-file</code>). En la mayoría de las instalaciones de kubeadm, el certificado de servidor funciona como certificado de cliente, y también existe un certificado dedicado <code>healthcheck-client</code>.</p>
+<pre class="code" tabindex="0"><code># el endpoint por defecto es el puerto de cliente local 2379; agrega --endpoints si etcd está en otro lugar
+ETCDCTL_API=3 etcdctl \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  snapshot save /opt/backup/etcd.db
+etcdutl snapshot status /opt/backup/etcd.db -w table</code></pre>
+<p><code>etcdutl</code> es la utilidad offline que trabaja directamente sobre archivos. En las versiones actuales de etcd, la restauración y el estado de los snapshots se hacen con etcdutl, y el antiguo <code>etcdctl snapshot restore</code> está obsoleto. Una restauración no sobrescribe la base de datos en ejecución; construye un nuevo directorio de datos a partir del snapshot: <code>etcdutl snapshot restore /opt/backup/etcd.db --data-dir /var/lib/etcd-restored</code>. No se necesitan flags de TLS porque no contacta a ningún servidor.</p>
+<p>Ahora apunta etcd a los datos restaurados. Edita <code>/etc/kubernetes/manifests/etcd.yaml</code>. El directorio de datos aparece en el flag <code>--data-dir</code> y en el volumen hostPath llamado <code>etcd-data</code>. El cambio más simple y confiable es actualizar el <code>path</code> del hostPath a <code>/var/lib/etcd-restored</code> (y también el flag, si además cambias la ruta de montaje). Guarda el archivo; el kubelet reinicia etcd con el estado anterior. El API server puede tardar un minuto en reconectarse, así que <code>kubectl</code> puede fallar brevemente. Si se queda atascado, revisa con <code>crictl ps</code> y <code>crictl logs</code> en el nodo.</p>
+<p>Trata los archivos de snapshot como altamente sensibles: contienen todos los Secrets del clúster, sin cifrar a menos que hayas habilitado el cifrado en reposo (encryption at rest). Guárdalos con permisos restrictivos y fuera del nodo.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>etcdctl</dt><dd>El cliente de red para un etcd en ejecución; se usa para snapshot save, member list y endpoint health.</dd><dt>etcdutl</dt><dd>La utilidad offline de etcd para trabajar con archivos de datos, incluidos snapshot restore y status.</dd><dt>Data directory (directorio de datos)</dt><dd>La ubicación en disco de la base de datos de etcd, definida por --data-dir y montada mediante un volumen hostPath.</dd><dt>etcd PKI</dt><dd>La CA y los certificados separados en /etc/kubernetes/pki/etcd que se usan para el TLS mutuo de etcd.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Después de tomar un snapshot en /opt/snap.db, un compañero borra el namespace <code>payments</code>. Ejecutas <code>etcdutl snapshot restore /opt/snap.db --data-dir /var/lib/etcd-from-backup</code>, cambias el hostPath etcd-data en etcd.yaml a ese directorio, esperas a que etcd y el API server se reinicien, y <code>kubectl get ns</code> vuelve a mostrar payments.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> snapshot save falla con un error de TLS o de deadline si omites --cacert, --cert o --key; copia las rutas directamente del manifiesto de etcd en lugar de adivinarlas. Para la restauración, recuerda que el volumen hostPath es lo que realmente decide qué directorio del host ve etcd.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿snapshot restore sobrescribe la base de datos de etcd en ejecución?</summary><p>No. Crea un nuevo directorio de datos; luego apuntas etcd hacia él.</p></details>
+<details class="sq"><summary>¿Dónde puedes consultar el endpoint y las rutas de certificados que necesita etcdctl?</summary><p>En el manifiesto del static Pod de etcd, /etc/kubernetes/manifests/etcd.yaml.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../cluster-upgrades-with-kubeadm-one-minor-version-at-a-time-upgrade-plan/">← Actualizaciones del clúster con kubeadm: una versión minor a</a><a href="../highly-available-control-planes-stacked-vs-external-etcd-quorum-load-b/">Control planes de alta disponibilidad: etcd stacked vs exter →</a></nav>
+</main>
+</body>
+</html>

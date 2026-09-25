@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pasar configuraciones de providers a los módulos con el ar… · Lección de Terraform Associate</title>
+<meta name="description" content="Los recursos de un módulo hijo necesitan una configuración de provider, como un provider de AWS configurado para una región y una cuenta concretas. De form">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Pasar configuraciones de providers a los módulos con el ar… · Lección de Terraform Associate">
+<meta property="og:description" content="Los recursos de un módulo hijo necesitan una configuración de provider, como un provider de AWS configurado para una región y una cuenta concretas. De form">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/terraform/lessons/passing-provider-configurations-to-modules-with-the-providers-argument/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/terraform/lessons/passing-provider-configurations-to-modules-with-the-providers-argument/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../terraform/">Terraform Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../terraform/lessons/passing-provider-configurations-to-modules-with-the-providers-argument/" hreflang="en" lang="en">English</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004)</p>
+<h1>Pasar configuraciones de providers a los módulos con el argumento `providers`</h1>
+<article class="lbody">
+<p>Los recursos de un módulo hijo necesitan una configuración de provider, como un provider de AWS configurado para una región y una cuenta concretas. De forma predeterminada, un módulo hijo hereda automáticamente las configuraciones de provider predeterminadas (sin alias) de su padre. Si tu módulo raíz tiene un solo bloque <code>provider &quot;aws&quot;</code>, cada módulo que usa recursos de AWS lo usa discretamente. Esa herencia implícita cubre la mayoría de las configuraciones simples.</p>
+<p>Las cosas cambian cuando tienes más de una configuración del mismo provider. Creas configuraciones adicionales con el meta-argumento <code>alias</code>, por ejemplo un segundo provider de AWS para otra región: <code>provider &quot;aws&quot; { alias = &quot;west&quot;  region = &quot;us-west-2&quot; }</code>, referenciado como <code>aws.west</code>. Las configuraciones con alias nunca se heredan implícitamente. Para que un módulo use una, la pasas explícitamente con el argumento <code>providers</code> en el bloque module.</p>
+<pre class="code" tabindex="0"><code>provider &quot;aws&quot; {
+  region = &quot;us-east-1&quot;
+}
+
+provider &quot;aws&quot; {
+  alias  = &quot;west&quot;
+  region = &quot;us-west-2&quot;
+}
+
+module &quot;replica&quot; {
+  source = &quot;./modules/bucket&quot;
+  providers = {
+    aws = aws.west
+  }
+}</code></pre>
+<p>El argumento <code>providers</code> es un mapa. La clave es el nombre del provider tal como lo ve el módulo hijo, y el valor es una configuración de provider del módulo que llama. En el ejemplo, todo lo que en <code>./modules/bucket</code> usa <code>aws</code> recibe la configuración de us-west-2. Una vez que estableces <code>providers</code> para un módulo, Terraform usa solo las asociaciones que listaste, así que incluye todos los providers que necesita el módulo.</p>
+<p>Algunos módulos necesitan dos configuraciones del mismo provider a la vez, por ejemplo para configurar la replicación entre un bucket de origen y un bucket de destino en regiones distintas. Un módulo así declara los nombres adicionales que espera con <code>configuration_aliases</code> dentro de su entrada de <code>required_providers</code>, como <code>configuration_aliases = [aws.src, aws.dst]</code>. Quien llama asocia entonces ambos: <code>providers = { aws.src = aws.east, aws.dst = aws.west }</code>.</p>
+<p>La buena práctica es que los módulos hijos reutilizables no contengan sus propios bloques <code>provider</code>. La configuración de providers pertenece al módulo raíz, y los módulos hijos declaran solo sus requisitos de <code>required_providers</code> (source y restricciones de versión). Los módulos que contienen bloques provider se llaman módulos legacy (heredados) y no pueden usarse con <code>count</code>, <code>for_each</code> ni <code>depends_on</code>. También causan problemas al eliminarlos, porque Terraform necesita la configuración del provider para destruir los recursos del módulo. Mantener los providers en el raíz y pasarlos hacia abajo les da a quienes llaman el control sobre regiones, cuentas y credenciales.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Provider alias (alias de provider)</dt><dd>Una configuración adicional con nombre de un provider, creada con el meta-argumento alias y referenciada como PROVIDER.ALIAS.</dd><dt>providers argument (argumento providers)</dt><dd>Un mapa en un bloque module que asigna las configuraciones de provider de quien llama a los nombres de provider que usa el módulo hijo.</dd><dt>Implicit provider inheritance (herencia implícita de providers)</dt><dd>El comportamiento predeterminado en el que los módulos hijos usan automáticamente las configuraciones de provider predeterminadas, sin alias, del padre.</dd><dt>configuration_aliases</dt><dd>Un ajuste de required_providers en un módulo hijo que declara nombres adicionales de configuración de provider que quien llama debe pasar.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un módulo de recuperación ante desastres crea una base de datos principal en una región y una réplica en otra. Declara configuration_aliases = [aws.primary, aws.replica], y el módulo raíz lo llama con providers = { aws.primary = aws, aws.replica = aws.dr }, así que una sola llamada al módulo construye recursos en dos regiones.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Las configuraciones de provider predeterminadas se heredan automáticamente; las que tienen alias nunca se heredan y deben pasarse con el mapa providers en el bloque module.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Tu módulo raíz define el provider aws con alias eu. ¿Cómo haces que el módulo logs lo use?</summary><p>Agrega providers = { aws = aws.eu } al bloque module &quot;logs&quot;.</p></details>
+<details class="sq"><summary>¿Por qué los módulos reutilizables deben evitar sus propios bloques provider?</summary><p>La configuración de providers le corresponde a quien llama; los módulos con bloques provider no pueden usar count, for_each ni depends_on y son difíciles de eliminar de forma segura.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Terraform Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../terraform/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../variable-scope-child-modules-only-see-values-passed-in-outputs-are-rea/">← Alcance de las variables: los módulos hijos solo ven los val</a><a href="../the-version-argument-registry-sources-only-and-ref-for-git-sources/">El argumento `version` (solo orígenes de registro) y `ref` p →</a></nav>
+</main>
+</body>
+</html>

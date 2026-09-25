@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Migrar el estado entre backends con `terraform init -migra… · Lección de Terraform Associate</title>
+<meta name="description" content="Los equipos suelen empezar con estado local y luego pasar a un backend remoto, o moverse entre backends remotos cuando cambian de nube o adoptan HCP Terraf">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Migrar el estado entre backends con `terraform init -migra… · Lección de Terraform Associate">
+<meta property="og:description" content="Los equipos suelen empezar con estado local y luego pasar a un backend remoto, o moverse entre backends remotos cuando cambian de nube o adoptan HCP Terraf">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/terraform/lessons/migrating-state-between-backends-with-terraform-init-migrate-state/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/terraform/lessons/migrating-state-between-backends-with-terraform-init-migrate-state/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../terraform/">Terraform Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../terraform/lessons/migrating-state-between-backends-with-terraform-init-migrate-state/" hreflang="en" lang="en">English</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004)</p>
+<h1>Migrar el estado entre backends con `terraform init -migrate-state`</h1>
+<article class="lbody">
+<p>Los equipos suelen empezar con estado local y luego pasar a un backend remoto, o moverse entre backends remotos cuando cambian de nube o adoptan HCP Terraform. Terraform puede copiar por ti el estado existente del backend anterior al nuevo como parte de la reinicialización, así que no tienes que mover archivos a mano.</p>
+<p>El proceso es corto. Primero, edita la configuración: agrega, cambia o elimina el bloque <code>backend</code> (o agrega un bloque <code>cloud</code>). Luego, ejecuta <code>terraform init</code>. Terraform detecta que la configuración del backend difiere de la registrada en <code>.terraform</code> y pregunta qué hacer. Ejecutar <code>terraform init -migrate-state</code> le indica explícitamente que quieres copiar el estado existente al nuevo backend. Terraform entonces pide confirmación, copia el estado y, a partir de ese momento, usa la nueva ubicación.</p>
+<pre class="code" tabindex="0"><code>$ terraform init -migrate-state
+Initializing the backend...
+Do you want to copy existing state to the new backend?
+  Enter &quot;yes&quot; to copy and &quot;no&quot; to start with an empty state.</code></pre>
+<p>Compáralo con <code>terraform init -reconfigure</code>. Ese indicador también acepta una configuración de backend cambiada, pero ignora los ajustes del backend anterior guardados y no migra ningún estado. Es útil cuando intencionalmente quieres apuntar a otro estado que ya existe, o cuando el backend anterior no es accesible, pero usado por error te deja viendo un estado vacío o distinto mientras el estado anterior queda intacto. Recuerda: <code>-migrate-state</code> copia, <code>-reconfigure</code> no.</p>
+<p>Volver de un backend remoto al estado local funciona de la misma forma: elimina el bloque <code>backend</code> y ejecuta <code>terraform init -migrate-state</code>, y Terraform copia el estado en un <code>terraform.tfstate</code> local. Si usas varios workspaces de la CLI, Terraform puede migrarlos todos, y te preguntará cómo asociarlos cuando el destino maneje los workspaces de otra forma. Agregar <code>-force-copy</code> responde que sí a los avisos, lo que es práctico en la automatización.</p>
+<p>Antes de cualquier migración, toma precauciones. Asegúrate de que nadie más esté ejecutando Terraform, guarda una copia de respaldo del estado (por ejemplo con <code>terraform state pull &gt; backup.tfstate</code>) y, después, ejecuta <code>terraform plan</code> para confirmar que el nuevo backend contiene los mismos recursos y que el plan no muestra cambios inesperados. Cuando tengas la confianza, elimina o restringe la ubicación del estado anterior para que nadie siga escribiendo en ella.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>terraform init -migrate-state</dt><dd>Reinicializa con un backend cambiado y copia el estado existente del backend anterior al nuevo.</dd><dt>terraform init -reconfigure</dt><dd>Reinicializa con un backend cambiado ignorando los ajustes del backend anterior y sin migrar el estado.</dd><dt>-force-copy</dt><dd>Un indicador de init que responde automáticamente que sí a los avisos de migración del estado.</dd><dt>terraform state pull</dt><dd>Muestra el estado actual desde el backend configurado; útil para hacer un respaldo antes de una migración.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una startup ha estado usando estado local. La líder técnica agrega un bloque backend gcs, ejecuta terraform state pull para guardar un respaldo, luego ejecuta terraform init -migrate-state y responde yes. Un terraform plan posterior no muestra cambios, lo que confirma que el bucket ahora contiene el mismo estado.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Para que tus recursos sigan rastreados al cambiar de backend, usa -migrate-state; -reconfigure empieza de cero con el nuevo backend y no copia nada.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Cambias tu backend de local a s3 y quieres que tu estado existente se mueva. ¿Qué comando usas?</summary><p>terraform init -migrate-state, y luego confirmas la copia.</p></details>
+<details class="sq"><summary>¿Cuál es el riesgo de usar terraform init -reconfigure después de cambiar de backend?</summary><p>No copia el estado, así que Terraform puede ver un estado vacío y planear recrear recursos existentes.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Terraform Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../terraform/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../backend-blocks-cannot-use-variables-partial-configuration-with-backend/">← Los bloques backend no pueden usar variables; configuración </a><a href="../the-cloud-block-for-hcp-terraform/">El bloque `cloud` para HCP Terraform →</a></nav>
+</main>
+</body>
+</html>

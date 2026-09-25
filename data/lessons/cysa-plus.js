@@ -1864,4 +1864,4 @@ CertHub.addLessons("cysa-plus", [
    ]
   ]
  }
-]);
+], { reviewed: "2026-09-25" });

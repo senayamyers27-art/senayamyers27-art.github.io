@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>`count` frente a `for_each`, `count.index`, `each.key` y `… · Lección de Terraform Associate</title>
+<meta name="description" content="Tanto count como for_each son meta-argumentos que crean varias instancias de un recurso, data source o módulo a partir de un solo bloque. Se parecen, pero ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="`count` frente a `for_each`, `count.index`, `each.key` y `… · Lección de Terraform Associate">
+<meta property="og:description" content="Tanto count como for_each son meta-argumentos que crean varias instancias de un recurso, data source o módulo a partir de un solo bloque. Se parecen, pero ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/terraform/lessons/count-vs-for-each-count-index-each-key-and-each-value/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/terraform/lessons/count-vs-for-each-count-index-each-key-and-each-value/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../terraform/">Terraform Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../terraform/lessons/count-vs-for-each-count-index-each-key-and-each-value/" hreflang="en" lang="en">English</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004)</p>
+<h1>`count` frente a `for_each`, `count.index`, `each.key` y `each.value`</h1>
+<article class="lbody">
+<p>Tanto <code>count</code> como <code>for_each</code> son meta-argumentos que crean varias instancias de un recurso, data source o módulo a partir de un solo bloque. Se parecen, pero identifican las instancias de forma distinta, y esa diferencia decide cuál deberías usar.</p>
+<p><code>count</code> recibe un número entero. Terraform crea esa cantidad de instancias, direccionadas por índice: <code>aws_instance.web[0]</code>, <code>aws_instance.web[1]</code> y así sucesivamente. Dentro del bloque, <code>count.index</code> da el índice actual, empezando en cero.</p>
+<pre class="code" tabindex="0"><code>resource &quot;aws_instance&quot; &quot;web&quot; {
+  count         = 3
+  ami           = var.ami_id
+  instance_type = &quot;t3.micro&quot;
+  tags = { Name = &quot;web-${count.index}&quot; }
+}</code></pre>
+<p><code>for_each</code> recibe un mapa o un set de cadenas. Terraform crea una instancia por elemento, direccionada por clave: <code>aws_iam_user.dev[&quot;alice&quot;]</code>. Dentro del bloque, <code>each.key</code> es la clave del mapa o el elemento del set, y <code>each.value</code> es el valor del mapa; para un set, <code>each.value</code> es lo mismo que <code>each.key</code>. Una lista no se acepta directamente, así que envuélvela en <code>toset()</code>.</p>
+<pre class="code" tabindex="0"><code>resource &quot;aws_iam_user&quot; &quot;dev&quot; {
+  for_each = toset([&quot;alice&quot;, &quot;bob&quot;, &quot;carol&quot;])
+  name     = each.key
+}
+
+resource &quot;aws_s3_bucket&quot; &quot;b&quot; {
+  for_each = { logs = &quot;private&quot;, site = &quot;public&quot; }
+  bucket   = &quot;acme-${each.key}&quot;
+  tags     = { Access = each.value }
+}</code></pre>
+<p>La diferencia clave aparece cuando cambia la colección. Supón que usaste <code>count</code> con una lista de tres nombres de usuario y eliminas el primero. Todos los nombres restantes bajan un índice, así que Terraform ve los índices 0 y 1 como cambiados y el índice 2 como eliminado. Eso puede significar renombrar o reemplazar objetos que no pretendías tocar. Con <code>for_each</code>, cada instancia está ligada a una clave estable; eliminar <code>alice</code> destruye solo <code>[&quot;alice&quot;]</code> y deja en paz a bob y carol.</p>
+<p>Así que la regla general es: usa <code>count</code> cuando las instancias son casi idénticas e intercambiables, o cuando quieres un simple interruptor de encendido/apagado con <code>count = var.enabled ? 1 : 0</code>. Usa <code>for_each</code> cuando cada instancia tiene una identidad distinta o ajustes distintos. Un bloque no puede usar <code>count</code> y <code>for_each</code> a la vez. En ambos casos, el número de instancias, o las claves en el caso de <code>for_each</code>, deben conocerse en el momento del plan; no puedes basarlos en atributos que solo se conocen después del apply, como los IDs de recursos que se están creando en la misma ejecución.</p>
+<p>Las referencias también funcionan de forma distinta. Un recurso con <code>count</code> es una lista, así que <code>aws_instance.web[*].id</code> obtiene todos los IDs. Un recurso con <code>for_each</code> es un mapa, así que usas <code>aws_s3_bucket.b[&quot;logs&quot;].arn</code> para uno, o <code>values(aws_s3_bucket.b)[*].arn</code> o una expresión <code>for</code> para todos.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>count</dt><dd>Meta-argumento que crea un número de instancias direccionadas por índice entero.</dd><dt>count.index</dt><dd>El índice, empezando en cero, de la instancia actual en un bloque con <code>count</code>.</dd><dt>for_each</dt><dd>Meta-argumento que crea una instancia por cada elemento de un mapa o set, direccionada por clave.</dd><dt>each.key / each.value</dt><dd>En un bloque con <code>for_each</code>, la clave y el valor del elemento actual; son idénticos para los sets.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un equipo gestiona las cuentas de desarrolladores con <code>count</code> sobre una lista de nombres. Cuando un desarrollador se va y se elimina del inicio de la lista, el plan quiere renombrar otras dos cuentas. Cambian a <code>for_each = toset(var.developers)</code>, moviendo las entradas de estado existentes a las nuevas claves con bloques <code>moved</code>, y las eliminaciones futuras solo afectan a la persona que se va.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> <code>for_each</code> acepta mapas y sets de cadenas, no listas, y da claves estables. Los índices de <code>count</code> se desplazan cuando se eliminan elementos del medio. No puedes usar ambos en un mismo bloque.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué <code>for_each</code> suele ser más seguro que <code>count</code> para una lista de usuarios con nombre?</summary><p>Las instancias se identifican por nombre, así que eliminar un usuario afecta solo a esa instancia; con <code>count</code>, eliminar un elemento desplaza los índices y cambia otras instancias.</p></details>
+<details class="sq"><summary>En un <code>for_each</code> sobre <code>toset([&quot;a&quot;, &quot;b&quot;])</code>, ¿qué son <code>each.key</code> y <code>each.value</code> para el primer elemento?</summary><p>Ambos son <code>&quot;a&quot;</code>, porque en un set la clave y el valor son iguales.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Terraform Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../terraform/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../built-in-functions-and-testing-them-in-terraform-console/">← Funciones integradas y cómo probarlas en `terraform console`</a><a href="../explicit-dependencies-with-depends-on-lifecycle-rules-create-before-de/">Dependencias explícitas con `depends_on`; reglas de `lifecyc →</a></nav>
+</main>
+</body>
+</html>

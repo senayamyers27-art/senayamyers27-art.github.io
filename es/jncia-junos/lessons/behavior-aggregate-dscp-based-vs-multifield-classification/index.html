@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Clasificación behavior aggregate (basada en DSCP) vs clasi… · Lección de JNCIA-Junos</title>
+<meta name="description" content="La clasificación es el primer paso de CoS: decidir qué forwarding class y loss priority recibe un paquete. Junos ofrece dos formas de hacerlo, y el examen ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Clasificación behavior aggregate (basada en DSCP) vs clasi… · Lección de JNCIA-Junos">
+<meta property="og:description" content="La clasificación es el primer paso de CoS: decidir qué forwarding class y loss priority recibe un paquete. Junos ofrece dos formas de hacerlo, y el examen ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/jncia-junos/lessons/behavior-aggregate-dscp-based-vs-multifield-classification/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/jncia-junos/lessons/behavior-aggregate-dscp-based-vs-multifield-classification/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../jncia-junos/">JNCIA-Junos</a> / <a href="../">Lecciones</a> · <a href="../../../../jncia-junos/lessons/behavior-aggregate-dscp-based-vs-multifield-classification/" hreflang="en" lang="en">English</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106</p>
+<h1>Clasificación behavior aggregate (basada en DSCP) vs clasificación multifield</h1>
+<article class="lbody">
+<p>La clasificación es el primer paso de CoS: decidir qué forwarding class y loss priority recibe un paquete. Junos ofrece dos formas de hacerlo, y el examen espera que sepas cuándo se usa cada una. Un clasificador behavior aggregate (BA) lee una sola marca de CoS que ya está en el paquete. Un clasificador multifield (MF) examina varios campos del encabezado usando un firewall filter.</p>
+<p>La clasificación BA depende de marcas que alguien aguas arriba ya estableció. Para tráfico IP, normalmente es el DSCP (Differentiated Services Code Point), los 6 bits superiores del byte ToS de IPv4 o del byte traffic class de IPv6, lo que da 64 valores posibles. Valores comunes son EF (decimal 46) para voz, las clases AF como AF11 a AF43 para tráfico asegurado, CS6 y CS7 para control de red, y 0 para best effort. Los equipos más antiguos usan IP precedence, los 3 bits superiores del mismo byte. En Ethernet, 802.1p usa 3 bits en la etiqueta VLAN, y las redes MPLS usan los bits EXP (traffic class). Un clasificador BA es una tabla de búsqueda: el valor DSCP X se asocia con la forwarding class Y y la loss priority Z. Es rápido y simple, y lo aplicas a una interfaz bajo <code>[edit class-of-service interfaces]</code>.</p>
+<p>La debilidad de la clasificación BA es la confianza. Solo funciona si las marcas son correctas, lo cual está bien dentro de tu propia red pero es riesgoso en el borde, donde un cliente o usuario podría marcar todo como EF. Ahí es donde ayuda la clasificación MF.</p>
+<p>Un clasificador MF es un firewall filter cuyos términos hacen coincidencia con campos como la dirección de origen y destino, el protocolo y los puertos, y cuya acción establece <code>forwarding-class</code> y <code>loss-priority</code>. Por ejemplo, un término podría coincidir con tráfico UDP de la subred del gateway de voz en un rango de puertos y ponerlo en expedited-forwarding, mientras otro término pone todo lo demás en best-effort. Lo aplicas como filtro de entrada (input) en la interfaz de ingreso, como cualquier otro filtro.</p>
+<pre class="code" tabindex="0"><code>set firewall family inet filter CLASSIFY term voice from source-address 10.9.9.0/24
+set firewall family inet filter CLASSIFY term voice from protocol udp
+set firewall family inet filter CLASSIFY term voice then forwarding-class expedited-forwarding
+set firewall family inet filter CLASSIFY term voice then loss-priority low
+set firewall family inet filter CLASSIFY term rest then forwarding-class best-effort
+set interfaces ge-0/0/1 unit 0 family inet filter input CLASSIFY</code></pre>
+<p>Los dos pueden coexistir. Cuando ambos se aplican a la misma interfaz, el clasificador BA se ejecuta primero y el clasificador MF después, así que el resultado MF gana para cualquier paquete con el que coincida. El diseño típico es clasificación MF en el borde de la red, donde el tráfico entra desde orígenes no confiables, luego una rewrite rule establece DSCP en la salida, y luego clasificación BA en los routers del núcleo, que simplemente confían en esas marcas.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Behavior aggregate (BA) classifier (clasificador BA)</dt><dd>Un clasificador que asocia una sola marca de CoS (DSCP, IP precedence, 802.1p o MPLS EXP) con una forwarding class y una loss priority.</dd><dt>Multifield (MF) classifier (clasificador MF)</dt><dd>Un firewall filter que hace coincidencia con varios campos del encabezado y establece la forwarding class y la loss priority como su acción.</dd><dt>DSCP</dt><dd>Differentiated Services Code Point: 6 bits en el encabezado IP usados para marcar el trato CoS de un paquete.</dd><dt>EF (DSCP 46)</dt><dd>El valor DSCP usado por convención para tráfico expedito de baja latencia, como la voz.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un router de borde de un ISP recibe tráfico de clientes donde todos los paquetes dicen ser DSCP EF. El ISP aplica un clasificador MF en la interfaz hacia el cliente que solo respeta EF para el tráfico de la subred de voz contratada por el cliente y pone el resto en best-effort, luego reescribe el DSCP en la salida. Los routers del núcleo usan un clasificador BA y confían en esas marcas corregidas.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si una pregunta menciona coincidencias con direcciones o puertos, la respuesta es multifield (un firewall filter). Si menciona leer DSCP, precedence, 802.1p o EXP, la respuesta es behavior aggregate. Cuando aplican ambos, MF tiene prioridad sobre BA.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué tipo de clasificador usa un firewall filter?</summary><p>La clasificación multifield; los términos del filtro hacen coincidencia con campos del encabezado y las acciones <code>then</code> establecen la forwarding class y la loss priority.</p></details>
+<details class="sq"><summary>¿Por qué la clasificación BA se usa normalmente en el núcleo y no en el borde?</summary><p>Porque confía en las marcas existentes, lo cual es seguro una vez que el borde las clasificó y reescribió, pero riesgoso para tráfico de orígenes no confiables.</p></details>
+<details class="sq"><summary>Si un paquete coincide con un clasificador BA y uno MF en la misma interfaz, ¿qué resultado se aplica?</summary><p>El resultado MF, porque el clasificador multifield se evalúa después del clasificador BA y lo reemplaza.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia JNCIA-Junos gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../jncia-junos/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../junos-default-forwarding-classes-best-effort-expedited-forwarding-assu/">← Forwarding classes por defecto de Junos (best-effort, expedi</a><a href="../junos-os-as-one-modular-os-across-routing-switching-and-security-platf/">Junos OS como un único sistema operativo modular para plataf →</a></nav>
+</main>
+</body>
+</html>

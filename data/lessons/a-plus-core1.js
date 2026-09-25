@@ -2251,4 +2251,4 @@ CertHub.addLessons("a-plus-core1", [
    ]
   ]
  }
-]);
+], { reviewed: "2026-09-25" });

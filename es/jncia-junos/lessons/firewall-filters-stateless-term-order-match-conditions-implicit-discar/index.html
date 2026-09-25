@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Firewall filters: stateless, orden de los términos, condic… · Lección de JNCIA-Junos</title>
+<meta name="description" content="Los firewall filters de Junos inspeccionan paquetes y deciden qué hacer con ellos. Otros fabricantes llaman a la misma función listas de control de acceso ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Firewall filters: stateless, orden de los términos, condic… · Lección de JNCIA-Junos">
+<meta property="og:description" content="Los firewall filters de Junos inspeccionan paquetes y deciden qué hacer con ellos. Otros fabricantes llaman a la misma función listas de control de acceso ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/jncia-junos/lessons/firewall-filters-stateless-term-order-match-conditions-implicit-discar/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/jncia-junos/lessons/firewall-filters-stateless-term-order-match-conditions-implicit-discar/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../jncia-junos/">JNCIA-Junos</a> / <a href="../">Lecciones</a> · <a href="../../../../jncia-junos/lessons/firewall-filters-stateless-term-order-match-conditions-implicit-discar/" hreflang="en" lang="en">English</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106</p>
+<h1>Firewall filters: stateless, orden de los términos, condiciones de coincidencia, descarte implícito al final</h1>
+<article class="lbody">
+<p>Los firewall filters de Junos inspeccionan paquetes y deciden qué hacer con ellos. Otros fabricantes llaman a la misma función listas de control de acceso (ACL, access control lists). Los filtros se configuran bajo <code>firewall family &lt;family&gt; filter &lt;name&gt;</code>, donde la familia normalmente es <code>inet</code> para IPv4 o <code>inet6</code> para IPv6. Se aplican a interfaces y se procesan en el Packet Forwarding Engine a alta velocidad.</p>
+<p>Los firewall filters son stateless (sin estado). Cada paquete se examina por sí solo, sin memoria de paquetes o conexiones anteriores. Si permites que un cliente dentro de tu red abra una conexión TCP hacia un servidor externo, un filtro stateless en la dirección entrante también debe permitir explícitamente las respuestas del servidor. La condición de coincidencia <code>tcp-established</code> ayuda aquí: coincide con los paquetes TCP que tienen activado el flag ACK o RST, que es como se ven los paquetes de respuesta. Esto es diferente de las políticas de seguridad stateful de los firewalls de la serie SRX, que rastrean sesiones y permiten automáticamente el tráfico de retorno.</p>
+<p>Un filtro está formado por términos, evaluados en orden de arriba hacia abajo, igual que los términos de las políticas. Cada término tiene una sección <code>from</code> con condiciones de coincidencia y una sección <code>then</code> con acciones. El primer término que coincide y aplica una acción terminante decide el destino del paquete, y los términos posteriores no se revisan.</p>
+<pre class="code" tabindex="0"><code>set firewall family inet filter PROTECT term SSH from source-address 192.0.2.0/24
+set firewall family inet filter PROTECT term SSH from protocol tcp
+set firewall family inet filter PROTECT term SSH from destination-port ssh
+set firewall family inet filter PROTECT term SSH then accept
+set firewall family inet filter PROTECT term ICMP from protocol icmp
+set firewall family inet filter PROTECT term ICMP then accept</code></pre>
+<p>Las condiciones de coincidencia comunes para IPv4 incluyen <code>source-address</code>, <code>destination-address</code> (y <code>address</code> para cualquiera de las dos), <code>source-prefix-list</code> y <code>destination-prefix-list</code>, <code>protocol</code> (tcp, udp, icmp, ospf, etc.), <code>source-port</code> y <code>destination-port</code> (por número o por nombre), <code>icmp-type</code>, <code>tcp-flags</code>, <code>tcp-established</code> y <code>tcp-initial</code>, <code>dscp</code> y <code>fragment-flags</code>. La lógica es la misma que en la política de enrutamiento: las condiciones diferentes en un término se combinan con AND, y varios valores para una misma condición se combinan con OR. Un término sin sección <code>from</code> coincide con todos los paquetes.</p>
+<p>Todo filtro termina con un término implícito que descarta todo lo que no coincidió antes. No lo ves en la configuración, pero siempre está ahí. En el ejemplo anterior, un paquete Telnet desde cualquier lugar, o un paquete SSH desde fuera de 192.0.2.0/24, no coincide con ningún término y se descarta en silencio. Este comportamiento de denegación por defecto es seguro, pero también significa que cuando aplicas un filtro debes permitir explícitamente todo lo que aún necesitas, o puedes cortar tráfico, incluida tu propia sesión de gestión. Una práctica común es terminar los filtros con un término final explícito que cuente o registre lo que se descarta, para que el descarte implícito nunca ocurra sin que lo veas.</p>
+<p>Como el orden importa y los términos nuevos se agregan al final, usa <code>insert</code> para reubicar términos y revisa el filtro con <code>show firewall family inet filter &lt;name&gt;</code> en modo de configuración antes de hacer commit.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Stateless filter (filtro sin estado)</dt><dd>Un filtro que evalúa cada paquete de forma independiente sin rastrear conexiones, así que el tráfico de retorno debe permitirse explícitamente.</dd><dt>Implicit discard (descarte implícito)</dt><dd>La acción final oculta de todo firewall filter de Junos que descarta en silencio los paquetes que no coincidieron con ningún término.</dd><dt>tcp-established</dt><dd>Una condición de coincidencia para paquetes TCP con el flag ACK o RST activado, normalmente tráfico de respuesta.</dd><dt>Match condition (condición de coincidencia)</dt><dd>Un criterio <code>from</code> como dirección, protocolo o puerto, usado para seleccionar paquetes en un término de filtro.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un ingeniero aplica un filtro que permite solo HTTPS hacia la subred de un servidor web y hace commit. De repente el servidor no puede resolver nombres ni descargar actualizaciones. El filtro es stateless y termina con un descarte implícito, así que las respuestas de DNS y de las actualizaciones que regresan se descartan. Agregar un término para el tráfico de retorno, usando <code>tcp-established</code> para TCP, y un término para las respuestas DNS restaura el servicio.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Los filtros son stateless, se evalúan de arriba hacia abajo y terminan con un descarte implícito. Varias condiciones en un término se combinan con AND, varios valores en una condición se combinan con OR.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Un paquete no coincide con ningún término de un filtro. ¿Qué le pasa?</summary><p>Se descarta en silencio por el término final implícito.</p></details>
+<details class="sq"><summary>¿Por qué un filtro stateless podría necesitar un término <code>tcp-established</code>?</summary><p>Porque no rastrea conexiones, los paquetes de respuesta deben permitirse explícitamente; <code>tcp-established</code> coincide con ellos.</p></details>
+<details class="sq"><summary>Un término tiene <code>from protocol tcp</code> y <code>from destination-port [ 22 443 ]</code>. ¿Qué paquetes coinciden?</summary><p>Los paquetes TCP hacia el puerto de destino 22 o 443.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia JNCIA-Junos gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../jncia-junos/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../testing-with-test-policy/">← Pruebas con `test policy`</a><a href="../filter-actions-terminating-accept-discard-reject-and-non-terminating-c/">Acciones de filtro: terminantes (accept, discard, reject) y  →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Recursos Ingress: ingressClassName, reglas de host y path,… · Lección de CKAD</title>
+<meta name="description" content="Un Ingress describe cómo debe llegar el tráfico HTTP y HTTPS de fuera del clúster a los Services de dentro, usando nombres de host y rutas de URL. Un solo ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Recursos Ingress: ingressClassName, reglas de host y path,… · Lección de CKAD">
+<meta property="og:description" content="Un Ingress describe cómo debe llegar el tráfico HTTP y HTTPS de fuera del clúster a los Services de dentro, usando nombres de host y rutas de URL. Un solo ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/ingress-resources-ingressclassname-host-and-path-rules-pathtype-prefix/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/ingress-resources-ingressclassname-host-and-path-rules-pathtype-prefix/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/ingress-resources-ingressclassname-host-and-path-rules-pathtype-prefix/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>Recursos Ingress: ingressClassName, reglas de host y path, pathType Prefix vs Exact, default backend y Secrets TLS</h1>
+<article class="lbody">
+<p>Un Ingress describe cómo debe llegar el tráfico HTTP y HTTPS de fuera del clúster a los Services de dentro, usando nombres de host y rutas de URL. Un solo Ingress, servido por un único punto de entrada externo, puede enrutar <code>shop.example.com/api</code> a un Service y <code>shop.example.com/</code> a otro. El objeto Ingress es solo un conjunto de reglas; un Ingress controller las lee y hace el enrutamiento real.</p>
+<p><code>spec.ingressClassName</code> nombra la IngressClass, y por lo tanto el controlador, que debe manejar este Ingress. Si se omite, se usa la IngressClass por defecto del clúster si hay una marcada; de lo contrario, el Ingress puede ignorarse. Lista las clases con <code>kubectl get ingressclass</code>.</p>
+<p><code>spec.rules</code> es una lista. Cada regla puede tener un <code>host</code>; sin él, se aplica a todos los hosts. Cada regla tiene <code>http.paths</code>, y cada path tiene un <code>path</code>, un <code>pathType</code> y un <code>backend</code> que nombra un Service y un puerto. El Service del backend debe estar en el mismo namespace que el Ingress.</p>
+<pre class="code" tabindex="0"><code>apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: shop
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts: [&quot;shop.example.com&quot;]
+    secretName: shop-tls
+  defaultBackend:
+    service:
+      name: fallback
+      port: {number: 80}
+  rules:
+  - host: shop.example.com
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: api
+            port: {number: 8080}
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: web
+            port: {number: 80}</code></pre>
+<p><code>pathType</code> decide cómo coinciden los paths. <code>Exact</code> coincide exactamente con la ruta de la URL y distingue mayúsculas de minúsculas: <code>/api</code> coincide solo con <code>/api</code>, no con <code>/api/</code> ni con <code>/api/v1</code>. <code>Prefix</code> coincide por elementos de la ruta separados por <code>/</code>: <code>/api</code> coincide con <code>/api</code>, <code>/api/</code> y <code>/api/v1</code>, pero no con <code>/apiv2</code>. <code>ImplementationSpecific</code> deja la coincidencia en manos del controlador. Cuando coinciden varios paths, gana el path coincidente más largo, y Exact tiene preferencia sobre Prefix para paths iguales.</p>
+<p><code>spec.defaultBackend</code> maneja las solicitudes que no coinciden con ninguna regla. Sin él, el controlador devuelve su propia respuesta por defecto, normalmente un 404. Para servir HTTPS, lista los hosts bajo <code>spec.tls</code> con un <code>secretName</code> que apunte a un Secret <code>kubernetes.io/tls</code> del mismo namespace, creado con <code>kubectl create secret tls shop-tls --cert=tls.crt --key=tls.key</code>. El controlador termina el TLS con ese certificado y reenvía HTTP plano al Service, salvo que se configure de otra forma.</p>
+<p>Genera Ingresses rápidamente: <code>kubectl create ingress shop --class=nginx --rule=&quot;shop.example.com/api*=api:8080&quot; --rule=&quot;shop.example.com/*=web:80&quot; --default-backend=fallback:80</code>, agregando <code>,tls=shop-tls</code> a una regla para activar TLS en ese host. Un <code>*</code> final en el path significa Prefix; sin él, el path es Exact. Revisa el resultado con <code>kubectl describe ingress shop</code>, que lista cada regla, sus backends y sus endpoints.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Ingress</dt><dd>Un objeto que define reglas de enrutamiento HTTP(S) hacia Services basadas en host y path.</dd><dt>ingressClassName</dt><dd>Campo que elige qué IngressClass (controlador) implementa el Ingress.</dd><dt>pathType Prefix</dt><dd>Coincide con el path y con todo lo que está por debajo, elemento por elemento.</dd><dt>pathType Exact</dt><dd>Coincide solo con la ruta de URL exacta.</dd><dt>defaultBackend</dt><dd>Service que recibe las solicitudes que no coinciden con ninguna regla.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una tarea te pide enrutar <code>app.local/v1</code> exactamente al Service <code>v1-svc</code> y todo lo que esté bajo <code>app.local/</code> a <code>web</code>. Creas un Ingress con un path Exact <code>/v1</code> hacia v1-svc:80 y un path Prefix <code>/</code> hacia web:80, de modo que <code>/v1</code> va a v1-svc mientras que <code>/v1/users</code> cae en web.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Prefix coincide con segmentos completos de la ruta (<code>/api</code> no coincide con <code>/apiv2</code>); Exact coincide con una sola ruta. En <code>kubectl create ingress</code>, un <code>*</code> final significa Prefix.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Un path Prefix <code>/foo</code> coincide con <code>/foo/bar</code>? ¿Y con <code>/foobar</code>?</summary><p>Coincide con <code>/foo/bar</code> pero no con <code>/foobar</code>, porque la coincidencia es por elemento de la ruta.</p></details>
+<details class="sq"><summary>¿Qué referencia la sección tls de un Ingress?</summary><p>Los hosts que se sirven por HTTPS y un Secret kubernetes.io/tls, del mismo namespace, que contiene el certificado y la clave.</p></details>
+<details class="sq"><summary>¿Qué maneja las solicitudes que no coinciden con ninguna regla del Ingress?</summary><p>El defaultBackend si está definido; si no, la respuesta por defecto del propio controlador (a menudo un 404).</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../networkpolicy-needs-a-cni-plugin-that-enforces-it-for-example-calico-o/">← NetworkPolicy necesita un plugin CNI que la aplique (por eje</a><a href="../ingress-controllers-for-example-ingress-nginx-and-testing-with-curl-an/">Ingress controllers (por ejemplo ingress-nginx) y pruebas co →</a></nav>
+</main>
+</body>
+</html>

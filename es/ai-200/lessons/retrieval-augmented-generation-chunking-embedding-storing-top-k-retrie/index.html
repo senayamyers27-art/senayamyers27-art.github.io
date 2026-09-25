@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Generación aumentada por recuperación: fragmentación, embe… · Lección de AI-200</title>
+<meta name="description" content="Un modelo de lenguaje grande solo sabe lo que estaba en sus datos de entrenamiento, y puede inventar con total seguridad respuestas sobre tus documentos pr">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Generación aumentada por recuperación: fragmentación, embe… · Lección de AI-200">
+<meta property="og:description" content="Un modelo de lenguaje grande solo sabe lo que estaba en sus datos de entrenamiento, y puede inventar con total seguridad respuestas sobre tus documentos pr">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/retrieval-augmented-generation-chunking-embedding-storing-top-k-retrie/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/retrieval-augmented-generation-chunking-embedding-storing-top-k-retrie/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/retrieval-augmented-generation-chunking-embedding-storing-top-k-retrie/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Generación aumentada por recuperación: fragmentación, embeddings, almacenamiento, recuperación top-k con filtros de metadatos y cómo agregar los resultados al prompt</h1>
+<article class="lbody">
+<p>Un modelo de lenguaje grande solo sabe lo que estaba en sus datos de entrenamiento, y puede inventar con total seguridad respuestas sobre tus documentos privados. La generación aumentada por recuperación (RAG) resuelve esto al encontrar pasajes relevantes de tus propios datos en el momento de la pregunta y ponerlos en el prompt, para que el modelo responda a partir de los hechos proporcionados. RAG tiene una canalización de ingesta y una de consulta, y los servicios de datos de este dominio están en medio.</p>
+<p>La ingesta empieza con la fragmentación (chunking): dividir los documentos en pasajes lo bastante pequeños para generar su embedding y para que quepan varios en un prompt, pero lo bastante grandes para conservar el significado. Las estrategias comunes son fragmentos de tamaño fijo medidos en tokens con cierta superposición entre vecinos (para que una oración cortada en un límite aparezca completa en algún fragmento) o la división según la estructura, por encabezados, párrafos u oraciones. Los fragmentos demasiado grandes diluyen la coincidencia; los demasiado pequeños pierden contexto. Guarda metadatos con cada fragmento: documento de origen, título, sección, idioma, fecha e información de acceso, como el inquilino o los grupos permitidos.</p>
+<p>Lo siguiente es el embedding. Cada fragmento pasa por un modelo de embeddings, que devuelve un vector de longitud fija. Usa el mismo modelo para los documentos y para las consultas; los vectores de modelos distintos no son comparables. Registra el nombre del modelo junto con los datos para saber cuándo debes volver a generar los embeddings.</p>
+<p>Después viene el almacenamiento: escribe el texto del fragmento, los metadatos y el vector en un almacén compatible con vectores, como un contenedor de Cosmos DB con directiva vectorial, una tabla de PostgreSQL con una columna <code>vector(n)</code> o un índice de Redis. Mantenlo actualizado con el change feed o con un trabajo controlado por eventos cuando cambien los documentos de origen.</p>
+<p>En el momento de la consulta, genera el embedding de la pregunta del usuario y luego ejecuta la recuperación top-k: obtén los k fragmentos cuyos vectores están más cerca del vector de la pregunta, donde k suele ser pequeño, por ejemplo de 3 a 10. Aplica filtros de metadatos en la misma consulta, por ejemplo el inquilino del usuario, una línea de productos o un idioma. Los filtros mejoran la relevancia y son esenciales para la seguridad: garantizan que un usuario nunca recupere fragmentos de documentos que no tiene permitido ver. Algunos sistemas combinan la similitud vectorial con la búsqueda por palabras clave (búsqueda híbrida) o reordenan los resultados (reranking) para mejorar la calidad.</p>
+<pre class="code" tabindex="0"><code>q_vec = embed(question)
+hits = container.query_items(
+  &quot;SELECT TOP 5 c.text, c.source FROM c WHERE c.tenantId = @t &quot;
+  &quot;ORDER BY VectorDistance(c.embedding, @v)&quot;,
+  parameters=[{&quot;name&quot;: &quot;@t&quot;, &quot;value&quot;: tenant}, {&quot;name&quot;: &quot;@v&quot;, &quot;value&quot;: q_vec}],
+  partition_key=tenant)
+context = &quot;\n\n&quot;.join(f&quot;[{h['source']}] {h['text']}&quot; for h in hits)
+messages = [
+  {&quot;role&quot;: &quot;system&quot;, &quot;content&quot;: &quot;Answer only from the sources below. If the answer is not there, say so. Cite sources.\n\n&quot; + context},
+  {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: question}]</code></pre>
+<p>Por último, agrega los resultados al prompt. Coloca los pasajes recuperados en una sección claramente delimitada, indícale al modelo que responda solo a partir de ellos y que diga cuándo la respuesta no está presente, y pide citas para que los usuarios puedan verificar. Vigila la ventana de contexto del modelo: k por el tamaño del fragmento más las instrucciones tienen que caber. Trata el texto recuperado como datos, no como instrucciones, ya que los documentos podrían contener texto que intente dirigir al modelo.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>RAG (generación aumentada por recuperación)</dt><dd>Retrieval-augmented generation: recuperar datos relevantes en el momento de la consulta y agregarlos al prompt del modelo para fundamentar las respuestas.</dd><dt>Chunking (fragmentación)</dt><dd>Dividir los documentos de origen en pasajes, a menudo con superposición, antes de generar sus embeddings.</dd><dt>Top-k retrieval (recuperación top-k)</dt><dd>Devolver los k elementos cuyos vectores son más similares al vector de la consulta.</dd><dt>Metadata filter (filtro de metadatos)</dt><dd>Una condición sobre propiedades del fragmento, como el inquilino o el idioma, que se aplica junto con la búsqueda vectorial.</dd><dt>Grounding (fundamentación)</dt><dd>Limitar la respuesta de un modelo al contenido de origen proporcionado, a menudo con instrucciones y citas.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un asistente de RR. HH. respondió una pregunta sobre la licencia parental usando la política de otro país. El equipo agregó metadatos de país e inquilino a cada fragmento, filtró la recuperación por el país del usuario, redujo el tamaño de los fragmentos con una pequeña superposición para que las secciones de las políticas quedaran intactas e indicó al modelo que citara las fuentes y dijera cuándo ninguna política coincidía. Las respuestas del país equivocado dejaron de aparecer.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Usa el mismo modelo de embeddings para los fragmentos y para las consultas; aplica el control de acceso con filtros de metadatos al recuperar, no pidiéndole al modelo que ignore documentos.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué agregar superposición entre fragmentos adyacentes?</summary><p>Para que las oraciones o ideas cortadas en el límite de un fragmento sigan apareciendo completas en al menos un fragmento, lo que mejora la recuperación.</p></details>
+<details class="sq"><summary>¿Dónde debe aplicarse el aislamiento de inquilinos en una app de RAG?</summary><p>En la consulta de recuperación, como filtro de metadatos (o partición), para que los fragmentos de otros inquilinos nunca lleguen al prompt.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../pgvector-vector-n-columns-distance-operators-l2-cosine-inner-product-h/">← pgvector: columnas vector(n), operadores de distancia (&lt;-&gt; L</a><a href="../azure-managed-redis-cache-aside-pattern-ttl-and-invalidation-eviction/">Azure Managed Redis: patrón cache-aside, TTL e invalidación, →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trucos de salida para diagnosticar rápido: -o wide, -o yam… · Lección de CKAD</title>
+<meta name="description" content="Muchas tareas del CKAD terminan con 'escribe el resultado en un archivo'. Cuanto más rápido puedas extraer exactamente el campo correcto de la API, más tie">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Trucos de salida para diagnosticar rápido: -o wide, -o yam… · Lección de CKAD">
+<meta property="og:description" content="Muchas tareas del CKAD terminan con 'escribe el resultado en un archivo'. Cuanto más rápido puedas extraer exactamente el campo correcto de la API, más tie">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/output-tricks-for-fast-troubleshooting-o-wide-o-yaml-jsonpath-show-lab/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/output-tricks-for-fast-troubleshooting-o-wide-o-yaml-jsonpath-show-lab/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/output-tricks-for-fast-troubleshooting-o-wide-o-yaml-jsonpath-show-lab/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>Trucos de salida para diagnosticar rápido: -o wide, -o yaml, jsonpath, --show-labels, --sort-by</h1>
+<article class="lbody">
+<p>Muchas tareas del CKAD terminan con 'escribe el resultado en un archivo'. Cuanto más rápido puedas extraer exactamente el campo correcto de la API, más tiempo te queda para las tareas difíciles. Las opciones de salida de kubectl son las herramientas para eso.</p>
+<p><code>-o wide</code> agrega columnas adicionales: para Pods, la IP del Pod, el nodo y el nodo nominado; para Deployments, los nombres de contenedores, las imágenes y el selector; para Services, el selector. Es la forma más rápida de ver en qué nodo cayó un Pod o qué imagen ejecuta un Deployment. <code>--show-labels</code> agrega una columna LABELS, y <code>-L app,tier</code> agrega una columna por cada etiqueta nombrada. Junto con <code>-l</code> (filtrar por etiqueta), estas opciones hacen que los problemas de selectores sean fáciles de detectar.</p>
+<p><code>-o yaml</code> imprime el objeto completo tal como lo almacena el API server, incluido el status y los campos con valores por defecto. Úsalo para ver exactamente qué se está ejecutando y como punto de partida para manifiestos nuevos: <code>kubectl get deploy web -o yaml &gt; web.yaml</code>. Quita los campos administrados por el servidor, como <code>status</code>, <code>uid</code>, <code>resourceVersion</code> y <code>creationTimestamp</code>, antes de reutilizarlo. Combinado con <code>--dry-run=client</code>, <code>-o yaml</code> genera manifiestos nuevos a partir de comandos imperativos sin crear nada.</p>
+<p><code>-o jsonpath='{...}'</code> extrae campos específicos. La expresión recorre el objeto desde arriba: <code>{.metadata.name}</code>, <code>{.spec.containers[0].image}</code>, <code>{.status.podIP}</code>. Para las listas que devuelve <code>get pods</code>, empieza desde <code>.items</code>: <code>{.items[*].metadata.name}</code> imprime todos los nombres en una línea. <code>[*]</code> significa todos los elementos, <code>[0]</code> el primero, y los filtros se ven así: <code>[?(@.type==&quot;Ready&quot;)]</code>. Para un elemento por línea, usa <code>{range .items[*]}{.metadata.name}{&quot;\n&quot;}{end}</code>. Encierra la expresión entre comillas simples para que el shell no la toque.</p>
+<pre class="code" tabindex="0"><code>kubectl get pods -o wide --show-labels
+kubectl get pods -L app,version
+kubectl get pod web-5d8f7 -o jsonpath='{.status.podIP}'
+kubectl get pods -o jsonpath='{.items[*].spec.containers[*].image}'
+kubectl get pods -o jsonpath='{range .items[*]}{.metadata.name}{&quot;\t&quot;}{.status.phase}{&quot;\n&quot;}{end}'
+kubectl get pods --sort-by=.metadata.creationTimestamp
+kubectl get pods --sort-by='.status.containerStatuses[0].restartCount'
+kubectl get pods -o custom-columns=NAME:.metadata.name,NODE:.spec.nodeName</code></pre>
+<p><code>--sort-by</code> ordena la lista por cualquier campo, escrito como una expresión JSONPath relativa a cada elemento (sin <code>.items</code>): ordena por fecha de creación, contador de reinicios o nombre. <code>-o custom-columns=</code> construye tu propia tabla con nombres de encabezado y rutas de campos, a menudo más clara que jsonpath para varios campos. <code>-o name</code> imprime solo nombres del estilo <code>pod/web-5d8f7</code>, prácticos en bucles, y <code>--no-headers</code> quita la fila de encabezado para scripts.</p>
+<p>Si no conoces la ruta de un campo, ejecuta <code>-o yaml</code> una vez, encuentra el campo y escribe la ruta desde la raíz del objeto. <code>kubectl explain</code> también muestra la estructura. Revisa siempre con <code>cat</code> el archivo que escribiste antes de seguir.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>-o wide</dt><dd>Agrega columnas adicionales como la IP del Pod, el nodo y las imágenes.</dd><dt>-o yaml</dt><dd>Imprime el objeto completo, incluido el status y los valores por defecto.</dd><dt>jsonpath</dt><dd>Plantilla de salida que extrae campos específicos del árbol del objeto.</dd><dt>--sort-by</dt><dd>Ordena la salida de una lista por un campo dado como expresión JSONPath.</dd><dt>custom-columns</dt><dd>Formato de salida que construye una tabla a partir de rutas de campos con nombre.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una tarea pide los nombres de todos los Pods del namespace <code>ops</code>, ordenados por antigüedad, uno por línea, guardados en /opt/pods.txt. Ejecutas <code>kubectl get pods -n ops --sort-by=.metadata.creationTimestamp -o custom-columns=NAME:.metadata.name --no-headers &gt; /opt/pods.txt</code> y lo revisas con <code>cat</code>.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Para <code>kubectl get pods</code> (una lista), jsonpath empieza en <code>.items</code>, pero las rutas de <code>--sort-by</code> son relativas a cada elemento. Pon siempre las expresiones jsonpath entre comillas simples.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué opción muestra rápidamente el nodo en el que se ejecuta cada Pod?</summary><p><code>-o wide</code>.</p></details>
+<details class="sq"><summary>Escribe un jsonpath para imprimir la imagen del primer contenedor del Pod web.</summary><p><code>kubectl get pod web -o jsonpath='{.spec.containers[0].image}'</code>.</p></details>
+<details class="sq"><summary>¿Cómo listas los Pods ordenados por contador de reinicios?</summary><p><code>kubectl get pods --sort-by='.status.containerStatuses[0].restartCount'</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../debugging-kubectl-exec-kubectl-debug-ephemeral-containers-and-pod-copi/">← Depuración: kubectl exec, kubectl debug (contenedores efímer</a><a href="../extending-kubernetes-customresourcedefinitions-custom-resources-and-op/">Extender Kubernetes: CustomResourceDefinitions, recursos per →</a></nav>
+</main>
+</body>
+</html>

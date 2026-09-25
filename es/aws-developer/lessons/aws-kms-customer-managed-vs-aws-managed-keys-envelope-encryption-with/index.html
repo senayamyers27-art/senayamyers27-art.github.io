@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AWS KMS: claves administradas por el cliente vs administra… · Lección de Developer Associate</title>
+<meta name="description" content="AWS Key Management Service (KMS) crea y controla claves criptográficas cuyo material de clave nunca sale de KMS sin cifrar. Servicios como S3, DynamoDB, La">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="AWS KMS: claves administradas por el cliente vs administra… · Lección de Developer Associate">
+<meta property="og:description" content="AWS Key Management Service (KMS) crea y controla claves criptográficas cuyo material de clave nunca sale de KMS sin cifrar. Servicios como S3, DynamoDB, La">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/aws-kms-customer-managed-vs-aws-managed-keys-envelope-encryption-with/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/aws-kms-customer-managed-vs-aws-managed-keys-envelope-encryption-with/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/aws-kms-customer-managed-vs-aws-managed-keys-envelope-encryption-with/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>AWS KMS: claves administradas por el cliente vs administradas por AWS, cifrado de sobre con GenerateDataKey, límite de 4 KB de Encrypt, uso de claves entre cuentas</h1>
+<article class="lbody">
+<p>AWS Key Management Service (KMS) crea y controla claves criptográficas cuyo material de clave nunca sale de KMS sin cifrar. Servicios como S3, DynamoDB, Lambda y Secrets Manager llaman a KMS por ti, y tu propio código puede llamarlo directamente.</p>
+<p>Hay distintos tipos de claves de KMS según quién las administra. Las claves administradas por AWS (alias como <code>aws/s3</code> o <code>aws/lambda</code>) se crean automáticamente cuando usas el cifrado predeterminado de un servicio; puedes verlas y ver su uso en CloudTrail, pero no puedes cambiar su política de clave, y rotan automáticamente cada año. Las claves administradas por el cliente son las que tú creas; controlas la política de la clave, los grants, la habilitación y deshabilitación, la eliminación (con un período de espera de 7 a 30 días), las etiquetas y los alias, y puedes activar la rotación automática. Solo las claves administradas por el cliente pueden compartirse con otras cuentas o recibir políticas detalladas, así que requisitos como 'controlar quién puede usar la clave' o 'entre cuentas' apuntan a ellas. (Las claves propiedad de AWS, que los servicios usan internamente en cuentas de AWS que no puedes ver, son una tercera categoría.)</p>
+<p>La API <code>Encrypt</code> puede cifrar directamente como máximo 4 KB de texto plano. Eso está bien para una contraseña o un secreto pequeño, pero no para un archivo. Para datos más grandes, usa el cifrado de sobre (envelope encryption): cifra los datos con una clave de datos y cifra la clave de datos con la clave de KMS. Llama a <code>GenerateDataKey</code> con el ID de tu clave de KMS; KMS devuelve la clave de datos en dos formas, en texto plano y cifrada con la clave de KMS. Tu código cifra los datos localmente con la clave de datos en texto plano (por ejemplo, con AES-GCM), descarta de la memoria la clave en texto plano y guarda la clave de datos cifrada junto al texto cifrado. Para descifrar, llama a <code>Decrypt</code> sobre la clave de datos cifrada para recuperar la clave en texto plano y luego descifra los datos localmente. <code>GenerateDataKeyWithoutPlaintext</code> devuelve solo la copia cifrada, útil cuando un componente cifrará más tarde.</p>
+<p>El cifrado de sobre es más rápido (los datos grandes nunca viajan a KMS), más barato (una llamada a KMS por clave de datos, no por byte) y evita el límite de 4 KB. Tanto AWS Encryption SDK como SSE-KMS de S3 lo usan internamente.</p>
+<p>Un contexto de cifrado (encryption context) es un conjunto de pares clave-valor no secretos que pasas con Encrypt o GenerateDataKey; los mismos pares deben proporcionarse para descifrar. Agrega comprobaciones de integridad y aparece en CloudTrail, lo que hace más claras las auditorías. Cuando las solicitudes fallan con <code>ThrottlingException</code>, has alcanzado las cuotas de solicitudes de KMS; las respuestas incluyen guardar en caché las claves de datos (Encryption SDK lo admite), usar S3 Bucket Keys, reintentar con retroceso o solicitar un aumento de cuota.</p>
+<p>Para el uso entre cuentas se requieren dos cosas: la política de la clave en la cuenta de la clave debe permitir a la otra cuenta (o a un rol específico de ella) usar la clave, y en la otra cuenta una política de IAM debe conceder al usuario o rol las acciones de KMS sobre el ARN de esa clave. Las claves administradas por AWS no pueden usarse así porque sus políticas de clave no se pueden editar. Las claves son regionales; las claves multirregión te permiten descifrar en otra región sin volver a cifrar.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Customer managed key (clave administrada por el cliente)</dt><dd>Una clave de KMS que creas y controlas, incluida su política de clave, su rotación y el acceso entre cuentas.</dd><dt>AWS managed key (clave administrada por AWS)</dt><dd>Una clave de KMS creada por un servicio de AWS para tu cuenta, con una política de clave fija que no puedes cambiar.</dd><dt>Envelope encryption (cifrado de sobre)</dt><dd>Cifrar los datos con una clave de datos y luego cifrar esa clave de datos con una clave de KMS.</dd><dt>GenerateDataKey</dt><dd>Una API de KMS que devuelve una clave de datos en texto plano y cifrada para el cifrado local.</dd><dt>Encryption context (contexto de cifrado)</dt><dd>Pares clave-valor no secretos vinculados a una operación de cifrado de KMS que deben coincidir al descifrar.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una aplicación debe cifrar archivos de logs de 50 MB antes de almacenarlos. Llamar a Encrypt falla porque solo acepta 4 KB. En su lugar, el código llama a GenerateDataKey, cifra el archivo localmente con la clave de datos en texto plano, descarta esa clave y guarda la clave de datos cifrada como metadatos del objeto junto al archivo.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Cualquier pregunta con datos de más de 4 KB y KMS apunta al cifrado de sobre con GenerateDataKey. Los requisitos de uso entre cuentas o de política de clave personalizada descartan las claves administradas por AWS.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué devuelve GenerateDataKey?</summary><p>Una clave de datos en texto plano para el cifrado local inmediato y una copia de la misma clave cifrada con la clave de KMS para almacenarla.</p></details>
+<details class="sq"><summary>¿Por qué no puedes compartir una clave administrada por AWS con otra cuenta?</summary><p>Su política de clave la controla AWS y no se puede editar, así que no puede conceder acceso a otras cuentas.</p></details>
+<details class="sq"><summary>Menciona dos formas de reducir la limitación de KMS.</summary><p>Guardar en caché las claves de datos (por ejemplo con Encryption SDK) y habilitar S3 Bucket Keys; también reintentar con retroceso o solicitar un aumento de cuota.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../encryption-at-rest-sse-s3-sse-kms-sse-c-s3-bucket-keys-client-side-enc/">← Cifrado en reposo: SSE-S3, SSE-KMS, SSE-C, S3 Bucket Keys, c</a><a href="../encryption-in-transit-tls-acm-certificates-us-east-1-for-cloudfront-en/">Cifrado en tránsito: TLS, certificados de ACM (us-east-1 par →</a></nav>
+</main>
+</body>
+</html>

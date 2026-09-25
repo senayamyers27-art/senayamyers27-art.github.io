@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tipos de Service: ClusterIP, NodePort (30000–32767), LoadB… · Lección de CKA</title>
+<meta name="description" content="Un Service da un nombre y una dirección estables a un conjunto cambiante de Pods, seleccionados por etiquetas. Su type decide quién puede llegar a él y cóm">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Tipos de Service: ClusterIP, NodePort (30000–32767), LoadB… · Lección de CKA">
+<meta property="og:description" content="Un Service da un nombre y una dirección estables a un conjunto cambiante de Pods, seleccionados por etiquetas. Su type decide quién puede llegar a él y cóm">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/service-types-clusterip-nodeport-30000-32767-loadbalancer-cloud-contro/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/service-types-clusterip-nodeport-30000-32767-loadbalancer-cloud-contro/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/service-types-clusterip-nodeport-30000-32767-loadbalancer-cloud-contro/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Tipos de Service: ClusterIP, NodePort (30000–32767), LoadBalancer (cloud controller o MetalLB), headless y ExternalName</h1>
+<article class="lbody">
+<p>Un Service da un nombre y una dirección estables a un conjunto cambiante de Pods, seleccionados por etiquetas. Su <code>type</code> decide quién puede llegar a él y cómo.</p>
+<p>ClusterIP es el predeterminado. El Service obtiene una IP virtual del Service CIDR accesible solo dentro del clúster, más un nombre DNS como <code>web.shop.svc.cluster.local</code>. <code>port</code> es el puerto al que se conectan los clientes; <code>targetPort</code> es el puerto del contenedor (un número o un puerto con nombre) al que se reenvía el tráfico.</p>
+<p>NodePort se construye sobre ClusterIP y además abre el mismo puerto en todos los nodos, del rango 30000 a 32767 a menos que se cambie el <code>--service-node-port-range</code> del API server. Los clientes fuera del clúster llegan a la IP de cualquier nodo en ese puerto. Puedes dejar que Kubernetes elija el puerto o definir <code>nodePort</code> explícitamente. LoadBalancer se construye sobre NodePort y pide que se aprovisione un balanceador de carga externo. En la nube, eso lo hace el cloud-controller-manager. En bare metal o en un laboratorio, nada lo hace a menos que instales algo como MetalLB, que asigna direcciones de un pool configurado. Sin eso, el EXTERNAL-IP del Service se queda en <code>&lt;pending&gt;</code>, aunque su NodePort y su ClusterIP siguen funcionando.</p>
+<pre class="code" tabindex="0"><code>kubectl expose deployment web --port=80 --target-port=8080 --name=web          # ClusterIP
+kubectl expose deployment web --port=80 --target-port=8080 --type=NodePort --name=web-np
+kubectl create service nodeport web2 --tcp=80:8080 --node-port=30080
+kubectl get svc -o wide</code></pre>
+<p>Un headless Service define <code>clusterIP: None</code>. No obtiene IP virtual y kube-proxy lo ignora; en cambio, el DNS devuelve las IP individuales de los Pods como registros A. Se usa cuando los clientes necesitan llegar a Pods específicos, sobre todo en los StatefulSets, cuyos Pods reciben nombres como <code>db-0.db.ns.svc.cluster.local</code>.</p>
+<p>Un Service ExternalName no tiene selector ni hace ningún proxy. Simplemente hace que el DNS del clúster devuelva un registro CNAME que apunta a un hostname externo indicado en <code>spec.externalName</code>, por ejemplo para crear un alias de <code>db.prod.svc.cluster.local</code> hacia el nombre DNS de una base de datos gestionada. Como es solo DNS, los puertos no se remapean y los protocolos que verifican el hostname, como HTTPS, pueden verse afectados.</p>
+<p>Cuando creas un Service con <code>kubectl expose</code>, copia el selector del recurso que expones, que es la forma más fácil de acertar con las etiquetas. Sea cual sea el tipo, un Service solo envía tráfico a los Pods que coinciden con su selector y están Ready, así que la primera verificación para un Service que no responde siempre es <code>kubectl get endpointslices -l kubernetes.io/service-name=&lt;svc&gt;</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>ClusterIP</dt><dd>El tipo de Service predeterminado, accesible solo dentro del clúster mediante una IP virtual.</dd><dt>NodePort</dt><dd>Un tipo de Service que además abre un puerto del rango 30000–32767 en todos los nodos.</dd><dt>LoadBalancer</dt><dd>Un tipo de Service que solicita un balanceador de carga externo a un cloud controller o a MetalLB.</dd><dt>Headless Service</dt><dd>Un Service con clusterIP None cuyo nombre DNS se resuelve directamente en las IP de los Pods.</dd><dt>ExternalName</dt><dd>Un Service que devuelve un CNAME de DNS hacia un hostname externo, sin proxy.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>En un laboratorio de kubeadm en bare metal, un Service LoadBalancer se queda con EXTERNAL-IP <code>&lt;pending&gt;</code>. Aun así puedes llegar a él a través de la IP de cualquier nodo y el NodePort asignado. Instalar MetalLB con un pool de direcciones de la subred del laboratorio le da una IP externa.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> port es el puerto del Service, targetPort es el puerto del contenedor y nodePort es el puerto del nodo. Confundir port con targetPort es la causa más común de un Service que existe pero rechaza las conexiones.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué un Service LoadBalancer muestra EXTERNAL-IP pending en un clúster bare metal?</summary><p>Nada está aprovisionando balanceadores de carga; necesitas un cloud controller o algo como MetalLB.</p></details>
+<details class="sq"><summary>¿Qué devuelve el DNS para un headless Service?</summary><p>Las direcciones IP de sus Pods listos, en lugar de una única IP virtual.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../kube-proxy-modes-iptables-ipvs-nftables-and-how-service-virtual-ips-wo/">← Modos de kube-proxy (iptables, IPVS, nftables) y cómo funcio</a><a href="../endpointslices-services-without-selectors-externaltrafficpolicy-and-se/">EndpointSlices, Services sin selectores, externalTrafficPoli →</a></nav>
+</main>
+</body>
+</html>

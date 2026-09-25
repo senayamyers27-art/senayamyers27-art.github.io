@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Túneles GRE: configuración, keepalives, problemas de enrut… · Lección de ENCOR</title>
+<meta name="description" content="Generic Routing Encapsulation (GRE) es un protocolo de tunelización sencillo que envuelve un paquete dentro de otro. El paquete original, que puede ser IPv">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Túneles GRE: configuración, keepalives, problemas de enrut… · Lección de ENCOR">
+<meta property="og:description" content="Generic Routing Encapsulation (GRE) es un protocolo de tunelización sencillo que envuelve un paquete dentro de otro. El paquete original, que puede ser IPv">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/gre-tunnels-configuration-keepalives-recursive-routing-problems-mtu-an/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/gre-tunnels-configuration-keepalives-recursive-routing-problems-mtu-an/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ccnp-encor/">ENCOR</a> / <a href="../">Lecciones</a> · <a href="../../../../ccnp-encor/lessons/gre-tunnels-configuration-keepalives-recursive-routing-problems-mtu-an/" hreflang="en" lang="en">English</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2</p>
+<h1>Túneles GRE: configuración, keepalives, problemas de enrutamiento recursivo, MTU y MSS</h1>
+<article class="lbody">
+<p>Generic Routing Encapsulation (GRE) es un protocolo de tunelización sencillo que envuelve un paquete dentro de otro. El paquete original, que puede ser IPv4, IPv6 o incluso tráfico multicast y de protocolos de enrutamiento, se convierte en la carga útil de un nuevo paquete IP con un encabezado GRE, usando el número de protocolo IP 47. GRE te permite construir un enlace virtual punto a punto a través de una red que no conoce tus direcciones, como internet, y ejecutar protocolos de enrutamiento sobre él. GRE no proporciona cifrado ni autenticación propios, por lo que a menudo se combina con IPsec.</p>
+<p>Un túnel GRE básico necesita una interfaz de túnel en cada router con tres cosas: una dirección IP para el propio túnel (el overlay), un origen del túnel (tunnel source, una interfaz o dirección local en el underlay) y un destino del túnel (tunnel destination, la dirección del underlay del router remoto).</p>
+<pre class="code" tabindex="0"><code>interface Tunnel0
+ ip address 172.16.0.1 255.255.255.252
+ tunnel source GigabitEthernet0/0
+ tunnel destination 203.0.113.2
+ ip mtu 1400
+ ip tcp adjust-mss 1360</code></pre>
+<p>El modo de túnel predeterminado es <code>tunnel mode gre ip</code>. Una interfaz de túnel se levanta en cuanto el router tiene una ruta hacia el destino del túnel, aunque el extremo remoto esté caído o mal configurado. Los keepalives de GRE corrigen esto: <code>keepalive 10 3</code> envía un keepalive cada 10 segundos y baja el protocolo de línea después de 3 respuestas perdidas. Ejecutar un protocolo de enrutamiento sobre el túnel también detecta la falla mediante sus propios hellos.</p>
+<p>El enrutamiento recursivo es el problema clásico de GRE. El router debe alcanzar el destino del túnel a través del underlay. Si un protocolo de enrutamiento que se ejecuta sobre el túnel llega a aprender una mejor ruta hacia el destino del túnel a través del propio túnel, el router tendría que enviar los paquetes del túnel a través del túnel, lo cual es imposible. IOS lo detecta, registra un mensaje que dice que el túnel está deshabilitado temporalmente debido a enrutamiento recursivo, y el túnel oscila. Evítalo no anunciando nunca el underlay (las redes de origen y destino del túnel) en el protocolo de enrutamiento que se ejecuta sobre el túnel, por ejemplo usando protocolos o procesos separados, filtrando con distribute lists o usando rutas estáticas para el underlay.</p>
+<p>GRE agrega sobrecarga: 20 bytes por el nuevo encabezado IP más 4 bytes del encabezado GRE, es decir, 24 bytes en total. En una ruta Ethernet estándar de 1500 bytes, un paquete original de tamaño completo ya no cabe y debe fragmentarse o descartarse. Configurar <code>ip mtu</code> en el túnel (comúnmente 1400 para dejar espacio para IPsec más adelante) hace que el router fragmente antes de encapsular o que avise a los emisores mediante ICMP. Como muchas redes bloquean ICMP, Path MTU Discovery puede fallar, así que también configuras <code>ip tcp adjust-mss</code>, que reescribe el tamaño máximo de segmento en los paquetes TCP SYN. El MSS es la MTU menos 40 bytes de encabezados IPv4 y TCP, así que una MTU de 1400 se combina con un MSS de 1360.</p>
+<p>Verifica con <code>show interfaces tunnel 0</code>, <code>show ip interface brief</code> y haciendo ping a través del túnel con paquetes grandes y el bit don't-fragment, por ejemplo <code>ping 172.16.0.2 size 1400 df-bit</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>GRE</dt><dd>Generic Routing Encapsulation: un protocolo de tunelización (protocolo IP 47) que transporta un paquete dentro de otro sin cifrado.</dd><dt>Tunnel source y destination (origen y destino del túnel)</dt><dd>Las direcciones del underlay que usan los paquetes GRE entre los dos extremos del túnel.</dd><dt>Recursive routing (enrutamiento recursivo)</dt><dd>Una falla en la que la ruta hacia el destino del túnel apunta a través del propio túnel, lo que hace que el túnel se caiga.</dd><dt>MSS</dt><dd>Maximum segment size (tamaño máximo de segmento): la mayor carga útil TCP que aceptará un host, normalmente la MTU menos 40 bytes.</dd><dt>GRE keepalive</dt><dd>Sondas periódicas que bajan el protocolo de línea del túnel cuando el extremo remoto deja de responder.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Dos sucursales construyen un túnel GRE sobre internet y ejecutan EIGRP a través de él. Alguien agrega <code>network 0.0.0.0</code> bajo EIGRP, lo que anuncia las interfaces públicas en EIGRP. Cada router aprende la dirección pública del otro a través del túnel, el log reporta enrutamiento recursivo y el túnel oscila hasta que la sentencia network se restringe a las subredes del túnel y de la LAN.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Un túnel GRE está up/up siempre que el destino sea enrutable, aunque el extremo remoto esté muerto, a menos que se habiliten los keepalives. GRE agrega 24 bytes; configura ip mtu e ip tcp adjust-mss (MTU menos 40).</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué causa el mensaje del log que indica que un túnel se deshabilitó temporalmente debido a enrutamiento recursivo?</summary><p>La mejor ruta hacia el destino del túnel se aprendió a través del propio túnel, normalmente porque las direcciones del underlay se anunciaron en el protocolo de enrutamiento que se ejecuta sobre el túnel.</p></details>
+<details class="sq"><summary>Si la ip mtu del túnel es 1400, ¿a qué valor debe configurarse ip tcp adjust-mss?</summary><p>1360, que es 1400 menos 20 bytes de encabezado IP y 20 bytes de encabezado TCP.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia ENCOR gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ccnp-encor/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../vrf-and-vrf-lite-separate-routing-tables-overlapping-addresses-per-vrf/">← VRF y VRF-Lite: tablas de enrutamiento separadas, direccione</a><a href="../ipsec-ike-phases-tunnel-vs-transport-mode-crypto-maps-vs-tunnel-protec/">IPsec: fases de IKE, modo túnel frente a modo transporte, cr →</a></nav>
+</main>
+</body>
+</html>

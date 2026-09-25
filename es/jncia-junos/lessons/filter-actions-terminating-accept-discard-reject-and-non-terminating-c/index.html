@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Acciones de filtro: terminantes (accept, discard, reject) … · Lección de JNCIA-Junos</title>
+<meta name="description" content="La sección then de un término de firewall filter decide qué pasa con los paquetes que coinciden. Las acciones son de dos tipos. Las acciones terminantes de">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Acciones de filtro: terminantes (accept, discard, reject) … · Lección de JNCIA-Junos">
+<meta property="og:description" content="La sección then de un término de firewall filter decide qué pasa con los paquetes que coinciden. Las acciones son de dos tipos. Las acciones terminantes de">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/jncia-junos/lessons/filter-actions-terminating-accept-discard-reject-and-non-terminating-c/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/jncia-junos/lessons/filter-actions-terminating-accept-discard-reject-and-non-terminating-c/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../jncia-junos/">JNCIA-Junos</a> / <a href="../">Lecciones</a> · <a href="../../../../jncia-junos/lessons/filter-actions-terminating-accept-discard-reject-and-non-terminating-c/" hreflang="en" lang="en">English</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106</p>
+<h1>Acciones de filtro: terminantes (accept, discard, reject) y no terminantes (count, log, syslog, policer)</h1>
+<article class="lbody">
+<p>La sección <code>then</code> de un término de firewall filter decide qué pasa con los paquetes que coinciden. Las acciones son de dos tipos. Las acciones terminantes deciden el destino del paquete y detienen la evaluación del filtro. Las acciones no terminantes (también llamadas modificadores de acción) hacen algo adicional, como contar o limitar la tasa, y pueden combinarse con una acción terminante en el mismo término.</p>
+<p>Las acciones terminantes que debes conocer son <code>accept</code>, <code>discard</code> y <code>reject</code>. <code>accept</code> deja que el paquete continúe. <code>discard</code> lo descarta en silencio, sin devolver nada. <code>reject</code> lo descarta y envía un mensaje ICMP al origen, por defecto un mensaje destination unreachable que indica que el tráfico fue filtrado administrativamente; puedes elegir otros tipos de mensaje ICMP o un TCP reset. Discard suele ser la opción más segura hacia redes no confiables porque le da menos información a un atacante y no genera tráfico adicional, mientras que reject puede ser más amable dentro de una red porque las aplicaciones fallan rápido en lugar de esperar un timeout. <code>routing-instance</code> también es terminante: envía el paquete a una instancia forwarding para el reenvío basado en filtros.</p>
+<p>Las principales acciones no terminantes son estas. <code>count &lt;name&gt;</code> incrementa un contador con nombre para los paquetes y bytes que coinciden, que se muestra con <code>show firewall filter &lt;name&gt;</code> o <code>show firewall</code>. <code>log</code> registra los encabezados de los paquetes en un búfer del Routing Engine, que se ve con <code>show firewall log</code>; el búfer es pequeño y se sobrescribe con el tiempo. <code>syslog</code> envía un mensaje sobre el paquete al log del sistema, así que puede ir a archivos locales o a un servidor syslog remoto si hay un archivo o host configurado para la facility firewall. <code>policer &lt;name&gt;</code> aplica un límite de tasa definido bajo <code>firewall policer</code>, de modo que el tráfico por encima de un ancho de banda y un tamaño de ráfaga se descarta o se marca. Otras incluyen <code>forwarding-class</code> y <code>loss-priority</code> para la clase de servicio, <code>sample</code> para el muestreo de tráfico y la acción de control de flujo <code>next term</code>.</p>
+<pre class="code" tabindex="0"><code>set firewall policer LIMIT-ICMP if-exceeding bandwidth-limit 1m burst-size-limit 15k
+set firewall policer LIMIT-ICMP then discard
+set firewall family inet filter PROTECT term ICMP from protocol icmp
+set firewall family inet filter PROTECT term ICMP then policer LIMIT-ICMP
+set firewall family inet filter PROTECT term ICMP then count ICMP-IN
+set firewall family inet filter PROTECT term ICMP then accept
+set firewall family inet filter PROTECT term LAST then count DROPPED
+set firewall family inet filter PROTECT term LAST then discard</code></pre>
+<p>Una regla importante: si un término solo tiene acciones no terminantes y ninguna acción terminante, Junos trata el término como si también dijera <code>accept</code>. Así que un término con solo <code>count</code> contará y aceptará el paquete, no lo pasará a los términos posteriores. Si quieres contar un paquete y aun así dejar que los términos posteriores decidan, agrega <code>next term</code> de forma explícita.</p>
+<p>Los contadores y los logs son tu ventana para ver lo que hace un filtro. Cuando un filtro parece bloquear lo que no debe, revisa qué contador de término está aumentando con <code>show firewall filter &lt;name&gt;</code>, y usa <code>clear firewall filter &lt;name&gt;</code> para reiniciar los contadores antes de una prueba. El término final <code>count DROPPED</code> de arriba hace visible el descarte implícito, que normalmente es invisible.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>discard</dt><dd>Una acción terminante que descarta el paquete en silencio.</dd><dt>reject</dt><dd>Una acción terminante que descarta el paquete y envía un ICMP unreachable (o un TCP reset) al origen.</dd><dt>count</dt><dd>Una acción no terminante que incrementa un contador con nombre de paquetes y bytes.</dd><dt>policer</dt><dd>Una acción no terminante que limita la tasa del tráfico que coincide usando un policer definido bajo <code>firewall policer</code>.</dd><dt>log vs syslog</dt><dd><code>log</code> guarda los encabezados de los paquetes en un búfer del Routing Engine para <code>show firewall log</code>; <code>syslog</code> escribe en el log del sistema.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>La CPU de un router se dispara cada vez que alguien lo inunda con pings. El ingeniero agrega un término a su filtro de loopback que coincide con ICMP, aplica un policer que lo limita a una tasa pequeña, lo cuenta y lo acepta. Los pings normales de diagnóstico siguen funcionando, el contador muestra cuánto ICMP está llegando y la inundación ya no satura al Routing Engine.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Un término con solo acciones no terminantes acepta el paquete de forma implícita. Discard es silencioso; reject devuelve un ICMP. Log va a un búfer local (<code>show firewall log</code>); syslog va al log del sistema.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Un término coincide con un paquete y solo tiene <code>then count WEB</code>. ¿Qué le pasa al paquete?</summary><p>Se cuenta y se acepta, porque un término sin acción terminante implica accept.</p></details>
+<details class="sq"><summary>¿Cuál es la diferencia entre discard y reject?</summary><p>Discard descarta en silencio; reject descarta y envía un ICMP unreachable o un TCP reset al emisor.</p></details>
+<details class="sq"><summary>¿Dónde ves los paquetes registrados por la acción <code>log</code>?</summary><p>Con <code>show firewall log</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia JNCIA-Junos gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../jncia-junos/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../firewall-filters-stateless-term-order-match-conditions-implicit-discar/">← Firewall filters: stateless, orden de los términos, condicio</a><a href="../applying-filters-to-interfaces-input-output-and-to-lo0-to-protect-the/">Aplicar filtros a interfaces (input/output) y a lo0 para pro →</a></nav>
+</main>
+</body>
+</html>

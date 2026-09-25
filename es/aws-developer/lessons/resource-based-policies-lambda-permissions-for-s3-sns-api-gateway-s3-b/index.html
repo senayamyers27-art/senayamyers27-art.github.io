@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Políticas basadas en recursos: permisos de Lambda para S3/… · Lección de Developer Associate</title>
+<meta name="description" content="Las políticas basadas en identidad se asocian a un usuario o rol y dicen qué puede hacer esa identidad. Las políticas basadas en recursos se asocian a un r">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Políticas basadas en recursos: permisos de Lambda para S3/… · Lección de Developer Associate">
+<meta property="og:description" content="Las políticas basadas en identidad se asocian a un usuario o rol y dicen qué puede hacer esa identidad. Las políticas basadas en recursos se asocian a un r">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/resource-based-policies-lambda-permissions-for-s3-sns-api-gateway-s3-b/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/resource-based-policies-lambda-permissions-for-s3-sns-api-gateway-s3-b/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/resource-based-policies-lambda-permissions-for-s3-sns-api-gateway-s3-b/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Políticas basadas en recursos: permisos de Lambda para S3/SNS/API Gateway, políticas de bucket de S3, políticas de claves de KMS</h1>
+<article class="lbody">
+<p>Las políticas basadas en identidad se asocian a un usuario o rol y dicen qué puede hacer esa identidad. Las políticas basadas en recursos se asocian a un recurso y dicen quién puede acceder a él. Incluyen un elemento <code>Principal</code> que nombra a quién se le permite, que puede ser una cuenta de AWS, un rol o un servicio de AWS como <code>s3.amazonaws.com</code>. Muchos errores de integración en el examen se reducen a que falta una política basada en recursos.</p>
+<p>La política basada en recursos de una función Lambda (su política de función) controla qué servicios y cuentas pueden invocarla. Cuando S3, SNS, EventBridge o API Gateway invocan una función, esos servicios no asumen tu rol de ejecución; necesitan permiso en la propia función. Lo agregas con <code>lambda add-permission</code> (la consola lo hace por ti cuando agregas un disparador). Usa condiciones <code>SourceArn</code> (y, para S3, <code>SourceAccount</code>) para que solo tu bucket, tema o API específico pueda invocar la función, lo que evita el problema del suplente confundido (confused deputy), en el que el recurso de otro cliente dispara tu función.</p>
+<pre class="code" tabindex="0"><code>aws lambda add-permission \
+  --function-name resize-image \
+  --statement-id s3-invoke \
+  --action lambda:InvokeFunction \
+  --principal s3.amazonaws.com \
+  --source-arn arn:aws:s3:::my-upload-bucket \
+  --source-account 111122223333</code></pre>
+<p>Para API Gateway, el principal es <code>apigateway.amazonaws.com</code> y el ARN de origen es el ARN execute-api de la API, que puede delimitarse a una etapa, un método y una ruta. Cuando una variable de etapa apunta a distintos alias de la función, cada alias necesita su propio permiso. Si falta este permiso, aparece como un error 500 de API Gateway con 'Invalid permissions on Lambda function' en los logs de ejecución. Para las fuentes de eventos SQS, Kinesis y DynamoDB Streams es lo contrario: Lambda las sondea, así que el rol de ejecución necesita permisos de lectura y no se requiere política de función.</p>
+<p>Las políticas de bucket de S3 son políticas JSON en el bucket. Pueden conceder acceso a otras cuentas, imponer condiciones para todos (por ejemplo, denegar cualquier solicitud en la que <code>aws:SecureTransport</code> sea false, o denegar <code>PutObject</code> sin un encabezado de cifrado obligatorio) y restringir el acceso a VPC endpoints específicos o a IP de origen. El acceso dentro de una cuenta se concede si la política de identidad o la política del bucket lo permiten y nada lo deniega explícitamente; el acceso entre cuentas requiere que ambos lados lo permitan. La configuración S3 Block Public Access anula las políticas de bucket que harían públicos los datos.</p>
+<p>Las políticas de claves de AWS Key Management Service (KMS) son especiales: toda clave de KMS debe tener una, y es el control principal. Las políticas de IAM conceden acceso a una clave solo si la política de la clave lo permite, normalmente mediante la declaración predeterminada que da acceso completo al principal raíz de la cuenta, lo que en la práctica delega en IAM. Sin esa declaración, ni siquiera la política de IAM de un administrador puede usar la clave. Para el uso entre cuentas, la política de la clave debe nombrar a la otra cuenta y las políticas de IAM de esa cuenta también deben permitir las acciones de KMS. Los grants son un mecanismo adicional para la delegación temporal y programática del uso de la clave a servicios de AWS.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Resource-based policy (política basada en recursos)</dt><dd>Una política asociada a un recurso que nombra a los principales a los que se permite acceder a él.</dd><dt>Function policy (política de función)</dt><dd>La política basada en recursos de una función Lambda que autoriza a servicios o cuentas a invocarla.</dd><dt>Bucket policy (política de bucket)</dt><dd>Una política basada en recursos en un bucket de S3 que controla el acceso e impone condiciones a las solicitudes.</dd><dt>Key policy (política de clave)</dt><dd>La política basada en recursos obligatoria de una clave de KMS; las políticas de IAM solo funcionan si ella lo permite.</dd><dt>Confused deputy (suplente confundido)</dt><dd>Una situación en la que se engaña a un servicio de confianza para que actúe en nombre de la parte equivocada, lo que se evita con las condiciones SourceArn y SourceAccount.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un desarrollador crea con la CLI una suscripción de un tema de SNS a una función Lambda, pero los mensajes nunca la disparan. La política de la función no tiene ninguna declaración que permita a sns.amazonaws.com. Ejecutar lambda add-permission con el ARN del tema como ARN de origen corrige la entrega.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Las fuentes basadas en empuje (S3, SNS, API Gateway, EventBridge) necesitan permiso en la política basada en recursos de la función. Las fuentes basadas en sondeo (SQS, Kinesis, DynamoDB Streams) necesitan permisos en el rol de ejecución.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué S3 necesita una política de función de Lambda pero SQS no?</summary><p>S3 invoca la función directamente, así que la función debe permitir al principal de S3; con SQS, Lambda sondea la cola usando los permisos del rol de ejecución.</p></details>
+<details class="sq"><summary>Un administrador con permisos completos de IAM no puede usar una clave de KMS. ¿Por qué podría ser?</summary><p>La política de la clave no permite a la raíz de la cuenta ni al administrador, así que las políticas de IAM no se respetan para esa clave.</p></details>
+<details class="sq"><summary>¿Cómo puedes obligar a que todo el acceso a un bucket de S3 use HTTPS?</summary><p>Agrega una política de bucket que deniegue todas las acciones cuando la condición aws:SecureTransport sea false.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../iam-for-applications-execution-roles-instance-profiles-ecs-task-roles/">← IAM para aplicaciones: roles de ejecución, perfiles de insta</a><a href="../cross-account-access-with-sts-assumerole-and-trust-policies-temporary/">Acceso entre cuentas con STS AssumeRole y políticas de confi →</a></nav>
+</main>
+</body>
+</html>

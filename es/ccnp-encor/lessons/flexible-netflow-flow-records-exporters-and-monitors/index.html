@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Flexible NetFlow: flow records, exporters y monitors · Lección de ENCOR</title>
+<meta name="description" content="SNMP te dice cuánto tráfico cruzó una interfaz; NetFlow te dice qué era ese tráfico: quién habló con quién, en qué puertos, cuántos paquetes y bytes. Un fl">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Flexible NetFlow: flow records, exporters y monitors · Lección de ENCOR">
+<meta property="og:description" content="SNMP te dice cuánto tráfico cruzó una interfaz; NetFlow te dice qué era ese tráfico: quién habló con quién, en qué puertos, cuántos paquetes y bytes. Un fl">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/flexible-netflow-flow-records-exporters-and-monitors/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/flexible-netflow-flow-records-exporters-and-monitors/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ccnp-encor/">ENCOR</a> / <a href="../">Lecciones</a> · <a href="../../../../ccnp-encor/lessons/flexible-netflow-flow-records-exporters-and-monitors/" hreflang="en" lang="en">English</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2</p>
+<h1>Flexible NetFlow: flow records, exporters y monitors</h1>
+<article class="lbody">
+<p>SNMP te dice cuánto tráfico cruzó una interfaz; NetFlow te dice qué era ese tráfico: quién habló con quién, en qué puertos, cuántos paquetes y bytes. Un flujo (flow) es un conjunto de paquetes que comparten los mismos campos clave, clásicamente la IP de origen y destino, el puerto de origen y destino, el protocolo, el tipo de servicio y la interfaz de entrada. El dispositivo registra cada flujo en una caché y exporta registros resumidos a un colector para su análisis. NetFlow se usa para la planificación de capacidad, la visibilidad de aplicaciones, la facturación y la seguridad, como detectar escaneos, exfiltración de datos o patrones de tráfico inusuales.</p>
+<p>NetFlow tradicional usaba un conjunto fijo de campos clave. Flexible NetFlow (FNF) te permite definir exactamente qué campos identifican un flujo y qué campos recolectas sobre él. Se construye con tres componentes, que se configuran en orden y se aplican a una interfaz.</p>
+<p>El flow record define los campos. Las sentencias <code>match</code> son campos clave: un paquete con un valor distinto en cualquier campo clave crea un flujo nuevo. Las sentencias <code>collect</code> son campos no clave que se recolectan para cada flujo, como los contadores de bytes y paquetes y las marcas de tiempo. Cisco también proporciona records predefinidos, como el record IPv4 tradicional.</p>
+<p>El flow exporter define a dónde y cómo se envían los registros: la dirección de destino del colector, la interfaz de origen, el transporte (UDP) y el puerto, y el formato de exportación. NetFlow versión 9 se basa en plantillas, lo que hace posibles los records flexibles; IPFIX (IP Flow Information Export) es el estándar de la IETF basado en la versión 9. Los colectores comúnmente escuchan en puertos UDP como 2055 o 9996, y debes configurar el puerto que espera el colector.</p>
+<p>El flow monitor los une: hace referencia a un record y a uno o más exporters y establece los parámetros de la caché, como los tiempos de espera activo e inactivo. El inactive timeout exporta un flujo que ha estado inactivo; el active timeout exporta periódicamente los flujos de larga duración para que el colector los vea antes de que terminen. Por último, aplica el monitor a una interfaz en una dirección.</p>
+<pre class="code" tabindex="0"><code>flow record REC-APP
+ match ipv4 source address
+ match ipv4 destination address
+ match transport source-port
+ match transport destination-port
+ match ipv4 protocol
+ collect counter bytes
+ collect counter packets
+!
+flow exporter EXP-COLL
+ destination 10.0.0.70
+ source Loopback0
+ transport udp 2055
+ export-protocol netflow-v9
+!
+flow monitor MON-APP
+ record REC-APP
+ exporter EXP-COLL
+!
+interface GigabitEthernet0/1
+ ip flow monitor MON-APP input</code></pre>
+<p>Verifica con <code>show flow monitor MON-APP cache</code> para ver los flujos en el dispositivo, <code>show flow exporter statistics</code> para confirmar que se están enviando registros y <code>show flow record</code>. En enlaces de muy alta velocidad, NetFlow con muestreo (sampled NetFlow) reduce la carga examinando solo una fracción de los paquetes, cambiando precisión por escalabilidad.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Flow (flujo)</dt><dd>Un conjunto de paquetes que comparten los mismos valores en los campos clave definidos.</dd><dt>Flow record</dt><dd>Define los campos clave (match) y los campos no clave (collect) de Flexible NetFlow.</dd><dt>Flow exporter</dt><dd>Define el destino del colector, el origen, el puerto de transporte y el formato de exportación.</dd><dt>Flow monitor</dt><dd>Une un record y los exporters con los ajustes de la caché y se aplica a una interfaz.</dd><dt>IPFIX</dt><dd>El protocolo estándar de la IETF para la exportación de flujos, basado en NetFlow versión 9.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un enlace WAN se satura cada tarde. Las gráficas de SNMP solo muestran que está lleno. Después de aplicar un monitor de Flexible NetFlow, el colector muestra que la mayor parte del tráfico es un solo host que envía grandes volúmenes a una dirección externa desconocida en un puerto inusual, lo que el equipo de seguridad investiga como una posible exfiltración de datos.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Orden de construcción: record, luego exporter, luego el monitor que hace referencia a ambos, y luego se aplica el monitor a una interfaz. Los campos match son claves que definen un flujo; los campos collect son solo datos recolectados.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cuál es la diferencia entre match y collect en un flow record?</summary><p>match define los campos clave que distinguen los flujos; collect recolecta datos adicionales como contadores sin crear flujos nuevos.</p></details>
+<details class="sq"><summary>¿Qué componente se aplica directamente a una interfaz?</summary><p>El flow monitor, con ip flow monitor NAME input u output.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia ENCOR gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ccnp-encor/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../syslog-severity-levels-and-logging-configuration/">← Niveles de severidad de syslog y configuración del registro</a><a href="../span-rspan-and-erspan/">SPAN, RSPAN y ERSPAN →</a></nav>
+</main>
+</body>
+</html>

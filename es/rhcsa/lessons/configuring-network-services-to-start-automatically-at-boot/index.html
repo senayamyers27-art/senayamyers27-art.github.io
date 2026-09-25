@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Configurar servicios de red para que arranquen automáticam… · Lección de RHCSA</title>
+<meta name="description" content="Un servicio de red solo es útil si está escuchando cuando llegan los clientes, incluso después de un reinicio. En RHEL, hacer que un servicio de red arranq">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Configurar servicios de red para que arranquen automáticam… · Lección de RHCSA">
+<meta property="og:description" content="Un servicio de red solo es útil si está escuchando cuando llegan los clientes, incluso después de un reinicio. En RHEL, hacer que un servicio de red arranq">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/configuring-network-services-to-start-automatically-at-boot/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/configuring-network-services-to-start-automatically-at-boot/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/configuring-network-services-to-start-automatically-at-boot/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Configurar servicios de red para que arranquen automáticamente al iniciar el sistema</h1>
+<article class="lbody">
+<p>Un servicio de red solo es útil si está escuchando cuando llegan los clientes, incluso después de un reinicio. En RHEL, hacer que un servicio de red arranque al iniciar el sistema implica los mismos comandos de systemd que cualquier servicio, más dos comprobaciones específicas de red: la propia conexión de red debe activarse automáticamente, y los clientes deben poder pasar por el firewall.</p>
+<p>El primer paso es la unidad de servicio. Después de instalar un paquete como httpd, vsftpd o nfs-utils, el servicio normalmente queda instalado pero deshabilitado. Ejecuta <code>systemctl enable --now httpd</code> para que arranque ahora y en cada inicio, y luego confírmalo con <code>systemctl is-enabled httpd</code> y <code>systemctl is-active httpd</code>. <code>ss -tlnp</code> confirma que el proceso escucha en el puerto esperado.</p>
+<p>El segundo paso es la propia red. NetworkManager debe estar habilitado (lo está por defecto) y el perfil de conexión debe tener <code>connection.autoconnect yes</code>. Compruébalo con <code>systemctl is-enabled NetworkManager</code> y <code>nmcli -f NAME,AUTOCONNECT con show</code>. Un servicio puede estar perfectamente habilitado y aun así ser inaccesible tras reiniciar porque la interfaz no se activó con la dirección correcta.</p>
+<p>El tercer paso es el acceso. Abre el servicio en firewalld de forma permanente, por ejemplo <code>firewall-cmd --permanent --add-service=http</code> seguido de <code>firewall-cmd --reload</code>. Si el servicio usa un puerto no estándar, puede que SELinux también necesite una etiqueta de puerto, lo que se trata en las lecciones de SELinux.</p>
+<pre class="code" tabindex="0"><code>dnf install -y httpd
+systemctl enable --now httpd
+firewall-cmd --permanent --add-service=http
+firewall-cmd --reload
+systemctl is-enabled httpd NetworkManager
+ss -tlnp | grep ':80'</code></pre>
+<p>Algunos servicios necesitan esperar a que la red esté completamente configurada, no solo a que NetworkManager haya arrancado. Las unidades que lo necesitan se ordenan después de <code>network-online.target</code>; NetworkManager proporciona ese target mediante su servicio wait-online. La mayoría de los servicios empaquetados ya lo gestionan, pero esto explica por qué existe <code>_netdev</code> para los montajes de red y por qué una unidad personalizada que se enlaza a una dirección concreta podría arrancar demasiado pronto.</p>
+<p>La prueba final y más fiable es un reinicio. Después, revisa el estado del servicio, el puerto en escucha, la dirección de la interfaz y una conexión desde otro host.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>enable --now</dt><dd>Habilita una unidad para que arranque al iniciar el sistema y la inicia de inmediato.</dd><dt>network-online.target</dt><dd>Un target de systemd que se alcanza cuando la red está completamente configurada; se usa para ordenar los servicios que necesitan red operativa.</dd><dt>ss -tlnp</dt><dd>Lista los sockets TCP en escucha con puertos numéricos y los procesos dueños.</dd><dt>Permanent firewall rule (regla de firewall permanente)</dt><dd>Un cambio de firewalld guardado con --permanent para que sobreviva a las recargas y los reinicios.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Configuras vsftpd y funciona, pero tras el reinicio del evaluador los clientes no pueden conectarse. systemctl is-enabled vsftpd imprime disabled. Ejecutar systemctl enable --now vsftpd y añadir el servicio ftp al firewall con --permanent y --reload hace que sobreviva al siguiente reinicio.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Para los servicios de red, revisa tres cosas antes de dar por terminada una tarea: el servicio está habilitado, la conexión se conecta automáticamente y la regla del firewall es permanente. Luego reinicia y prueba.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué dos comprobaciones de systemctl confirman que un servicio se ejecutará tras reiniciar y que se está ejecutando ahora?</summary><p>systemctl is-enabled para el arranque y systemctl is-active para el estado actual.</p></details>
+<details class="sq"><summary>El servicio está habilitado pero es inaccesible tras reiniciar. Nombra dos causas de red.</summary><p>El perfil de conexión no se conectó automáticamente o se activó con la dirección equivocada, o la regla del firewall era solo de tiempo de ejecución (runtime).</p></details>
+<details class="sq"><summary>¿Para qué sirve network-online.target?</summary><p>Marca el momento en que la red está completamente configurada, para que los servicios que necesitan red operativa puedan ordenarse después.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../checking-addresses-routes-and-name-resolution-ip-addr-ip-route-ping-ge/">← Comprobar direcciones, rutas y resolución de nombres: ip add</a><a href="../restricting-network-access-with-firewalld-and-firewall-cmd-services-po/">Restringir el acceso de red con firewalld y firewall-cmd (se →</a></nav>
+</main>
+</body>
+</html>

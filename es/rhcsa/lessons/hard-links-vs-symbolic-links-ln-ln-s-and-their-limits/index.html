@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Enlaces duros vs. enlaces simbólicos (ln, ln -s) y sus lím… · Lección de RHCSA</title>
+<meta name="description" content="Para entender los enlaces primero necesitas la idea de inodo. Los datos y metadatos de un archivo (propietario, permisos, marcas de tiempo, tamaño, dónde e">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Enlaces duros vs. enlaces simbólicos (ln, ln -s) y sus lím… · Lección de RHCSA">
+<meta property="og:description" content="Para entender los enlaces primero necesitas la idea de inodo. Los datos y metadatos de un archivo (propietario, permisos, marcas de tiempo, tamaño, dónde e">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/hard-links-vs-symbolic-links-ln-ln-s-and-their-limits/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/hard-links-vs-symbolic-links-ln-ln-s-and-their-limits/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/hard-links-vs-symbolic-links-ln-ln-s-and-their-limits/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Enlaces duros vs. enlaces simbólicos (ln, ln -s) y sus límites</h1>
+<article class="lbody">
+<p>Para entender los enlaces primero necesitas la idea de inodo. Los datos y metadatos de un archivo (propietario, permisos, marcas de tiempo, tamaño, dónde están los bloques de datos) viven en un inodo, identificado por un número. Un nombre de archivo es solo una entrada de directorio que apunta a un inodo. <code>ls -i</code> muestra los números de inodo, y la segunda columna de <code>ls -l</code> muestra el contador de enlaces: cuántos nombres apuntan a ese inodo.</p>
+<p>Un enlace duro (hard link) es simplemente otro nombre para el mismo inodo, creado con <code>ln target linkname</code>. Ambos nombres son iguales; ninguno es el 'original'. Editar el archivo a través de un nombre cambia lo que ves a través del otro, y siempre comparten permisos y propietario porque solo hay un inodo. Borrar un nombre solo reduce el contador de enlaces; los datos se liberan cuando el contador llega a cero y ningún proceso tiene todavía el archivo abierto.</p>
+<p>Un enlace simbólico (soft link) es un archivo pequeño separado cuyo contenido es una ruta, creado con <code>ln -s target linkname</code>. Cuando abres el enlace, el sistema sigue la ruta. <code>ls -l</code> lo muestra con el tipo <code>l</code> y una flecha: <code>lrwxrwxrwx ... current -&gt; /opt/app-2.1</code>. Si el destino se mueve o se borra, el enlace simbólico permanece pero no apunta a nada; esto se llama enlace colgante o roto (dangling link), y <code>ls</code> normalmente lo resalta en rojo.</p>
+<pre class="code" tabindex="0"><code>ln /data/report.txt /data/report-hard.txt
+ln -s /etc/httpd/conf/httpd.conf /root/httpd.conf
+ls -li /data                  # mismo número de inodo, contador de enlaces 2
+readlink -f /root/httpd.conf  # a dónde apunta realmente el enlace simbólico</code></pre>
+<p>Los límites son lo que pregunta el examen. Los enlaces duros no pueden cruzar sistemas de archivos, porque los números de inodo solo son únicos dentro de un sistema de archivos; intentarlo da el error 'Invalid cross-device link'. No se permiten enlaces duros a directorios (ni siquiera para root), lo que evita bucles en el árbol. Los enlaces simbólicos no tienen ninguna de esas restricciones: pueden apuntar a directorios y a archivos de otros sistemas de archivos, o incluso a rutas que todavía no existen. El precio es que se rompen cuando el destino se mueve.</p>
+<p>Presta atención al orden de los argumentos: <code>ln</code> recibe primero el destino existente y después el nombre nuevo, igual que <code>cp</code>. Con los enlaces simbólicos, un destino relativo se interpreta respecto al directorio del propio enlace, no a tu directorio actual, así que <code>ln -s ../conf/app.conf /etc/app.conf</code> apunta a <code>/conf/app.conf</code>. Usar destinos absolutos evita esa confusión.</p>
+<p>Ten en cuenta también que los permisos propios de un enlace simbólico (siempre mostrados como rwxrwxrwx) se ignoran; el acceso lo deciden los permisos del destino.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Inode (inodo)</dt><dd>La estructura en disco que contiene los metadatos de un archivo y la ubicación de sus datos, identificada por un número único dentro de su sistema de archivos.</dd><dt>Hard link (enlace duro)</dt><dd>Una entrada de directorio adicional que apunta al mismo inodo; se crea con ln.</dd><dt>Symbolic link (enlace simbólico)</dt><dd>Un archivo especial que contiene una ruta a otro archivo o directorio; se crea con ln -s.</dd><dt>Link count (contador de enlaces)</dt><dd>El número de enlaces duros (nombres) que hacen referencia a un inodo, mostrado en la segunda columna de ls -l.</dd><dt>Dangling link (enlace colgante)</dt><dd>Un enlace simbólico cuyo destino ya no existe.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una aplicación espera su configuración en /etc/app.conf, pero mantienes el archivo real en un sistema de archivos /data separado. Un enlace duro falla con 'Invalid cross-device link', así que creas <code>ln -s /data/app/app.conf /etc/app.conf</code> y lo confirmas con <code>ls -l /etc/app.conf</code>.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Enlaces duros: mismo inodo, solo en el mismo sistema de archivos, sin directorios, sobreviven al borrado del otro nombre. Enlaces simbólicos: archivo separado que contiene una ruta, pueden cruzar sistemas de archivos y apuntar a directorios, se rompen si el destino se mueve.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Si borras el nombre original de un archivo que tiene un enlace duro, ¿qué pasa con los datos?</summary><p>No se pierde nada; los datos siguen accesibles a través del otro nombre hasta que se elimina el último enlace.</p></details>
+<details class="sq"><summary>¿Por qué no puedes crear un enlace duro de un archivo de /home a /boot cuando son sistemas de archivos distintos?</summary><p>Los enlaces duros hacen referencia a números de inodo, que solo tienen sentido dentro de un sistema de archivos.</p></details>
+<details class="sq"><summary>¿Cómo reconoces un enlace simbólico en la salida de <code>ls -l</code>?</summary><p>El primer carácter es l y el nombre va seguido de -&gt; y la ruta de destino.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../creating-deleting-copying-and-moving-files-and-directories-mkdir-p-cp/">← Crear, borrar, copiar y mover archivos y directorios (mkdir </a><a href="../listing-setting-and-changing-standard-ugo-rwx-permissions-in-numeric-a/">Listar, establecer y cambiar permisos estándar ugo/rwx en fo →</a></nav>
+</main>
+</body>
+</html>

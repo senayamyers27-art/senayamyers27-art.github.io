@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tipos de Service: ClusterIP, NodePort, LoadBalancer, Exter… · Lección de CKAD</title>
+<meta name="description" content="Los Pods van y vienen y sus direcciones IP cambian. Un Service ofrece un nombre estable y una IP virtual delante de un conjunto cambiante de Pods, elegidos">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Tipos de Service: ClusterIP, NodePort, LoadBalancer, Exter… · Lección de CKAD">
+<meta property="og:description" content="Los Pods van y vienen y sus direcciones IP cambian. Un Service ofrece un nombre estable y una IP virtual delante de un conjunto cambiante de Pods, elegidos">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/service-types-clusterip-nodeport-loadbalancer-externalname-and-headles/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/service-types-clusterip-nodeport-loadbalancer-externalname-and-headles/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/service-types-clusterip-nodeport-loadbalancer-externalname-and-headles/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>Tipos de Service: ClusterIP, NodePort, LoadBalancer, ExternalName y headless (clusterIP: None)</h1>
+<article class="lbody">
+<p>Los Pods van y vienen y sus direcciones IP cambian. Un Service ofrece un nombre estable y una IP virtual delante de un conjunto cambiante de Pods, elegidos mediante un selector de etiquetas, y reparte las conexiones entre ellos. El <code>type</code> del Service decide quién puede alcanzarlo.</p>
+<p>ClusterIP es el tipo por defecto. El Service recibe una IP virtual alcanzable solo desde dentro del clúster, más un nombre DNS. kube-proxy (o el plugin de red) en cada nodo programa reglas para que el tráfico a esa IP y puerto se reenvíe a uno de los Pods listos. Úsalo para back ends internos: bases de datos, APIs internas, cualquier cosa a la que llamen otros Pods.</p>
+<p>NodePort se basa en ClusterIP y además abre el mismo puerto en todos los nodos, elegido por defecto del rango 30000 a 32767. El tráfico a la IP de cualquier nodo en ese puerto llega al Service, aunque en ese nodo no se ejecute ningún Pod que coincida. Es sencillo para laboratorios y pruebas, por ejemplo <code>curl &lt;node-ip&gt;:30080</code>, pero expone a los clientes un puerto poco habitual y la dirección de un nodo.</p>
+<p>LoadBalancer se basa en NodePort y le pide al proveedor de nube, o a un complemento en clústeres bare-metal, que cree un balanceador de carga externo que reenvíe al Service. Su dirección aparece en la columna EXTERNAL-IP. En un clúster local sin esa integración, la columna se queda en <code>&lt;pending&gt;</code>; minikube ofrece <code>minikube tunnel</code> para completarla. Cada Service LoadBalancer suele implicar un balanceador de carga de nube independiente, por eso las apps HTTP a menudo se exponen a través de un único Ingress.</p>
+<p>ExternalName no tiene selector ni Pods. Asigna un nombre de Service a un nombre DNS externo devolviendo un registro CNAME: <code>externalName: db.example.com</code> hace que <code>db.&lt;namespace&gt;.svc.cluster.local</code> resuelva a ese host. Permite que el código dentro del clúster use un nombre interno estable mientras el destino real vive en otro lugar. No hay proxy ni mapeo de puertos.</p>
+<p>Un Service headless define <code>clusterIP: None</code>. No hay IP virtual ni balanceo de carga por parte de kube-proxy; en su lugar, el DNS devuelve las direcciones IP de los Pods listos individuales, y los clientes eligen. Los StatefulSets usan Services headless para que cada Pod tenga su propio nombre DNS, como <code>db-0.db.prod.svc.cluster.local</code>.</p>
+<pre class="code" tabindex="0"><code>apiVersion: v1
+kind: Service
+metadata:
+  name: web
+spec:
+  type: NodePort
+  selector:
+    app: web
+  ports:
+  - port: 80
+    targetPort: 8080
+    nodePort: 30080</code></pre>
+<p><code>kubectl get svc</code> muestra TYPE, CLUSTER-IP, EXTERNAL-IP y PORT(S), donde un NodePort aparece como <code>80:30080/TCP</code>. El tipo de un Service existente se puede cambiar con <code>kubectl edit</code> o <code>kubectl patch svc web -p '{&quot;spec&quot;:{&quot;type&quot;:&quot;NodePort&quot;}}'</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>ClusterIP</dt><dd>Tipo de Service por defecto, con una IP virtual interna alcanzable solo dentro del clúster.</dd><dt>NodePort</dt><dd>Tipo de Service que además abre un puerto (rango por defecto 30000-32767) en todos los nodos.</dd><dt>LoadBalancer</dt><dd>Tipo de Service que aprovisiona un balanceador de carga externo a través del proveedor de nube o un complemento.</dd><dt>ExternalName</dt><dd>Tipo de Service que devuelve un CNAME de DNS hacia un host externo, sin hacer de proxy.</dd><dt>Headless Service (Service headless)</dt><dd>Service con clusterIP: None cuyo DNS devuelve las IPs individuales de los Pods.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una app usa un Service ClusterIP <code>orders</code> para su API interna, un Service LoadBalancer para su gateway público, un Service ExternalName <code>payments</code> que apunta al hostname de un socio para que el código pueda llamar a <code>payments</code> como a cualquier otro Service, y un Service headless para su base de datos StatefulSet de tres nodos.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Cada tipo se basa en el anterior: LoadBalancer incluye un NodePort, que incluye un ClusterIP. ExternalName y headless son los diferentes: sin proxy y sin IP virtual.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cuál es el tipo de Service por defecto?</summary><p>ClusterIP.</p></details>
+<details class="sq"><summary>Un Service LoadBalancer en un clúster local de kind muestra EXTERNAL-IP &lt;pending&gt;. ¿Por qué?</summary><p>No hay proveedor de nube ni complemento de balanceador de carga que aprovisione una dirección externa.</p></details>
+<details class="sq"><summary>¿Qué devuelve el DNS para un Service headless?</summary><p>Las direcciones IP de los Pods listos individuales en lugar de una sola IP virtual.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../linux-capabilities-add-drop-and-pod-security-admission-levels-privileg/">← Capabilities de Linux (add/drop) y niveles de Pod Security A</a><a href="../selectors-port-vs-targetport-vs-nodeport-named-ports/">Selectores, port vs targetPort vs nodePort y puertos con nom →</a></nav>
+</main>
+</body>
+</html>

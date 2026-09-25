@@ -2913,4 +2913,4 @@ CertHub.addLessons("az-802", [
    ]
   ]
  }
-]);
+], { reviewed: "2026-09-25" });

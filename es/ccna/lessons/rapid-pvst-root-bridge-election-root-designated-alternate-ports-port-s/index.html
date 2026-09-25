@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rapid PVST+: elección del root bridge, puertos root/design… · Lección de CCNA</title>
+<meta name="description" content="Los enlaces redundantes entre switches protegen contra fallas, pero en Capa 2 crean bucles. Las tramas Ethernet no tienen tiempo de vida (TTL), así que un ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Rapid PVST+: elección del root bridge, puertos root/design… · Lección de CCNA">
+<meta property="og:description" content="Los enlaces redundantes entre switches protegen contra fallas, pero en Capa 2 crean bucles. Las tramas Ethernet no tienen tiempo de vida (TTL), así que un ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ccna/lessons/rapid-pvst-root-bridge-election-root-designated-alternate-ports-port-s/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ccna/lessons/rapid-pvst-root-bridge-election-root-designated-alternate-ports-port-s/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ccna/">CCNA</a> / <a href="../">Lecciones</a> · <a href="../../../../ccna/lessons/rapid-pvst-root-bridge-election-root-designated-alternate-ports-port-s/" hreflang="en" lang="en">English</a></p>
+<p class="note">Cisco CCNA 200-301 v2.0</p>
+<h1>Rapid PVST+: elección del root bridge, puertos root/designated/alternate, estados de puerto, PortFast, BPDU guard</h1>
+<article class="lbody">
+<p>Los enlaces redundantes entre switches protegen contra fallas, pero en Capa 2 crean bucles. Las tramas Ethernet no tienen tiempo de vida (TTL), así que un broadcast en un bucle circula para siempre, causando una tormenta de broadcast, inestabilidad en la tabla MAC y tramas duplicadas. Spanning Tree Protocol (STP) lo evita bloqueando solo los puertos necesarios para dejar un árbol sin bucles. Rapid PVST+ es la implementación de Cisco de Rapid Spanning Tree (IEEE 802.1w) que ejecuta una instancia separada por VLAN, y es la opción predeterminada en muchos switches Cisco actuales.</p>
+<p>Los switches intercambian BPDU (bridge protocol data units, unidades de datos del protocolo de puente) para elegir un root bridge (puente raíz). Cada switch tiene un bridge ID formado por una prioridad y su dirección MAC. La prioridad predeterminada es 32768 e incluye el extended system ID, que es el número de VLAN, así que un switch en la VLAN 10 anuncia 32778. Gana el bridge ID más bajo: primero la prioridad más baja y luego, como desempate, la MAC más baja. Como el switch más antiguo suele tener la MAC más baja, debes elegir el root deliberadamente con <code>spanning-tree vlan 10 root primary</code> o <code>spanning-tree vlan 10 priority 4096</code>. Las prioridades deben ser múltiplos de 4096.</p>
+<p>Luego, cada switch que no es root elige un root port (puerto raíz), su mejor camino hacia el root, según el menor costo de ruta hacia el root. Los costos predeterminados se basan en la velocidad del enlace; con el método corto común, 10 Mbps cuesta 100, 100 Mbps cuesta 19, 1 Gbps cuesta 4 y 10 Gbps cuesta 2. Los empates se resuelven por el bridge ID vecino más bajo y luego por el port ID vecino más bajo (prioridad del puerto, 128 de forma predeterminada, más el número de puerto). En cada segmento de enlace se elige un designated port (puerto designado): el puerto con el menor costo hacia el root, y todos los puertos del root bridge son designados. Todos los puertos restantes se convierten en alternate ports (puertos alternativos, un camino de respaldo hacia el root, en estado discarding) o, rara vez, en backup ports (un puerto redundante en un segmento compartido al que el mismo switch ya da servicio).</p>
+<p>RSTP simplifica los estados de puerto a tres: discarding (sin reenvío ni aprendizaje), learning (construye la tabla MAC pero no reenvía) y forwarding. RSTP converge rápido porque, en enlaces punto a punto, los switches usan un intercambio de propuesta y acuerdo (proposal/agreement) en lugar de esperar temporizadores, y un puerto alternativo puede tomar el control de inmediato cuando falla el root port.</p>
+<p>Los puertos de borde se conectan a dispositivos finales y nunca deberían recibir BPDU. PortFast (<code>spanning-tree portfast</code> en una interfaz, o <code>spanning-tree portfast default</code> globalmente para los puertos de acceso) hace que un puerto pase directamente a forwarding, así que las PC obtienen su dirección DHCP sin demora. BPDU guard (<code>spanning-tree bpduguard enable</code>, o <code>spanning-tree portfast bpduguard default</code>) protege esos puertos: si llega una BPDU, lo que significa que alguien conectó un switch, el puerto pasa a err-disabled. Permanece caído hasta que se recupera con <code>shutdown</code> y luego <code>no shutdown</code>, o automáticamente mediante errdisable recovery.</p>
+<p>Verifica con <code>show spanning-tree vlan 10</code>, que muestra el root ID y si 'This bridge is the root', además del rol de cada interfaz (Root, Desg, Altn, Back), su estado (FWD, BLK/discarding, LRN) y su costo.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Bridge ID</dt><dd>La prioridad de un switch (que incluye el número de VLAN) más su dirección MAC; el más bajo gana la elección del root.</dd><dt>Root port (puerto raíz)</dt><dd>En un switch que no es root, el único puerto con el camino de menor costo hacia el root bridge.</dd><dt>Designated port (puerto designado)</dt><dd>El puerto que reenvía en cada segmento, con el mejor camino hacia el root; todos los puertos del root bridge son designados.</dd><dt>Alternate port (puerto alternativo)</dt><dd>Un puerto RSTP en discarding que ofrece un camino de respaldo hacia el root y puede tomar el control de inmediato.</dd><dt>BPDU guard</dt><dd>Una función que pone en err-disabled un puerto PortFast si recibe una BPDU.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Tres switches en triángulo tienen todos prioridad 32769 en la VLAN 1, y el switch de acceso más antiguo, con la MAC más baja, se convirtió en root, lo que obliga al tráfico a pasar por un armario lento. El ingeniero configura <code>spanning-tree vlan 1-100 root primary</code> en el núcleo. Ahora <code>show spanning-tree</code> muestra el núcleo como root, los enlaces ascendentes de los switches de acceso hacia el núcleo como root ports y un enlace entre switches de acceso como alternate.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Más bajo es mejor en cada paso: el bridge ID más bajo para el root, el menor costo para los root ports y designated ports, luego el bridge ID del emisor más bajo, luego el port ID del emisor más bajo.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Dos switches tienen prioridad 32768 en la VLAN 20. ¿Cuál se convierte en root?</summary><p>El que tiene la dirección MAC más baja, porque los empates de prioridad se resuelven por la dirección MAC.</p></details>
+<details class="sq"><summary>¿Qué ocurre cuando un puerto PortFast con BPDU guard recibe una BPDU?</summary><p>El puerto pasa al estado err-disabled y deja de reenviar hasta que se recupera.</p></details>
+<details class="sq"><summary>¿Cuáles son los tres estados de puerto de RSTP?</summary><p>Discarding, learning y forwarding.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CCNA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ccna/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../etherchannel-lacp-and-static-layer-2-and-layer-3-and-member-port-consi/">← EtherChannel (LACP y estático), de Capa 2 y de Capa 3, y reg</a><a href="../inter-vlan-routing-router-on-a-stick-subinterfaces-and-multilayer-swit/">Enrutamiento entre VLAN: subinterfaces router-on-a-stick y S →</a></nav>
+</main>
+</body>
+</html>

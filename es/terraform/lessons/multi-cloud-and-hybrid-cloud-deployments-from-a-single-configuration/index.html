@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Despliegues multicloud y de nube híbrida desde una sola co… · Lección de Terraform Associate</title>
+<meta name="description" content="Multicloud significa usar más de un proveedor de nube pública, por ejemplo AWS para cómputo y Google Cloud para analítica. Nube híbrida significa combinar ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Despliegues multicloud y de nube híbrida desde una sola co… · Lección de Terraform Associate">
+<meta property="og:description" content="Multicloud significa usar más de un proveedor de nube pública, por ejemplo AWS para cómputo y Google Cloud para analítica. Nube híbrida significa combinar ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/terraform/lessons/multi-cloud-and-hybrid-cloud-deployments-from-a-single-configuration/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/terraform/lessons/multi-cloud-and-hybrid-cloud-deployments-from-a-single-configuration/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../terraform/">Terraform Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../terraform/lessons/multi-cloud-and-hybrid-cloud-deployments-from-a-single-configuration/" hreflang="en" lang="en">English</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004)</p>
+<h1>Despliegues multicloud y de nube híbrida desde una sola configuración</h1>
+<article class="lbody">
+<p>Multicloud significa usar más de un proveedor de nube pública, por ejemplo AWS para cómputo y Google Cloud para analítica. Nube híbrida significa combinar la nube pública con infraestructura privada o local (on-premises), como un clúster de VMware vSphere en tu propio centro de datos. Ambos son comunes en organizaciones grandes, a menudo por resiliencia, razones regulatorias, costos o porque distintos equipos eligieron distintas plataformas.</p>
+<p>Cada nube tiene su propia herramienta de IaC nativa, como AWS CloudFormation, las plantillas de Azure Resource Manager y Bicep, o Google Cloud Deployment Manager y sus sucesores. Esas herramientas funcionan bien dentro de una plataforma, pero no pueden gestionar recursos en otra. El modelo de providers de Terraform permite que una sola configuración, un solo lenguaje y un solo flujo de trabajo las cubran a todas. Un único <code>terraform apply</code> puede crear recursos en varias nubes y sistemas locales, respetando las dependencias entre ellos.</p>
+<p>Las dependencias entre plataformas son donde esto brilla. Imagina que creas un balanceador de carga en una nube y un registro DNS en otro proveedor de DNS que apunta a él. Como el argumento del registro DNS hace referencia al atributo de dirección del balanceador de carga, Terraform sabe que debe crear primero el balanceador y pasar la dirección. Con herramientas nativas separadas tendrías que ejecutar una, copiar un output a mano o con scripts de unión, y luego ejecutar la otra.</p>
+<pre class="code" tabindex="0"><code>resource &quot;aws_lb&quot; &quot;app&quot; { ... }
+
+resource &quot;cloudflare_record&quot; &quot;app&quot; {
+  zone_id = var.zone_id
+  name    = &quot;app&quot;
+  type    = &quot;CNAME&quot;
+  content = aws_lb.app.dns_name
+}</code></pre>
+<p>Ten cuidado de no exagerar lo que hace Terraform. No hace que las nubes sean intercambiables. Un <code>aws_instance</code> y un <code>azurerm_linux_virtual_machine</code> son tipos de recursos distintos con argumentos distintos, y no puedes cambiar de nube cambiando una palabra. Lo que ganas es un flujo de trabajo común, herramientas compartidas para revisión, políticas y estado, y la capacidad de conectar plataformas entre sí. Los equipos suelen envolver los detalles de cada plataforma en módulos con entradas similares para que el código que los llama se vea parecido.</p>
+<p>Los entornos multicloud también plantean preocupaciones prácticas que debes reconocer: cada provider necesita sus propias credenciales, el estado de muchas plataformas debe guardarse en un backend compartido y protegido, y las configuraciones muy grandes a menudo se dividen en otras más pequeñas, cada una con su propio estado, para limitar el impacto de un error. Los bloques de código de esta lección están abreviados con <code>...</code> para facilitar la lectura.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Multi-cloud (multicloud)</dt><dd>Usar dos o más proveedores de nube pública juntos.</dd><dt>Hybrid cloud (nube híbrida)</dt><dd>Combinar servicios de nube pública con infraestructura privada o local (on-premises).</dd><dt>Native IaC tool (herramienta de IaC nativa)</dt><dd>La herramienta de aprovisionamiento propia de un proveedor de nube, como CloudFormation o las plantillas ARM, que solo gestiona los recursos de ese proveedor.</dd><dt>Cross-provider reference (referencia entre providers)</dt><dd>Una expresión en el recurso de un provider que usa un atributo del recurso de otro provider, lo que crea una dependencia implícita.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un minorista ejecuta su capa web en Azure, mantiene una copia de recuperación ante desastres en AWS y gestiona ambas, además de su clúster local de vSphere, desde un solo repositorio. Los ingenieros aprenden un solo flujo de trabajo, y un cambio de DNS para conmutar por error (failover) es un pull request revisado en lugar de una carrera manual.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Las preguntas del examen contrastan Terraform con CloudFormation o las plantillas ARM: la ventaja de Terraform es gestionar muchos providers, incluidas varias nubes, con un solo flujo de trabajo. No es que el mismo bloque resource funcione en todas las nubes.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué característica de Terraform hace posible el despliegue multicloud desde una sola configuración?</summary><p>Su modelo de plugins de providers: cada plataforma tiene un provider, y core los conduce a todos con el mismo lenguaje y flujo de trabajo.</p></details>
+<details class="sq"><summary>¿Puedes mover una carga de trabajo de AWS a Azure cambiando solo el nombre del provider en tu configuración?</summary><p>No. Los tipos de recursos y los argumentos son específicos de cada provider, así que debes reescribir esos recursos, aunque el flujo de trabajo y las herramientas siguen siendo los mismos.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Terraform Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../terraform/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../terraform-s-plugin-model-one-workflow-and-language-hcl-for-many-provid/">← El modelo de plugins de Terraform: un solo flujo de trabajo </a><a href="../service-agnostic-workflows-managing-saas-dns-git-kubernetes-and-monito/">Flujos de trabajo independientes del servicio: gestionar Saa →</a></nav>
+</main>
+</body>
+</html>

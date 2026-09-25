@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Diagnosticar denegaciones rutinarias de SELinux: /var/log/… · Lección de RHCSA</title>
+<meta name="description" content="Cuando SELinux bloquea algo, la aplicación normalmente solo informa un error vago como permission denied o 403 Forbidden. La explicación real está en el lo">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Diagnosticar denegaciones rutinarias de SELinux: /var/log/… · Lección de RHCSA">
+<meta property="og:description" content="Cuando SELinux bloquea algo, la aplicación normalmente solo informa un error vago como permission denied o 403 Forbidden. La explicación real está en el lo">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/diagnosing-routine-selinux-denials-var-log-audit-audit-log-ausearch-m/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/diagnosing-routine-selinux-denials-var-log-audit-audit-log-ausearch-m/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/diagnosing-routine-selinux-denials-var-log-audit-audit-log-ausearch-m/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Diagnosticar denegaciones rutinarias de SELinux: /var/log/audit/audit.log, ausearch -m AVC, sealert</h1>
+<article class="lbody">
+<p>Cuando SELinux bloquea algo, la aplicación normalmente solo informa un error vago como permission denied o 403 Forbidden. La explicación real está en el log de auditoría. Resolver problemas de SELinux es una rutina: confirmar que SELinux está implicado, encontrar la denegación, entender qué etiqueta, puerto o booleano está mal y corregir esa cosa concreta.</p>
+<p>Las denegaciones las registra el demonio de auditoría, auditd, en <code>/var/log/audit/audit.log</code> como mensajes AVC (access vector cache). Cada uno nombra el permiso denegado, como <code>read</code>, <code>open</code> o <code>name_bind</code>, el proceso con su contexto de origen (<code>scontext</code>), el destino con su contexto (<code>tcontext</code>) y la clase de objeto (<code>tclass</code>), como file, dir o tcp_socket.</p>
+<pre class="code" tabindex="0"><code>type=AVC msg=audit(...): avc:  denied  { read } for  pid=2143
+  comm=&quot;httpd&quot; name=&quot;index.html&quot; dev=&quot;vda1&quot; ino=12345
+  scontext=system_u:system_r:httpd_t:s0
+  tcontext=unconfined_u:object_r:admin_home_t:s0 tclass=file</code></pre>
+<p>Léelo así: al proceso <code>httpd</code>, de tipo <code>httpd_t</code>, se le denegó la lectura de un archivo etiquetado como <code>admin_home_t</code>. Los servidores web pueden leer <code>httpd_sys_content_t</code>, así que la etiqueta del archivo está mal, y <code>restorecon</code> o una regla de <code>semanage fcontext</code> lo corrige. Una denegación <code>name_bind</code> sobre un tcp_socket apunta a una etiqueta de puerto, y una denegación de una acción legítima pero opcional suele apuntar a un booleano.</p>
+<p><code>ausearch</code> busca en el log de auditoría sin tener que recorrerlo entero. <code>ausearch -m AVC -ts recent</code> muestra los mensajes AVC de los últimos diez minutos, <code>-ts today</code> los de hoy y <code>-c httpd</code> filtra por nombre de comando. Añade <code>-i</code> para interpretar los valores numéricos como nombres legibles.</p>
+<p><code>sealert</code>, del paquete setroubleshoot-server, va más allá. Cuando está instalado, el servicio setroubleshoot escribe un resumen de una línea en el journal, y <code>sealert -l id</code> imprime una explicación completa, incluidas las causas probables y los comandos sugeridos, como la línea exacta de <code>semanage fcontext</code>, <code>semanage port</code> o <code>setsebool</code>. <code>sealert -a /var/log/audit/audit.log</code> analiza todo el log. Busca en el journal con <code>journalctl | grep sealert</code> o busca el texto SELinux is preventing.</p>
+<pre class="code" tabindex="0"><code>ausearch -m AVC -ts recent -i
+journalctl -t setroubleshoot --since '10 min ago'
+sealert -l 3e4f...   # id del mensaje del journal</code></pre>
+<p>Dos precauciones. Si no hay ningún AVC pero sospechas de SELinux, usa brevemente <code>setenforce 0</code> y vuelve a intentarlo; si entonces funciona, SELinux está implicado, posiblemente mediante una regla que no registra nada (una regla dontaudit), y debes volver a enforcing de inmediato. Y lee con sentido crítico las sugerencias de sealert: su consejo de último recurso de construir un módulo personalizado con <code>audit2allow</code> casi nunca es correcto en las tareas del examen, donde la respuesta es una etiqueta, un tipo de puerto o un booleano correctos.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>AVC denial (denegación AVC)</dt><dd>Un registro del log de auditoría de un acceso bloqueado por SELinux, que nombra el permiso, el contexto de origen, el contexto de destino y la clase.</dd><dt>auditd</dt><dd>El demonio de auditoría que escribe las denegaciones de SELinux y otros eventos en /var/log/audit/audit.log.</dd><dt>ausearch</dt><dd>Busca en el log de auditoría por tipo de mensaje, hora y comando; -m AVC selecciona las denegaciones de SELinux.</dd><dt>sealert</dt><dd>Una herramienta de setroubleshoot que explica las denegaciones en lenguaje sencillo y sugiere soluciones.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Apache devuelve 403 para un sitio nuevo en /srv/site. ausearch -m AVC -ts recent muestra que a httpd_t se le denegó la lectura de archivos con tcontext default_t. sealert sugiere semanage fcontext -a -t httpd_sys_content_t '/srv/site(/.*)?' seguido de restorecon. Lo aplicas, y el sitio carga con SELinux todavía en enforcing.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Lee el tcontext de la denegación: un tipo de archivo equivocado significa restorecon o semanage fcontext, name_bind significa semanage port y un comportamiento opcional significa un booleano. Nunca dejes SELinux en permissive como solución.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué comando muestra las denegaciones de SELinux de los últimos minutos?</summary><p>ausearch -m AVC -ts recent.</p></details>
+<details class="sq"><summary>En un mensaje AVC, ¿qué representan scontext y tcontext?</summary><p>scontext es el contexto del proceso que intenta el acceso; tcontext es el contexto del archivo, puerto u otro objeto de destino.</p></details>
+<details class="sq"><summary>No aparece ningún AVC, pero cambiar a permissive hace que el problema desaparezca. ¿Qué podría explicarlo?</summary><p>Una regla dontaudit está denegando el acceso en silencio, así que SELinux sigue siendo la causa aunque no se registre nada.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../using-selinux-booleans-getsebool-a-setsebool-p-semanage-boolean-l/">← Usar los booleanos de SELinux (getsebool -a, setsebool -P, s</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Almacenamiento: particiones (fdisk, gdisk, parted), lsblk,… · Lección de Linux+</title>
+<meta name="description" content="Antes de que un disco pueda guardar archivos, normalmente se divide en particiones, cada una de las cuales recibe un sistema de archivos y un punto de mont">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Almacenamiento: particiones (fdisk, gdisk, parted), lsblk,… · Lección de Linux+">
+<meta property="og:description" content="Antes de que un disco pueda guardar archivos, normalmente se divide en particiones, cada una de las cuales recibe un sistema de archivos y un punto de mont">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/linux-plus/lessons/storage-partitions-fdisk-gdisk-parted-lsblk-blkid-uuids-etc-fstab-opti/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/linux-plus/lessons/storage-partitions-fdisk-gdisk-parted-lsblk-blkid-uuids-etc-fstab-opti/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../linux-plus/">Linux+</a> / <a href="../">Lecciones</a> · <a href="../../../../linux-plus/lessons/storage-partitions-fdisk-gdisk-parted-lsblk-blkid-uuids-etc-fstab-opti/" hreflang="en" lang="en">English</a></p>
+<p class="note">CompTIA Linux+ XK0-006</p>
+<h1>Almacenamiento: particiones (fdisk, gdisk, parted), lsblk, blkid, UUID, opciones de /etc/fstab (nofail, noexec)</h1>
+<article class="lbody">
+<p>Antes de que un disco pueda guardar archivos, normalmente se divide en particiones, cada una de las cuales recibe un sistema de archivos y un punto de montaje. Linux+ espera que sepas identificar discos, crear particiones con la herramienta adecuada para el tipo de tabla de particiones y montarlas de forma confiable en el arranque.</p>
+<p>Hay dos formatos de tabla de particiones. MBR (Master Boot Record) es el formato heredado: admite hasta cuatro particiones primarias (o tres más una partición extendida que contiene particiones lógicas) y discos de hasta unos 2 TiB con los sectores comunes de 512 bytes. GPT (GUID Partition Table) es el formato moderno que se usa con UEFI: admite discos mucho más grandes, muchas particiones (128 por defecto) y guarda una copia de respaldo de la tabla al final del disco. <code>fdisk</code> es una herramienta interactiva que hoy maneja tanto MBR como GPT; <code>gdisk</code> es una herramienta centrada en GPT con una interfaz similar; <code>parted</code> maneja ambos y además se puede usar en scripts, como en <code>parted /dev/sdb mklabel gpt</code> y <code>parted /dev/sdb mkpart primary ext4 1MiB 100%</code>. Dentro de fdisk, <code>n</code> crea, <code>p</code> imprime, <code>t</code> cambia el tipo, <code>d</code> elimina y <code>w</code> escribe; nada cambia en el disco hasta que escribes. Después, <code>partprobe</code> le pide al kernel que vuelva a leer la tabla.</p>
+<p><code>lsblk</code> muestra los dispositivos de bloques como un árbol: discos, sus particiones, volúmenes LVM y arreglos RAID, con tamaño, tipo y punto de montaje. <code>lsblk -f</code> agrega el tipo de sistema de archivos, la etiqueta y el UUID. <code>blkid</code> imprime los atributos de cada dispositivo de bloques, especialmente su UUID (Universally Unique Identifier) y el TYPE del sistema de archivos. Los nombres de dispositivo como <code>/dev/sdb1</code> pueden cambiar cuando se agregan discos o las controladoras cambian el orden, pero el UUID de un sistema de archivos sigue siendo el mismo, por eso debes montar por UUID (o LABEL) en lugar de por nombre de dispositivo.</p>
+<p><code>/etc/fstab</code> lista los sistemas de archivos que se montan en el arranque. Cada línea tiene seis campos: dispositivo (<code>UUID=...</code>), punto de montaje, tipo de sistema de archivos, opciones, indicador de dump (normalmente 0) y orden de paso de fsck (1 para la raíz, 2 para los demás, 0 para omitir). Por ejemplo: <code>UUID=3f2a... /data xfs defaults,nofail 0 2</code>.</p>
+<p>Las opciones importan tanto para la confiabilidad como para la seguridad. <code>defaults</code> significa rw, suid, dev, exec, auto, nouser y async. <code>nofail</code> le dice al proceso de arranque que no falle si falta el dispositivo, lo que mantiene arrancando a un servidor cuando un disco externo o de red no está presente; sin ella, un dispositivo faltante puede enviar el sistema al modo de emergencia. <code>noexec</code> impide ejecutar binarios desde ese sistema de archivos, un paso común de endurecimiento para <code>/tmp</code> o directorios de carga. <code>nosuid</code> ignora los bits SUID/SGID, <code>nodev</code> ignora los archivos de dispositivo, <code>ro</code> monta en solo lectura y <code>_netdev</code> marca los sistemas de archivos de red para que esperen a la red.</p>
+<p>Siempre prueba las ediciones de fstab antes de reiniciar: <code>mount -a</code> intenta montar todo lo listado y <code>findmnt --verify</code> revisa el archivo en busca de errores. En sistemas con systemd, ejecuta <code>systemctl daemon-reload</code> después de editar fstab para que se actualicen las unidades de montaje generadas.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>GPT</dt><dd>GUID Partition Table: esquema de particionado moderno que admite discos muy grandes, muchas particiones y una tabla de respaldo.</dd><dt>MBR</dt><dd>Master Boot Record: esquema de particionado heredado limitado a cuatro particiones primarias y discos de aproximadamente 2 TiB.</dd><dt>UUID</dt><dd>Un identificador único guardado en un sistema de archivos, usado en /etc/fstab para que los montajes no dependan de los nombres de dispositivo.</dd><dt>nofail</dt><dd>Una opción de fstab que permite que el arranque continúe si el dispositivo no está presente.</dd><dt>noexec</dt><dd>Una opción de fstab que impide ejecutar binarios guardados en ese sistema de archivos.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Agregas un disco de 4 TB a un servidor para respaldos. Creas una etiqueta GPT y una partición con parted, la formateas con mkfs.xfs, obtienes su UUID con blkid y agregas UUID=... /backup xfs defaults,nofail,noexec 0 2 a /etc/fstab. Ejecutar mount -a lo monta sin errores, y nofail garantiza que, si alguna vez se retira el disco, el servidor siga arrancando.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si un escenario pregunta por qué un servidor se quedó en modo de emergencia después de que un disco se retiró o cambió de nombre, sospecha de una entrada de fstab por nombre de dispositivo sin nofail; la solución es usar UUID= y agregar nofail donde corresponda.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué esquema de particionado deberías usar para un disco de 6 TB, y por qué?</summary><p>GPT, porque MBR no puede direccionar discos de más de unos 2 TiB con sectores de 512 bytes.</p></details>
+<details class="sq"><summary>¿Qué controla el último campo de una línea de /etc/fstab?</summary><p>El orden de paso de fsck en el arranque: 1 para el sistema de archivos raíz, 2 para los demás sistemas de archivos, 0 para omitir la verificación.</p></details>
+<details class="sq"><summary>¿Cómo encuentras el UUID de /dev/sdc1?</summary><p>Ejecuta blkid /dev/sdc1 o lsblk -f.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Linux+ gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../linux-plus/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../files-and-directories-ls-find-cp-mv-hard-vs-symbolic-links-file-stat/">← Archivos y directorios: ls, find, cp, mv, enlaces duros vs s</a><a href="../lvm-pvcreate-vgextend-lvextend-r-and-software-raid-with-mdadm/">LVM (pvcreate, vgextend, lvextend -r) y RAID por software co →</a></nav>
+</main>
+</body>
+</html>

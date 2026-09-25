@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KQL: where, project, summarize, bin(), join y render sobre… · Lección de AI-200</title>
+<meta name="description" content="Kusto Query Language (KQL) es la forma de consultar los datos de Application Insights y Log Analytics. Una consulta empieza con el nombre de una tabla y pa">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="KQL: where, project, summarize, bin(), join y render sobre… · Lección de AI-200">
+<meta property="og:description" content="Kusto Query Language (KQL) es la forma de consultar los datos de Application Insights y Log Analytics. Una consulta empieza con el nombre de una tabla y pa">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/kql-where-project-summarize-bin-join-and-render-against-requests-depen/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/kql-where-project-summarize-bin-join-and-render-against-requests-depen/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/kql-where-project-summarize-bin-join-and-render-against-requests-depen/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>KQL: where, project, summarize, bin(), join y render sobre requests, dependencies, exceptions y traces</h1>
+<article class="lbody">
+<p>Kusto Query Language (KQL) es la forma de consultar los datos de Application Insights y Log Analytics. Una consulta empieza con el nombre de una tabla y pasa las filas por operadores, cada uno separado por <code>|</code>, de forma muy parecida a una canalización del shell de Unix. Las tablas de Application Insights que más usarás son <code>requests</code> (llamadas entrantes a tu app, con name, url, resultCode, success y duration), <code>dependencies</code> (llamadas salientes, con target, type, success y duration), <code>exceptions</code> (errores, con type, outerMessage y problemId) y <code>traces</code> (mensajes de registro, con message y severityLevel). Todas comparten <code>timestamp</code>, <code>operation_Id</code> y <code>cloud_RoleName</code>. En un recurso basado en un área de trabajo que se consulta directamente desde Log Analytics, los mismos datos aparecen en tablas llamadas AppRequests, AppDependencies, AppExceptions y AppTraces, con nombres de columna ligeramente distintos.</p>
+<p><code>where</code> filtra filas. Filtra primero por tiempo para que la consulta recorra menos datos: <code>where timestamp &gt; ago(1h)</code>. Combina condiciones con <code>and</code>, y usa <code>==</code>, <code>!=</code>, <code>contains</code>, <code>has</code> o <code>startswith</code> con cadenas. <code>project</code> elige y renombra columnas, como SELECT en SQL; <code>extend</code> agrega columnas calculadas.</p>
+<p><code>summarize</code> agrega filas en grupos, como GROUP BY: <code>summarize count(), avg(duration), percentile(duration, 95) by name</code>. La función <code>bin()</code> redondea valores en intervalos, y es la forma de construir series temporales: <code>summarize count() by bin(timestamp, 5m)</code> produce una fila por cada intervalo de cinco minutos. Otros operadores útiles son <code>top</code>, <code>order by</code> (o <code>sort by</code>), <code>take</code> y <code>distinct</code>.</p>
+<pre class="code" tabindex="0"><code>requests
+| where timestamp &gt; ago(24h)
+| summarize total = sum(itemCount), failed = sumif(itemCount, success == false)
+    by bin(timestamp, 15m)
+| extend failureRate = 100.0 * failed / total
+| render timechart</code></pre>
+<p><code>join</code> combina dos tablas mediante una columna común, y <code>operation_Id</code> es la clave natural para conectar una solicitud con sus excepciones o dependencias. El tipo de join predeterminado en KQL es <code>innerunique</code>, que elimina duplicados del lado izquierdo; especifica <code>kind=inner</code> o <code>kind=leftouter</code> cuando eso sea lo que quieres. Mantén pequeño el lado izquierdo filtrando primero.</p>
+<pre class="code" tabindex="0"><code>requests
+| where timestamp &gt; ago(1h) and success == false
+| project operation_Id, name, resultCode, duration
+| join kind=inner (
+    exceptions | where timestamp &gt; ago(1h) | project operation_Id, type, outerMessage
+  ) on operation_Id
+| summarize count() by name, type
+| order by count_ desc</code></pre>
+<p><code>render</code> convierte los resultados en un gráfico en el portal: <code>timechart</code> para series temporales, <code>barchart</code>, <code>columnchart</code>, <code>piechart</code> y otros. Puedes anclar gráficos a paneles o workbooks, y las mismas consultas alimentan las alertas de búsqueda de registros de la siguiente lección.</p>
+<p>Un hábito práctico: cuando investigues una solicitud fallida, toma su operation_Id y consulta cada tabla con <code>where operation_Id == &quot;...&quot;</code> para ver todo lo que ocurrió en esa transacción, incluidos los registros escritos por el camino.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>KQL</dt><dd>Kusto Query Language, el lenguaje de consultas basado en canalizaciones de Log Analytics y Application Insights.</dd><dt>summarize</dt><dd>El operador de KQL que agrega filas en grupos con funciones como count, avg y percentile.</dd><dt>bin()</dt><dd>Una función que redondea valores en intervalos de tamaño fijo, que se usa a menudo con timestamp para construir series temporales.</dd><dt>join</dt><dd>Un operador que combina filas de dos tablas según columnas coincidentes, como operation_Id.</dd><dt>render</dt><dd>Un operador que muestra los resultados de una consulta como un gráfico, por ejemplo un timechart.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Después de una versión, las tasas de error subieron. Una ingeniera ejecutó una consulta que combinaba las solicitudes fallidas con las excepciones por operation_Id, agrupadas por nombre de solicitud y tipo de excepción, y descubrió que un punto de conexión lanzaba un KeyError por una configuración faltante. Un timechart de errores por bin(timestamp, 5m) mostró que el pico empezó exactamente en el momento de la implementación, lo que confirmó la causa.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Aprende qué contiene cada tabla (requests entrantes, dependencies salientes, exceptions errores, traces registros), usa bin(timestamp, intervalo) dentro de summarize para los gráficos temporales y haz join por operation_Id para correlacionar.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Escribe el fragmento de KQL que cuenta las solicitudes por intervalo de 5 minutos.</summary><p>requests | summarize count() by bin(timestamp, 5m), opcionalmente seguido de | render timechart.</p></details>
+<details class="sq"><summary>¿Por qué columna harías join entre requests y exceptions para correlacionar un error con su excepción?</summary><p>operation_Id, el ID de traza compartido por toda la telemetría de la misma operación.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../distributed-tracing-across-services-sampling-and-live-metrics/">← Seguimiento distribuido entre servicios, muestreo y métricas</a><a href="../alerts-metric-vs-log-search-alerts-and-action-groups/">Alertas: alertas de métricas vs alertas de búsqueda de regis →</a></nav>
+</main>
+</body>
+</html>

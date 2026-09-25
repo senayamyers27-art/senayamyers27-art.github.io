@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Problemas de DNS: Pods y logs de CoreDNS, detección de buc… · Lección de CKA</title>
+<meta name="description" content="Cuando las aplicaciones reportan errores como 'could not resolve host' o 'no such host', la causa suele estar en un conjunto reducido: CoreDNS no se está e">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Problemas de DNS: Pods y logs de CoreDNS, detección de buc… · Lección de CKA">
+<meta property="og:description" content="Cuando las aplicaciones reportan errores como 'could not resolve host' o 'no such host', la causa suele estar en un conjunto reducido: CoreDNS no se está e">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/dns-problems-coredns-pods-and-logs-loop-detection-with-systemd-resolve/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/dns-problems-coredns-pods-and-logs-loop-detection-with-systemd-resolve/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/dns-problems-coredns-pods-and-logs-loop-detection-with-systemd-resolve/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Problemas de DNS: Pods y logs de CoreDNS, detección de bucles con systemd-resolved y pruebas con un Pod temporal</h1>
+<article class="lbody">
+<p>Cuando las aplicaciones reportan errores como 'could not resolve host' o 'no such host', la causa suele estar en un conjunto reducido: CoreDNS no se está ejecutando, su Service no tiene endpoints, su configuración está mal, una NetworkPolicy bloquea el puerto 53, o la configuración DNS del propio Pod es inusual. Revísalas en orden.</p>
+<p>Primero reproduce el problema desde un Pod temporal. <code>kubectl run dns --rm -it --restart=Never --image=busybox -- nslookup kubernetes.default</code> debería devolver el ClusterIP del Service <code>kubernetes</code>. Luego prueba el nombre que falla, tanto corto como completo (<code>api.shop.svc.cluster.local</code>), y un nombre externo. Inspecciona también el <code>/etc/resolv.conf</code> del Pod con <code>cat</code>: debería listar la IP del Service kube-dns como nameserver, los dominios de búsqueda del clúster y <code>options ndots:5</code>.</p>
+<p>Luego revisa el propio CoreDNS. Sus Pods llevan la etiqueta <code>k8s-app=kube-dns</code> en kube-system.</p>
+<pre class="code" tabindex="0"><code>kubectl get pods -n kube-system -l k8s-app=kube-dns -o wide
+kubectl logs -n kube-system -l k8s-app=kube-dns --tail=30
+kubectl get svc kube-dns -n kube-system
+kubectl get endpointslices -n kube-system -l kubernetes.io/service-name=kube-dns
+kubectl get cm coredns -n kube-system -o yaml</code></pre>
+<p>Si los Pods están en Pending justo después de crear el clúster, falta el CNI. Si están Running pero el Service no tiene endpoints, mira la readiness. Si los logs muestran errores, lee el Corefile; un error de tipeo o un destino de <code>forward</code> incorrecto es común después de las ediciones. Después de corregir el ConfigMap, CoreDNS se recarga automáticamente, o puedes reiniciar el Deployment.</p>
+<p>Una falla muy conocida es el bucle de reenvío. El plugin <code>loop</code> de CoreDNS envía una consulta de prueba al arrancar; si la consulta vuelve al propio CoreDNS, registra un mensaje de que se detectó un bucle y termina, así que los Pods entran en CrashLoopBackOff. La causa típica es systemd-resolved en el nodo: el <code>/etc/resolv.conf</code> del nodo apunta al resolver stub local en 127.0.0.53, el kubelet le pasa ese archivo a CoreDNS, y <code>forward . /etc/resolv.conf</code> envía entonces las consultas a 127.0.0.53 dentro del Pod de CoreDNS, que es el propio CoreDNS.</p>
+<p>La solución es darle al kubelet la lista real de resolvers upstream en lugar del stub. En los hosts con systemd-resolved ese archivo suele ser <code>/run/systemd/resolve/resolv.conf</code>; define <code>resolvConf</code> con esa ruta en <code>/var/lib/kubelet/config.yaml</code> y reinicia el kubelet, y luego reinicia CoreDNS. kubeadm normalmente detecta systemd-resolved y lo configura por ti, así que el problema aparece sobre todo cuando alguien lo cambió. Una alternativa es apuntar <code>forward</code> a IP upstream explícitas. Quitar el plugin loop solo oculta el problema.</p>
+<p>Dos verificaciones más completan la lista. Si un namespace tiene una NetworkPolicy de egress, debe permitir UDP y TCP en el puerto 53 hacia los Pods de CoreDNS. Y un Pod con <code>dnsPolicy: Default</code>, o con <code>hostNetwork: true</code> sin <code>ClusterFirstWithHostNet</code>, no resolverá los nombres del clúster por diseño.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>loop plugin (plugin loop)</dt><dd>Plugin de CoreDNS que detecta bucles de reenvío y detiene CoreDNS si encuentra uno.</dd><dt>systemd-resolved stub</dt><dd>Un resolver local en 127.0.0.53 que causa bucles si CoreDNS le reenvía consultas.</dd><dt>resolvConf</dt><dd>Ajuste del kubelet que indica el archivo resolv.conf que se pasa a los Pods con la política Default y a CoreDNS.</dd><dt>k8s-app=kube-dns</dt><dd>La etiqueta que selecciona los Pods de CoreDNS y los backends del Service kube-dns.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Después de reconstruir un nodo, los Pods de CoreDNS de ese nodo se caen, y sus logs informan un bucle detectado para la zona raíz. El resolvConf de la configuración del kubelet se había cambiado a /etc/resolv.conf, que apunta a 127.0.0.53. Volver a ponerlo en /run/systemd/resolve/resolv.conf, reiniciar el kubelet y borrar los Pods de CoreDNS arregla la resolución.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> CoreDNS en CrashLoopBackOff con una línea de log 'Loop detected' es el problema del stub de systemd-resolved; corrige el resolvConf del kubelet o el destino de forward, no el plugin loop.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué etiqueta encuentra los Pods de CoreDNS?</summary><p>k8s-app=kube-dns en el namespace kube-system.</p></details>
+<details class="sq"><summary>¿Por qué reenviar a 127.0.0.53 causa un bucle dentro de CoreDNS?</summary><p>Dentro del Pod de CoreDNS, 127.0.0.53 es local al Pod, así que las consultas vuelven al propio CoreDNS en lugar de ir al resolver del nodo.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../service-and-networking-problems-selectors-readiness-and-endpointslices/">← Problemas de Services y de red: selectores, readiness y Endp</a><a href="../cluster-access-problems-kubeconfig-contexts-expired-certificates-conne/">Problemas de acceso al clúster: contexts de kubeconfig, cert →</a></nav>
+</main>
+</body>
+</html>

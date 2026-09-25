@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Intent APIs de Catalyst Center: autenticación con token y … · Lección de ENCOR</title>
+<meta name="description" content="Catalyst Center expone una API REST northbound, llamada Intent API, que permite a scripts y otros sistemas hacer lo mismo que puedes hacer en la GUI: lista">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Intent APIs de Catalyst Center: autenticación con token y … · Lección de ENCOR">
+<meta property="og:description" content="Catalyst Center expone una API REST northbound, llamada Intent API, que permite a scripts y otros sistemas hacer lo mismo que puedes hacer en la GUI: lista">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/catalyst-center-intent-apis-token-authentication-and-common-calls/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/catalyst-center-intent-apis-token-authentication-and-common-calls/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ccnp-encor/">ENCOR</a> / <a href="../">Lecciones</a> · <a href="../../../../ccnp-encor/lessons/catalyst-center-intent-apis-token-authentication-and-common-calls/" hreflang="en" lang="en">English</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2</p>
+<h1>Intent APIs de Catalyst Center: autenticación con token y llamadas comunes</h1>
+<article class="lbody">
+<p>Catalyst Center expone una API REST northbound, llamada Intent API, que permite a scripts y otros sistemas hacer lo mismo que puedes hacer en la GUI: listar dispositivos, leer el estado de salud (health), consultar clientes, ejecutar comandos y aprovisionar. Se llama basada en intención porque describes lo que quieres, por ejemplo 'dame el health de todos los sitios', y Catalyst Center determina cómo obtenerlo de los dispositivos. La API está documentada dentro del producto, en su sección de plataforma, y en el sitio para desarrolladores de Cisco.</p>
+<p>La autenticación usa un token. Primero envías una solicitud POST al endpoint de autenticación, <code>/dna/system/api/v1/auth/token</code>, usando autenticación HTTP Basic con un usuario y contraseña de Catalyst Center. La respuesta es un JSON que contiene un valor <code>Token</code>. En cada solicitud posterior, envías ese token en el encabezado <code>X-Auth-Token</code>. El token es válido por un tiempo limitado (Cisco documenta un valor predeterminado de aproximadamente una hora); después de eso, la API devuelve 401 y debes solicitar uno nuevo.</p>
+<pre class="code" tabindex="0"><code>import os, requests
+from requests.auth import HTTPBasicAuth
+BASE = os.environ[&quot;CC_URL&quot;]  # Dirección HTTPS de Catalyst Center
+user, password = os.environ[&quot;CC_USER&quot;], os.environ[&quot;CC_PASS&quot;]
+r = requests.post(BASE + &quot;/dna/system/api/v1/auth/token&quot;,
+                  auth=HTTPBasicAuth(user, password), verify=&quot;ca.pem&quot;)
+token = r.json()[&quot;Token&quot;]
+headers = {&quot;X-Auth-Token&quot;: token, &quot;Content-Type&quot;: &quot;application/json&quot;}
+devs = requests.get(BASE + &quot;/dna/intent/api/v1/network-device&quot;,
+                    headers=headers, verify=&quot;ca.pem&quot;).json()
+for d in devs[&quot;response&quot;]:
+    print(d[&quot;hostname&quot;], d[&quot;managementIpAddress&quot;], d[&quot;softwareVersion&quot;])</code></pre>
+<p>Las rutas de la Intent API empiezan con <code>/dna/intent/api/v1/</code>. Entre las llamadas comunes están <code>network-device</code> (el inventario, con parámetros de consulta para filtrar por hostname, familia o plataforma, y un ID de dispositivo que puedes usar en otras llamadas), <code>site</code> (la jerarquía de sitios), <code>network-health</code> y <code>site-health</code> (los puntajes de health de assurance), <code>client-health</code> y <code>client-detail</code> (experiencia de los clientes), los endpoints de <code>topology</code> (topología física y de Capa 2 o Capa 3) y los endpoints de <code>interface</code>. La mayoría de las respuestas envuelven los resultados en una clave <code>response</code>, así que primero lees <code>json()[&quot;response&quot;]</code>.</p>
+<p>Algunas operaciones toman tiempo, como ejecutar comandos CLI con el command runner (<code>network-device-poller/cli/read-request</code>), el aprovisionamiento o el despliegue de plantillas. Estas son asíncronas: la API responde de inmediato (a menudo con 202 Accepted) y devuelve un <code>taskId</code>. Luego consultas periódicamente (polling) el endpoint de tareas, <code>/dna/intent/api/v1/task/{taskId}</code>, hasta que reporte que terminó, y lees el resultado, que puede apuntar a un ID de archivo con la salida del comando que obtienes desde el endpoint de archivos. Diseña tus scripts para esperar y consultar, en lugar de asumir que el trabajo terminó al instante.</p>
+<p>Además de la Intent API, Catalyst Center ofrece notificaciones de eventos (webhooks) que envían los issues de assurance a sistemas externos, como herramientas ITSM, y APIs de integración. Por seguridad, usa una cuenta dedicada con el rol mínimo necesario, mantén las credenciales fuera del código y valida el certificado del servidor. Los endpoints exactos cambian entre versiones, así que revisa la documentación de la API para tu versión.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Intent API</dt><dd>La API REST northbound de Catalyst Center para consultar y configurar la red en términos de resultados deseados.</dd><dt>X-Auth-Token</dt><dd>El encabezado HTTP que lleva el token de Catalyst Center en cada solicitud a la API.</dd><dt>Token endpoint (endpoint de token)</dt><dd>POST /dna/system/api/v1/auth/token con autenticación Basic, que devuelve un token de duración limitada.</dd><dt>taskId</dt><dd>El identificador que devuelve una operación asíncrona; se consulta mediante la API de tareas para obtener su estado y resultado.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Cada mañana, un script se autentica en Catalyst Center, llama al endpoint site-health y publica en el canal de chat de operaciones cualquier sitio con un puntaje de health por debajo del objetivo. Cuando un sitio se ve mal, ejecuta un comando show en los switches de ese sitio mediante el command runner, consulta el taskId devuelto y adjunta la salida.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Primero el token: POST a /dna/system/api/v1/auth/token con autenticación Basic y luego envía X-Auth-Token en cada llamada. Las acciones de larga duración devuelven un taskId que debes consultar, no el resultado final.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué encabezado lleva el token de Catalyst Center?</summary><p>X-Auth-Token.</p></details>
+<details class="sq"><summary>Una solicitud al command runner responde de inmediato con un taskId. ¿Qué haces después?</summary><p>Consultar el endpoint de tareas con ese taskId hasta que termine y luego obtener el resultado, como el archivo de salida.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia ENCOR gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ccnp-encor/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../rest-api-methods-and-response-codes-200-201-204-400-401-403-404-500/">← Métodos de API REST y códigos de respuesta (200, 201, 204, 4</a><a href="../sd-wan-manager-rest-apis/">APIs REST de SD-WAN Manager →</a></nav>
+</main>
+</body>
+</html>

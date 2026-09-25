@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Versiones y alias de Lambda; alias ponderados; desplazamie… · Lección de Developer Associate</title>
+<meta name="description" content="Desplegar código nuevo de Lambda de forma segura significa poder dirigir a quienes llaman a una versión conocida, desplazar el tráfico gradualmente y rever">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Versiones y alias de Lambda; alias ponderados; desplazamie… · Lección de Developer Associate">
+<meta property="og:description" content="Desplegar código nuevo de Lambda de forma segura significa poder dirigir a quienes llaman a una versión conocida, desplazar el tráfico gradualmente y rever">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/lambda-versions-and-aliases-weighted-aliases-codedeploy-canary-linear/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/lambda-versions-and-aliases-weighted-aliases-codedeploy-canary-linear/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/lambda-versions-and-aliases-weighted-aliases-codedeploy-canary-linear/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Versiones y alias de Lambda; alias ponderados; desplazamiento de tráfico canary, lineal y todo a la vez con CodeDeploy y reversión por alarmas</h1>
+<article class="lbody">
+<p>Desplegar código nuevo de Lambda de forma segura significa poder dirigir a quienes llaman a una versión conocida, desplazar el tráfico gradualmente y revertir rápido. Las versiones y los alias proporcionan los bloques de construcción, y AWS CodeDeploy automatiza el desplazamiento.</p>
+<p>Cuando editas una función, cambias <code>$LATEST</code>, la copia de trabajo mutable. Publicar una versión (<code>aws lambda publish-version</code>) toma una instantánea inmutable del código y la configuración, numerada 1, 2, 3 y así sucesivamente. El código y la mayoría de los ajustes de una versión no pueden cambiar después, así que una versión es una unidad de despliegue confiable. Cada versión tiene su propio ARN: un ARN calificado termina en <code>:3</code> para la versión 3, mientras que un ARN no calificado se refiere a <code>$LATEST</code>.</p>
+<p>Un alias es un puntero con nombre a una versión, como <code>prod</code>, <code>staging</code> o <code>live</code>, con su propio ARN que termina en <code>:prod</code>. Quienes llaman y los disparadores (integraciones de API Gateway, mapeos de fuentes de eventos, notificaciones de S3) deben referenciar el alias, no un número de versión. Para publicar, actualizas el alias para que apunte a una nueva versión; para revertir, lo vuelves a apuntar a la anterior. La configuración de quien llama nunca cambia. Los alias también pueden tener su propia concurrencia aprovisionada y sus propios permisos en la política basada en recursos.</p>
+<p>Un alias ponderado divide el tráfico entre dos versiones: por ejemplo, <code>prod</code> envía el 90% de las invocaciones a la versión 3 y el 10% a la versión 4, usando una configuración de enrutamiento (<code>--routing-config AdditionalVersionWeights={&quot;4&quot;=0.1}</code>). Luego puedes observar las métricas de la nueva versión y aumentar el peso. Los alias no pueden apuntar a <code>$LATEST</code> con pesos; ambas deben ser versiones publicadas.</p>
+<p>AWS CodeDeploy automatiza el desplazamiento ponderado para Lambda. Una configuración de despliegue define el patrón: canary desplaza primero un porcentaje pequeño y luego el resto después de un intervalo (por ejemplo, <code>CodeDeployDefault.LambdaCanary10Percent5Minutes</code>: 10% durante cinco minutos y luego 100%); lineal desplaza incrementos iguales a intervalos fijos (por ejemplo, <code>LambdaLinear10PercentEvery1Minute</code>: 10% más cada minuto hasta llegar a 100%); todo a la vez (all-at-once) desplaza todo de inmediato. También puedes crear configuraciones personalizadas. Durante el despliegue, CodeDeploy supervisa las alarmas de CloudWatch que asocies, como alarmas de tasa de errores o de latencia para la nueva versión del alias. Si una alarma pasa al estado ALARM, CodeDeploy se detiene y revierte automáticamente el alias a la versión anterior. Las funciones hook (<code>BeforeAllowTraffic</code> y <code>AfterAllowTraffic</code>) pueden ejecutar pruebas de validación antes y después del desplazamiento, y un hook que falla también dispara la reversión.</p>
+<p>En SAM esto son solo unas líneas en la función: <code>AutoPublishAlias: live</code> publica una nueva versión en cada despliegue y mueve el alias <code>live</code>, y <code>DeploymentPreference</code> con <code>Type: Canary10Percent5Minutes</code>, una lista de <code>Alarms</code> y <code>Hooks</code> opcionales hace que CodeDeploy se encargue del desplazamiento de tráfico y la reversión.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>$LATEST</dt><dd>La versión mutable y no publicada de una función Lambda que refleja las ediciones más recientes de código y configuración.</dd><dt>Version (versión)</dt><dd>Una instantánea inmutable y numerada del código y la configuración de una función Lambda.</dd><dt>Alias</dt><dd>Un puntero con nombre a una versión de la función, opcionalmente ponderado entre dos versiones, con su propio ARN.</dd><dt>Canary deployment (despliegue canary)</dt><dd>Un desplazamiento de tráfico que envía primero un porcentaje pequeño a la nueva versión y luego el resto tras una espera.</dd><dt>Linear deployment (despliegue lineal)</dt><dd>Un desplazamiento de tráfico que mueve porcentajes iguales a la nueva versión a intervalos regulares.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un equipo usa SAM con AutoPublishAlias: live y DeploymentPreference Type Linear10PercentEvery1Minute, más una alarma sobre la métrica Errors de la función. A los cuatro minutos de una publicación, los errores se disparan, la alarma se activa y CodeDeploy regresa el alias live a la versión anterior sin que nadie cambie API Gateway.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Canary son dos pasos (un porcentaje pequeño y luego todo); lineal son muchos pasos iguales. La reversión automática en CodeDeploy la activan las alarmas de CloudWatch o los hooks que fallan. En producción, apunta los disparadores a alias, nunca a $LATEST.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué API Gateway debe llamar a un alias en lugar de a un número de versión?</summary><p>Para que las publicaciones y las reversiones solo requieran mover el alias, sin cambiar la integración de API Gateway.</p></details>
+<details class="sq"><summary>¿Qué hace LambdaCanary10Percent5Minutes?</summary><p>Desplaza el 10% del tráfico a la nueva versión, espera cinco minutos y luego desplaza el 90% restante.</p></details>
+<details class="sq"><summary>¿Qué dispara una reversión automática en un despliegue de Lambda con CodeDeploy?</summary><p>Una alarma de CloudWatch configurada que pasa al estado ALARM, o un hook BeforeAllowTraffic o AfterAllowTraffic que falla.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../aws-cdk-basics-constructs-cdk-bootstrap-cdk-synth-cdk-deploy/">← Fundamentos de AWS CDK: constructs, cdk bootstrap, cdk synth</a><a href="../api-gateway-stages-stage-variables-deployments-mock-integrations-canar/">Etapas de API Gateway, variables de etapa, despliegues, inte →</a></nav>
+</main>
+</body>
+</html>

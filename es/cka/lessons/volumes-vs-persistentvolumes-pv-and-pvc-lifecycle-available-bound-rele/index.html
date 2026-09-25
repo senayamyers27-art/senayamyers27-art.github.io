@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Volumes frente a PersistentVolumes; ciclo de vida de PV y … · Lección de CKA</title>
+<meta name="description" content="El sistema de archivos propio de un contenedor desaparece cuando el contenedor se reinicia. Los volúmenes resuelven eso, y Kubernetes ofrece dos niveles de">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Volumes frente a PersistentVolumes; ciclo de vida de PV y … · Lección de CKA">
+<meta property="og:description" content="El sistema de archivos propio de un contenedor desaparece cuando el contenedor se reinicia. Los volúmenes resuelven eso, y Kubernetes ofrece dos niveles de">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/volumes-vs-persistentvolumes-pv-and-pvc-lifecycle-available-bound-rele/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/volumes-vs-persistentvolumes-pv-and-pvc-lifecycle-available-bound-rele/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/volumes-vs-persistentvolumes-pv-and-pvc-lifecycle-available-bound-rele/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Volumes frente a PersistentVolumes; ciclo de vida de PV y PVC (Available, Bound, Released) y reglas de vinculación</h1>
+<article class="lbody">
+<p>El sistema de archivos propio de un contenedor desaparece cuando el contenedor se reinicia. Los volúmenes resuelven eso, y Kubernetes ofrece dos niveles de abstracción para ellos.</p>
+<p>Un volumen se declara directamente en el <code>spec.volumes</code> de un Pod y se monta con <code>volumeMounts</code>. Algunos tipos de volumen viven y mueren con el Pod: <code>emptyDir</code> es un espacio temporal compartido por los contenedores del Pod que se borra cuando el Pod se quita del nodo. Otros referencian algo externo, como <code>configMap</code>, <code>secret</code>, <code>hostPath</code> o un recurso compartido NFS. Los volúmenes a nivel de Pod atan la carga de trabajo a detalles específicos del almacenamiento, lo que resulta incómodo para los desarrolladores y no es portable.</p>
+<p>Los PersistentVolumes (PVs) separan la oferta de almacenamiento de la demanda. Un PV es un objeto de alcance de clúster que representa una porción real de almacenamiento, con una capacidad, modos de acceso, una política de recuperación y detalles del backend, creado por un administrador o automáticamente por un provisioner. Un PersistentVolumeClaim (PVC) es una solicitud de namespace: 'necesito 5Gi, ReadWriteOnce, de la clase fast'. El Pod luego usa un volumen <code>persistentVolumeClaim</code> que indica el claim, así que al spec del Pod no le importa qué almacenamiento hay detrás.</p>
+<pre class="code" tabindex="0"><code>apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: data, namespace: app}
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: manual
+  resources:
+    requests: {storage: 1Gi}
+---
+# en el spec del Pod
+volumes:
+- name: data
+  persistentVolumeClaim: {claimName: data}</code></pre>
+<p>El ciclo de vida de un PV tiene cuatro fases. <code>Available</code>: libre y sin vincular. <code>Bound</code>: vinculado en exclusiva a un PVC; la vinculación es uno a uno, y un PV grande vinculado a un claim pequeño le da todo el PV. <code>Released</code>: su PVC se borró pero el recurso todavía no se recuperó, y no puede vincularse automáticamente a un nuevo claim porque aún registra el <code>claimRef</code> anterior. <code>Failed</code>: la recuperación automática falló.</p>
+<p>El control plane vincula un PVC a un PV solo cuando todo esto coincide: el <code>storageClassName</code> es el mismo (una cadena vacía solo coincide con PVs sin clase), el PV admite los modos de acceso solicitados, su capacidad es al menos el tamaño solicitado, su <code>volumeMode</code> (Filesystem o Block) coincide, y cualquier <code>selector</code> de etiquetas del PVC coincide con el PV. Si nada coincide y ningún provisioner puede crear un PV, el PVC se queda en <code>Pending</code>, al igual que cualquier Pod que lo use. Puedes forzar un emparejamiento específico con <code>spec.volumeName</code> en el PVC o con un <code>claimRef</code> en el PV.</p>
+<p>Revisa el estado con <code>kubectl get pv,pvc -A</code>; las columnas STATUS y CLAIM cuentan la historia. <code>kubectl describe pvc</code> muestra eventos que explican por qué un claim no se vincula.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>PersistentVolume</dt><dd>Un objeto de alcance de clúster que representa una porción de almacenamiento y sus propiedades.</dd><dt>PersistentVolumeClaim</dt><dd>Una solicitud de almacenamiento de namespace que se vincula a un PV coincidente.</dd><dt>Released (liberado)</dt><dd>Fase del PV después de que se borra su claim, antes de que el almacenamiento se recupere o se libere manualmente.</dd><dt>emptyDir</dt><dd>Un volumen temporal con alcance de Pod que se elimina cuando el Pod sale del nodo.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un PVC que pide 2Gi ReadWriteOnce con storageClassName manual se queda en Pending. El único PV es de 5Gi ReadWriteOnce, pero tiene storageClassName slow. Cambiar el PVC a la clase slow (o crear un PV manual coincidente) permite que se vincule, y el PVC luego muestra la capacidad completa de 5Gi.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Los PVCs en Pending casi siempre se deben a una discrepancia en storageClassName, modo de acceso, tamaño o selector. Compara los campos del PVC y del PV lado a lado con kubectl get -o yaml.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Puede un PV estar vinculado a dos PVCs?</summary><p>No, la vinculación de PV a PVC es exclusiva y uno a uno.</p></details>
+<details class="sq"><summary>¿Por qué un PV en Released no se vincula automáticamente a un PVC nuevo?</summary><p>Todavía tiene un claimRef al claim borrado y puede contener datos antiguos.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../testing-connectivity-with-temporary-pods-busybox-nicolaka-netshoot-nsl/">← Probar la conectividad con Pods temporales (busybox, nicolak</a><a href="../access-modes-readwriteonce-readonlymany-readwritemany-readwriteoncepod/">Modos de acceso: ReadWriteOnce, ReadOnlyMany, ReadWriteMany  →</a></nav>
+</main>
+</body>
+</html>

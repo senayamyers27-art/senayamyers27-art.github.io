@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Emparejamiento de redes virtuales: no transitivo, tránsito… · Lección de Azure Administrator</title>
+<meta name="description" content="El emparejamiento de redes virtuales (VNet peering) conecta dos VNet para que sus recursos se comuniquen usando direcciones IP privadas, como si fueran una">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Emparejamiento de redes virtuales: no transitivo, tránsito… · Lección de Azure Administrator">
+<meta property="og:description" content="El emparejamiento de redes virtuales (VNet peering) conecta dos VNet para que sus recursos se comuniquen usando direcciones IP privadas, como si fueran una">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-104/lessons/virtual-network-peering-non-transitive-gateway-transit-and-use-remote/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-104/lessons/virtual-network-peering-non-transitive-gateway-transit-and-use-remote/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-104/">Azure Administrator</a> / <a href="../">Lecciones</a> · <a href="../../../../az-104/lessons/virtual-network-peering-non-transitive-gateway-transit-and-use-remote/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure Administrator Associate AZ-104</p>
+<h1>Emparejamiento de redes virtuales: no transitivo, tránsito de puerta de enlace y uso de puertas de enlace remotas, emparejamiento global</h1>
+<article class="lbody">
+<p>El emparejamiento de redes virtuales (VNet peering) conecta dos VNet para que sus recursos se comuniquen usando direcciones IP privadas, como si fueran una sola red. El tráfico viaja por la red troncal de Microsoft, nunca por internet pública, con baja latencia y sin ninguna puerta de enlace en el camino. Emparejar VNet de la misma región es emparejamiento regional; emparejar VNet de regiones diferentes es emparejamiento global (global peering), que funciona de la misma manera. Las VNet pueden estar en suscripciones diferentes, e incluso en tenants de Microsoft Entra diferentes con los permisos adecuados.</p>
+<p>Un emparejamiento en realidad son dos vínculos, uno desde cada lado. En el portal, crear un emparejamiento en una VNet puede crear ambos vínculos a la vez; con la CLI o PowerShell creas ambos tú mismo (<code>az network vnet peering create</code> en cada lado). El estado del emparejamiento muestra Initiated cuando solo existe un lado y Connected cuando existen ambos. Las VNet no deben tener espacios de direcciones superpuestos. El tráfico de emparejamiento se cobra por los datos de entrada y salida, con tarifas más altas para el emparejamiento global.</p>
+<p>El emparejamiento es no transitivo. Si la VNet A está emparejada con la VNet B, y B está emparejada con C, A no puede llegar a C a través de B. Este es el dato más evaluado sobre el emparejamiento. En un diseño de hub-and-spoke (concentrador y radios), en el que los radios solo se emparejan con un concentrador central, los radios no pueden comunicarse entre sí de forma predeterminada. Para permitir el tráfico entre radios, puedes emparejar los radios directamente o enrutar el tráfico a través de una aplicación virtual de red o Azure Firewall en el concentrador usando rutas definidas por el usuario, con 'Allow forwarded traffic' habilitado en los emparejamientos. Azure Virtual Network Manager y Azure Virtual WAN también pueden crear topologías conectadas por ti.</p>
+<p>Cada vínculo de emparejamiento tiene configuraciones. Allow access to the remote VNet (activada de forma predeterminada) permite la comunicación. Allow forwarded traffic acepta tráfico que no se originó en la VNet emparejada, como el tráfico enrutado a través de una aplicación virtual. Allow gateway transit, establecida en el lado del concentrador, permite que las VNet emparejadas usen la puerta de enlace de VPN o ExpressRoute del concentrador. Use remote gateways, establecida en el lado del radio, indica al radio que use la puerta de enlace del par en lugar de la suya.</p>
+<p>El tránsito de puerta de enlace (gateway transit) es la forma en que una red hub-and-spoke comparte una sola puerta de enlace de VPN. El concentrador tiene la puerta de enlace y habilita Allow gateway transit; cada radio habilita Use remote gateways. Así los radios pueden llegar al entorno local a través de la puerta de enlace del concentrador, y el entorno local aprende las rutas hacia los radios. Un radio que ya tiene su propia puerta de enlace no puede usar puertas de enlace remotas, y una VNet solo puede usar puertas de enlace remotas de un emparejamiento. El tránsito de puerta de enlace funciona tanto con el emparejamiento global como con el regional.</p>
+<p>Solucionar problemas de emparejamiento normalmente se reduce a tres comprobaciones: ¿ambos vínculos están en Connected?, ¿se superponen los espacios de direcciones?, y ¿los grupos de seguridad de red o las tablas de rutas bloquean el tráfico? Las rutas efectivas de Network Watcher en la NIC de una VM muestran si existe una ruta 'VNet peering' hacia el espacio de direcciones remoto.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>VNet peering (emparejamiento de VNet)</dt><dd>Una conexión privada por la red troncal entre dos VNet que permite a los recursos comunicarse por IP privada.</dd><dt>Global peering (emparejamiento global)</dt><dd>Emparejamiento entre VNet de diferentes regiones de Azure.</dd><dt>Non-transitive (no transitivo)</dt><dd>La propiedad por la que el emparejamiento conecta solo las dos VNet involucradas, no las VNet emparejadas con cualquiera de ellas.</dd><dt>Gateway transit (tránsito de puerta de enlace)</dt><dd>Una opción de emparejamiento que permite a las VNet emparejadas usar la puerta de enlace de VPN o ExpressRoute de la VNet concentradora, combinada con Use remote gateways en el radio.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una empresa tiene una VNet concentradora con una puerta de enlace de VPN hacia su sede central y tres VNet radio para aplicaciones. Los emparejamientos del concentrador permiten el tránsito de puerta de enlace y cada radio usa puertas de enlace remotas, así que todos los radios llegan a la sede central a través de una sola puerta de enlace. Cuando Spoke1 necesita llegar a Spoke2, el administrador agrega rutas definidas por el usuario que pasan por Azure Firewall en el concentrador, porque el emparejamiento no es transitivo.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El emparejamiento es no transitivo: A-B y B-C no dan A-C. Allow gateway transit va en la VNet que tiene la puerta de enlace; Use remote gateways va en la VNet que la toma prestada. Los espacios de direcciones no deben superponerse.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Spoke1 y Spoke2 están emparejadas cada una con Hub. ¿Puede una VM de Spoke1 llegar a una VM de Spoke2?</summary><p>No de forma predeterminada, porque el emparejamiento es no transitivo; empareja los radios o enruta a través de una aplicación virtual en el concentrador.</p></details>
+<details class="sq"><summary>¿Qué configuración habilitas en un radio para que use la puerta de enlace de VPN del concentrador?</summary><p>Use remote gateways (con Allow gateway transit habilitado en el lado del concentrador).</p></details>
+<details class="sq"><summary>Un emparejamiento muestra el estado Initiated. ¿Qué significa?</summary><p>Solo se ha creado un lado del emparejamiento; crea el vínculo desde la otra VNet.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Azure Administrator gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-104/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../virtual-networks-and-subnets-address-space-planning-the-5-reserved-ips/">← Redes virtuales y subredes: planificación del espacio de dir</a><a href="../public-ip-addresses-standard-sku-static-allocation-zones/">Direcciones IP públicas: SKU Standard, asignación estática y →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Métricas personalizadas: PutMetricData, formato de métrica… · Lección de Developer Associate</title>
+<meta name="description" content="Los servicios de AWS publican muchas métricas automáticamente, pero no tus eventos de negocio: pedidos realizados, pagos rechazados, artículos en un carrit">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Métricas personalizadas: PutMetricData, formato de métrica… · Lección de Developer Associate">
+<meta property="og:description" content="Los servicios de AWS publican muchas métricas automáticamente, pero no tus eventos de negocio: pedidos realizados, pagos rechazados, artículos en un carrit">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/custom-metrics-putmetricdata-cloudwatch-embedded-metric-format-high-re/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/custom-metrics-putmetricdata-cloudwatch-embedded-metric-format-high-re/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/custom-metrics-putmetricdata-cloudwatch-embedded-metric-format-high-re/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Métricas personalizadas: PutMetricData, formato de métricas integradas de CloudWatch, métricas de alta resolución</h1>
+<article class="lbody">
+<p>Los servicios de AWS publican muchas métricas automáticamente, pero no tus eventos de negocio: pedidos realizados, pagos rechazados, artículos en un carrito, tiempo dedicado a llamar a la API de un socio. Las métricas personalizadas te permiten publicar esos números en Amazon CloudWatch para graficarlos, ponerlos en paneles y crear alarmas sobre ellos igual que con las métricas integradas.</p>
+<p>Una métrica se identifica por un espacio de nombres (namespace, un contenedor al que le pones nombre, como <code>MyShop/Checkout</code>; el prefijo <code>AWS/</code> está reservado para los servicios de AWS), un nombre de métrica y hasta 30 dimensiones, los pares nombre-valor que identifican una serie concreta, como <code>Environment=prod</code> o <code>PaymentProvider=acme</code>. Cada combinación única de dimensiones es una métrica separada, así que evita dimensiones con valores ilimitados como ID de usuario o ID de solicitud; crean cantidades enormes de métricas y de costo. Cada punto de datos tiene un valor, una unidad opcional (<code>Count</code>, <code>Milliseconds</code>, <code>Bytes</code>, etc.) y una marca de tiempo.</p>
+<p>La forma directa de publicar es la API <code>PutMetricData</code>. Puedes enviar valores individuales, arreglos de valores con conteos o conjuntos de estadísticas (Sum, Minimum, Maximum y SampleCount) que resumen muchas observaciones en un solo punto de datos. Agrupa varios valores en cada llamada, porque llamar a la API por cada evento individual agrega latencia a tu código y puede ser limitado. La identidad que llama necesita el permiso <code>cloudwatch:PutMetricData</code>, y puedes restringirlo a un espacio de nombres con la clave de condición <code>cloudwatch:namespace</code>.</p>
+<pre class="code" tabindex="0"><code>aws cloudwatch put-metric-data --namespace MyShop/Checkout \
+  --metric-name OrdersPlaced --dimensions Environment=prod \
+  --unit Count --value 1 --storage-resolution 1</code></pre>
+<p>La resolución importa. Las métricas de resolución estándar tienen una granularidad de un minuto. Las métricas de alta resolución, publicadas con <code>StorageResolution</code> en 1, conservan los datos con granularidad de un segundo para que puedas ver picos cortos, y las alarmas sobre ellas pueden usar períodos de 10 o 30 segundos (además de múltiplos de 60). Los datos de alta resolución se conservan con detalle de un segundo solo por poco tiempo antes de agregarse, y cuestan más cuando se usan en alarmas, así que úsalos solo cuando los segundos importen, como en el trading en tiempo real o en señales de autoescalado.</p>
+<p>El formato de métricas integradas de CloudWatch (embedded metric format, EMF) suele ser la mejor opción desde Lambda y contenedores. En lugar de llamar a una API, escribes una línea de log JSON estructurada que incluye un objeto <code>_aws</code> que describe qué campos son métricas y cuáles son dimensiones. CloudWatch Logs extrae las métricas de forma automática y asíncrona, así que no hay llamada a la API en la ruta de la solicitud, ni latencia adicional ni riesgo de limitación, y la línea de log completa, incluidos detalles de alta cardinalidad como el ID de pedido, sigue siendo consultable en Logs Insights. Bibliotecas como las bibliotecas cliente de EMF y las utilidades de métricas de Powertools for AWS Lambda generan este formato por ti.</p>
+<pre class="code" tabindex="0"><code>{&quot;_aws&quot;: {&quot;Timestamp&quot;: 1735689600000, &quot;CloudWatchMetrics&quot;: [{&quot;Namespace&quot;: &quot;MyShop/Checkout&quot;, &quot;Dimensions&quot;: [[&quot;Environment&quot;]], &quot;Metrics&quot;: [{&quot;Name&quot;: &quot;OrderValue&quot;, &quot;Unit&quot;: &quot;None&quot;}]}]}, &quot;Environment&quot;: &quot;prod&quot;, &quot;OrderValue&quot;: 42.5, &quot;orderId&quot;: &quot;o-981&quot;}</code></pre>
+<p>En las instancias EC2, el uso de memoria y de disco no son métricas integradas; el agente de CloudWatch los recopila y los publica como métricas personalizadas, lo cual es otro escenario común del examen.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Namespace (espacio de nombres)</dt><dd>Un contenedor para métricas de CloudWatch, como MyShop/Checkout; el prefijo AWS/ está reservado para los servicios de AWS.</dd><dt>PutMetricData</dt><dd>La API de CloudWatch para publicar puntos de datos de métricas personalizadas o conjuntos de estadísticas.</dd><dt>Embedded metric format (EMF, formato de métricas integradas)</dt><dd>Un formato de log JSON estructurado del que CloudWatch Logs extrae métricas automáticamente.</dd><dt>High-resolution metric (métrica de alta resolución)</dt><dd>Una métrica personalizada almacenada con granularidad de un segundo al configurar StorageResolution en 1.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una función Lambda de pago llamaba a PutMetricData en cada pedido, lo que agregaba latencia y a veces provocaba limitación. El equipo cambia a imprimir líneas de log EMF con las métricas OrderValue y PaymentLatency y una dimensión Environment. Las métricas siguen apareciendo en CloudWatch, la función es más rápida y cada línea de log sigue llevando el ID de pedido para la investigación.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Publicar métricas desde Lambda sin llamadas a la API ni latencia adicional apunta al formato de métricas integradas. ¿Necesitas granularidad de menos de un minuto o alarmas de 10 segundos? Métricas de alta resolución con StorageResolution 1. ¿Uso de memoria en EC2? El agente de CloudWatch.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué evitar usar un ID de usuario como dimensión de una métrica?</summary><p>Cada combinación distinta de dimensiones es una métrica separada, así que los valores ilimitados crean cantidades enormes de métricas y de costo.</p></details>
+<details class="sq"><summary>¿Cuál es la ventaja de EMF sobre PutMetricData en Lambda?</summary><p>Las métricas se extraen de los logs de forma asíncrona, así que no hay llamada síncrona a la API, ni latencia ni limitación, y el contexto detallado se queda en la línea de log.</p></details>
+<details class="sq"><summary>¿Cómo publicas una métrica de alta resolución?</summary><p>Configura StorageResolution en 1 en PutMetricData (o su equivalente en EMF), lo que da granularidad de un segundo.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../aws-x-ray-segments-subsegments-annotations-vs-metadata-sampling-active/">← AWS X-Ray: segmentos, subsegmentos, anotaciones vs metadatos</a><a href="../cloudwatch-alarms-with-sns-notifications-structured-logging-and-correl/">Alarmas de CloudWatch con notificaciones de SNS; logging est →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LVM (pvcreate, vgextend, lvextend -r) y RAID por software … · Lección de Linux+</title>
+<meta name="description" content="Las particiones simples son rígidas: agrandar una normalmente implica volver a particionar. LVM (Logical Volume Manager) agrega una capa flexible entre los">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="LVM (pvcreate, vgextend, lvextend -r) y RAID por software … · Lección de Linux+">
+<meta property="og:description" content="Las particiones simples son rígidas: agrandar una normalmente implica volver a particionar. LVM (Logical Volume Manager) agrega una capa flexible entre los">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/linux-plus/lessons/lvm-pvcreate-vgextend-lvextend-r-and-software-raid-with-mdadm/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/linux-plus/lessons/lvm-pvcreate-vgextend-lvextend-r-and-software-raid-with-mdadm/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../linux-plus/">Linux+</a> / <a href="../">Lecciones</a> · <a href="../../../../linux-plus/lessons/lvm-pvcreate-vgextend-lvextend-r-and-software-raid-with-mdadm/" hreflang="en" lang="en">English</a></p>
+<p class="note">CompTIA Linux+ XK0-006</p>
+<h1>LVM (pvcreate, vgextend, lvextend -r) y RAID por software con mdadm</h1>
+<article class="lbody">
+<p>Las particiones simples son rígidas: agrandar una normalmente implica volver a particionar. LVM (Logical Volume Manager) agrega una capa flexible entre los discos y los sistemas de archivos para que puedas agrupar espacio, agrandar volúmenes en línea y tomar instantáneas. El RAID por software (Redundant Array of Independent Disks) con <code>mdadm</code> combina discos para obtener redundancia o velocidad. Ambos son habilidades de almacenamiento centrales de Linux+.</p>
+<p>LVM tiene tres capas. Un PV (physical volume, volumen físico) es un disco o partición inicializado para LVM con <code>pvcreate /dev/sdb</code>. Un VG (volume group, grupo de volúmenes) agrupa uno o más PV en un solo almacén de espacio: <code>vgcreate vgdata /dev/sdb</code>. Un LV (logical volume, volumen lógico) se toma de un VG y se comporta como una partición: <code>lvcreate -n lvweb -L 20G vgdata</code> crea <code>/dev/vgdata/lvweb</code> (también accesible como <code>/dev/mapper/vgdata-lvweb</code>). Luego pones un sistema de archivos en el LV y lo montas. Los comandos de visualización <code>pvs</code>, <code>vgs</code> y <code>lvs</code> dan resúmenes de una línea, mientras que <code>pvdisplay</code>, <code>vgdisplay</code> y <code>lvdisplay</code> dan el detalle.</p>
+<p>Ampliar el almacenamiento es donde LVM brilla. Si el VG tiene espacio libre, <code>lvextend -L +10G /dev/vgdata/lvweb</code> agrega 10 GiB al LV, y <code>lvextend -l +100%FREE</code> usa todo el espacio restante. La opción <code>-r</code> (<code>--resizefs</code>) también agranda el sistema de archivos en el mismo paso, llamando a la herramienta correcta para ext4 o XFS. Sin <code>-r</code>, debes agrandar el sistema de archivos tú mismo con <code>resize2fs</code> o <code>xfs_growfs</code>, o el espacio extra queda sin usar. Si el VG se quedó sin espacio, agrega un disco: <code>pvcreate /dev/sdc</code> y luego <code>vgextend vgdata /dev/sdc</code>, y después extiende el LV. Reducir es más arriesgado: ext4 se puede reducir mientras está desmontado, y XFS no se puede reducir en absoluto. Las instantáneas de LVM (<code>lvcreate -s</code>) capturan una vista en un momento dado, útil para respaldos consistentes.</p>
+<p>El RAID por software se construye con <code>mdadm</code>, que crea dispositivos <code>/dev/md</code>. Conoce los niveles: RAID 0 reparte (stripe) los datos entre discos para ganar velocidad sin redundancia; RAID 1 replica (mirror) los datos y sobrevive a la falla de un disco; RAID 5 reparte con paridad distribuida, necesita al menos tres discos y sobrevive a una falla; RAID 6 usa doble paridad, necesita al menos cuatro discos y sobrevive a dos fallas; RAID 10 reparte sobre pares en espejo para obtener velocidad más redundancia.</p>
+<p>Crear un espejo se ve así: <code>mdadm --create /dev/md0 --level=1 --raid-devices=2 /dev/sdb1 /dev/sdc1</code>. Revisa el estado con <code>cat /proc/mdstat</code> o <code>mdadm --detail /dev/md0</code>. Para que el arreglo se ensamble de forma consistente en el arranque, guarda su definición con <code>mdadm --detail --scan &gt;&gt; /etc/mdadm.conf</code> (la ruta es <code>/etc/mdadm/mdadm.conf</code> en sistemas de la familia Debian). Para reemplazar un disco: márcalo como fallido con <code>--fail</code>, quítalo con <code>--remove</code>, luego agrega el disco nuevo con <code>--add</code> y observa la reconstrucción en <code>/proc/mdstat</code>.</p>
+<p>RAID y LVM a menudo se apilan: RAID proporciona la redundancia por debajo y LVM proporciona volúmenes flexibles por encima. Recuerda que ninguno de los dos es un respaldo; RAID protege contra la falla de un disco, no contra borrados, corrupción o ransomware.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>PV / VG / LV</dt><dd>Physical volume (un disco preparado para LVM), volume group (un conjunto de PV) y logical volume (un volumen utilizable tomado de ese conjunto).</dd><dt>lvextend -r</dt><dd>Extiende un volumen lógico y redimensiona su sistema de archivos en el mismo comando.</dd><dt>vgextend</dt><dd>Agrega un nuevo volumen físico a un grupo de volúmenes existente para aumentar su espacio libre.</dd><dt>mdadm</dt><dd>La herramienta de Linux para crear, monitorear y administrar arreglos RAID por software (/dev/mdN).</dd><dt>/proc/mdstat</dt><dd>Un archivo de estado del kernel que muestra cada arreglo RAID por software, sus miembros y el progreso de cualquier reconstrucción.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>El volumen /var/lib/pgsql de un servidor de base de datos está al 95 por ciento. vgs no muestra espacio libre en el grupo de volúmenes, así que conectas un nuevo disco virtual, ejecutas pvcreate /dev/sdd y vgextend vgdb /dev/sdd, y luego lvextend -r -L +50G /dev/vgdb/lvpg. El sistema de archivos XFS crece en línea y la base de datos nunca se detiene.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si un LV se extendió pero df todavía muestra el tamaño anterior, el sistema de archivos no se redimensionó; la solución es resize2fs (ext4) o xfs_growfs (XFS), o usar lvextend -r la próxima vez.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Ordena estos pasos para agregar el espacio de un disco nuevo a un LV existente: lvextend, pvcreate, vgextend.</summary><p>pvcreate sobre el disco, vgextend del grupo de volúmenes con él y luego lvextend del volumen lógico (con -r para agrandar el sistema de archivos).</p></details>
+<details class="sq"><summary>¿Qué nivel de RAID necesita al menos tres discos y sobrevive a la falla de un disco usando paridad?</summary><p>RAID 5.</p></details>
+<details class="sq"><summary>¿Cómo compruebas si un arreglo RAID por software se está reconstruyendo?</summary><p>cat /proc/mdstat o mdadm --detail /dev/mdN.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Linux+ gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../linux-plus/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../storage-partitions-fdisk-gdisk-parted-lsblk-blkid-uuids-etc-fstab-opti/">← Almacenamiento: particiones (fdisk, gdisk, parted), lsblk, b</a><a href="../filesystems-ext4-xfs-btrfs-mkfs-mount-resize2fs-xfs-growfs-df-and-du/">Sistemas de archivos: ext4, XFS, Btrfs; mkfs, mount, resize2 →</a></nav>
+</main>
+</body>
+</html>

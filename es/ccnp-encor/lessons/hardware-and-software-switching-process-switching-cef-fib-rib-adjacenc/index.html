@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Conmutación por hardware y por software: process switching… · Lección de ENCOR</title>
+<meta name="description" content="Un router tiene que tomar una decisión de reenvío para cada paquete: buscar el destino, elegir una interfaz de salida y un siguiente salto, reescribir el e">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Conmutación por hardware y por software: process switching… · Lección de ENCOR">
+<meta property="og:description" content="Un router tiene que tomar una decisión de reenvío para cada paquete: buscar el destino, elegir una interfaz de salida y un siguiente salto, reescribir el e">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/hardware-and-software-switching-process-switching-cef-fib-rib-adjacenc/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/hardware-and-software-switching-process-switching-cef-fib-rib-adjacenc/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ccnp-encor/">ENCOR</a> / <a href="../">Lecciones</a> · <a href="../../../../ccnp-encor/lessons/hardware-and-software-switching-process-switching-cef-fib-rib-adjacenc/" hreflang="en" lang="en">English</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2</p>
+<h1>Conmutación por hardware y por software: process switching, CEF, FIB, RIB, tabla de adyacencias</h1>
+<article class="lbody">
+<p>Un router tiene que tomar una decisión de reenvío para cada paquete: buscar el destino, elegir una interfaz de salida y un siguiente salto, reescribir el encabezado de Capa 2 y enviarlo. La forma en que se toma esa decisión determina qué tan rápido puede reenviar el dispositivo. Los dispositivos Cisco han usado tres generaciones de métodos de conmutación, y ENCOR espera que sepas en qué se diferencian y qué tablas intervienen.</p>
+<p>Process switching es el método más antiguo y más lento. Cada paquete se entrega a la CPU principal, que ejecuta un proceso que busca el destino en la tabla de enrutamiento, resuelve la dirección de Capa 2 del siguiente salto y reescribe la trama. Cada paquete repite toda la búsqueda. Hoy, process switching se usa solo para el tráfico que no puede manejarse de otra forma, como los paquetes dirigidos al propio router o los paquetes que necesitan un manejo especial.</p>
+<p>Fast switching mejoró esto con una caché de rutas: el primer paquete hacia un destino se conmutaba por proceso y el resultado se guardaba en caché para que los paquetes posteriores hacia el mismo destino usaran la caché. La debilidad era que la caché se construía bajo demanda y había que invalidarla cuando cambiaban las rutas, así que una ráfaga de destinos nuevos todavía podía saturar la CPU.</p>
+<p>Cisco Express Forwarding (CEF) es el método actual y está habilitado por defecto. CEF construye sus tablas por adelantado a partir del plano de control en lugar de bajo demanda. Los protocolos de enrutamiento y las rutas estáticas llenan la RIB (Routing Information Base, la tabla de enrutamiento que ves con <code>show ip route</code>). A partir de la RIB, CEF construye la FIB (Forwarding Information Base), una copia de las mejores rutas optimizada para búsquedas rápidas, con los siguientes saltos recursivos ya resueltos. Por separado, CEF construye la tabla de adyacencias a partir de ARP (IPv4) y neighbor discovery (IPv6), que contiene el encabezado de reescritura de Capa 2 ya preparado para cada siguiente salto conectado directamente. Una entrada de la FIB apunta a una adyacencia, así que el reenvío es una sola búsqueda de coincidencia más larga seguida de una reescritura del encabezado. Como las tablas están preconstruidas, el primer paquete hacia un destino se reenvía tan rápido como el milésimo.</p>
+<p>En plataformas con hardware de reenvío dedicado, como los switches Catalyst, la FIB y la información de adyacencias se programan en ASIC (circuitos integrados de aplicación específica) y en TCAM, así que el reenvío ocurre completamente en hardware sin la CPU. Esto se suele llamar conmutación por hardware (hardware switching), y a las versiones basadas en CPU se les llama conmutación por software (software switching). En los routers por software, CEF se ejecuta en software en la CPU, pero sigue siendo mucho más rápido que process switching.</p>
+<p>Algunas entradas de adyacencia son especiales. Una adyacencia glean significa que el destino está en una subred conectada pero ARP todavía no lo ha resuelto, así que el paquete se envía a la CPU para disparar ARP. Una adyacencia punt envía paquetes a la CPU para funciones que CEF no puede manejar. Las adyacencias drop y null descartan el tráfico. Puedes inspeccionar estas tablas con <code>show ip cef</code>, <code>show ip cef &lt;prefix&gt; detail</code> y <code>show adjacency detail</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>RIB</dt><dd>Routing Information Base: la tabla de enrutamiento construida por los protocolos de enrutamiento y las rutas estáticas y conectadas.</dd><dt>FIB</dt><dd>Forwarding Information Base: la copia de CEF, optimizada para búsquedas, de las mejores rutas de la RIB con los siguientes saltos resueltos.</dd><dt>Adjacency table (tabla de adyacencias)</dt><dd>La tabla de CEF con los siguientes saltos conectados directamente y sus encabezados de reescritura de Capa 2 preconstruidos, generada a partir de ARP o ND.</dd><dt>Process switching</dt><dd>Reenviar cada paquete mediante un proceso de la CPU con una búsqueda completa en la tabla de enrutamiento; el método más lento.</dd><dt>CEF</dt><dd>Cisco Express Forwarding: preconstruye la FIB y la tabla de adyacencias para que el reenvío no requiera trabajo de CPU por destino.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un ingeniero nota que el tráfico hacia un servidor es lento. <code>show ip cef 10.20.30.40 detail</code> muestra el siguiente salto correcto, pero <code>show adjacency detail</code> revela que el siguiente salto está en estado glean porque ARP está fallando en esa VLAN, lo que envía los paquetes a la CPU. Corregir la discrepancia de VLAN permite que ARP resuelva y el tráfico vuelve al reenvío por hardware.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> La RIB la construye el plano de control; la FIB y la tabla de adyacencias las deriva CEF de ella para el plano de datos. Las tablas de CEF se construyen antes de que llegue el tráfico, a diferencia de la caché de rutas bajo demanda de fast switching.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿De dónde obtiene CEF la información de reescritura de Capa 2 para un siguiente salto?</summary><p>De la tabla de adyacencias, que CEF construye a partir de las entradas de ARP (IPv4) o de neighbor discovery (IPv6).</p></details>
+<details class="sq"><summary>¿Por qué CEF es más rápido que fast switching para el primer paquete hacia un destino nuevo?</summary><p>La FIB y la tabla de adyacencias de CEF se preconstruyen a partir de la RIB y de ARP, mientras que fast switching tenía que conmutar por proceso el primer paquete para crear una entrada en la caché.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia ENCOR gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ccnp-encor/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../qos-components-classification-and-marking-dscp-cos-policing-shaping-qu/">← Componentes de QoS: clasificación y marcado (DSCP, CoS), pol</a><a href="../cam-and-tcam-tables-and-what-each-stores/">Tablas CAM y TCAM y lo que almacena cada una →</a></nav>
+</main>
+</body>
+</html>

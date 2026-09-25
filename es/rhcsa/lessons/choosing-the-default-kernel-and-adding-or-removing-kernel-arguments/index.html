@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Elegir el kernel predeterminado y añadir o quitar argument… · Lección de RHCSA</title>
+<meta name="description" content="RHEL mantiene varios kernels instalados a la vez, para que una actualización defectuosa nunca te deje sin uno que funcione. Por defecto, dnf conserva un nú">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Elegir el kernel predeterminado y añadir o quitar argument… · Lección de RHCSA">
+<meta property="og:description" content="RHEL mantiene varios kernels instalados a la vez, para que una actualización defectuosa nunca te deje sin uno que funcione. Por defecto, dnf conserva un nú">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/choosing-the-default-kernel-and-adding-or-removing-kernel-arguments/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/choosing-the-default-kernel-and-adding-or-removing-kernel-arguments/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/choosing-the-default-kernel-and-adding-or-removing-kernel-arguments/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Elegir el kernel predeterminado y añadir o quitar argumentos del kernel</h1>
+<article class="lbody">
+<p>RHEL mantiene varios kernels instalados a la vez, para que una actualización defectuosa nunca te deje sin uno que funcione. Por defecto, dnf conserva un número limitado de versiones del kernel y elimina la más antigua cuando llega una nueva. La entrada de arranque predeterminada suele ser el kernel más reciente, pero puede que necesites arrancar uno anterior de forma permanente, por ejemplo mientras se investiga un problema de un controlador en el kernel nuevo.</p>
+<p>Empieza viendo qué está instalado: <code>rpm -q kernel</code> lista los paquetes del kernel y <code>grubby --info=ALL</code> lista las entradas de arranque con sus números de índice y rutas del kernel. <code>grubby --default-kernel</code> imprime la ruta del kernel predeterminado, y <code>grubby --default-index</code> imprime su posición en el menú, contando desde 0.</p>
+<p>Para cambiar el predeterminado de forma permanente, dale a <code>grubby</code> la ruta del kernel o un índice. El ajuste se guarda como la entrada guardada (saved entry) en el bloque de entorno de GRUB, y <code>uname -r</code> confirma qué kernel se está ejecutando después del reinicio.</p>
+<pre class="code" tabindex="0"><code>grubby --info=ALL | grep -E '^(index|kernel)'
+grubby --set-default /boot/vmlinuz-&lt;older-version&gt;
+# o: grubby --set-default-index=1
+grubby --default-kernel
+reboot
+uname -r</code></pre>
+<p>Los argumentos del kernel ajustan el kernel al arrancar. Algunos ejemplos que puedes encontrar son <code>quiet</code> y <code>rhgb</code> (reducen los mensajes y muestran una pantalla de arranque gráfica), <code>console=</code> para enviar la salida a una consola serie, <code>systemd.unit=rescue.target</code> para recuperación y <code>crashkernel=</code> para reservar memoria para los volcados de fallos. Añádelos o quítalos con <code>--args</code> y <code>--remove-args</code>. <code>--update-kernel</code> acepta <code>ALL</code>, <code>DEFAULT</code> o la ruta de un kernel concreto.</p>
+<pre class="code" tabindex="0"><code>grubby --update-kernel=DEFAULT --args='audit=1'
+grubby --update-kernel=ALL --remove-args='quiet'
+grubby --info=DEFAULT | grep args</code></pre>
+<p>Distingue los cambios permanentes de los puntuales. Los argumentos añadidos con grubby persisten. Los argumentos escritos en el menú de GRUB después de presionar e se aplican solo a ese arranque, que es exactamente lo que quieres para tareas de recuperación como arrancar en <code>rescue.target</code> o <code>rd.break</code>. Comprueba siempre el resultado con <code>cat /proc/cmdline</code> después de reiniciar.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Kernel argument (argumento del kernel)</dt><dd>Una opción en la línea de comandos del kernel que cambia el comportamiento del kernel o de systemd al arrancar.</dd><dt>grubby --set-default</dt><dd>Establece la entrada de arranque predeterminada por la ruta del kernel, de forma persistente tras los reinicios.</dd><dt>uname -r</dt><dd>Imprime la versión (release) del kernel en ejecución.</dd><dt>/proc/cmdline</dt><dd>Un archivo virtual que muestra la línea de comandos con la que arrancó el kernel en ejecución.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Tras una actualización, un controlador de almacenamiento falla con el kernel más reciente. Listas las entradas con grubby --info=ALL, ejecutas grubby --set-default con la ruta vmlinuz del kernel anterior, reinicias, y uname -r muestra la versión anterior mientras el kernel nuevo sigue instalado para probarlo más tarde.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Las ediciones hechas en el menú de GRUB con e duran solo un arranque. Si una tarea dice persistente, usa grubby (o /etc/default/grub con grub2-mkconfig) y verifícalo después de un reinicio.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo ves qué kernel arrancará por defecto?</summary><p>grubby --default-kernel (o --default-index para ver su posición).</p></details>
+<details class="sq"><summary>¿Qué comando quita el argumento quiet de todos los kernels?</summary><p>grubby --update-kernel=ALL --remove-args='quiet'.</p></details>
+<details class="sq"><summary>¿Cuál es la diferencia entre añadir un argumento en el menú de GRUB y con grubby?</summary><p>La edición en el menú de GRUB se aplica solo a ese arranque; grubby cambia la entrada guardada para que persista.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../modifying-the-boot-loader-grubby-etc-default-grub-and-grub2-mkconfig/">← Modificar el cargador de arranque: grubby, /etc/default/grub</a><a href="../configuring-static-and-dhcp-ipv4-and-ipv6-addresses-with-nmcli-ipv4-me/">Configurar direcciones IPv4 e IPv6 estáticas y por DHCP con  →</a></nav>
+</main>
+</body>
+</html>

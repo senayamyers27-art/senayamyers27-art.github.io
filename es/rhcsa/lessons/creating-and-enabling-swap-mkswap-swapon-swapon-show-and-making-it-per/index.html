@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Crear y habilitar swap (mkswap, swapon, swapon --show) y h… · Lección de RHCSA</title>
+<meta name="description" content="El swap es espacio en disco que el kernel usa como desbordamiento de la memoria. Cuando la RAM se llena, el kernel mueve al swap las páginas que no se han ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Crear y habilitar swap (mkswap, swapon, swapon --show) y h… · Lección de RHCSA">
+<meta property="og:description" content="El swap es espacio en disco que el kernel usa como desbordamiento de la memoria. Cuando la RAM se llena, el kernel mueve al swap las páginas que no se han ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/creating-and-enabling-swap-mkswap-swapon-swapon-show-and-making-it-per/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/creating-and-enabling-swap-mkswap-swapon-swapon-show-and-making-it-per/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/creating-and-enabling-swap-mkswap-swapon-swapon-show-and-making-it-per/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Crear y habilitar swap (mkswap, swapon, swapon --show) y hacerlo persistente</h1>
+<article class="lbody">
+<p>El swap es espacio en disco que el kernel usa como desbordamiento de la memoria. Cuando la RAM se llena, el kernel mueve al swap las páginas que no se han usado recientemente para que los programas activos puedan seguir ejecutándose. El swap es mucho más lento que la RAM, así que es una red de seguridad más que una mejora de rendimiento, pero muchas cargas de trabajo y el examen RHCSA esperan que lo añadas cuando se te pida. El swap puede estar en una partición, en un volumen lógico o en un archivo; las tareas del examen normalmente piden una partición o un volumen lógico de un tamaño dado.</p>
+<p>El flujo de trabajo tiene tres pasos. Primero, crea el espacio: una partición (en <code>fdisk</code> establece el tipo en Linux swap, en <code>parted</code> usa <code>mkpart</code> con el tipo de sistema de archivos <code>linux-swap</code>, en <code>gdisk</code> usa el código de tipo 8200) o un volumen lógico con <code>lvcreate</code>. Segundo, escribe una firma de swap con <code>mkswap</code>, que también asigna un UUID (universally unique identifier). Tercero, actívalo con <code>swapon</code>. Revisa el resultado con <code>swapon --show</code> o <code>free -h</code>.</p>
+<pre class="code" tabindex="0"><code>mkswap /dev/vdb2            # escribe la firma, imprime el UUID
+swapon /dev/vdb2            # activar ahora
+swapon --show               # listar las áreas de swap activas
+free -h                     # la línea Swap: muestra el nuevo total</code></pre>
+<p>La activación con <code>swapon</code> no sobrevive a un reinicio. Para que el swap sea persistente, añade una línea a <code>/etc/fstab</code>. Para swap, el campo del punto de montaje es <code>none</code> (o <code>swap</code>), el tipo es <code>swap</code> y los campos dump y fsck son ambos 0. Usa el UUID de <code>mkswap</code> o <code>blkid</code> en lugar del nombre del dispositivo, porque los nombres como <code>/dev/vdb</code> pueden cambiar entre arranques.</p>
+<pre class="code" tabindex="0"><code>UUID=3f1c...-9a2e  none  swap  defaults  0 0</code></pre>
+<p>Después de editar <code>/etc/fstab</code>, prueba la entrada sin reiniciar: ejecuta <code>swapon -a</code>, que activa todas las entradas de swap listadas en el archivo, y luego <code>swapon --show</code> otra vez. Si ya habías activado el dispositivo a mano, desactívalo primero con <code>swapoff /dev/vdb2</code> para que <code>swapon -a</code> demuestre que la línea de fstab funciona. También puedes establecer una prioridad con la opción <code>pri=</code>; el kernel usa primero las áreas de swap de mayor prioridad.</p>
+<p>Los errores comunes son olvidar el paso de <code>mkswap</code> (swapon falla entonces con una firma no válida), poner la ruta de un punto de montaje en el segundo campo o escribir mal el UUID. En el examen, un sistema que no arranca por una línea de fstab rota cuesta mucho más que la tarea de swap, así que prueba siempre con <code>swapon -a</code> y <code>findmnt --verify</code> antes de reiniciar.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Swap space (espacio swap)</dt><dd>Espacio en disco que usa el kernel para guardar páginas de memoria que no caben en la RAM.</dd><dt>mkswap</dt><dd>Escribe una firma de swap y un UUID en una partición, volumen lógico o archivo para que pueda usarse como swap.</dd><dt>swapon / swapoff</dt><dd>Activan o desactivan áreas de swap; swapon -a activa todas las entradas de swap de /etc/fstab.</dd><dt>UUID</dt><dd>Un identificador único universal guardado en un sistema de archivos o en una firma de swap, usado para referirse a un dispositivo de forma fiable en /etc/fstab.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Te piden añadir una partición swap de 512 MiB en /dev/vdb que esté activa después de reiniciar. Creas la partición 2 con parted como linux-swap, ejecutas mkswap /dev/vdb2, copias el UUID en /etc/fstab con none, swap, defaults, 0 0, luego ejecutas swapon -a y lo confirmas con swapon --show antes de reiniciar.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> La persistencia es lo que revisan los evaluadores. Un área de swap activada solo con swapon desaparece al reiniciar, así que la tarea falla a menos que exista la línea en /etc/fstab y swapon -a la active sin errores.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué tres comandos llevan una nueva partición a ser swap activo y verificado?</summary><p>mkswap para escribir la firma, swapon para activarlo y swapon --show (o free -h) para verificarlo.</p></details>
+<details class="sq"><summary>¿Qué va en los campos del punto de montaje y de fsck de una línea de swap en /etc/fstab?</summary><p>El punto de montaje es none (o swap) y los campos dump y orden de fsck son ambos 0, ya que el swap nunca se monta ni se revisa.</p></details>
+<details class="sq"><summary>¿Por qué usar el UUID en lugar de /dev/vdb2 en /etc/fstab?</summary><p>Los nombres de dispositivo pueden cambiar entre arranques cuando se añaden discos o se detectan en otro orden, mientras que el UUID permanece con la firma de swap.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../adding-new-partitions-logical-volumes-and-swap-without-destroying-exis/">← Añadir nuevas particiones, volúmenes lógicos y swap sin dest</a><a href="../creating-vfat-ext4-and-xfs-file-systems-mkfs-vfat-mkfs-ext4-mkfs-xfs/">Crear sistemas de archivos vfat, ext4 y xfs (mkfs.vfat, mkfs →</a></nav>
+</main>
+</body>
+</html>

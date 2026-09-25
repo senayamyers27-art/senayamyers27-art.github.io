@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Requests y limits de recursos, LimitRange y ResourceQuota … · Lección de CKA</title>
+<meta name="description" content="Cada contenedor puede declarar requests (solicitudes) y limits (límites) de recursos para CPU y memoria. Determinan la programación, la aplicación de límit">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Requests y limits de recursos, LimitRange y ResourceQuota … · Lección de CKA">
+<meta property="og:description" content="Cada contenedor puede declarar requests (solicitudes) y limits (límites) de recursos para CPU y memoria. Determinan la programación, la aplicación de límit">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/resource-requests-and-limits-limitrange-and-resourcequota-as-admission/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/resource-requests-and-limits-limitrange-and-resourcequota-as-admission/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/resource-requests-and-limits-limitrange-and-resourcequota-as-admission/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Requests y limits de recursos, LimitRange y ResourceQuota como controles de admisión</h1>
+<article class="lbody">
+<p>Cada contenedor puede declarar requests (solicitudes) y limits (límites) de recursos para CPU y memoria. Determinan la programación, la aplicación de límites en tiempo de ejecución y la Quality of Service, y los administradores aplican políticas sobre ellos con LimitRange y ResourceQuota.</p>
+<p>Un request es lo que reserva el scheduler. Un nodo solo se elige si la suma de los requests de los Pods que ya están ahí más los requests del nuevo Pod cabe dentro de la capacidad allocatable del nodo. El uso real no le importa al scheduler. Un limit es un techo que se aplica en tiempo de ejecución: un contenedor que supera su límite de CPU es estrangulado (throttled), mientras que uno que supera su límite de memoria es terminado por el kernel con el estado OOMKilled. La CPU se mide en cores o millicores (<code>500m</code> es medio core), y la memoria en bytes con sufijos como <code>Mi</code> y <code>Gi</code>.</p>
+<pre class="code" tabindex="0"><code>resources:
+  requests: {cpu: 250m, memory: 128Mi}
+  limits:   {cpu: 500m, memory: 256Mi}</code></pre>
+<p>Los requests y limits también definen la clase QoS de un Pod. Guaranteed significa que cada contenedor tiene requests iguales a los limits tanto para CPU como para memoria. Burstable significa que hay al menos un request o limit definido, pero no llega a Guaranteed. BestEffort significa que no hay ninguno. Bajo presión de memoria, el kubelet desaloja primero los Pods BestEffort y luego los Burstable que usan más de lo que solicitaron.</p>
+<p>Un LimitRange es una política de namespace que se aplica en la admisión. Puede definir requests y limits por defecto para los contenedores que no los indican (<code>defaultRequest</code> y <code>default</code>), así como mínimos, máximos y una proporción máxima entre limit y request por contenedor o por Pod. Solo se aplica a los Pods creados después de que exista; los Pods existentes no cambian. Un Pod que viola el mínimo o el máximo es rechazado con un error claro del API server.</p>
+<p>Un ResourceQuota pone un tope al consumo total en un namespace: sumas como <code>requests.cpu</code>, <code>limits.memory</code> y <code>requests.storage</code>, y cantidades de objetos como <code>pods</code>, <code>services</code> o <code>persistentvolumeclaims</code>. Una vez que existe una cuota sobre recursos de cómputo, cada Pod nuevo en ese namespace debe especificar esos requests o limits, o recibir valores por defecto de un LimitRange; de lo contrario, se rechaza. Revisa el uso con <code>kubectl describe quota -n &lt;ns&gt;</code>, que muestra Used y Hard para cada recurso.</p>
+<pre class="code" tabindex="0"><code>kubectl create quota team-a --hard=requests.cpu=2,requests.memory=4Gi,pods=10 -n team-a</code></pre>
+<p>Ambos son controles de admisión, así que sus rechazos ocurren en el momento de la creación. Cuando una cuota rechaza los Pods de un Deployment, el objeto Deployment en sí se crea sin problema, pero su ReplicaSet no puede crear Pods. Ves la razón en <code>kubectl describe rs</code> o en los eventos del namespace, no en <code>kubectl get pods</code>, que simplemente muestra menos Pods de los esperados.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Request (solicitud)</dt><dd>La cantidad de CPU o memoria reservada para un contenedor y usada en las decisiones de programación.</dd><dt>Limit (límite)</dt><dd>El máximo de CPU (se estrangula) o de memoria (se termina por OOM) que puede usar un contenedor.</dd><dt>LimitRange</dt><dd>Una política de admisión de namespace para valores por defecto, mínimos y máximos por contenedor o por Pod.</dd><dt>ResourceQuota</dt><dd>Un tope por namespace sobre el uso agregado de recursos y la cantidad de objetos.</dd><dt>QoS class (clase QoS)</dt><dd>Guaranteed, Burstable o BestEffort, derivada de los requests y limits y usada para el orden de desalojo.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un Deployment en el namespace team-a muestra 0/3 listos y ningún Pod. <code>kubectl describe rs</code> informa 'failed quota: must specify limits.memory'. Agregar un LimitRange con limits de memoria por defecto, o agregar limits a la plantilla de Pod, permite que el ReplicaSet cree los Pods.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si los Pods no existen en absoluto, normalmente la admisión los rechazó (cuota o LimitRange), así que mira los eventos del ReplicaSet. Si los Pods existen pero están en Pending, normalmente la programación falló por requests insuficientes.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué pasa cuando un contenedor supera su límite de memoria y qué pasa cuando supera su límite de CPU?</summary><p>Memoria: se termina por OOM. CPU: se estrangula pero sigue ejecutándose.</p></details>
+<details class="sq"><summary>¿Qué clase QoS recibe un Pod cuando cada contenedor define requests y limits iguales de CPU y memoria?</summary><p>Guaranteed.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../configmaps-and-secrets-creation-env-and-volume-consumption-immutable-o/">← ConfigMaps y Secrets: creación, consumo como env y como volu</a><a href="../scheduling-nodeselector-nodename-node-affinity-required-vs-preferred/">Programación: nodeSelector, nodeName y node affinity (requir →</a></nav>
+</main>
+</body>
+</html>

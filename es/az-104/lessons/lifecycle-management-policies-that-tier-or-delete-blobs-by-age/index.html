@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Directivas de administración del ciclo de vida que cambian… · Lección de Azure Administrator</title>
+<meta name="description" content="Establecer niveles de acceso a mano no escala cuando una cuenta de almacenamiento contiene millones de blobs. La administración del ciclo de vida (lifecycl">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Directivas de administración del ciclo de vida que cambian… · Lección de Azure Administrator">
+<meta property="og:description" content="Establecer niveles de acceso a mano no escala cuando una cuenta de almacenamiento contiene millones de blobs. La administración del ciclo de vida (lifecycl">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-104/lessons/lifecycle-management-policies-that-tier-or-delete-blobs-by-age/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-104/lessons/lifecycle-management-policies-that-tier-or-delete-blobs-by-age/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-104/">Azure Administrator</a> / <a href="../">Lecciones</a> · <a href="../../../../az-104/lessons/lifecycle-management-policies-that-tier-or-delete-blobs-by-age/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure Administrator Associate AZ-104</p>
+<h1>Directivas de administración del ciclo de vida que cambian de nivel o eliminan blobs según su antigüedad</h1>
+<article class="lbody">
+<p>Establecer niveles de acceso a mano no escala cuando una cuenta de almacenamiento contiene millones de blobs. La administración del ciclo de vida (lifecycle management) te permite definir reglas que Azure ejecuta automáticamente, moviendo los blobs a niveles más fríos a medida que envejecen y eliminándolos cuando ya no se necesitan. Es la forma estándar de mantener los costos de almacenamiento acordes con el uso real de los datos.</p>
+<p>Una directiva de administración del ciclo de vida es un documento JSON de reglas, asociado a una cuenta de almacenamiento (cuentas general-purpose v2, premium block blob o las cuentas heredadas de Blob Storage) en Data management &gt; Lifecycle management. Cada regla tiene filtros que seleccionan los blobs y acciones que indican qué hacer. Los filtros incluyen <code>blobTypes</code> (como <code>blockBlob</code>), <code>prefixMatch</code> (un nombre de contenedor seguido de una ruta opcional, como <code>logs/app1</code>) y <code>blobIndexMatch</code> (etiquetas de índice de blobs). Las acciones se aplican a la versión actual de los blobs (blobs base) y, por separado, a las versiones anteriores y a las instantáneas.</p>
+<p>Las acciones incluyen <code>tierToCool</code>, <code>tierToCold</code>, <code>tierToArchive</code> y <code>delete</code>, cada una con una condición. Las condiciones se basan en la antigüedad: días desde la última modificación del blob (<code>daysAfterModificationGreaterThan</code>), días desde la creación o días desde el último acceso (<code>daysAfterLastAccessTimeGreaterThan</code>), lo que requiere que el seguimiento de la hora del último acceso esté habilitado en la cuenta. Con la hora del último acceso también puedes usar <code>enableAutoTierToHotFromCool</code> para devolver un blob a Hot cuando se vuelve a leer.</p>
+<pre class="code" tabindex="0"><code>{
+  &quot;rules&quot;: [{
+    &quot;name&quot;: &quot;age-logs&quot;,
+    &quot;enabled&quot;: true,
+    &quot;type&quot;: &quot;Lifecycle&quot;,
+    &quot;definition&quot;: {
+      &quot;filters&quot;: { &quot;blobTypes&quot;: [&quot;blockBlob&quot;], &quot;prefixMatch&quot;: [&quot;logs/&quot;] },
+      &quot;actions&quot;: { &quot;baseBlob&quot;: {
+        &quot;tierToCool&quot;:    { &quot;daysAfterModificationGreaterThan&quot;: 30 },
+        &quot;tierToArchive&quot;: { &quot;daysAfterModificationGreaterThan&quot;: 90 },
+        &quot;delete&quot;:        { &quot;daysAfterModificationGreaterThan&quot;: 365 }
+      } }
+    }
+  }]
+}</code></pre>
+<p>La directiva anterior mueve los blobs del contenedor logs a Cool después de 30 días sin modificaciones, a Archive después de 90 y los elimina después de un año. La vista de lista del portal crea el mismo JSON por ti mediante un asistente, y la vista de código lo muestra. Azure ejecuta la directiva aproximadamente una vez al día, y después de crear o cambiar una directiva pueden pasar hasta 24 horas antes de que empiecen las acciones, así que no esperes que los blobs se muevan de inmediato en un laboratorio.</p>
+<p>Puntos de diseño: ordena las acciones para que los niveles solo se vuelvan más fríos con el tiempo, recuerda los periodos mínimos de retención (pasar de Cool a Archive antes de 30 días genera cargos por eliminación anticipada) y usa una regla aparte con acciones <code>version</code> o <code>snapshot</code> para limpiar versiones antiguas si el control de versiones está activado; de lo contrario, las versiones antiguas siguen costando dinero.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Lifecycle management policy (directiva de administración del ciclo de vida)</dt><dd>Un conjunto de reglas JSON en una cuenta de almacenamiento que cambian de nivel o eliminan blobs automáticamente según condiciones.</dd><dt>prefixMatch</dt><dd>Un filtro de regla que limita una regla a los blobs cuyo nombre empieza con un nombre de contenedor y una ruta opcional.</dd><dt>daysAfterModificationGreaterThan</dt><dd>Una condición que activa una acción cuando un blob lleva sin modificarse más días que el número indicado.</dd><dt>Last access time tracking (seguimiento de la hora del último acceso)</dt><dd>Una configuración de la cuenta que registra las lecturas de blobs para que las reglas puedan actuar según los días desde el último acceso.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una plataforma de IoT escribe archivos de diagnóstico en un contenedor de telemetría. Los ingenieros los leen durante algunas semanas, los auditores de vez en cuando piden datos más antiguos y no se necesita nada con más de dos años. Una regla de ciclo de vida pasa los blobs de telemetría a Cool a los 30 días, a Archive a los 180 días y los elimina a los 730 días, reduciendo el costo de almacenamiento sin ningún script.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Las reglas de ciclo de vida actúan según la antigüedad desde la modificación, la creación o el último acceso; las reglas de último acceso necesitan el seguimiento de acceso habilitado. Los cambios pueden tardar hasta 24 horas en aplicarse, y las versiones e instantáneas necesitan sus propias acciones.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Quieres mover blobs a Cool si nadie los ha leído en 60 días. ¿Qué debe estar habilitado?</summary><p>El seguimiento de la hora del último acceso en la cuenta de almacenamiento, y luego una regla con daysAfterLastAccessTimeGreaterThan 60.</p></details>
+<details class="sq"><summary>¿Qué filtro restringe una regla de ciclo de vida a un contenedor?</summary><p>prefixMatch con el nombre del contenedor (opcionalmente seguido de una ruta).</p></details>
+<details class="sq"><summary>Creaste una regla de ciclo de vida hace una hora y nada ha cambiado. ¿Hay algún problema?</summary><p>No necesariamente; las directivas se ejecutan aproximadamente una vez al día y pueden tardar hasta 24 horas en surtir efecto.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Azure Administrator gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-104/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../blob-containers-and-access-tiers-hot-cool-cold-and-archive-rehydration/">← Contenedores de blobs y niveles de acceso: Hot, Cool, Cold y</a><a href="../data-protection-blob-and-container-soft-delete-versioning-snapshots-ch/">Protección de datos: eliminación temporal de blobs y contene →</a></nav>
+</main>
+</body>
+</html>

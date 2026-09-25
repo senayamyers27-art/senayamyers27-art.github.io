@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Roles de RBAC de Azure del plano de datos: Key Vault Secre… · Lección de AI-200</title>
+<meta name="description" content="Azure separa dos tipos de operaciones. El plano de control (plano de administración) administra los propios recursos: crear un Key Vault, cambiar el nivel ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Roles de RBAC de Azure del plano de datos: Key Vault Secre… · Lección de AI-200">
+<meta property="og:description" content="Azure separa dos tipos de operaciones. El plano de control (plano de administración) administra los propios recursos: crear un Key Vault, cambiar el nivel ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/azure-rbac-data-plane-roles-key-vault-secrets-user-service-bus-data-se/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/azure-rbac-data-plane-roles-key-vault-secrets-user-service-bus-data-se/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/azure-rbac-data-plane-roles-key-vault-secrets-user-service-bus-data-se/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Roles de RBAC de Azure del plano de datos: Key Vault Secrets User, Service Bus Data Sender/Receiver, AcrPull y los roles de datos integrados de Cosmos DB</h1>
+<article class="lbody">
+<p>Azure separa dos tipos de operaciones. El plano de control (plano de administración) administra los propios recursos: crear un Key Vault, cambiar el nivel de Service Bus, eliminar una cuenta de Cosmos DB. Pasa por Azure Resource Manager. El plano de datos trabaja con los datos que hay dentro: leer un secreto, enviar un mensaje, descargar una imagen, consultar elementos. Roles como Owner y Contributor son roles del plano de control; te permiten administrar el recurso pero, en los servicios que usan acceso a datos con RBAC, por sí solos no te permiten leer los datos. Las apps necesitan roles del plano de datos, asignados a su identidad administrada con el mínimo privilegio.</p>
+<p>En Key Vault con el modelo de permisos de Azure RBAC, Key Vault Secrets User puede leer el contenido de los secretos, que es lo que necesita una aplicación. Key Vault Secrets Officer también puede crear, actualizar y eliminar secretos, adecuado para un proceso de rotación o un administrador. Key Vault Reader ve los metadatos pero no los valores de los secretos. Existen pares similares para las claves (Key Vault Crypto User, Crypto Officer) y los certificados (Key Vault Certificates Officer), y Key Vault Administrator cubre todo el plano de datos.</p>
+<p>En Service Bus, Azure Service Bus Data Sender permite enviar a colas y temas, Azure Service Bus Data Receiver permite recibir de colas y suscripciones, y Azure Service Bus Data Owner permite acceso completo a los datos, incluida la administración de entidades. Asigna en el ámbito útil más reducido: una sola cola o un solo tema en lugar de todo el namespace. Un productor solo necesita Sender; un worker solo necesita Receiver.</p>
+<p>En Azure Container Registry, AcrPull permite que una identidad descargue imágenes y AcrPush le permite subirlas y descargarlas. Las plataformas de proceso reciben AcrPull; las canalizaciones de compilación reciben AcrPush. Storage tiene roles equivalentes, como Storage Blob Data Reader y Contributor, y Event Hubs tiene Data Sender y Receiver.</p>
+<p>Cosmos DB for NoSQL es diferente y se evalúa con frecuencia. Su acceso al plano de datos usa el control de acceso basado en roles nativo de Cosmos DB, con dos roles de datos integrados: Cosmos DB Built-in Data Reader (leer elementos y consultar, leer metadatos) y Cosmos DB Built-in Data Contributor (crear, leer, actualizar y eliminar elementos). No se asignan en la página habitual Access control (IAM) del portal, sino mediante asignaciones de roles SQL de Cosmos DB, por ejemplo con la CLI. El ámbito puede ser la cuenta, una base de datos o un contenedor.</p>
+<pre class="code" tabindex="0"><code>PRINCIPAL=$(az identity show -g rg -n app-id --query principalId -o tsv)
+az cosmosdb sql role assignment create -g rg --account-name shop-cosmos \
+  --role-definition-name &quot;Cosmos DB Built-in Data Contributor&quot; \
+  --principal-id $PRINCIPAL --scope &quot;/&quot;
+
+az role assignment create --assignee $PRINCIPAL \
+  --role &quot;Azure Service Bus Data Receiver&quot; --scope $QUEUE_ID</code></pre>
+<p>Una vez que las apps usan roles de Microsoft Entra, puedes deshabilitar la autenticación local (basada en claves) en servicios como Cosmos DB, Service Bus y Storage, para que las claves filtradas dejen de funcionar. Las asignaciones de roles pueden tardar varios minutos en aplicarse, así que un 403 Forbidden justo después de la asignación puede resolverse solo; un 403 persistente suele significar el rol, el ámbito o la identidad equivocados.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Data plane (plano de datos)</dt><dd>Operaciones sobre los datos dentro de un servicio, como leer secretos o enviar mensajes, a diferencia de administrar el recurso.</dd><dt>Key Vault Secrets User</dt><dd>Un rol integrado que puede leer el contenido de los secretos en un Key Vault con RBAC habilitado.</dd><dt>Azure Service Bus Data Sender</dt><dd>Un rol integrado que permite a una identidad enviar mensajes a las colas y temas de su ámbito.</dd><dt>Cosmos DB Built-in Data Contributor</dt><dd>Un rol de datos nativo de Cosmos DB que permite leer y escribir elementos, asignado mediante asignaciones de roles SQL de Cosmos DB.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un desarrollador le dio a la identidad de una function app el rol Contributor sobre una cuenta de Cosmos DB, pero todas las consultas fallaban con 403 Forbidden. Contributor es un rol del plano de control. Después de ejecutar az cosmosdb sql role assignment create con Cosmos DB Built-in Data Contributor en el ámbito de la cuenta, las consultas funcionaron, y luego el equipo deshabilitó la autenticación basada en claves en la cuenta.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Contributor u Owner no conceden acceso a los datos; elige el rol de datos que corresponde a la acción (Secrets User para leer secretos, Data Sender o Receiver para Service Bus, AcrPull para imágenes) y recuerda que los roles de datos de Cosmos DB se asignan con az cosmosdb sql role assignment.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Una app solo debe leer secretos de un Key Vault en modo RBAC. ¿Qué rol?</summary><p>Key Vault Secrets User, que puede leer el contenido de los secretos pero no modificarlos.</p></details>
+<details class="sq"><summary>¿Por qué una identidad con Contributor sobre una cuenta de Cosmos DB podría seguir recibiendo 403 en las consultas?</summary><p>Contributor es un rol del plano de control; el acceso a los datos necesita un rol de datos de Cosmos DB, como Built-in Data Reader o Contributor.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../managed-identities-system-assigned-vs-user-assigned-defaultazurecreden/">← Identidades administradas: asignadas por el sistema vs asign</a><a href="../key-vault-secrets-keys-and-certificates-versions-soft-delete-and-purge/">Key Vault: secretos, claves y certificados, versiones, elimi →</a></nav>
+</main>
+</body>
+</html>

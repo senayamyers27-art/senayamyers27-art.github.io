@@ -2119,4 +2119,4 @@ CertHub.addLessons("sc-500", [
    ]
   ]
  }
-]);
+], { reviewed: "2026-09-25" });

@@ -1946,4 +1946,4 @@ CertHub.addLessons("aws-developer", [
    ]
   ]
  }
-]);
+], { reviewed: "2026-09-25" });

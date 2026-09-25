@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Problemas de nodos: NotReady, estado del kubelet y journal… · Lección de CKA</title>
+<meta name="description" content="El troubleshooting es el dominio más grande del CKA, y un nodo en NotReady es una tarea clásica. El estado del nodo lo reporta su kubelet, así que un nodo ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Problemas de nodos: NotReady, estado del kubelet y journal… · Lección de CKA">
+<meta property="og:description" content="El troubleshooting es el dominio más grande del CKA, y un nodo en NotReady es una tarea clásica. El estado del nodo lo reporta su kubelet, así que un nodo ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/node-problems-notready-kubelet-status-and-journalctl-u-kubelet-kubelet/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/node-problems-notready-kubelet-status-and-journalctl-u-kubelet-kubelet/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/node-problems-notready-kubelet-status-and-journalctl-u-kubelet-kubelet/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Problemas de nodos: NotReady, estado del kubelet y journalctl -u kubelet, configuración y certificados del kubelet, container runtime caído y condiciones del nodo (DiskPressure, MemoryPressure)</h1>
+<article class="lbody">
+<p>El troubleshooting es el dominio más grande del CKA, y un nodo en NotReady es una tarea clásica. El estado del nodo lo reporta su kubelet, así que un nodo NotReady casi siempre significa que el kubelet está detenido, mal configurado, no puede llegar al API server o reporta que su runtime o su red no están listos.</p>
+<p>Empieza desde afuera: <code>kubectl get nodes</code> y <code>kubectl describe node node01</code>. La sección Conditions muestra <code>Ready</code>, <code>MemoryPressure</code>, <code>DiskPressure</code>, <code>PIDPressure</code> y, con algunos CNIs, <code>NetworkUnavailable</code>, cada una con un motivo y un mensaje. Si Ready es <code>Unknown</code> y el mensaje dice que el kubelet dejó de publicar el estado del nodo, el kubelet no se está comunicando en absoluto con el API server. Si Ready es <code>False</code>, el kubelet se está ejecutando pero reporta un problema, como que el container runtime está caído o que el CNI no está inicializado.</p>
+<p>Luego conéctate por SSH al nodo y revisa el servicio del kubelet. Es una unidad de systemd, así que <code>systemctl status kubelet</code> te dice si se está ejecutando, y <code>journalctl -u kubelet</code> (agrega <code>-f</code> para seguirlo, o <code>--no-pager | tail -50</code>) muestra por qué falla. Si simplemente está detenido o deshabilitado, <code>systemctl enable --now kubelet</code> lo resuelve.</p>
+<pre class="code" tabindex="0"><code>sudo systemctl status kubelet
+sudo journalctl -u kubelet --no-pager | tail -50
+sudo systemctl status containerd
+sudo crictl info | head
+cat /var/lib/kubelet/config.yaml
+systemctl cat kubelet            # unidad y drop-ins, incluidos los flags de kubeadm
+cat /var/lib/kubelet/kubeadm-flags.env</code></pre>
+<p>Las fallas de configuración comunes están en unos pocos archivos. <code>/var/lib/kubelet/config.yaml</code> es la KubeletConfiguration (cgroup driver, ruta de static Pods, DNS del clúster, ajustes de certificados). <code>/etc/kubernetes/kubelet.conf</code> es el kubeconfig del kubelet, incluida la dirección del API server. El drop-in de systemd (míralo con <code>systemctl cat kubelet</code>) y <code>/var/lib/kubelet/kubeadm-flags.env</code> agregan flags de línea de comandos como el endpoint del runtime. Una ruta, un puerto o una ubicación de binario equivocados, o un error de tipeo en cualquiera de ellos, aparecen claramente en el journal. Después de corregir, ejecuta <code>systemctl daemon-reload</code> si editaste un archivo de unidad, y luego <code>systemctl restart kubelet</code>.</p>
+<p>Los certificados también importan. El certificado de cliente del kubelet, normalmente <code>/var/lib/kubelet/pki/kubelet-client-current.pem</code>, suele rotarse automáticamente. Si venció o la CA no coincide, el journal muestra errores x509 o unauthorized. Revisa el vencimiento con <code>openssl x509 -noout -enddate -in &lt;file&gt;</code>.</p>
+<p>Si el kubelet se ejecuta pero el runtime está caído, el journal se queja de que no puede conectarse al socket de containerd; inicia containerd y revisa su propio journal. Por último, las condiciones de presión vienen de los umbrales de desalojo del kubelet. DiskPressure aparece cuando al sistema de archivos del nodo o al de imágenes le queda poco espacio; el kubelet hace recolección de basura de imágenes y puede desalojar Pods, y el nodo recibe un taint disk-pressure para que los Pods nuevos lo eviten. MemoryPressure, de forma similar, desencadena desalojos, empezando por los Pods que superan sus requests. Libera espacio o memoria y la condición desaparece.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>NotReady</dt><dd>Estado del nodo cuando la condición Ready es False o Unknown.</dd><dt>journalctl -u kubelet</dt><dd>Muestra los logs del servicio kubelet, la fuente principal de errores a nivel de nodo.</dd><dt>Node conditions (condiciones del nodo)</dt><dd>Indicadores de estado como Ready, MemoryPressure, DiskPressure y PIDPressure que reporta el kubelet.</dd><dt>KubeletConfiguration</dt><dd>El archivo de configuración del kubelet, normalmente /var/lib/kubelet/config.yaml.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>node01 está NotReady con estado Unknown. En el nodo, <code>systemctl status kubelet</code> muestra que falló; el journal dice que no se puede cargar el archivo de configuración porque la ruta del drop-in apunta a /var/lib/kubelet/confg.yaml. Corregir el error de tipeo, ejecutar daemon-reload y reiniciar el kubelet devuelve node01 a Ready en menos de un minuto.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Ready Unknown significa que el kubelet dejó de reportar; Ready False significa que reporta un problema. En ambos casos, <code>systemctl status kubelet</code> y <code>journalctl -u kubelet</code> en el nodo son tus dos primeros comandos.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué comando muestra la unidad de systemd del kubelet junto con sus archivos drop-in?</summary><p><code>systemctl cat kubelet</code>.</p></details>
+<details class="sq"><summary>¿Qué hace el kubelet ante una condición DiskPressure?</summary><p>Hace recolección de basura de imágenes y desaloja Pods si es necesario, y aplica un taint al nodo para mantener alejados los Pods nuevos.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../csi-drivers-and-statefulset-volumeclaimtemplates-with-pvc-retention/">← Drivers CSI y volumeClaimTemplates de StatefulSet con retenc</a><a href="../control-plane-problems-static-pod-manifests-crictl-ps-logs-when-the-ap/">Problemas del control plane: manifiestos de static Pods, cri →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PVs estáticos: hostPath para laboratorios, volúmenes local… · Lección de CKA</title>
+<meta name="description" content="Sin un provisioner dinámico, un administrador crea los PersistentVolumes a mano, lo que se llama aprovisionamiento estático. El CKA a menudo te pide escrib">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="PVs estáticos: hostPath para laboratorios, volúmenes local… · Lección de CKA">
+<meta property="og:description" content="Sin un provisioner dinámico, un administrador crea los PersistentVolumes a mano, lo que se llama aprovisionamiento estático. El CKA a menudo te pide escrib">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/static-pvs-hostpath-for-labs-local-volumes-with-nodeaffinity-nfs/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/static-pvs-hostpath-for-labs-local-volumes-with-nodeaffinity-nfs/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/static-pvs-hostpath-for-labs-local-volumes-with-nodeaffinity-nfs/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>PVs estáticos: hostPath para laboratorios, volúmenes local con nodeAffinity y NFS</h1>
+<article class="lbody">
+<p>Sin un provisioner dinámico, un administrador crea los PersistentVolumes a mano, lo que se llama aprovisionamiento estático. El CKA a menudo te pide escribir un PV así, así que conoce tres backends comunes y sus manifiestos.</p>
+<p><code>hostPath</code> monta un directorio del propio sistema de archivos del nodo. Es ideal para laboratorios de un solo nodo, pero malo para producción: los datos viven en el nodo donde caiga el Pod, un Pod reprogramado en otro nodo ve un directorio distinto (vacío), y dar a los Pods acceso a rutas del host es un riesgo de seguridad porque un contenedor podría leer o modificar archivos sensibles del host. El campo opcional <code>type</code>, como <code>DirectoryOrCreate</code> o <code>Directory</code>, controla si la ruta se crea o debe existir de antemano.</p>
+<pre class="code" tabindex="0"><code>apiVersion: v1
+kind: PersistentVolume
+metadata: {name: pv-log}
+spec:
+  capacity: {storage: 1Gi}
+  accessModes: [ReadWriteOnce]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: manual
+  hostPath: {path: /data/log, type: DirectoryOrCreate}</code></pre>
+<p>Un volumen <code>local</code> también usa un disco o directorio de un nodo, pero lo hace correctamente. Requiere <code>nodeAffinity</code> en el PV indicando el nodo que tiene el almacenamiento, para que el scheduler sepa que cualquier Pod que lo use debe ejecutarse ahí. La ruta debe existir de antemano. Combina los PVs local con una StorageClass que tenga <code>provisioner: kubernetes.io/no-provisioner</code> y <code>volumeBindingMode: WaitForFirstConsumer</code>, para que la vinculación espere hasta que se conozca la ubicación del Pod.</p>
+<pre class="code" tabindex="0"><code>spec:
+  capacity: {storage: 50Gi}
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-storage
+  local: {path: /mnt/disks/ssd1}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - {key: kubernetes.io/hostname, operator: In, values: [node02]}</code></pre>
+<p>NFS ofrece almacenamiento en red que cualquier nodo puede montar, así que admite ReadWriteMany. El PV especifica el servidor y la ruta exportada. Cada nodo que pueda ejecutar el Pod necesita tener instaladas las utilidades de cliente NFS (el nombre del paquete depende de la distribución); de lo contrario, el montaje falla con un error en los eventos del Pod. Para NFS dinámico, se puede usar en su lugar un driver CSI o un provisioner NFS externo.</p>
+<pre class="code" tabindex="0"><code>spec:
+  capacity: {storage: 5Gi}
+  accessModes: [ReadWriteMany]
+  storageClassName: nfs
+  nfs: {server: 10.0.0.20, path: /exports/shared}</code></pre>
+<p>En todos los PVs estáticos, el claim debe coincidir en clase y modo de acceso y no solicitar más que la capacidad del PV, y la capacidad es una etiqueta para la coincidencia más que una cuota: un PV hostPath de 1Gi no impide que un Pod escriba más. Recuerda que los PVs creados manualmente usan por defecto la reclaim policy Retain.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Static provisioning (aprovisionamiento estático)</dt><dd>Crear objetos PV manualmente para almacenamiento existente.</dd><dt>hostPath</dt><dd>Un tipo de volumen que monta un directorio del sistema de archivos del nodo; adecuado solo para laboratorios.</dd><dt>local volume (volumen local)</dt><dd>Un PV para almacenamiento conectado a un nodo que requiere nodeAffinity para fijar los Pods a ese nodo.</dd><dt>NFS volume (volumen NFS)</dt><dd>Almacenamiento de archivos en red identificado por servidor y ruta, utilizable en lectura-escritura desde muchos nodos.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una tarea pide un PV llamado pv-analytics de 100Mi, ReadWriteMany, con hostPath /pv/data-analytics. Escribes el manifiesto con un storageClassName que coincida con el PVC proporcionado, lo aplicas y <code>kubectl get pv,pvc</code> muestra ambos en Bound.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El API server rechaza un PV local sin nodeAffinity. Y los datos de hostPath se quedan en un nodo; si el Pod se mueve, sus datos no.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué campo es obligatorio en un PV local y no lo necesita hostPath?</summary><p>nodeAffinity, que identifica el nodo que tiene el almacenamiento.</p></details>
+<details class="sq"><summary>¿Qué debe estar instalado en los nodos para montar PVs NFS?</summary><p>Las utilidades de cliente NFS del sistema operativo del nodo.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../volume-expansion-with-allowvolumeexpansion/">← Expansión de volúmenes con allowVolumeExpansion</a><a href="../csi-drivers-and-statefulset-volumeclaimtemplates-with-pvc-retention/">Drivers CSI y volumeClaimTemplates de StatefulSet con retenc →</a></nav>
+</main>
+</body>
+</html>

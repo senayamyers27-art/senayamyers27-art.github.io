@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Programación: nodeSelector, nodeName y node affinity (requ… · Lección de CKA</title>
+<meta name="description" content="Por defecto, el scheduler ubica un Pod en cualquier nodo con recursos suficientes. A menudo necesitas más control: GPUs en algunos nodos, SSDs en otros, un">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Programación: nodeSelector, nodeName y node affinity (requ… · Lección de CKA">
+<meta property="og:description" content="Por defecto, el scheduler ubica un Pod en cualquier nodo con recursos suficientes. A menudo necesitas más control: GPUs en algunos nodos, SSDs en otros, un">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/scheduling-nodeselector-nodename-node-affinity-required-vs-preferred/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/scheduling-nodeselector-nodename-node-affinity-required-vs-preferred/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/scheduling-nodeselector-nodename-node-affinity-required-vs-preferred/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Programación: nodeSelector, nodeName y node affinity (required vs preferred)</h1>
+<article class="lbody">
+<p>Por defecto, el scheduler ubica un Pod en cualquier nodo con recursos suficientes. A menudo necesitas más control: GPUs en algunos nodos, SSDs en otros, una carga de trabajo que debe quedarse en una zona. Kubernetes te da varias herramientas, desde las más toscas hasta las más expresivas.</p>
+<p><code>nodeName</code> es la más tosca. Definir <code>spec.nodeName: node02</code> evita por completo al scheduler: el kubelet de node02 simplemente ejecuta el Pod. Los taints NoSchedule no se aplican en este caso y no hay alternativa si el nodo no existe o está lleno; el Pod puede fallar en lugar de esperar. Es útil para pruebas o cuando el scheduler está caído, pero no para cargas de trabajo normales.</p>
+<p><code>nodeSelector</code> es el método más simple que tiene en cuenta el scheduler. Es un mapa de etiquetas, y el Pod solo puede ir a nodos que las tengan todas. Primero etiqueta los nodos con <code>kubectl label node node02 disktype=ssd</code> y luego agrega el selector. También están disponibles etiquetas conocidas como <code>kubernetes.io/hostname</code>, <code>kubernetes.io/os</code> y <code>topology.kubernetes.io/zone</code>. Revisa las etiquetas con <code>kubectl get nodes --show-labels</code> o <code>-L disktype</code>.</p>
+<pre class="code" tabindex="0"><code>spec:
+  nodeSelector:
+    disktype: ssd
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - {key: topology.kubernetes.io/zone, operator: In, values: [zone-a, zone-b]}
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 50
+        preference:
+          matchExpressions:
+          - {key: gpu, operator: Exists}</code></pre>
+<p>La node affinity es la forma expresiva. Sus operadores son In, NotIn, Exists, DoesNotExist, Gt y Lt. La variante required, <code>requiredDuringSchedulingIgnoredDuringExecution</code>, es una regla estricta: si ningún nodo coincide, el Pod se queda en Pending. La variante preferred es flexible: cada término tiene un peso de 1 a 100, el scheduler suma los pesos de los términos que coinciden a la puntuación de un nodo, pero igual ubicará el Pod en otro lugar si nada coincide.</p>
+<p>Dos detalles estructurales se evalúan con frecuencia. Varios <code>nodeSelectorTerms</code> se combinan con OR, mientras que varias <code>matchExpressions</code> dentro de un mismo término se combinan con AND. Y la parte 'IgnoredDuringExecution' significa que las reglas solo se verifican en el momento de la programación: si más tarde quitas una etiqueta de un nodo, los Pods que ya se ejecutan ahí se quedan. Si se definen tanto nodeSelector como node affinity, ambos deben cumplirse.</p>
+<p>Para mantener otras cargas de trabajo fuera de nodos especiales, combina la affinity con taints y tolerations; la affinity atrae Pods y los taints los repelen.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>nodeName</dt><dd>Un campo del Pod que lo fija directamente a un nodo, evitando al scheduler.</dd><dt>nodeSelector</dt><dd>Un mapa simple de etiquetas que un nodo debe cumplir por completo para que el Pod se programe ahí.</dd><dt>Required node affinity (afinidad obligatoria)</dt><dd>Una regla estricta de programación; el Pod se queda en Pending si ningún nodo la cumple.</dd><dt>Preferred node affinity (afinidad preferida)</dt><dd>Una regla flexible con peso que influye en la puntuación pero no bloquea la programación.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una tarea te pide ejecutar un Pod solo en nodos con la etiqueta <code>tier=frontend</code>, pero ninguno la tiene. Después de agregar el nodeSelector, el Pod aparece en Pending con '0/3 nodes are available: 3 node(s) didn't match Pod's node affinity/selector'. <code>kubectl label node node01 tier=frontend</code> permite que se programe de inmediato.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Los términos se combinan con OR y las expresiones dentro de un término con AND. Y una etiqueta faltante con affinity required o nodeSelector significa Pending para siempre, nunca una alternativa.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Quitar una etiqueta de un nodo desaloja los Pods que se programaron ahí por una node affinity required?</summary><p>No. IgnoredDuringExecution significa que la regla solo se evalúa en el momento de la programación.</p></details>
+<details class="sq"><summary>¿Qué le pasa a un Pod cuya node affinity preferred no coincide con ningún nodo?</summary><p>Se programa en otro nodo adecuado; las preferencias solo afectan la puntuación.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../resource-requests-and-limits-limitrange-and-resourcequota-as-admission/">← Requests y limits de recursos, LimitRange y ResourceQuota co</a><a href="../taints-and-tolerations-noschedule-prefernoschedule-noexecute-and-toler/">Taints y tolerations: NoSchedule, PreferNoSchedule, NoExecut →</a></nav>
+</main>
+</body>
+</html>

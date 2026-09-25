@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shells no interactivos para cuentas de servicio (/sbin/nol… · Lección de RHCSA</title>
+<meta name="description" content="No todas las cuentas son para personas. Servicios como servidores web, bases de datos y tareas de respaldo se ejecutan con sus propios usuarios para que co">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Shells no interactivos para cuentas de servicio (/sbin/nol… · Lección de RHCSA">
+<meta property="og:description" content="No todas las cuentas son para personas. Servicios como servidores web, bases de datos y tareas de respaldo se ejecutan con sus propios usuarios para que co">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/non-interactive-shells-for-service-accounts-sbin-nologin/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/non-interactive-shells-for-service-accounts-sbin-nologin/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/non-interactive-shells-for-service-accounts-sbin-nologin/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Shells no interactivos para cuentas de servicio (/sbin/nologin)</h1>
+<article class="lbody">
+<p>No todas las cuentas son para personas. Servicios como servidores web, bases de datos y tareas de respaldo se ejecutan con sus propios usuarios para que comprometer un servicio no entregue todo el sistema. Esas cuentas deben poseer archivos y ejecutar procesos, pero nadie debería poder iniciar sesión con ellas. Darles un shell no interactivo es la forma estándar de garantizarlo.</p>
+<p>El shell es el último campo de la línea de una cuenta en <code>/etc/passwd</code>, y es el programa que se inicia cuando el usuario inicia sesión. Ponlo en <code>/sbin/nologin</code> y cualquier inicio de sesión interactivo, ya sea en la consola, por SSH o con <code>su -</code>, inicia nologin en su lugar. Ese programa imprime un mensaje corto, por defecto This account is currently not available, y termina. En RHEL, <code>/sbin</code> es un enlace a <code>/usr/sbin</code>, así que <code>/usr/sbin/nologin</code> es el mismo archivo.</p>
+<pre class="code" tabindex="0"><code>useradd -r -s /sbin/nologin -c 'Backup service' backupsvc
+usermod -s /sbin/nologin sarah       # cuenta existente
+getent passwd sarah
+# sarah:x:1003:1003::/home/sarah:/sbin/nologin
+su - sarah
+# This account is currently not available.</code></pre>
+<p>Entiende los límites. nologin bloquea los shells, no todo. Un usuario con <code>/sbin/nologin</code> todavía puede autenticarse en servicios que no inician un shell, como algunas configuraciones de FTP o correo, y root todavía puede ejecutar comandos como ese usuario con <code>sudo -u</code> o <code>runuser</code>. El reenvío de puertos por SSH podría seguir siendo posible según la configuración del servidor. Si una cuenta no debe autenticarse en absoluto, bloquéala o haz que caduque también.</p>
+<p>Una herramienta relacionada es <code>/bin/false</code>, que simplemente termina con fallo y no imprime nada. También bloquea los inicios de sesión interactivos, pero en RHEL se prefiere nologin porque explica por qué falló el inicio de sesión. Las tareas del examen que dicen que el usuario no debe tener un shell interactivo esperan <code>/sbin/nologin</code>.</p>
+<p>La lista de shells de inicio de sesión válidos está en <code>/etc/shells</code>. Algunos servicios, como ciertos servidores FTP, rechazan a los usuarios cuyo shell no aparece ahí, lo que conviene saber si una cuenta de servicio no puede autenticarse de forma inesperada. Puedes comprobar el shell de cualquier usuario con <code>getent passwd user</code> o mirando el último campo.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Service account (cuenta de servicio)</dt><dd>Una cuenta que usa un programa y no una persona, normalmente creada con useradd -r.</dd><dt>/sbin/nologin</dt><dd>Un shell que rechaza educadamente el inicio de sesión interactivo; se usa para bloquear los inicios de sesión de cuentas de servicio.</dd><dt>Login shell (shell de inicio de sesión)</dt><dd>El programa que se inicia cuando un usuario inicia sesión, guardado en el último campo de /etc/passwd.</dd><dt>/etc/shells</dt><dd>La lista de shells de inicio de sesión válidos del sistema.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>La tarea: crear el usuario sarah como miembro de sysadmins sin shell interactivo. Ejecutas useradd -G sysadmins -s /sbin/nologin sarah y estableces su contraseña. su - sarah imprime This account is currently not available, lo que confirma el requisito.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Sin shell interactivo en el examen significa -s /sbin/nologin. Bloquea los inicios de sesión con shell pero no la autenticación en sí, así que combínalo con el bloqueo cuando una cuenta deba quedar completamente deshabilitada.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Dónde se guarda el shell de inicio de sesión de un usuario?</summary><p>En el séptimo (último) campo de la línea del usuario en /etc/passwd.</p></details>
+<details class="sq"><summary>¿Cómo le das a un usuario existente un shell no interactivo?</summary><p>usermod -s /sbin/nologin username.</p></details>
+<details class="sq"><summary>¿Impide /sbin/nologin que root ejecute un comando como ese usuario?</summary><p>No; root todavía puede usar sudo -u o runuser, porque nologin solo bloquea los inicios de sesión con shell interactivo.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../creating-deleting-and-modifying-local-user-accounts-useradd-u-g-s-c-us/">← Crear, borrar y modificar cuentas de usuario locales (userad</a><a href="../changing-passwords-passwd-passwd-stdin-and-adjusting-password-aging-ch/">Cambiar contraseñas (passwd, passwd --stdin) y ajustar la ca →</a></nav>
+</main>
+</body>
+</html>

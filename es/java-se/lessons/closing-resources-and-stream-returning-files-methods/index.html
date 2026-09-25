@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cerrar recursos y métodos de Files que devuelven streams · Lección de OCP Java</title>
+<meta name="description" content="Los archivos, sockets, conexiones a bases de datos y muchos streams mantienen recursos del sistema operativo que el recolector de basura no libera con pron">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Cerrar recursos y métodos de Files que devuelven streams · Lección de OCP Java">
+<meta property="og:description" content="Los archivos, sockets, conexiones a bases de datos y muchos streams mantienen recursos del sistema operativo que el recolector de basura no libera con pron">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/java-se/lessons/closing-resources-and-stream-returning-files-methods/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/java-se/lessons/closing-resources-and-stream-returning-files-methods/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../java-se/">OCP Java</a> / <a href="../">Lecciones</a> · <a href="../../../../java-se/lessons/closing-resources-and-stream-returning-files-methods/" hreflang="en" lang="en">English</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25)</p>
+<h1>Cerrar recursos y métodos de Files que devuelven streams</h1>
+<article class="lbody">
+<p>Los archivos, sockets, conexiones a bases de datos y muchos streams mantienen recursos del sistema operativo que el recolector de basura no libera con prontitud. Si olvidas cerrarlos puedes quedarte sin manejadores de archivo, dejar archivos bloqueados en Windows o perder salida en buffer. La sentencia try-with-resources es la forma estándar de garantizar el cierre.</p>
+<p>Cualquier objeto que implemente <code>AutoCloseable</code> puede declararse entre los paréntesis después de <code>try</code>. Cuando el bloque termina, normalmente o por una excepción, su método <code>close()</code> se llama automáticamente. <code>Closeable</code>, usada por las clases de E/S, extiende AutoCloseable y restringe <code>close()</code> a lanzar IOException; el <code>close()</code> de AutoCloseable lanza Exception, así que el compilador te obliga a manejar lo que pueda lanzar el método close declarado. Una variable de recurso es implícitamente final. Desde Java 9 también puedes listar una variable existente que sea final o efectivamente final: <code>try (reader) { ... }</code>.</p>
+<p>El orden es preciso. Los recursos se cierran en orden inverso a su declaración, y se cierran antes de que se ejecute cualquier bloque <code>catch</code> o <code>finally</code>. Si el bloque try lanza una excepción y luego <code>close()</code> también lanza una, la excepción del cierre no reemplaza a la original. Se adjunta como excepción suprimida, recuperable con <code>getSuppressed()</code>, y la excepción original se propaga. Si solo close lanza, esa excepción se propaga.</p>
+<pre class="code" tabindex="0"><code>try (var a = new Res(&quot;A&quot;); var b = new Res(&quot;B&quot;)) {
+    System.out.println(&quot;body&quot;);
+} finally {
+    System.out.println(&quot;finally&quot;);
+}
+// body, cierre de B, cierre de A, finally</code></pre>
+<p>La API Stream interactúa con esto. <code>BaseStream</code>, el padre de Stream, implementa AutoCloseable, pero la mayoría de los streams, como los que vienen de colecciones, no mantienen recursos y no necesitan cerrarse. La excepción son los streams devueltos por métodos de E/S: <code>Files.lines</code>, <code>Files.list</code>, <code>Files.walk</code> y <code>Files.find</code>. Su Javadoc indica usar try-with-resources, porque el stream mantiene abierto un manejador de archivo o directorio hasta que se cierra, y una operación terminal no lo cierra por ti.</p>
+<pre class="code" tabindex="0"><code>try (Stream&lt;Path&gt; entries = Files.list(Path.of(&quot;logs&quot;))) {
+    entries.filter(p -&gt; p.toString().endsWith(&quot;.gz&quot;)).forEach(System.out::println);
+}
+// En cambio, readAllLines, readString, write y writeString abren y cierran internamente.</code></pre>
+<p>Los métodos que devuelven un objeto Reader, Writer o stream, como <code>Files.newBufferedReader</code>, <code>Files.newInputStream</code> y <code>Files.newBufferedWriter</code>, también te pasan a ti la responsabilidad de cerrarlo. Los métodos que hacen todo el trabajo en una sola llamada, como <code>readAllLines</code>, <code>readString</code>, <code>write</code>, <code>writeString</code>, <code>copy</code> y <code>size</code>, cierran lo que abren. Al envolver streams, cerrar el envoltorio más externo cierra los internos, así que declara el envoltorio como recurso. Un stream puede registrar acciones de limpieza con <code>onClose(Runnable)</code>, que se ejecutan cuando se llama a <code>close()</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>try-with-resources</dt><dd>Una sentencia try que declara recursos AutoCloseable y los cierra automáticamente en orden inverso.</dd><dt>AutoCloseable</dt><dd>Una interfaz con close() throws Exception, requerida para los recursos de try-with-resources.</dd><dt>Closeable</dt><dd>Una interfaz de E/S que extiende AutoCloseable con close() throws IOException.</dd><dt>Suppressed exception (excepción suprimida)</dt><dd>Una excepción lanzada al cerrar un recurso después de que el cuerpo ya lanzó otra, adjuntada a la original mediante addSuppressed.</dd><dt>Resource-backed stream (stream respaldado por un recurso)</dt><dd>Un Stream como los de Files.lines, list, walk o find que mantiene un manejador abierto y debe cerrarse.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un servicio de monitoreo lista un directorio cada pocos segundos con Files.list pero nunca cierra el stream. Al cabo de un día falla con un error de demasiados archivos abiertos. Envolver la llamada en try-with-resources libera cada manejador de directorio en cuanto termina el listado.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Los recursos se cierran en orden inverso, antes de catch y finally. Una excepción de close después de una excepción del cuerpo se suprime, no se lanza. Files.lines, list, walk y find devuelven streams que debes cerrar; readAllLines y writeString no lo necesitan.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>En try (var x = ...; var y = ...), ¿qué recurso se cierra primero?</summary><p>y, porque los recursos se cierran en orden inverso a su declaración.</p></details>
+<details class="sq"><summary>El cuerpo del try lanza IOException y close() lanza IllegalStateException. ¿Cuál se propaga?</summary><p>La IOException; la IllegalStateException se agrega como excepción suprimida.</p></details>
+<details class="sq"><summary>¿Llamar a count() sobre el stream de Files.lines cierra el archivo?</summary><p>No. Una operación terminal no cierra el stream; usa try-with-resources.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia OCP Java gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../java-se/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../serialization-serializable-transient-fields-serialversionuid/">← Serialización: Serializable, campos transient, serialVersion</a><a href="../locale-objects-language-country-locale-of-and-locale-getdefault/">Objetos Locale: idioma, país, Locale.of y Locale.getDefault →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tráfico de tránsito vs tráfico de excepción (dirigido al h… · Lección de JNCIA-Junos</title>
+<meta name="description" content="Todo paquete que recibe un dispositivo Junos cae en uno de dos grupos, y saber en cuál es esencial para entender el rendimiento y la seguridad. El tráfico ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Tráfico de tránsito vs tráfico de excepción (dirigido al h… · Lección de JNCIA-Junos">
+<meta property="og:description" content="Todo paquete que recibe un dispositivo Junos cae en uno de dos grupos, y saber en cuál es esencial para entender el rendimiento y la seguridad. El tráfico ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/jncia-junos/lessons/transit-traffic-vs-exception-host-bound-traffic-and-why-exception-traf/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/jncia-junos/lessons/transit-traffic-vs-exception-host-bound-traffic-and-why-exception-traf/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../jncia-junos/">JNCIA-Junos</a> / <a href="../">Lecciones</a> · <a href="../../../../jncia-junos/lessons/transit-traffic-vs-exception-host-bound-traffic-and-why-exception-traf/" hreflang="en" lang="en">English</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106</p>
+<h1>Tráfico de tránsito vs tráfico de excepción (dirigido al host) y por qué el tráfico de excepción hacia el RE tiene limitación de tasa</h1>
+<article class="lbody">
+<p>Todo paquete que recibe un dispositivo Junos cae en uno de dos grupos, y saber en cuál es esencial para entender el rendimiento y la seguridad. El tráfico de tránsito (transit traffic) pasa a través del dispositivo camino a otro lugar. El tráfico de excepción (exception traffic) necesita atención del Routing Engine, ya sea porque está dirigido al dispositivo o porque el PFE no puede manejarlo solo.</p>
+<p>El tráfico de tránsito es la gran mayoría. Una sesión web entre una PC y un servidor, por ejemplo, simplemente pasa a través del router. El PFE busca el destino en su tabla de reenvío, aplica filtros y CoS, y envía el paquete. El RE nunca ve estos paquetes.</p>
+<p>El tráfico de excepción viene en varios tipos. El tráfico dirigido al host (host-bound) está dirigido a una de las propias direcciones IP del dispositivo: paquetes de protocolos de enrutamiento como los hellos de OSPF y las actualizaciones BGP, sesiones de gestión como SSH, SNMP y NTP, y pings al router. Cierto tráfico necesita que el RE genere una respuesta: cuando el TTL de un paquete expira, el RE puede crear un mensaje ICMP time-exceeded, que es lo que hace funcionar a traceroute. Algunos paquetes necesitan procesamiento especial, como ciertas opciones IP, o paquetes que necesitan resolución ARP para un siguiente salto. Y cierto tráfico no está dirigido al router pero igual lo procesa, como los paquetes multicast de control de los protocolos de enrutamiento.</p>
+<p>El camino del PFE al RE está limitado deliberadamente. El RE es una CPU de propósito general con mucha menos capacidad de paquetes que los ASIC del PFE. Si un atacante, una mala configuración o un bucle de red enviara tráfico a velocidad de línea a la propia dirección del router, un camino sin límite podría saturar la CPU del RE, dejando a rpd sin tiempo para enviar hellos. Las adyacencias de enrutamiento caerían y toda la red podría sufrir. Por eso Junos limita la tasa del tráfico de excepción en su camino hacia el RE, y en muchas plataformas agrega policing por protocolo, a menudo llamado protección DDoS (distributed denial of service, denegación de servicio distribuida), para que una inundación de un tipo de tráfico no desplace a los demás.</p>
+<p>Los límites de tasa incorporados son una red de seguridad, no una defensa completa, porque limitan el volumen pero no deciden qué orígenes son legítimos. Esa decisión la agregas tú con un firewall filter aplicado a la interfaz loopback, lo0, que el PFE aplica al tráfico dirigido al host antes de subirlo. Ese filtro debe aceptar solo los protocolos y orígenes que el router necesita y descartar todo lo demás.</p>
+<p>Al diagnosticar problemas, recuerda que un ping al router mide el manejo de excepciones, no el reenvío de tránsito. Pings lentos o perdidos hacia un router ocupado no significan necesariamente que el tráfico de tránsito esté afectado. Prueba a través del router, no hacia él, para juzgar el rendimiento de reenvío.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Transit traffic (tráfico de tránsito)</dt><dd>Paquetes que pasan a través del dispositivo hacia otro destino, reenviados completamente por el PFE.</dd><dt>Exception traffic (tráfico de excepción)</dt><dd>Paquetes que el PFE envía al RE, incluido el tráfico dirigido al host y los paquetes que necesitan manejo especial.</dd><dt>Host-bound traffic (tráfico dirigido al host)</dt><dd>Tráfico dirigido al propio dispositivo, como protocolos de enrutamiento, SSH, SNMP o pings.</dd><dt>DDoS protection (protección DDoS)</dt><dd>Policing por protocolo en muchas plataformas Junos que limita cuánto de cada tipo de tráfico de excepción llega al RE.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un servidor de monitoreo mal configurado empieza a enviar miles de solicitudes SNMP por segundo a un router de núcleo. El tráfico de tránsito no se ve afectado, pero las respuestas SNMP se vuelven lentas. Como el tráfico de excepción tiene limitación de tasa, los keepalives de OSPF y BGP siguen pasando. El ingeniero luego actualiza el filtro de lo0 para aceptar SNMP solo desde hosts de gestión aprobados.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Las respuestas de traceroute, los pings al router y los paquetes de protocolos de enrutamiento son todos tráfico de excepción. Un ping a través del router hacia un host del otro lado es tráfico de tránsito.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Un hello OSPF recibido de un vecino es tráfico de tránsito o de excepción?</summary><p>Tráfico de excepción (dirigido al host), porque está dirigido al router y debe procesarlo rpd en el RE.</p></details>
+<details class="sq"><summary>¿Por qué Junos limita la tasa del tráfico enviado del PFE al RE?</summary><p>Para evitar que las inundaciones de tráfico dirigido al host saturen la CPU del RE e interrumpan los protocolos de enrutamiento y la gestión.</p></details>
+<details class="sq"><summary>¿Por qué un ping lento a un router puede ser engañoso?</summary><p>Los pings al router son tráfico de excepción que el RE maneja a una tasa limitada, así que no reflejan qué tan rápido el PFE reenvía el tráfico de tránsito.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia JNCIA-Junos gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../jncia-junos/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../key-daemons-rpd-routing-mgd-management-cli-dcd-interfaces-chassisd-cha/">← Daemons clave: rpd (enrutamiento), mgd (gestión/CLI), dcd (i</a><a href="../junos-os-vs-junos-os-evolved-freebsd-based-vs-linux-based/">Junos OS vs Junos OS Evolved (basado en FreeBSD vs basado en →</a></nav>
+</main>
+</body>
+</html>

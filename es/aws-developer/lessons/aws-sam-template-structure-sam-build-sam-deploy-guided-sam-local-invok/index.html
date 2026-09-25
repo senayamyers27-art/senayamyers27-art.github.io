@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AWS SAM: estructura de la plantilla, sam build, sam deploy… · Lección de Developer Associate</title>
+<meta name="description" content="AWS Serverless Application Model (SAM) es un framework de código abierto para construir aplicaciones sin servidor. Tiene dos partes: un formato de plantill">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="AWS SAM: estructura de la plantilla, sam build, sam deploy… · Lección de Developer Associate">
+<meta property="og:description" content="AWS Serverless Application Model (SAM) es un framework de código abierto para construir aplicaciones sin servidor. Tiene dos partes: un formato de plantill">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/aws-sam-template-structure-sam-build-sam-deploy-guided-sam-local-invok/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/aws-sam-template-structure-sam-build-sam-deploy-guided-sam-local-invok/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/aws-sam-template-structure-sam-build-sam-deploy-guided-sam-local-invok/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>AWS SAM: estructura de la plantilla, sam build, sam deploy --guided, sam local invoke / start-api, samconfig.toml</h1>
+<article class="lbody">
+<p>AWS Serverless Application Model (SAM) es un framework de código abierto para construir aplicaciones sin servidor. Tiene dos partes: un formato de plantilla que extiende CloudFormation con tipos de recursos sin servidor concisos, y la SAM CLI, que las compila, las prueba localmente y las despliega.</p>
+<p>Una plantilla de SAM es una plantilla de CloudFormation con una línea esencial: <code>Transform: AWS::Serverless-2016-10-31</code>. Esa línea le indica a CloudFormation que expanda los recursos de SAM en recursos completos de CloudFormation durante el despliegue. Los principales tipos de recursos de SAM son <code>AWS::Serverless::Function</code>, <code>AWS::Serverless::Api</code> y <code>AWS::Serverless::HttpApi</code>, <code>AWS::Serverless::SimpleTable</code> (una tabla básica de DynamoDB), <code>AWS::Serverless::LayerVersion</code>, <code>AWS::Serverless::StateMachine</code> y <code>AWS::Serverless::Application</code> (aplicaciones anidadas). Una sección <code>Globals</code> define propiedades compartidas por todas las funciones, como el runtime, el tiempo de espera y las variables de entorno. Todavía puedes incluir cualquier recurso normal de CloudFormation, <code>Parameters</code> y <code>Outputs</code>.</p>
+<pre class="code" tabindex="0"><code>Transform: AWS::Serverless-2016-10-31
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 10
+Resources:
+  GetOrder:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.handler
+      CodeUri: src/
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref Orders
+      Events:
+        Api:
+          Type: Api
+          Properties: { Path: /orders/{id}, Method: get }
+  Orders:
+    Type: AWS::Serverless::SimpleTable</code></pre>
+<p>Observa cuánto incluye la definición de una función: la propiedad <code>Events</code> crea el disparador (aquí una ruta de API Gateway, y el permiso correspondiente), y <code>Policies</code> acepta plantillas de políticas de SAM como <code>DynamoDBReadPolicy</code> o <code>S3ReadPolicy</code> que se expanden en declaraciones de IAM de mínimo privilegio. Las funciones también pueden definir <code>AutoPublishAlias</code> y <code>DeploymentPreference</code> para desplegar mediante CodeDeploy con desplazamiento de tráfico canary o lineal.</p>
+<p>El flujo de trabajo típico: <code>sam init</code> crea un proyecto a partir de una plantilla. <code>sam build</code> resuelve las dependencias y prepara los artefactos en <code>.aws-sam/build</code> (agrega <code>--use-container</code> para compilar dependencias nativas en un contenedor similar a Lambda). <code>sam deploy --guided</code> pregunta el nombre del stack, la región, los valores de los parámetros y si se deben confirmar los cambios, y luego guarda tus respuestas en <code>samconfig.toml</code>, así que los despliegues posteriores solo necesitan <code>sam deploy</code>. Internamente, deploy empaqueta los artefactos en un bucket de S3 (SAM puede crear un bucket administrado por ti) y crea o actualiza un stack de CloudFormation mediante un change set. <code>samconfig.toml</code> puede contener entornos separados, por ejemplo secciones <code>[default]</code> y <code>[prod]</code> que se seleccionan con <code>--config-env prod</code>.</p>
+<p>Las pruebas locales usan Docker para emular el entorno de Lambda. <code>sam local invoke GetOrder -e events/get.json</code> ejecuta una función una vez con un evento de prueba; <code>sam local generate-event</code> crea eventos de ejemplo para fuentes como S3 o SQS. <code>sam local start-api</code> ejecuta un servidor HTTP local que emula las rutas de API Gateway, para que puedas probar con un navegador o con curl. <code>sam local start-lambda</code> emula el endpoint de invocación de Lambda para pruebas basadas en el SDK. Para iterar más rápido en la nube, <code>sam sync --watch</code> envía los cambios de código directamente a un stack de desarrollo, y <code>sam logs</code> muestra en vivo los logs de CloudWatch de una función.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Transform: AWS::Serverless-2016-10-31</dt><dd>La declaración de plantilla que hace que CloudFormation procese los tipos de recursos de SAM.</dd><dt>sam build</dt><dd>El comando de la SAM CLI que instala las dependencias y prepara los artefactos de despliegue.</dd><dt>sam deploy --guided</dt><dd>Un despliegue interactivo que solicita la configuración y la guarda en samconfig.toml.</dd><dt>sam local start-api</dt><dd>Ejecuta una emulación local de las rutas de API Gateway respaldadas por funciones que se ejecutan en Docker.</dd><dt>SAM policy template (plantilla de políticas de SAM)</dt><dd>Una política de IAM con nombre y parámetros, como DynamoDBReadPolicy, que se usa en la propiedad Policies de una función.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un desarrollador cambia un handler, ejecuta sam build, luego sam local start-api y llama al endpoint con curl para confirmar la nueva respuesta. Satisfecho, ejecuta sam deploy, que lee el nombre del stack y la región guardados en samconfig.toml desde el primer despliegue guiado.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> La línea Transform es lo que identifica una plantilla de SAM. Para probar una API localmente, el comando es sam local start-api; para un solo evento, sam local invoke. sam deploy --guided escribe samconfig.toml.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué línea debe incluir una plantilla de SAM?</summary><p>Transform: AWS::Serverless-2016-10-31.</p></details>
+<details class="sq"><summary>¿Dónde se guardan las respuestas de sam deploy --guided?</summary><p>En samconfig.toml, en el directorio del proyecto.</p></details>
+<details class="sq"><summary>¿Qué requiere sam local invoke en tu máquina?</summary><p>Docker, porque ejecuta la función en un contenedor que emula Lambda.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../preparing-artifacts-zip-packages-vs-container-images-in-ecr-lambda-lay/">← Preparar artefactos: paquetes .zip vs imágenes de contenedor</a><a href="../cloudformation-templates-parameters-outputs-and-exports-fn-importvalue/">CloudFormation: plantillas, parámetros, salidas y exportacio →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Problemas de seguridad: denegaciones de SELinux, permisos … · Lección de Linux+</title>
+<meta name="description" content="Muchos tickets de 'simplemente dejó de funcionar' son en realidad controles de seguridad haciendo su trabajo: SELinux bloqueando un acceso inesperado, perm">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Problemas de seguridad: denegaciones de SELinux, permisos … · Lección de Linux+">
+<meta property="og:description" content="Muchos tickets de 'simplemente dejó de funcionar' son en realidad controles de seguridad haciendo su trabajo: SELinux bloqueando un acceso inesperado, perm">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/linux-plus/lessons/security-issues-selinux-denials-file-permissions-ssh-key-permissions-l/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/linux-plus/lessons/security-issues-selinux-denials-file-permissions-ssh-key-permissions-l/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../linux-plus/">Linux+</a> / <a href="../">Lecciones</a> · <a href="../../../../linux-plus/lessons/security-issues-selinux-denials-file-permissions-ssh-key-permissions-l/" hreflang="en" lang="en">English</a></p>
+<p class="note">CompTIA Linux+ XK0-006</p>
+<h1>Problemas de seguridad: denegaciones de SELinux, permisos de archivos, permisos de claves SSH, cuentas bloqueadas</h1>
+<article class="lbody">
+<p>Muchos tickets de 'simplemente dejó de funcionar' son en realidad controles de seguridad haciendo su trabajo: SELinux bloqueando un acceso inesperado, permisos demasiado restrictivos o demasiado abiertos, SSH rechazando una clave o una cuenta bloqueada tras inicios de sesión fallidos. La habilidad consiste en identificar qué control es el responsable y corregir la configuración sin debilitar la seguridad.</p>
+<p>Las denegaciones de SELinux a menudo aparecen como errores 'Permission denied' o HTTP 403 aunque los permisos normales parezcan correctos. Primero confirma que SELinux está involucrado: <code>getenforce</code> muestra el modo, y <code>ausearch -m avc -ts recent</code> (o <code>journalctl -t setroubleshoot</code>, o <code>sealert -a /var/log/audit/audit.log</code>) muestra las denegaciones AVC indicando el tipo del proceso de origen, el tipo del archivo de destino y la operación. Las causas y soluciones habituales son: etiquetas de archivo incorrectas después de <code>mv</code> o de restaurar archivos (se corrige con <code>restorecon -Rv ruta</code>), contenido en una ubicación no estándar (agrega una regla con <code>semanage fcontext -a -t type 'path(/.*)?'</code> y luego restorecon), un servicio en un puerto no estándar (<code>semanage port -a -t http_port_t -p tcp 8081</code>) o un comportamiento opcional que necesita un booleano (<code>setsebool -P httpd_can_network_connect on</code>). Poner brevemente el modo permissive con <code>setenforce 0</code> puede confirmar que SELinux es la causa, pero vuelve a enforcing y corrige el problema de la política en lugar de dejarlo desactivado.</p>
+<p>Los problemas de permisos de archivos siguen las reglas de lecciones anteriores. El usuario del proceso necesita lectura sobre los archivos y ejecución sobre cada directorio de la ruta; compruébalo con <code>namei -l /ruta/completa</code> y <code>ls -l</code>, y averigua con qué usuario se ejecuta un servicio con <code>ps -o user= -p PID</code> o con la configuración <code>User=</code> de la unidad. Revisa la pertenencia a grupos con <code>id user</code>, las ACL con <code>getfacl</code> y las opciones de montaje como <code>noexec</code> con <code>findmnt</code>. La solución es el cambio mínimo necesario, como ajustar la propiedad del grupo o agregar una ACL, nunca <code>chmod 777</code>, que crea un nuevo problema de seguridad. Presta atención también a lo contrario: archivos demasiado permisivos, como scripts escribibles por todos que ejecuta root, claves privadas legibles por otros o archivos de configuración que contienen contraseñas.</p>
+<p>La autenticación con claves SSH falla en silencio cuando los permisos son laxos, porque la comprobación StrictModes de sshd rechaza las claves que otros usuarios podrían haber manipulado. En el servidor, el directorio personal del usuario no debe ser escribible por el grupo ni por todos, <code>~/.ssh</code> debería ser 700 y <code>~/.ssh/authorized_keys</code> 600, todo propiedad del usuario. En el cliente, la clave privada debe ser 600, o ssh se niega a usarla con 'UNPROTECTED PRIVATE KEY FILE'. En sistemas con SELinux, un archivo authorized_keys creado de forma inusual puede necesitar <code>restorecon -Rv ~/.ssh</code>. Para el diagnóstico, ejecuta <code>ssh -v user@host</code> en el cliente y lee <code>journalctl -u sshd</code> (o <code>/var/log/secure</code> o <code>auth.log</code>) en el servidor, donde mensajes como 'Authentication refused: bad ownership or modes' apuntan directamente a la causa. Confirma también que la clave está en el archivo de la cuenta correcta y que <code>AllowUsers</code> o <code>AllowGroups</code> permiten al usuario.</p>
+<p>Las cuentas bloqueadas o expiradas producen fallos de inicio de sesión que parecen contraseñas incorrectas. Revisa cada causa posible: <code>faillock --user nombre</code> muestra los bloqueos por intentos fallidos (restablece con <code>--reset</code> después de confirmar que los intentos no fueron un ataque); <code>passwd -S nombre</code> muestra si la contraseña está bloqueada (<code>LK</code> o <code>L</code>); <code>chage -l nombre</code> muestra las fechas de expiración de la contraseña y de la cuenta; el shell en <code>/etc/passwd</code> podría ser <code>nologin</code>; y para las cuentas de directorio, revisa SSSD e <code>id nombre</code>. Investiga por qué se bloqueó una cuenta antes de desbloquearla, porque una ráfaga de fallos desde una dirección IP desconocida puede ser un intento de fuerza bruta que requiere un bloqueo en el firewall o un informe de incidente.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>AVC denial (denegación AVC)</dt><dd>Un mensaje del access vector cache de SELinux que registra una operación bloqueada por la política, guardado en el log de auditoría.</dd><dt>StrictModes</dt><dd>Una configuración de sshd (activada de forma predeterminada) que rechaza las claves cuando los permisos del directorio personal, de .ssh o de authorized_keys son demasiado abiertos.</dd><dt>namei -l</dt><dd>Muestra la propiedad y los permisos de cada componente de una ruta, revelando dónde se bloquea el acceso.</dd><dt>faillock</dt><dd>Comando que muestra y restablece los bloqueos por inicios de sesión fallidos registrados por pam_faillock.</dd><dt>passwd -S</dt><dd>Muestra el estado de la contraseña de un usuario, incluido si está bloqueada.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Después de restaurar un directorio personal, el inicio de sesión con clave SSH de un desarrollador falla y pasa a pedir contraseña. journalctl -u sshd muestra 'Authentication refused: bad ownership or modes for directory /home/dev'. La restauración dejó el directorio personal escribible por el grupo. chmod 755 /home/dev, chmod 700 ~/.ssh, chmod 600 ~/.ssh/authorized_keys y restorecon -Rv /home/dev/.ssh restablecen el inicio de sesión con clave.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Cuando el acceso falla pero los permisos parecen correctos en un sistema con SELinux, revisa ausearch -m avc antes de tocar chmod; la solución normalmente es restorecon, semanage o un booleano, nunca deshabilitar SELinux.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué permisos deberían tener ~/.ssh y ~/.ssh/authorized_keys para que el inicio de sesión con clave funcione de forma confiable?</summary><p>~/.ssh 700 y authorized_keys 600, propiedad del usuario, con un directorio personal que no sea escribible por el grupo ni por otros.</p></details>
+<details class="sq"><summary>Un usuario dice que su contraseña dejó de funcionar de repente. Menciona tres comandos para revisar el estado de la cuenta.</summary><p>faillock --user &lt;name&gt;, passwd -S &lt;name&gt; y chage -l &lt;name&gt; (revisa también el shell en /etc/passwd).</p></details>
+<details class="sq"><summary>¿Por qué chmod 777 es una mala solución para un error de permiso denegado?</summary><p>Da acceso completo a todos, creando un agujero de seguridad en lugar de otorgar solo el acceso mínimo que necesita el proceso.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Linux+ gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../linux-plus/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../service-failures-systemctl-status-exit-codes-journalctl-dependencies-p/">← Fallas de servicios: códigos de salida en systemctl status, </a><a href="../hardware-dmesg-lspci-lsusb-smartctl-failing-disks-and-raid-degradation/">Hardware: dmesg, lspci, lsusb, smartctl, discos que fallan y →</a></nav>
+</main>
+</body>
+</html>

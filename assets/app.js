@@ -34,6 +34,21 @@
   const TRACKS = CertHub.tracks || [{ id: "all", name: "All", certs: CertHub.catalog }];
   const TRACK_KEY = "certhub:track";
   const curTrack = () => { const t = CertHub.store.get(TRACK_KEY) || "all"; return t === "all" || TRACKS.some(x => x.id === t) ? t : "all"; };
+  // Certifications with saved progress, newest activity first: jump back in.
+  function continueHtml() {
+    const rows = Object.values(certs).map(c => {
+      let p = null; try { p = JSON.parse(CertHub.store.get("certhub:v1:" + c.id) || "null"); } catch (e) {}
+      if (!p || !p.start) return null;
+      const last = Math.max(0, ...(p.history || []).map(h => h.at));
+      const used = last || Object.keys(p.read || {}).length || Object.keys(p.stats || {}).length || Object.values(p.checks || {}).some(Boolean);
+      if (!used) return null;
+      const wk = Math.max(1, Math.floor((U.today() - U.parseD(p.start)) / U.DAY / 7) + 1);
+      const due = Object.values(p.review || {}).filter(r => r.due <= U.today().getTime() + 1000).length;
+      return { c, wk, due, last };
+    }).filter(Boolean).sort((a, b) => b.last - a.last).slice(0, 4);
+    if (!rows.length) return "";
+    return `<h2>Continue studying</h2><div class="panel">${rows.map(r => `<div class="row"><div class="grow"><a href="#${esc(r.c.id)}.week"><strong>${esc(r.c.short)} ${esc(r.c.exam)}</strong></a><br><span class="note">Week ${r.wk}${r.due ? ` · ${r.due} review${r.due > 1 ? "s" : ""} due` : ""}</span></div><a class="btn sm" href="#${esc(r.c.id)}.week">Today's plan</a></div>`).join("")}</div>`;
+  }
   function trackPicker() {
     const cur = curTrack();
     return `<div class="trackpick" role="group" aria-labelledby="tracks-h">${[["all", "All tracks"], ...TRACKS.map(t => [t.id, t.name])].map(([id, name]) => `<button type="button" class="chipbtn" data-track="${esc(id)}" aria-pressed="${cur === id}">${esc(name)}</button>`).join("")}</div>`;
@@ -62,7 +77,9 @@
       <div class="btns">${start ? `<a class="btn" href="#lab-home-lab">Start with the home lab</a>` : ""}<a class="btn ghost" href="#labs">Browse ${labList.length} labs</a><a class="btn ghost" href="#portfolio">Your portfolio${doneLabs ? ` (${doneLabs})` : ""}</a></div>
     </section>
     ${CertHub.install.installed() ? "" : `<div class="panel installcard"><div class="grow"><strong>Get the app on your phone</strong><br><span class="note">Install it from your browser: it opens full screen and works offline. No app store needed.</span></div><div class="btns" style="margin:0">${CertHub.install.prompt ? `<button type="button" class="btn sm" data-gact="install">Install</button>` : ""}<a class="btn ghost sm" href="#install">How to install</a></div></div>`}
+    ${continueHtml()}
     <h2 id="tracks-h">Certifications by career track</h2>
+    <p class="note"><a href="#careers">Career paths</a>: which certification to take first, the jobs each track leads to, and interview practice.</p>
     ${trackPicker()}
     <div id="trackcards">${trackCards()}</div>
     <h2>Your progress</h2>
@@ -90,7 +107,7 @@
   };
 
   /* ---------- router ---------- */
-  const NAV = [["home", "Certifications"], ["labs", "Labs"], ["portfolio", "Portfolio"], ["frameworks", "Frameworks"]];
+  const NAV = [["home", "Certifications"], ["labs", "Labs"], ["portfolio", "Portfolio"], ["careers", "Careers"], ["frameworks", "Frameworks"]];
   // The Account tab only appears when the site has an accounts API configured.
   const navItems = () => CertHub.sync && CertHub.sync.enabled ? NAV.concat([["account", "Account"]]) : NAV;
   function topNav(cur) {
@@ -135,6 +152,7 @@
       else if (/^cohort-[0-9a-f]{24}$/.test(head) && CertHub.accountViews) { topNav("account"); CertHub.accountViews.cohort(head.slice(7)); title = "Cohort Progress"; view = head; }
       else if (/^cap-[a-z0-9-]{1,60}$/.test(head) && CertHub.pro) { topNav("labs"); CertHub.pro.capstoneView(head); title = "Capstone project"; view = head; }
       else if (head === "frameworks" && CertHub.frameworksView) { topNav("frameworks"); $("#app").innerHTML = CertHub.frameworksView(); title = "Frameworks"; view = "frameworks"; }
+      else if ((head === "careers" || /^career-[a-z]{2,20}$/.test(head)) && CertHub.careerViews) { topNav("careers"); CertHub.careerViews.show(head); title = "Career Paths"; view = head; }
       else if (head === "portfolio") { topNav("portfolio"); $("#app").innerHTML = CertHub.labViews.portfolio(); title = "Lab Portfolio"; view = "portfolio"; }
       else { topNav("home"); $("#app").innerHTML = homeView(); view = "home"; }
     }

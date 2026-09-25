@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Preparar los hosts para kubeadm: containerd, cgroup driver… · Lección de CKA</title>
+<meta name="description" content="kubeadm arranca un clúster, pero asume que cada host ya está preparado: un container runtime instalado, el kernel configurado para la red de contenedores y">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Preparar los hosts para kubeadm: containerd, cgroup driver… · Lección de CKA">
+<meta property="og:description" content="kubeadm arranca un clúster, pero asume que cada host ya está preparado: un container runtime instalado, el kernel configurado para la red de contenedores y">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/preparing-hosts-for-kubeadm-containerd-matching-systemd-cgroup-driver/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/preparing-hosts-for-kubeadm-containerd-matching-systemd-cgroup-driver/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/preparing-hosts-for-kubeadm-containerd-matching-systemd-cgroup-driver/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Preparar los hosts para kubeadm: containerd, cgroup driver systemd coincidente, swap, módulos overlay y br_netfilter, sysctls de ip_forward y bridge, y puertos requeridos</h1>
+<article class="lbody">
+<p>kubeadm arranca un clúster, pero asume que cada host ya está preparado: un container runtime instalado, el kernel configurado para la red de contenedores y el kubelet capaz de gestionar recursos. Sus preflight checks te detendrán si algo de esto está mal, y el CKA puede pedirte que arregles un host que no los pasa.</p>
+<p>Empieza por el container runtime. containerd es la opción más común. Instálalo, genera una configuración por defecto con <code>containerd config default &gt; /etc/containerd/config.toml</code> y asegúrate de que las opciones del runtime runc tengan <code>SystemdCgroup = true</code>. En distribuciones basadas en systemd, el kubelet usa por defecto el cgroup driver <code>systemd</code> cuando lo configura kubeadm, y el runtime debe usar el mismo driver. Si el kubelet y el runtime no coinciden en el cgroup driver, los Pods e incluso el nodo pueden volverse inestables. Reinicia containerd después de editar el archivo.</p>
+<p>Luego, el swap. Históricamente el kubelet se negaba a iniciar con swap habilitado, y el paso estándar de preparación sigue siendo deshabilitarlo: <code>swapoff -a</code> para el sistema en ejecución y comentar las líneas de swap en <code>/etc/fstab</code> para que siga deshabilitado después de un reinicio. Las versiones más recientes de Kubernetes agregaron soporte configurable para swap, pero a menos que una tarea indique lo contrario, lo seguro es esperar que el swap esté deshabilitado.</p>
+<p>La red de contenedores necesita dos módulos del kernel. <code>overlay</code> da soporte al sistema de archivos overlay que usan las imágenes de contenedor, y <code>br_netfilter</code> hace que el tráfico en bridge sea visible para iptables. Cárgalos ahora con <code>modprobe</code> y hazlos persistentes en un archivo dentro de <code>/etc/modules-load.d/</code>. Después configura los sysctls para que el kernel reenvíe paquetes y haga pasar el tráfico en bridge por iptables.</p>
+<pre class="code" tabindex="0"><code>cat &lt;&lt;EOF | sudo tee /etc/modules-load.d/k8s.conf
+overlay
+br_netfilter
+EOF
+sudo modprobe overlay &amp;&amp; sudo modprobe br_netfilter
+cat &lt;&lt;EOF | sudo tee /etc/sysctl.d/k8s.conf
+net.ipv4.ip_forward = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+EOF
+sudo sysctl --system</code></pre>
+<p>Por último, los puertos. Los nodos del control plane necesitan tener accesibles, según corresponda, el 6443 (API server), el 2379 y el 2380 (cliente y peer de etcd), el 10250 (API del kubelet), el 10257 (controller-manager) y el 10259 (scheduler). Los worker nodes necesitan el 10250 más el rango de NodePort, de 30000 a 32767 por defecto. Tu plugin de CNI también puede necesitar sus propios puertos. Instala kubeadm, kubelet y kubectl en versiones coincidentes desde el repositorio de paquetes de Kubernetes y congélalos para que las actualizaciones rutinarias no los actualicen por sorpresa (por ejemplo <code>apt-mark hold kubelet kubeadm kubectl</code>).</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>cgroup driver (controlador de cgroups)</dt><dd>La forma en que el kubelet y el runtime crean los grupos de control; ambos deben usar el mismo, normalmente systemd.</dd><dt>br_netfilter</dt><dd>Un módulo del kernel que permite que iptables vea el tráfico que atraviesa un bridge de Linux.</dd><dt>net.ipv4.ip_forward</dt><dd>El sysctl que permite al kernel enrutar paquetes entre interfaces, necesario para el tráfico de los Pods.</dd><dt>Preflight checks (verificaciones previas)</dt><dd>Pruebas que kubeadm ejecuta antes de init o join para detectar errores de configuración del host.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p><code>kubeadm init</code> falla en los preflight checks con un mensaje de que el contenido de <code>/proc/sys/net/ipv4/ip_forward</code> no está en 1. Agregas <code>net.ipv4.ip_forward = 1</code> a <code>/etc/sysctl.d/k8s.conf</code>, ejecutas <code>sysctl --system</code> y vuelves a ejecutar init, que ahora pasa.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Una discrepancia de cgroup driver no siempre detiene la instalación; aparece más tarde como Pods que se reinician intermitentemente o errores del kubelet. Verifica <code>SystemdCgroup = true</code> en la configuración de containerd y reinicia containerd cada vez que la modifiques.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué dos módulos del kernel se cargan al preparar un host para kubeadm, y por qué?</summary><p>overlay para el sistema de archivos de las imágenes de contenedor y br_netfilter para que el tráfico en bridge de los Pods pase por iptables.</p></details>
+<details class="sq"><summary>¿Dónde haces persistentes los ajustes de sysctl para que sobrevivan a un reinicio?</summary><p>En un archivo dentro de /etc/sysctl.d/, aplicado con <code>sysctl --system</code>.</p></details>
+<details class="sq"><summary>¿Cuál es el rango de NodePort por defecto que debe estar abierto en los nodos?</summary><p>De 30000 a 32767.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../control-plane-and-node-components-kube-apiserver-etcd-kube-scheduler-k/">← Componentes del control plane y de los nodos: kube-apiserver</a><a href="../kubeadm-init-pod-network-cidr-control-plane-endpoint-installing-a-cni/">kubeadm init (pod network CIDR, control-plane endpoint), ins →</a></nav>
+</main>
+</body>
+</html>

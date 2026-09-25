@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IPsec sitio a sitio: IKE gateway, perfiles criptográficos … · Lección de NGFW Engineer</title>
+<meta name="description" content="Los firewalls de Palo Alto construyen VPN sitio a sitio basadas en rutas. En lugar de una política que diga 'cifra el tráfico de A a B', creas una interfaz">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="IPsec sitio a sitio: IKE gateway, perfiles criptográficos … · Lección de NGFW Engineer">
+<meta property="og:description" content="Los firewalls de Palo Alto construyen VPN sitio a sitio basadas en rutas. En lugar de una política que diga 'cifra el tráfico de A a B', creas una interfaz">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/palo-alto-ngfw/lessons/site-to-site-ipsec-ike-gateway-ike-and-ipsec-crypto-profiles-tunnel-in/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/palo-alto-ngfw/lessons/site-to-site-ipsec-ike-gateway-ike-and-ipsec-crypto-profiles-tunnel-in/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../palo-alto-ngfw/">NGFW Engineer</a> / <a href="../">Lecciones</a> · <a href="../../../../palo-alto-ngfw/lessons/site-to-site-ipsec-ike-gateway-ike-and-ipsec-crypto-profiles-tunnel-in/" hreflang="en" lang="en">English</a></p>
+<p class="note">Palo Alto Networks Certified Next-Generation Firewall Engineer NGFW-Engineer</p>
+<h1>IPsec sitio a sitio: IKE gateway, perfiles criptográficos IKE e IPsec, interfaces tunnel, proxy IDs, tunnel monitoring</h1>
+<article class="lbody">
+<p>Los firewalls de Palo Alto construyen VPN sitio a sitio basadas en rutas. En lugar de una política que diga 'cifra el tráfico de A a B', creas una interfaz tunnel y enrutas las redes remotas hacia ella. Todo lo que se enruta hacia el túnel se cifra con IPsec. Esto mantiene la lógica de la VPN en el enrutamiento, donde las rutas estáticas o los protocolos dinámicos pueden dirigir el tráfico.</p>
+<p>Los bloques de construcción se configuran en orden. Primero, una interfaz tunnel (Network &gt; Interfaces &gt; Tunnel, por ejemplo <code>tunnel.10</code>) asignada a un virtual o logical router y a una zona de seguridad; una dirección IP en ella es opcional, pero es necesaria para el tunnel monitoring o el enrutamiento dinámico a través del túnel. Segundo, un IKE crypto profile para la fase 1: grupo Diffie-Hellman (DH), algoritmo de cifrado, algoritmo de autenticación (hash) y tiempo de vida de la clave. Tercero, un IPsec crypto profile para la fase 2: ESP (o AH), cifrado, autenticación, grupo DH para perfect forward secrecy (PFS) y tiempo de vida. Ambos peers deben coincidir en estos valores.</p>
+<p>Luego viene el IKE gateway (Network &gt; Network Profiles &gt; IKE Gateways). Define la versión de IKE (IKEv1, IKEv2 o IKEv2 preferred), la interfaz e IP locales, la dirección del peer (IP estática, FQDN o dinámica), la autenticación por pre-shared key o certificado, la identificación local y del peer, el IKE crypto profile y opciones como NAT traversal y dead peer detection. Por último, el objeto IPsec tunnel (Network &gt; IPsec Tunnels) une la interfaz tunnel, el IKE gateway y el IPsec crypto profile.</p>
+<p>Los proxy IDs definen qué subredes locales y remotas cubre la asociación de seguridad de la fase 2. Un túnel de PAN-OS a PAN-OS no los necesita, porque ambos lados usan 0.0.0.0/0 de forma predeterminada. Pero cuando el peer es un dispositivo basado en políticas, debes ingresar proxy IDs que reflejen exactamente las redes locales y remotas configuradas en el peer, uno por cada par de subredes. Una discrepancia es la causa clásica de que la fase 1 se establezca mientras la fase 2 falla.</p>
+<p>El tunnel monitoring envía pings a través del túnel hacia una IP de destino del otro lado, con origen en la IP de la interfaz tunnel. Un perfil de monitoreo elige qué sucede ante una falla: Wait Recover mantiene el túnel y espera, mientras que Fail Over permite que el enrutamiento o PBF muevan el tráfico a un camino de respaldo. Dead peer detection funciona a nivel de IKE; el tunnel monitoring demuestra que el tráfico realmente pasa.</p>
+<p>No olvides la política y el enrutamiento. Necesitas una ruta para las subredes remotas que apunte a la interfaz tunnel y reglas de seguridad entre la zona interna y la zona de la VPN. Diagnostica con los indicadores de estado de la página IPsec Tunnels, el System log (mensajes de IKE) y comandos de CLI como <code>show vpn ike-sa</code>, <code>show vpn ipsec-sa</code> y <code>test vpn ike-sa gateway &lt;name&gt;</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>IKE gateway</dt><dd>El objeto que define el peer de la VPN, la interfaz local, la versión de IKE, la autenticación y el IKE crypto profile para la fase 1.</dd><dt>IPsec crypto profile (perfil criptográfico IPsec)</dt><dd>Configuración de la fase 2: ESP o AH, cifrado, autenticación, grupo DH para PFS y tiempo de vida.</dd><dt>Proxy ID</dt><dd>Un par de subredes local/remota que define una SA de fase 2, requerido cuando el peer usa una VPN basada en políticas.</dd><dt>Tunnel monitoring (monitoreo del túnel)</dt><dd>Pings a través del túnel hacia una IP remota que detectan un camino de datos roto y disparan wait-recover o fail-over.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Conectas un firewall PAN-OS al dispositivo VPN basado en políticas de un socio que protege 172.16.5.0/24 y 172.16.6.0/24. La fase 1 se establece, pero solo funciona una subred. El System log muestra una discrepancia en la propuesta de la fase 2. Al agregar dos proxy IDs, uno por cada subred remota emparejada con tu red local 10.1.0.0/16, ambas SA se levantan.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Fase 1 arriba pero fase 2 abajo con un peer basado en políticas casi siempre significa proxy IDs. Recuerda que la interfaz tunnel necesita una zona y un router, y que el tráfico sigue necesitando reglas de seguridad y una ruta.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué objeto une la interfaz tunnel, el IKE gateway y el IPsec crypto profile?</summary><p>La configuración de IPsec tunnel en Network &gt; IPsec Tunnels.</p></details>
+<details class="sq"><summary>¿Cuándo se requieren proxy IDs?</summary><p>Cuando el peer es un dispositivo VPN basado en políticas; deben reflejar los pares de subredes locales y remotas del peer.</p></details>
+<details class="sq"><summary>¿Qué requiere el tunnel monitoring en la interfaz tunnel?</summary><p>Una dirección IP, que se usa como origen de los pings de monitoreo.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia NGFW Engineer gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../palo-alto-ngfw/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../high-availability-active-passive-vs-active-active-ha1-ha2-ha3-and-back/">← Alta disponibilidad: active/passive vs active/active, enlace</a><a href="../quantum-resistant-ikev2-vpns-post-quantum-preshared-keys-and-gre-tunne/">VPN IKEv2 resistentes a la computación cuántica (post-quantu →</a></nav>
+</main>
+</body>
+</html>

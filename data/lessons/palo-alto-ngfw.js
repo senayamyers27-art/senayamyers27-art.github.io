@@ -1373,4 +1373,4 @@ CertHub.addLessons("palo-alto-ngfw", [
    ]
   ]
  }
-]);
+], { reviewed: "2026-09-25" });

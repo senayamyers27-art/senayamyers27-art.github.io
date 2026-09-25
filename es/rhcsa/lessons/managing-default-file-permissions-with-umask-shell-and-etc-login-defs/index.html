@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gestionar los permisos predeterminados de los archivos con… · Lección de RHCSA</title>
+<meta name="description" content="Cuando un programa crea un archivo o directorio, pide un modo inicial: 666 (rw-rw-rw-) para los archivos regulares y 777 (rwxrwxrwx) para los directorios. ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Gestionar los permisos predeterminados de los archivos con… · Lección de RHCSA">
+<meta property="og:description" content="Cuando un programa crea un archivo o directorio, pide un modo inicial: 666 (rw-rw-rw-) para los archivos regulares y 777 (rwxrwxrwx) para los directorios. ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/managing-default-file-permissions-with-umask-shell-and-etc-login-defs/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/managing-default-file-permissions-with-umask-shell-and-etc-login-defs/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/managing-default-file-permissions-with-umask-shell-and-etc-login-defs/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Gestionar los permisos predeterminados de los archivos con umask (shell y /etc/login.defs, ~/.bashrc)</h1>
+<article class="lbody">
+<p>Cuando un programa crea un archivo o directorio, pide un modo inicial: 666 (rw-rw-rw-) para los archivos regulares y 777 (rwxrwxrwx) para los directorios. Luego la umask (máscara de creación de archivos del usuario) quita bits de esa petición. Cada proceso tiene su propia umask, heredada de su padre, así que el valor establecido en tu shell controla los permisos de todo lo que creas desde él.</p>
+<p>La umask enumera los bits que se quitan. Con umask 022, se quita la escritura al grupo y a los otros: los archivos nuevos obtienen 644 (rw-r--r--) y los directorios nuevos 755. Con umask 002, solo los otros pierden la escritura: archivos 664, directorios 775. Con umask 077, el grupo y los otros lo pierden todo: archivos 600, directorios 700. Los archivos nunca obtienen ejecución por la umask, porque los programas no la piden para los archivos regulares.</p>
+<pre class="code" tabindex="0"><code>umask            # 0022
+umask -S         # u=rwx,g=rx,o=rx
+umask 027
+touch f; mkdir d
+ls -ld f d       # -rw-r----- f   drwxr-x--- d</code></pre>
+<p>Establecer <code>umask 027</code> en el prompt afecta solo a ese shell y a sus hijos, y desaparece al cerrar la sesión. Para que sea persistente para un usuario, añade la línea <code>umask</code> a <code>~/.bashrc</code> (que leen los shells interactivos) o a <code>~/.bash_profile</code> (que se lee al iniciar sesión). Los cambios surten efecto en los shells nuevos.</p>
+<p>En RHEL los valores predeterminados de todo el sistema vienen de varios lugares. <code>/etc/login.defs</code> tiene un ajuste <code>UMASK</code>, usado por ejemplo al crear directorios personales y aplicado al iniciar sesión por PAM (Pluggable Authentication Modules). Los archivos de inicio del shell como <code>/etc/profile</code> y <code>/etc/bashrc</code> también pueden establecerla, y el lugar más limpio para anularla a nivel de todo el sitio es un script en <code>/etc/profile.d/</code>. Los resultados típicos son 0022 para root y 0002 para los usuarios normales, lo que encaja con los grupos privados de usuario de RHEL, porque el grupo de un usuario solo lo contiene a él.</p>
+<pre class="code" tabindex="0"><code># /etc/profile.d/umask.sh  (todos los usuarios)
+umask 027
+
+# ~/.bashrc  (un usuario)
+umask 077</code></pre>
+<p>Dos cosas que recordar. La umask nunca concede permisos; solo los quita, así que no puede hacer ejecutable un archivo. Y se aplica solo en la creación; los archivos existentes conservan sus modos, así que usa <code>chmod</code> para corregirlos. Algunos servicios, como las unidades de systemd con <code>UMask=</code>, establecen sus propios valores independientemente de tu shell.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>umask</dt><dd>Una máscara por proceso de bits de permiso que se quitan a los archivos y directorios nuevos.</dd><dt>Default creation mode (modo de creación predeterminado)</dt><dd>El modo que piden los programas antes de aplicar la máscara: 666 para archivos y 777 para directorios.</dd><dt>~/.bashrc</dt><dd>Un archivo de inicio del shell por usuario donde se puede establecer una umask persistente para ese usuario.</dd><dt>/etc/profile.d/</dt><dd>Un directorio de scripts del shell que se ejecutan al iniciar sesión para todos los usuarios; un lugar limpio para ajustes de todo el sitio como la umask.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Los archivos nuevos del usuario daniel deben poder leerse solo por él. Añades umask 077 a /home/daniel/.bashrc. Después de que vuelva a iniciar sesión, touch report.txt crea -rw------- y mkdir notes crea drwx------.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Resta la umask a 666 para los archivos y a 777 para los directorios. Con umask 027, los archivos quedan en 640 y los directorios en 750.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Con umask 007, ¿qué modos obtienen los archivos y directorios nuevos?</summary><p>Archivos 660 (rw-rw----) y directorios 770 (rwxrwx---).</p></details>
+<details class="sq"><summary>¿Dónde establecerías una umask persistente para un solo usuario?</summary><p>En el ~/.bashrc o ~/.bash_profile de ese usuario.</p></details>
+<details class="sq"><summary>¿Puede la umask hacer ejecutables los archivos regulares nuevos?</summary><p>No; solo quita bits, y los programas piden 666 para los archivos, así que la ejecución nunca se establece por defecto.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../configuring-firewall-settings-with-firewall-cmd-zones-services-ports-s/">← Configurar el firewall con firewall-cmd: zonas, servicios, p</a><a href="../configuring-key-based-ssh-authentication-ssh-keygen-ssh-copy-id-ssh-pe/">Configurar la autenticación SSH basada en claves (ssh-keygen →</a></nav>
+</main>
+</body>
+</html>

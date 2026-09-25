@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Drift de recursos: detectarlo con `plan` y `apply -refresh… · Lección de Terraform Associate</title>
+<meta name="description" content="El drift (deriva) ocurre cuando la infraestructura real ya no coincide con lo que Terraform registró por última vez. Alguien edita un security group en la ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Drift de recursos: detectarlo con `plan` y `apply -refresh… · Lección de Terraform Associate">
+<meta property="og:description" content="El drift (deriva) ocurre cuando la infraestructura real ya no coincide con lo que Terraform registró por última vez. Alguien edita un security group en la ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/terraform/lessons/resource-drift-detecting-it-with-plan-and-apply-refresh-only-reconcili/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/terraform/lessons/resource-drift-detecting-it-with-plan-and-apply-refresh-only-reconcili/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../terraform/">Terraform Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../terraform/lessons/resource-drift-detecting-it-with-plan-and-apply-refresh-only-reconcili/" hreflang="en" lang="en">English</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004)</p>
+<h1>Drift de recursos: detectarlo con `plan` y `apply -refresh-only`, y reconciliar la configuración</h1>
+<article class="lbody">
+<p>El drift (deriva) ocurre cuando la infraestructura real ya no coincide con lo que Terraform registró por última vez. Alguien edita un security group en la consola, un proceso de autoscaling cambia un ajuste o un recurso se elimina a mano. Terraform no vigila tu infraestructura de forma continua, así que el drift permanece invisible hasta la próxima vez que Terraform compruebe.</p>
+<p>Esa comprobación es el paso de refresh. De forma predeterminada, <code>terraform plan</code> y <code>terraform apply</code> primero hacen refresh: le piden a los providers el estado actual de cada objeto gestionado y actualizan la vista en memoria de Terraform. Luego el plan compara la configuración con esa vista actualizada. Si alguien cambió algo, el plan muestra una nota de que hubo objetos que cambiaron fuera de Terraform, seguida de las acciones necesarias para volver a alinear la realidad con tu configuración. Un recurso eliminado aparece como que necesita crearse de nuevo.</p>
+<p>A veces quieres ver o aceptar el drift sin cambiar la infraestructura. <code>terraform plan -refresh-only</code> muestra cómo cambiaría el estado para coincidir con la realidad, sin proponer ningún cambio en la infraestructura. <code>terraform apply -refresh-only</code> hace lo mismo y, después de que lo apruebas, escribe esos valores actualizados en el archivo de estado. Nunca crea, modifica ni destruye objetos reales. Esto reemplazó al antiguo comando <code>terraform refresh</code>, que actualizaba el estado sin mostrarte qué cambiaría ni pedir aprobación, y que ahora está obsoleto.</p>
+<pre class="code" tabindex="0"><code>$ terraform plan -refresh-only
+Note: Objects have changed outside of Terraform
+  # aws_security_group.web has changed
+  ~ ingress = [...]</code></pre>
+<p>Detectar el drift es la mitad del trabajo; reconciliarlo es la otra mitad. Tienes dos opciones. Si el cambio manual fue incorrecto, simplemente ejecuta un <code>terraform apply</code> normal, y Terraform devuelve el recurso a lo que dice tu configuración. Si el cambio manual fue correcto (por ejemplo, una corrección de emergencia que debe quedarse), actualiza la configuración para que coincida con él y luego ejecuta plan para confirmar que no hay cambios. Usar solo <code>apply -refresh-only</code> únicamente actualiza el estado; en el siguiente plan normal, Terraform seguirá intentando revertir el objeto si la configuración no coincide.</p>
+<p>Para reducir el drift, limita el acceso a la consola para los recursos que gestiona Terraform, haz los cambios mediante revisión de código y usa <code>lifecycle { ignore_changes = [...] }</code> para los atributos que legítimamente se gestionan en otro lugar, como un número deseado ajustado por un autoscaler. Las evaluaciones de estado (health assessments) de HCP Terraform también pueden ejecutar la detección de drift de forma programada y avisarte.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Drift (deriva)</dt><dd>Una diferencia entre la infraestructura real y el estado que Terraform registró por última vez, normalmente por cambios hechos fuera de Terraform.</dd><dt>Refresh (actualización)</dt><dd>El paso en el que Terraform lee de los providers el estado actual de los objetos gestionados antes de planificar.</dd><dt>-refresh-only</dt><dd>Un modo de plan o apply que solo actualiza el estado para que coincida con la infraestructura real, sin cambiar ningún recurso.</dd><dt>ignore_changes</dt><dd>Un ajuste de lifecycle que le indica a Terraform que ignore los cambios en atributos específicos al planificar.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Durante un incidente, un ingeniero abre el puerto 8443 en un security group desde la consola. El siguiente terraform plan informa que el grupo cambió fuera de Terraform y propone eliminar la regla. Como el cambio debe quedarse, el equipo agrega la regla a la configuración, y el siguiente plan no muestra cambios.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> apply -refresh-only solo actualiza el estado y nunca cambia la infraestructura; para conservar un cambio manual de forma permanente también debes actualizar la configuración.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué comando actualiza el estado para que coincida con la infraestructura real sin cambiar ningún recurso?</summary><p>terraform apply -refresh-only.</p></details>
+<details class="sq"><summary>¿Qué pasa si ejecutas un terraform apply normal después de que alguien cambió manualmente un recurso gestionado?</summary><p>Terraform planea devolver el recurso a lo que dice la configuración.</p></details>
+<details class="sq"><summary>¿Qué comando antiguo reemplaza -refresh-only?</summary><p>terraform refresh, que está obsoleto porque actualizaba el estado sin revisión.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Terraform Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../terraform/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../sensitive-data-in-state-and-protecting-remote-state-encryption-access/">← Datos sensibles en el estado y protección del estado remoto </a><a href="../cli-workspaces-terraform-workspace-new-select-list-terraform-workspace/">Workspaces de la CLI: `terraform workspace new/select/list`  →</a></nav>
+</main>
+</body>
+</html>

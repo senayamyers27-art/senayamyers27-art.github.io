@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Secretos y configuración: Secrets Manager (rotación) vs Sy… · Lección de Developer Associate</title>
+<meta name="description" content="Las aplicaciones necesitan valores de configuración (ajustes de funcionalidades, URL de endpoints, nombres de tablas) y secretos (contraseñas de bases de d">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Secretos y configuración: Secrets Manager (rotación) vs Sy… · Lección de Developer Associate">
+<meta property="og:description" content="Las aplicaciones necesitan valores de configuración (ajustes de funcionalidades, URL de endpoints, nombres de tablas) y secretos (contraseñas de bases de d">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/secrets-and-configuration-secrets-manager-rotation-vs-systems-manager/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/secrets-and-configuration-secrets-manager-rotation-vs-systems-manager/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/secrets-and-configuration-secrets-manager-rotation-vs-systems-manager/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Secretos y configuración: Secrets Manager (rotación) vs Systems Manager Parameter Store (SecureString, niveles)</h1>
+<article class="lbody">
+<p>Las aplicaciones necesitan valores de configuración (ajustes de funcionalidades, URL de endpoints, nombres de tablas) y secretos (contraseñas de bases de datos, claves de API). Ambos deben vivir fuera del código, en un servicio que controle el acceso con IAM y registre el uso en CloudTrail. AWS ofrece dos opciones principales, y el examen normalmente te pide elegir entre ellas.</p>
+<p>AWS Systems Manager Parameter Store es un almacén jerárquico de clave-valor para configuración y secretos. Los parámetros tienen nombres con forma de ruta, como <code>/myapp/prod/db-url</code>, lo que te permite obtener una rama completa con <code>GetParametersByPath</code> y controlar el acceso por ruta en las políticas de IAM. Los tipos son <code>String</code>, <code>StringList</code> y <code>SecureString</code>; los valores SecureString se cifran con una clave de KMS (la clave administrada por AWS <code>aws/ssm</code> o tu clave administrada por el cliente) y se devuelven descifrados cuando pasas <code>WithDecryption=true</code> y tienes el permiso <code>kms:Decrypt</code>. Los parámetros conservan un historial de versiones. Hay dos niveles: los parámetros Standard son gratuitos, con un tamaño máximo de valor menor (4 KB) y una cuota de cantidad por región; los parámetros Advanced permiten valores más grandes (8 KB) y políticas de parámetros como fechas de expiración y notificaciones, y tienen costo. El rendimiento Standard basta para la mayoría de las aplicaciones; se puede habilitar un rendimiento mayor con costo adicional.</p>
+<p>AWS Secrets Manager está hecho específicamente para secretos. Su función estrella es la rotación automática: según una programación, Secrets Manager invoca una función Lambda de rotación que crea una nueva credencial, la configura en la base de datos o el servicio, la prueba y la marca como actual. AWS proporciona funciones de rotación listas para usar para Amazon RDS, Aurora, Redshift y DocumentDB, y puedes escribir las tuyas para otros sistemas. Durante la rotación, las etiquetas de preparación (staging labels: <code>AWSCURRENT</code>, <code>AWSPENDING</code>, <code>AWSPREVIOUS</code>) llevan el control de las versiones para que las aplicaciones siempre lean un valor que funciona. Secrets Manager también admite la replicación de secretos entre regiones, políticas basadas en recursos para el acceso entre cuentas y la generación de contraseñas aleatorias. Siempre se cifra con KMS y tiene un cargo mensual por secreto más cargos por llamadas a la API.</p>
+<p>Cómo elegir: si el requisito menciona rotación automática de credenciales de bases de datos, réplicas de secretos entre regiones o integración con RDS, elige Secrets Manager. Si enfatiza bajo costo, valores de configuración simples, una jerarquía de ajustes o guardar configuración no secreta junto con algunos valores cifrados, elige Parameter Store con SecureString. Parameter Store también puede referenciar secretos de Secrets Manager mediante una ruta especial, lo que da una sola API para ambos.</p>
+<p>En Lambda, obtén los secretos en la inicialización (fuera del handler) y guárdalos en caché durante un período, en lugar de hacerlo en cada invocación, para reducir la latencia y los costos de API. La extensión AWS Parameters and Secrets Lambda Extension ofrece una caché local por HTTP para esto. En CloudFormation, las referencias dinámicas como <code>{{resolve:secretsmanager:MySecret:SecretString:password}}</code> y <code>{{resolve:ssm-secure:/myapp/db-pass}}</code> (para las propiedades de recursos compatibles) inyectan los valores en el momento del despliegue sin ponerlos en la plantilla. Nunca guardes secretos en variables de entorno en texto plano ni en el control de código fuente.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Secrets Manager rotation (rotación de Secrets Manager)</dt><dd>Un proceso programado en el que una función Lambda reemplaza la credencial de un secreto tanto en el secreto como en el servicio de destino.</dd><dt>SecureString</dt><dd>Un tipo de parámetro de Parameter Store cuyo valor se cifra con una clave de KMS.</dd><dt>Parameter hierarchy (jerarquía de parámetros)</dt><dd>Nombres de parámetros con forma de ruta que agrupan ajustes y permiten obtenerlos y controlarlos con IAM por ruta.</dd><dt>Advanced parameter (parámetro Advanced)</dt><dd>Un nivel de pago de Parameter Store con valores más grandes y políticas de parámetros como la expiración.</dd><dt>Staging label (etiqueta de preparación)</dt><dd>Una etiqueta como AWSCURRENT o AWSPENDING que marca qué versión de un secreto está en uso.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un equipo de cumplimiento exige que la contraseña de Aurora de producción cambie cada 30 días sin tiempo de inactividad. Los desarrolladores la guardan en Secrets Manager con la función de rotación integrada para Aurora en una programación de 30 días, y sus funciones Lambda leen el secreto mediante la extensión de caché, así que los valores nuevos se toman en cuestión de minutos.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> La rotación automática es la palabra clave para Secrets Manager. La forma más barata de guardar configuración y algunos valores cifrados, organizados en una jerarquía: Parameter Store con SecureString.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué servicio rota automáticamente las credenciales de RDS?</summary><p>AWS Secrets Manager, usando una función Lambda de rotación.</p></details>
+<details class="sq"><summary>¿Qué se necesita para leer un SecureString en texto plano?</summary><p>Llamar a GetParameter con WithDecryption en true y tener el permiso kms:Decrypt sobre la clave usada.</p></details>
+<details class="sq"><summary>Menciona una característica de los parámetros Advanced que no tienen los Standard.</summary><p>Las políticas de parámetros, como la expiración, o tamaños de valor más grandes (8 KB en lugar de 4 KB).</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../encryption-in-transit-tls-acm-certificates-us-east-1-for-cloudfront-en/">← Cifrado en tránsito: TLS, certificados de ACM (us-east-1 par</a><a href="../keeping-sensitive-data-out-of-code-and-logs-default-credential-chain-n/">Mantener los datos sensibles fuera del código y de los logs: →</a></nav>
+</main>
+</body>
+</html>

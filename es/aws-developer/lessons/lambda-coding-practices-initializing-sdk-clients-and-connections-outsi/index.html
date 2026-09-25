@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Buenas prácticas de código en Lambda: inicializar clientes… · Lección de Developer Associate</title>
+<meta name="description" content="Una función Lambda es un handler (manejador): una función que Lambda llama una vez por invocación con dos argumentos, el evento (los datos de entrada) y el">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Buenas prácticas de código en Lambda: inicializar clientes… · Lección de Developer Associate">
+<meta property="og:description" content="Una función Lambda es un handler (manejador): una función que Lambda llama una vez por invocación con dos argumentos, el evento (los datos de entrada) y el">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/lambda-coding-practices-initializing-sdk-clients-and-connections-outsi/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/lambda-coding-practices-initializing-sdk-clients-and-connections-outsi/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/lambda-coding-practices-initializing-sdk-clients-and-connections-outsi/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Buenas prácticas de código en Lambda: inicializar clientes del SDK y conexiones fuera del handler, leer eventos, devolver respuestas proxy de API Gateway</h1>
+<article class="lbody">
+<p>Una función Lambda es un handler (manejador): una función que Lambda llama una vez por invocación con dos argumentos, el evento (los datos de entrada) y el contexto (información de tiempo de ejecución como el ID de solicitud y el tiempo restante). Escribir bien el handler tiene un efecto directo en la velocidad, el costo y la corrección.</p>
+<p>Lambda reutiliza los entornos de ejecución. La primera invocación en un entorno nuevo ejecuta la fase de inicialización (init phase), que carga tu código y ejecuta todo lo que está fuera del handler; esto forma parte de un arranque en frío. Las invocaciones posteriores en el mismo entorno pasan directamente al handler. Así que crea los clientes del SDK y las conexiones a bases de datos, y carga la configuración o las bibliotecas grandes, a nivel de módulo, fuera del handler. Se crean una sola vez y se reutilizan en muchas invocaciones en caliente, lo que ahorra tiempo y evita abrir una nueva conexión a la base de datos en cada solicitud. Mantén dentro del handler todo lo específico de la solicitud, y no guardes datos de usuario en variables globales, porque la siguiente invocación puede venir de otro usuario.</p>
+<pre class="code" tabindex="0"><code>import os, json, boto3
+
+table = boto3.resource('dynamodb').Table(os.environ['TABLE_NAME'])  # se ejecuta una vez por entorno
+
+def handler(event, context):
+    order_id = event['pathParameters']['id']
+    item = table.get_item(Key={'orderId': order_id}).get('Item')
+    if not item:
+        return {'statusCode': 404, 'body': json.dumps({'message': 'not found'})}
+    return {
+        'statusCode': 200,
+        'headers': {'Content-Type': 'application/json'},
+        'body': json.dumps(item, default=str)
+    }</code></pre>
+<p>Leer el evento correctamente significa conocer su forma para cada fuente. Una notificación de S3 llega como <code>event['Records'][i]['s3']['bucket']['name']</code> y <code>['object']['key']</code> (las claves vienen codificadas como URL, así que decodifícalas). SQS entrega <code>Records</code> con <code>body</code> como una cadena que normalmente analizas como JSON. Un evento de integración proxy de API Gateway incluye <code>httpMethod</code> (REST API) o <code>requestContext.http.method</code> (HTTP API, versión de carga útil 2.0), <code>path</code> (<code>rawPath</code> en 2.0), <code>headers</code>, <code>queryStringParameters</code>, <code>pathParameters</code> y <code>body</code> como cadena, posiblemente codificada en Base64 cuando <code>isBase64Encoded</code> es true. Maneja siempre los campos ausentes, porque en un evento de REST API <code>queryStringParameters</code> es null cuando no se envía cadena de consulta (en un evento 2.0 el campo simplemente no está).</p>
+<p>Con una integración proxy de Lambda, API Gateway pasa la solicitud completa a la función y espera recibir un objeto de respuesta específico: <code>statusCode</code> (número), <code>headers</code> y <code>multiValueHeaders</code> opcionales, <code>body</code> como cadena (así que debes aplicar <code>json.dumps</code> o <code>JSON.stringify</code> a los objetos) y <code>isBase64Encoded</code> opcional para contenido binario. Si devuelves otra forma, como un objeto sin procesar o un cuerpo que no es cadena, API Gateway no puede mapearlo y el cliente recibe un 502 Bad Gateway con un mensaje como 'Malformed Lambda proxy response'. Para clientes de navegador que llaman a una integración proxy, la propia función debe devolver los encabezados CORS, como <code>Access-Control-Allow-Origin</code>.</p>
+<p>Otras buenas prácticas: usa <code>get_remaining_time_in_millis()</code> del objeto de contexto para detenerte de forma controlada antes de agotar el tiempo; registra los logs en JSON estructurado; mantén pequeños los paquetes de despliegue; y evita los patrones recursivos, como una función que escribe en el mismo prefijo del bucket de S3 que la dispara.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Handler (manejador)</dt><dd>La función que Lambda llama en cada invocación, que recibe el evento y el objeto de contexto.</dd><dt>Init phase (fase de inicialización)</dt><dd>La parte de un arranque en frío en la que Lambda carga el código y ejecuta la inicialización fuera del handler, una vez por entorno de ejecución.</dd><dt>Lambda proxy integration (integración proxy de Lambda)</dt><dd>Una integración de API Gateway que pasa la solicitud HTTP completa a Lambda y espera una respuesta con statusCode, headers y un body de tipo cadena.</dd><dt>Context object (objeto de contexto)</dt><dd>El segundo argumento del handler, que expone el ID de solicitud, el nombre de la función, el límite de memoria y el tiempo de ejecución restante.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>La API de un equipo devuelve errores 502 después de una refactorización. Los logs muestran que la función ahora devuelve {'statusCode': 200, 'body': {'id': 7}}. Como el body es un objeto y no una cadena, API Gateway rechaza la respuesta; envolverlo en json.dumps corrige el error.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Espera una pregunta en la que la solución para funciones lentas o que agotan las conexiones sea mover la creación de clientes o conexiones fuera del handler. Un 502 de una integración proxy casi siempre significa que la forma de la respuesta o el body de tipo cadena están mal.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué inicializar una conexión a la base de datos fuera del handler?</summary><p>Se ejecuta una vez por entorno de ejecución y la reutilizan las invocaciones en caliente, lo que reduce la latencia y el número de conexiones abiertas.</p></details>
+<details class="sq"><summary>¿Qué debe ser el campo body en una respuesta proxy de Lambda?</summary><p>Una cadena; los objetos deben serializarse, por ejemplo con JSON.stringify o json.dumps.</p></details>
+<details class="sq"><summary>¿Dónde se encuentra la cadena de consulta en un evento proxy de REST API y cuál es su valor cuando no se envía ninguna?</summary><p>En queryStringParameters, que es null cuando la solicitud no tiene cadena de consulta, así que el código debe manejar ese caso.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../lambda-invocation-models-synchronous-asynchronous-retries-destinations/">← Modelos de invocación de Lambda: síncrono, asíncrono (reinte</a><a href="../dynamodb-partition-and-sort-keys-query-vs-scan-lsi-vs-gsi-rcu-wcu-math/">DynamoDB: claves de partición y de ordenamiento, Query vs Sc →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DynamoDB: claves de partición y de ordenamiento, Query vs … · Lección de Developer Associate</title>
+<meta name="description" content="Amazon DynamoDB es una base de datos sin servidor de clave-valor y de documentos. Es rápida a cualquier escala si diseñas en torno a sus claves, y se evalú">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="DynamoDB: claves de partición y de ordenamiento, Query vs … · Lección de Developer Associate">
+<meta property="og:description" content="Amazon DynamoDB es una base de datos sin servidor de clave-valor y de documentos. Es rápida a cualquier escala si diseñas en torno a sus claves, y se evalú">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/dynamodb-partition-and-sort-keys-query-vs-scan-lsi-vs-gsi-rcu-wcu-math/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/dynamodb-partition-and-sort-keys-query-vs-scan-lsi-vs-gsi-rcu-wcu-math/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/dynamodb-partition-and-sort-keys-query-vs-scan-lsi-vs-gsi-rcu-wcu-math/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>DynamoDB: claves de partición y de ordenamiento, Query vs Scan, LSI vs GSI, cálculo de RCU/WCU, modelos de consistencia, expresiones de condición, TTL, Streams, DAX</h1>
+<article class="lbody">
+<p>Amazon DynamoDB es una base de datos sin servidor de clave-valor y de documentos. Es rápida a cualquier escala si diseñas en torno a sus claves, y se evalúa mucho en DVA-C02, incluida la aritmética.</p>
+<p>Toda tabla tiene una clave primaria. Una clave primaria simple es solo una clave de partición; DynamoDB le aplica un hash para elegir la partición de almacenamiento, así que cada valor debe ser único. Una clave primaria compuesta agrega una clave de ordenamiento (sort key): los elementos comparten una clave de partición y se almacenan ordenados por la clave de ordenamiento, lo que permite consultas por rango como todos los pedidos del cliente 42 entre dos fechas. Los elementos pueden tener hasta 400 KB.</p>
+<p><code>Query</code> encuentra elementos por clave de partición (coincidencia exacta) y puede acotar con condiciones sobre la clave de ordenamiento (<code>=</code>, <code>&lt;</code>, <code>between</code>, <code>begins_with</code>). Lee solo los elementos que coinciden y es eficiente. <code>Scan</code> lee todos los elementos de la tabla o del índice y luego filtra, consumiendo capacidad por todo lo leído incluso cuando un <code>FilterExpression</code> descarta la mayor parte. Prefiere Query; usa Scan solo para tablas pequeñas o exportaciones, y acelera los escaneos grandes con segmentos de escaneo en paralelo. <code>ProjectionExpression</code> limita los atributos devueltos, pero no la capacidad consumida.</p>
+<p>Los índices secundarios permiten consultar por otros atributos. Un índice secundario local (LSI) mantiene la misma clave de partición con una clave de ordenamiento distinta, debe crearse cuando se crea la tabla y admite lecturas fuertemente consistentes. Un índice secundario global (GSI) puede tener una clave de partición y de ordenamiento completamente distintas, puede agregarse en cualquier momento, tiene su propia capacidad y solo admite lecturas eventualmente consistentes. Si la capacidad de escritura de un GSI es demasiado baja, las escrituras en la tabla base se limitan.</p>
+<p>Cálculo de capacidad: una unidad de capacidad de lectura (RCU) es una lectura fuertemente consistente por segundo de un elemento de hasta 4 KB, o dos lecturas eventualmente consistentes por segundo. Una unidad de capacidad de escritura (WCU) es una escritura por segundo de un elemento de hasta 1 KB. Primero redondea hacia arriba el tamaño del elemento y luego multiplica. Las lecturas y escrituras transaccionales cuestan el doble. Por ejemplo, 10 lecturas fuertemente consistentes por segundo de elementos de 6 KB: 6 KB se redondea a 8 KB, que son 2 RCU cada una, así que 20 RCU; con consistencia eventual serían 10 RCU. Escribir 5 elementos por segundo de 2.5 KB se redondea a 3 KB cada uno, así que 15 WCU.</p>
+<p>Las lecturas son eventualmente consistentes por defecto y pueden no reflejar por un momento una escritura reciente; configura <code>ConsistentRead=true</code> para lecturas fuertemente consistentes (al doble del costo en RCU). Las expresiones de condición hacen que las escrituras sean condicionales, por ejemplo <code>attribute_not_exists(pk)</code> para evitar sobrescribir o <code>version = :expected</code> para el bloqueo optimista; una condición fallida lanza <code>ConditionalCheckFailedException</code>. <code>UpdateItem</code> con <code>ADD</code> o <code>SET x = x + :inc</code> actualiza de forma atómica sin una lectura previa.</p>
+<p>Time to Live (TTL) elimina elementos después de una marca de tiempo guardada en un atributo que tú nombras, en segundos de época Unix, sin costo de escritura; la eliminación ocurre en segundo plano, normalmente en unos pocos días, así que filtra los elementos vencidos en las consultas. DynamoDB Streams registra los cambios a nivel de elemento (solo claves, imagen nueva, imagen anterior o ambas) durante 24 horas y suele disparar Lambda para replicación, auditoría o notificaciones. DynamoDB Accelerator (DAX) es una caché en memoria compatible con la API que reduce las lecturas eventualmente consistentes a microsegundos; no ayuda con las lecturas fuertemente consistentes ni con cargas de trabajo con muchas escrituras.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Partition key (clave de partición)</dt><dd>El atributo clave al que DynamoDB aplica un hash para decidir qué partición almacena un elemento.</dd><dt>Global secondary index (GSI, índice secundario global)</dt><dd>Un índice con su propia clave de partición y de ordenamiento, que se puede agregar en cualquier momento, con capacidad separada y solo lecturas eventualmente consistentes.</dd><dt>Local secondary index (LSI, índice secundario local)</dt><dd>Un índice que comparte la clave de partición de la tabla con una clave de ordenamiento alternativa; solo se crea junto con la tabla.</dd><dt>Read capacity unit (RCU, unidad de capacidad de lectura)</dt><dd>Una lectura fuertemente consistente por segundo, o dos lecturas eventualmente consistentes, de un elemento de hasta 4 KB.</dd><dt>Write capacity unit (WCU, unidad de capacidad de escritura)</dt><dd>Una escritura por segundo de un elemento de hasta 1 KB.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un juego guarda puntuaciones con la clave de partición playerId y la clave de ordenamiento gameDate. Para mostrar una tabla de clasificación de un juego entre todos los jugadores, el desarrollador agrega un GSI con clave de partición gameId y clave de ordenamiento score, y luego ejecuta un Query sobre el GSI con ScanIndexForward en false.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> En las preguntas de RCU/WCU, siempre redondea el tamaño del elemento hacia arriba al siguiente múltiplo de 4 KB (lecturas) o 1 KB (escrituras) antes de multiplicar; luego divide entre dos para lecturas eventualmente consistentes o duplica para transacciones.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cuántas RCU necesitan 20 lecturas eventualmente consistentes por segundo de elementos de 9 KB?</summary><p>9 KB se redondea a 12 KB, que son 3 RCU por lectura fuertemente consistente; la consistencia eventual lo reduce a la mitad, así que 20 x 3 / 2 = 30 RCU.</p></details>
+<details class="sq"><summary>Necesitas un nuevo patrón de consulta en una tabla existente con una clave de partición distinta. ¿LSI o GSI?</summary><p>Un GSI, porque puede usar una clave de partición distinta y puede agregarse a una tabla existente.</p></details>
+<details class="sq"><summary>¿Por qué un Scan con FilterExpression es costoso?</summary><p>Se consume capacidad por cada elemento leído antes de aplicar el filtro, no solo por los elementos devueltos.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../lambda-coding-practices-initializing-sdk-clients-and-connections-outsi/">← Buenas prácticas de código en Lambda: inicializar clientes d</a><a href="../amazon-s3-from-code-multipart-upload-storage-classes-and-lifecycle-eve/">Amazon S3 desde el código: carga multiparte, clases de almac →</a></nav>
+</main>
+</body>
+</html>

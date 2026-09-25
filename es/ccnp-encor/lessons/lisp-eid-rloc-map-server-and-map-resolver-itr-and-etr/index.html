@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LISP: EID, RLOC, map server y map resolver, ITR y ETR · Lección de ENCOR</title>
+<meta name="description" content="LISP (Locator/ID Separation Protocol) aborda una limitación básica de IP: una dirección IP dice tanto quién es un dispositivo como dónde está. Cuando un di">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="LISP: EID, RLOC, map server y map resolver, ITR y ETR · Lección de ENCOR">
+<meta property="og:description" content="LISP (Locator/ID Separation Protocol) aborda una limitación básica de IP: una dirección IP dice tanto quién es un dispositivo como dónde está. Cuando un di">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/lisp-eid-rloc-map-server-and-map-resolver-itr-and-etr/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/lisp-eid-rloc-map-server-and-map-resolver-itr-and-etr/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ccnp-encor/">ENCOR</a> / <a href="../">Lecciones</a> · <a href="../../../../ccnp-encor/lessons/lisp-eid-rloc-map-server-and-map-resolver-itr-and-etr/" hreflang="en" lang="en">English</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2</p>
+<h1>LISP: EID, RLOC, map server y map resolver, ITR y ETR</h1>
+<article class="lbody">
+<p>LISP (Locator/ID Separation Protocol) aborda una limitación básica de IP: una dirección IP dice tanto quién es un dispositivo como dónde está. Cuando un dispositivo se mueve, su dirección tiene que cambiar, y cada prefijo que deba ser alcanzable termina en las tablas de enrutamiento de toda la red. LISP separa esos dos roles en dos espacios de direcciones y agrega un sistema de mapeo entre ellos. Es el plano de control de Cisco SD-Access, así que ENCOR espera que conozcas sus componentes.</p>
+<p>El EID (endpoint identifier) es la dirección del endpoint, como la dirección IP de un host. Los EID identifican quién es el dispositivo y se mantienen iguales cuando se mueve. El RLOC (routing locator) es la dirección del router LISP detrás del cual está el EID, normalmente una loopback alcanzable en el underlay. Los RLOC identifican dónde está el dispositivo. El núcleo del underlay solo necesita enrutar los RLOC; no necesita conocer los prefijos EID.</p>
+<p>El sistema de mapeo almacena qué EID viven detrás de qué RLOC. Tiene dos funciones, que a menudo se ejecutan en el mismo dispositivo. El map server (MS) recibe los registros: los routers LISP envían mensajes Map-Register que dicen “estos prefijos EID son alcanzables a través de mi RLOC”. El map resolver (MR) recibe las consultas Map-Request de los routers que necesitan encontrar un EID y las reenvía al map server, que pasa la solicitud al ETR autoritativo o, si se le pide, envía un Map-Reply proxy en su nombre. En SD-Access, el nodo de plano de control ejecuta ambos roles.</p>
+<p>Los routers LISP tienen roles según la dirección del tráfico. El ITR (ingress tunnel router, router de túnel de entrada) recibe paquetes de los hosts locales dirigidos a un EID remoto. Busca en su map cache; si no hay entrada, envía un Map-Request al map resolver, recibe un Map-Reply con el RLOC, lo guarda en caché y encapsula el paquete con un encabezado externo dirigido a ese RLOC. El ETR (egress tunnel router, router de túnel de salida) es el router que está frente a los EID de destino. Registra sus EID con el map server, responde los Map-Request, desencapsula los paquetes que llegan y los entrega al host local. Un router que hace ambas cosas es un xTR, que es el caso habitual en el borde de un sitio. Los ITR proxy y los ETR proxy (PITR y PETR) conectan los sitios LISP con redes que no son LISP, de forma similar a como un border node de SD-Access conecta el fabric con el exterior.</p>
+<p>El flujo se basa en la demanda, como DNS: los routers obtienen solo los mapeos que necesitan y los guardan en caché, en lugar de que cada router tenga todas las rutas. Esto mantiene el estado pequeño y facilita la movilidad. Cuando un host se mueve a un sitio nuevo, el nuevo ETR registra el EID con su propio RLOC, el map server actualiza el mapeo, y el ETR anterior o el map server avisa a los ITR para que actualicen sus cachés, por ejemplo con un Solicit-Map-Request.</p>
+<p>LISP tradicional usa su propia encapsulación de plano de datos sobre UDP puerto 4341, con los mensajes de control en UDP 4342. SD-Access conserva el plano de control LISP pero usa VXLAN para el plano de datos para poder transportar tramas de Capa 2 y el Scalable Group Tag.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>EID</dt><dd>Endpoint identifier: la dirección que identifica a un host y que lo acompaña cuando se mueve.</dd><dt>RLOC</dt><dd>Routing locator: la dirección del underlay del router LISP a través del cual es alcanzable un EID.</dd><dt>Map server</dt><dd>Recibe los mensajes Map-Register de los ETR y almacena los mapeos de EID a RLOC.</dd><dt>Map resolver</dt><dd>Recibe las consultas Map-Request de los ITR y las resuelve al RLOC correcto.</dd><dt>ITR y ETR</dt><dd>El ingress tunnel router encapsula el tráfico hacia un RLOC remoto; el egress tunnel router registra los EID locales y desencapsula el tráfico que llega.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>El host 10.1.1.10 en el sitio A envía un paquete a 10.2.2.20 en el sitio B. El ITR del sitio A no tiene entrada en caché, así que envía un Map-Request al map resolver. El ETR del sitio B había registrado 10.2.2.0/24 con el RLOC 192.0.2.2, así que el ITR aprende ese mapeo, lo guarda en caché y encapsula el paquete hacia 192.0.2.2, donde el ETR lo desencapsula y lo entrega.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El registro va al map server (el ETR envía Map-Register); las búsquedas van al map resolver (el ITR envía Map-Request). La identidad es el EID; la ubicación es el RLOC.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué dispositivo LISP envía mensajes Map-Register y a quién?</summary><p>El ETR, al map server, anunciando los prefijos EID alcanzables detrás de su RLOC.</p></details>
+<details class="sq"><summary>¿Por qué LISP facilita la movilidad de los hosts?</summary><p>El host conserva su EID; solo cambia el mapeo de EID a RLOC cuando se mueve, así que el enrutamiento del underlay no cambia.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia ENCOR gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ccnp-encor/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../gre-over-ipsec-and-virtual-tunnel-interfaces-for-routing-protocols-ove/">← GRE sobre IPsec e interfaces de túnel virtuales para protoco</a><a href="../vxlan-vni-vtep-udp-encapsulation-overlay-vs-underlay/">VXLAN: VNI, VTEP, encapsulación UDP, overlay frente a underl →</a></nav>
+</main>
+</body>
+</html>

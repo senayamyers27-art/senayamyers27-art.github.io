@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dominancia de cases y exhaustividad (enums, tipos sellados… · Lección de OCP Java</title>
+<meta name="description" content="Dos comprobaciones del compilador hacen seguros los switch con pattern matching: la dominancia y la exhaustividad. La dominancia asegura que se pueda llega">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Dominancia de cases y exhaustividad (enums, tipos sellados… · Lección de OCP Java">
+<meta property="og:description" content="Dos comprobaciones del compilador hacen seguros los switch con pattern matching: la dominancia y la exhaustividad. La dominancia asegura que se pueda llega">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/java-se/lessons/case-dominance-and-exhaustiveness-enums-sealed-types-default/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/java-se/lessons/case-dominance-and-exhaustiveness-enums-sealed-types-default/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../java-se/">OCP Java</a> / <a href="../">Lecciones</a> · <a href="../../../../java-se/lessons/case-dominance-and-exhaustiveness-enums-sealed-types-default/" hreflang="en" lang="en">English</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25)</p>
+<h1>Dominancia de cases y exhaustividad (enums, tipos sellados, default)</h1>
+<article class="lbody">
+<p>Dos comprobaciones del compilador hacen seguros los switch con pattern matching: la dominancia y la exhaustividad. La dominancia asegura que se pueda llegar a cada case. La exhaustividad asegura que todo valor posible esté cubierto. Ambas son errores de compilación, así que las preguntas del examen suelen preguntar si un switch compila.</p>
+<p>Una etiqueta case está dominada cuando una etiqueta anterior coincide con todos los valores con los que ella coincidiría, así que nunca podría ejecutarse. Las reglas principales son: un patrón de tipo domina a un patrón posterior del mismo tipo o de un subtipo (<code>case CharSequence cs</code> antes de <code>case String s</code> es un error); un patrón sin guarda domina a un patrón con guarda del mismo tipo (<code>case Integer i</code> antes de <code>case Integer i when i &gt; 5</code> es un error); y un patrón domina a una etiqueta constante posterior de ese tipo (<code>case Integer i</code> antes de <code>case 42</code> es un error). La solución es ordenar los cases del más específico al más general. Un patrón con guarda no domina a un patrón posterior, porque el compilador no puede saber si la guarda es verdadera, pero las etiquetas constantes deben ir igualmente antes de cualquier patrón de su tipo, con o sin guarda.</p>
+<p><code>default</code> también participa. En un switch que usa patrones, una etiqueta de patrón después de <code>default</code> es un error, ya que <code>default</code> la dominaría. El hábito seguro es poner <code>default</code> al final. Además, un switch no puede tener a la vez un <code>default</code> y un patrón incondicional como <code>case Object o</code> cuando el selector es <code>Object</code>, porque ambos coincidirían con todo.</p>
+<p>La exhaustividad se requiere en toda expresión switch y en cualquier sentencia switch que use patrones o <code>case null</code>. Para un selector <code>enum</code>, listar todas las constantes hace que el switch sea exhaustivo. Para un tipo sellado, cubrir todos los subtipos permitidos lo hace exhaustivo, y no se necesita <code>default</code>. En otro caso, agrega <code>default</code> o un patrón incondicional. Una sentencia switch clásica sobre un <code>int</code>, <code>String</code> o <code>enum</code> con solo etiquetas constantes sigue pudiendo omitir valores.</p>
+<pre class="code" tabindex="0"><code>sealed interface Vehicle permits Car, Truck {}
+final class Car implements Vehicle {}
+final class Truck implements Vehicle {}
+
+int wheels(Vehicle v) {
+    return switch (v) {     // exhaustivo sin default
+        case Car c -&gt; 4;
+        case Truck t -&gt; 6;
+    };
+}
+
+// No compila: el segundo case está dominado
+// switch (obj) { case Number n -&gt; 1; case Integer i -&gt; 2; default -&gt; 0; }</code></pre>
+<p>Confiar en la exhaustividad en lugar de <code>default</code> es una decisión de diseño. Si alguien luego agrega un subtipo permitido o una nueva constante de enum, todo switch sin <code>default</code> deja de compilar, señalando exactamente el código que necesita actualizarse. Si código compilado contra la versión anterior se ejecuta con un subtipo o constante nuevos que no conoce, el switch lanza una <code>MatchException</code> en tiempo de ejecución (para tipos sellados; los switch sobre enums más antiguos usaban <code>IncompatibleClassChangeError</code>).</p>
+<p>Al revisar una respuesta, pregúntate primero: ¿se puede llegar alguna vez a cada case posterior? Luego: ¿hay algún valor que ningún case maneje? Un switch debe pasar ambas preguntas para compilar.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Dominance (dominancia)</dt><dd>Un case está dominado cuando un case anterior coincide con todos los valores con los que él podría coincidir, lo que lo hace inalcanzable y es un error de compilación.</dd><dt>Exhaustive switch (switch exhaustivo)</dt><dd>Un switch cuyos cases cubren todos los valores posibles del selector, requerido para expresiones switch y switch con patrones.</dd><dt>Unconditional pattern (patrón incondicional)</dt><dd>Un patrón que coincide con todos los valores del tipo del selector, como case Object o para un selector Object.</dd><dt>MatchException</dt><dd>La excepción de tiempo de ejecución que lanza un switch exhaustivo si encuentra un valor que sus cases compilados no cubren, como un subtipo agregado recientemente.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un motor de impuestos tiene una interfaz sellada <code>Income</code> con los records permitidos <code>Salary</code>, <code>Dividend</code> y <code>Rent</code>. Sus expresiones switch no tienen default. Cuando el equipo agrega <code>Royalty</code> a la lista permits, el compilador marca cada switch que necesita un case nuevo, así que ninguna regla fiscal se omite en silencio.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Ordena los cases con patrones de lo específico a lo general: subtipos antes que supertipos, con guarda antes que sin guarda, constantes antes que patrones de tipo, y default al final.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué <code>case Integer i -&gt; ...; case Integer i when i &gt; 0 -&gt; ...;</code> no compila?</summary><p>El patrón Integer sin guarda coincide con todos los valores con los que coincidiría el que tiene guarda, así que el segundo case está dominado.</p></details>
+<details class="sq"><summary>¿Necesita <code>default</code> una expresión switch sobre una interfaz sellada si cada subtipo permitido tiene un case?</summary><p>No. Cubrir todos los subtipos permitidos la hace exhaustiva.</p></details>
+<details class="sq"><summary>¿Necesita una sentencia switch clásica sobre un enum con etiquetas constantes cubrir todas las constantes?</summary><p>No. Solo las expresiones switch y los switch con patrones deben ser exhaustivos.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia OCP Java gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../java-se/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../pattern-matching-in-switch-type-patterns-record-patterns-and-when-guar/">← Pattern matching en switch: patrones de tipo, patrones de re</a><a href="../while-do-while-for-and-enhanced-for-loops/">Bucles while, do-while, for y for mejorado →</a></nav>
+</main>
+</body>
+</html>

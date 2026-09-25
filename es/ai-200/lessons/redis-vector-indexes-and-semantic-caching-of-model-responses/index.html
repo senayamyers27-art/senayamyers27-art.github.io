@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Índices vectoriales de Redis y caché semántica de las resp… · Lección de AI-200</title>
+<meta name="description" content="Redis no es solo una caché de clave-valor. Con el módulo search (RediSearch, parte de Redis Stack y disponible como módulo en Azure Managed Redis), Redis p">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Índices vectoriales de Redis y caché semántica de las resp… · Lección de AI-200">
+<meta property="og:description" content="Redis no es solo una caché de clave-valor. Con el módulo search (RediSearch, parte de Redis Stack y disponible como módulo en Azure Managed Redis), Redis p">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/redis-vector-indexes-and-semantic-caching-of-model-responses/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/redis-vector-indexes-and-semantic-caching-of-model-responses/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/redis-vector-indexes-and-semantic-caching-of-model-responses/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Índices vectoriales de Redis y caché semántica de las respuestas del modelo</h1>
+<article class="lbody">
+<p>Redis no es solo una caché de clave-valor. Con el módulo search (RediSearch, parte de Redis Stack y disponible como módulo en Azure Managed Redis), Redis puede indexar campos dentro de hashes o documentos JSON, incluidos campos vectoriales, y ejecutar consultas de K vecinos más cercanos (K-nearest-neighbor) en memoria. En Azure Managed Redis eliges los módulos al crear la caché, así que planifica el uso de search desde el principio.</p>
+<p>Creas un índice con <code>FT.CREATE</code>, indicando el prefijo de claves que se va a indexar, la estructura de datos (HASH o JSON) y un esquema. Un campo vectorial declara su algoritmo (FLAT para búsqueda exacta, HNSW para aproximada), el tipo de elemento (como FLOAT32), el número de dimensiones y la métrica de distancia (COSINE, L2 o IP). Toda clave escrita con ese prefijo se indexa automáticamente.</p>
+<pre class="code" tabindex="0"><code>FT.CREATE idx:cache ON HASH PREFIX 1 semcache: SCHEMA
+  prompt TEXT
+  model TAG
+  embedding VECTOR HNSW 6 TYPE FLOAT32 DIM 1536 DISTANCE_METRIC COSINE
+
+FT.SEARCH idx:cache &quot;(@model:{gpt-small})=&gt;[KNN 3 @embedding $vec AS score]&quot;
+  PARAMS 2 vec &lt;binary float32 bytes&gt; SORTBY score DIALECT 2</code></pre>
+<p>La sintaxis de la consulta KNN combina un prefiltro (aquí, un filtro TAG sobre model) con una búsqueda vectorial, y el parámetro <code>$vec</code> lleva el vector de consulta como bytes sin procesar, que en Python generas con <code>astype(np.float32).tobytes()</code> de NumPy. DIALECT 2 es obligatorio para esta sintaxis vectorial parametrizada. Los resultados vuelven con la puntuación de distancia; con COSINE, una distancia menor significa más similitud.</p>
+<p>La caché semántica aplica esto a las llamadas al modelo. Una caché normal solo acierta con exactamente la misma clave, pero los usuarios hacen la misma pregunta de muchas formas: &quot;¿Cómo restablezco mi contraseña?&quot; y &quot;Olvidé mi contraseña, ¿qué hago?&quot;. Una caché semántica genera el embedding de cada prompt entrante, busca en el índice de la caché el prompt anterior más cercano y, si la distancia está por debajo de un umbral, devuelve la respuesta almacenada sin llamar al modelo. Cuando hay un fallo, la app llama al modelo y luego almacena el prompt, su embedding y la respuesta con un TTL.</p>
+<p>El beneficio es menor latencia y menor costo del modelo para el tráfico repetitivo, como preguntas frecuentes y bots de soporte. Los riesgos requieren diseño. El umbral de similitud es un equilibrio: si es demasiado laxo, los usuarios reciben respuestas a otra pregunta; si es demasiado estricto, la caché casi nunca acierta. Delimita las entradas con filtros, como la versión del modelo, el idioma, el inquilino o el usuario, para que la respuesta en caché de un inquilino nunca llegue a otro, y no almacenes en caché respuestas que contengan datos personales o que dependan del contexto propio del usuario. Usa TTL para que las respuestas basadas en hechos cambiantes expiren, e invalida las entradas cuando cambien los documentos subyacentes.</p>
+<p>La caché semántica complementa a RAG en lugar de reemplazarlo: RAG fundamenta las respuestas en tus datos, y la caché semántica evita repetir todo el recorrido de recuperación y generación para preguntas que en la práctica ya se respondieron.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>FT.CREATE</dt><dd>El comando de búsqueda de Redis que define un índice sobre claves de hash o JSON, incluidos los campos vectoriales.</dd><dt>KNN query (consulta KNN)</dt><dd>Una consulta de búsqueda de Redis que devuelve los K vectores más cercanos a un vector de consulta proporcionado.</dd><dt>Semantic cache (caché semántica)</dt><dd>Una caché que devuelve respuestas del modelo almacenadas para prompts cuyos embeddings son lo bastante similares al prompt nuevo.</dd><dt>Similarity threshold (umbral de similitud)</dt><dd>La distancia máxima a la que un prompt en caché se considera una coincidencia en una caché semántica.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un bot de soporte recibe a diario miles de preguntas sobre contraseñas con palabras ligeramente distintas. El equipo agrega una caché semántica en Redis: se genera el embedding de cada prompt y se busca con KNN 1, filtrando por idioma y versión del modelo, y se devuelven de inmediato las respuestas en caché con una distancia coseno por debajo de un umbral ajustado. Las llamadas al modelo para las preguntas comunes bajaron drásticamente, y las entradas expiran después de un día para que los cambios de política se reflejen.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> La caché semántica coincide por significado, no por texto exacto, así que el equilibrio que evalúa el examen es el umbral de similitud; delimita siempre las entradas de caché (inquilino, modelo, idioma) y asígnales un TTL.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Además del algoritmo (FLAT o HNSW), ¿qué tres configuraciones necesita un campo VECTOR de Redis?</summary><p>El tipo de elemento, el número de dimensiones y la métrica de distancia, por ejemplo TYPE FLOAT32 DIM 1536 DISTANCE_METRIC COSINE.</p></details>
+<details class="sq"><summary>¿Qué pasa si el umbral de similitud de una caché semántica es demasiado laxo?</summary><p>Preguntas distintas se tratan como si fueran la misma, así que los usuarios reciben respuestas en caché que no corresponden a lo que preguntaron.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../azure-managed-redis-cache-aside-pattern-ttl-and-invalidation-eviction/">← Azure Managed Redis: patrón cache-aside, TTL e invalidación,</a><a href="../choosing-the-store-cosmos-db-vs-postgresql-pgvector-vs-redis-for-a-giv/">Elegir el almacén: Cosmos DB vs PostgreSQL + pgvector vs Red →</a></nav>
+</main>
+</body>
+</html>

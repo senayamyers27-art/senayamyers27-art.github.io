@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Colas de Service Bus vs temas y suscripciones; el nivel Ba… · Lección de AI-200</title>
+<meta name="description" content="Azure Service Bus es un agente de mensajes empresarial totalmente administrado. Las aplicaciones le envían mensajes y otras aplicaciones los reciben más ta">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Colas de Service Bus vs temas y suscripciones; el nivel Ba… · Lección de AI-200">
+<meta property="og:description" content="Azure Service Bus es un agente de mensajes empresarial totalmente administrado. Las aplicaciones le envían mensajes y otras aplicaciones los reciben más ta">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/service-bus-queues-vs-topics-and-subscriptions-basic-tier-has-no-topic/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/service-bus-queues-vs-topics-and-subscriptions-basic-tier-has-no-topic/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/service-bus-queues-vs-topics-and-subscriptions-basic-tier-has-no-topic/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Colas de Service Bus vs temas y suscripciones; el nivel Basic no tiene temas</h1>
+<article class="lbody">
+<p>Azure Service Bus es un agente de mensajes empresarial totalmente administrado. Las aplicaciones le envían mensajes y otras aplicaciones los reciben más tarde, lo que desacopla a los emisores de los receptores: el receptor puede estar desconectado, ser lento o escalar de otra forma, y el mensaje espera de forma segura. Service Bus está diseñado para mensajes de alto valor, como pedidos o pagos, en los que cada mensaje debe procesarse de forma confiable. Trabajas con él en Python mediante el paquete <code>azure-servicebus</code>.</p>
+<p>El recurso de nivel superior es un namespace (espacio de nombres), que tiene un nombre completo que termina en <code>servicebus.windows.net</code>. Dentro de un namespace creas colas y temas.</p>
+<p>Una cola (queue) es punto a punto. Los emisores ponen mensajes en ella y cada mensaje se entrega exactamente a un receptor. Varios receptores pueden leer de la misma cola (consumidores en competencia), lo que reparte la carga y te permite escalar horizontalmente los workers, pero cada mensaje individual va solo a uno de ellos. Los mensajes se almacenan de forma duradera y se reciben en orden FIFO (primero en entrar, primero en salir) en condiciones normales, y características como las sesiones proporcionan un orden estricto cuando se necesita. Usa una cola cuando un tipo de trabajo debe hacerse una sola vez, como procesar un pedido.</p>
+<p>Un tema (topic) es de publicación-suscripción. Los emisores publican en el tema, y el tema tiene una o más suscripciones. Cada suscripción actúa como su propia cola virtual y recibe una copia de cada mensaje que coincide con sus reglas de filtro. Los receptores leen de una suscripción, no del tema. Usa temas cuando varios sistemas independientes deben reaccionar al mismo evento: un mensaje OrderPlaced podría ir a una suscripción de facturación, una de envíos y una de análisis, y cada una se procesa por separado y a su propio ritmo. Agregar un consumidor nuevo significa agregar una suscripción sin tocar al emisor.</p>
+<pre class="code" tabindex="0"><code>from azure.servicebus import ServiceBusClient, ServiceBusMessage
+from azure.identity import DefaultAzureCredential
+
+with ServiceBusClient(&quot;shop-sb.servicebus.windows.net&quot;, DefaultAzureCredential()) as client:
+    with client.get_topic_sender(topic_name=&quot;orders&quot;) as sender:
+        sender.send_messages(ServiceBusMessage('{&quot;id&quot;: 1001}', subject=&quot;OrderPlaced&quot;))
+    with client.get_subscription_receiver(&quot;orders&quot;, &quot;billing&quot;) as receiver:
+        for msg in receiver.receive_messages(max_message_count=10, max_wait_time=5):
+            print(str(msg))
+            receiver.complete_message(msg)</code></pre>
+<p>El nivel decide qué puedes usar. Basic solo admite colas, sin temas ni suscripciones, y carece de características como sesiones, transacciones y detección de duplicados. Standard agrega temas y suscripciones y esas características avanzadas, sobre capacidad compartida con precios por operación. Premium se ejecuta en recursos dedicados para un rendimiento predecible, admite mensajes más grandes, integración con redes virtuales y private endpoints, y opciones de mayor disponibilidad. Una trampa clásica del examen: un diseño con varios consumidores independientes de cada mensaje no puede usar el nivel Basic, porque Basic no tiene temas.</p>
+<p>Para los permisos, asigna a la app emisora el rol Azure Service Bus Data Sender y a la app receptora Azure Service Bus Data Receiver, con alcance en la cola o el tema, en lugar de distribuir cadenas de conexión con claves de acceso compartido.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Namespace (espacio de nombres)</dt><dd>El recurso contenedor de Service Bus que aloja colas y temas y define el nivel.</dd><dt>Queue (cola)</dt><dd>Una entidad punto a punto en la que cada mensaje lo recibe exactamente un consumidor.</dd><dt>Topic (tema)</dt><dd>Una entidad de publicación-suscripción en la que cada suscripción que coincide recibe su propia copia de un mensaje.</dd><dt>Subscription (suscripción)</dt><dd>Una vista con nombre, similar a una cola, de un tema, con sus propias reglas de filtro y receptores.</dd><dt>Competing consumers (consumidores en competencia)</dt><dd>Varios receptores que leen de la misma cola para repartirse el trabajo.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una startup creó el procesamiento de pedidos sobre una cola de un namespace Basic. Cuando los equipos de finanzas y de almacén necesitaron cada pedido, un segundo consumidor de la cola solo recibía la mitad de los pedidos, porque cada mensaje de una cola va a un solo receptor. Se pasaron a un namespace Standard con un tema orders y suscripciones separadas de facturación y envíos, y ahora cada sistema recibe todos los pedidos.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Un consumidor por mensaje significa una cola; que cada consumidor reciba una copia significa un tema con suscripciones, lo que requiere Standard o Premium porque Basic no tiene temas.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Dos servicios deben recibir cada uno todos los mensajes de pedidos. ¿Qué deberías usar?</summary><p>Un tema con una suscripción por servicio; una cola entregaría cada mensaje solo a uno de ellos.</p></details>
+<details class="sq"><summary>¿Qué nivel de Service Bus no puede alojar temas?</summary><p>Basic; los temas y las suscripciones requieren Standard o Premium.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../choosing-the-store-cosmos-db-vs-postgresql-pgvector-vs-redis-for-a-giv/">← Elegir el almacén: Cosmos DB vs PostgreSQL + pgvector vs Red</a><a href="../receive-modes-peek-lock-complete-abandon-dead-letter-defer-vs-receive/">Modos de recepción: peek-lock (complete, abandon, dead-lette →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Deployments y ReplicaSets: cómo encajan la plantilla de Po… · Lección de CKAD</title>
+<meta name="description" content="Un Deployment es la forma estándar de ejecutar una app sin estado. No gestiona Pods directamente. En su lugar crea un ReplicaSet, y el ReplicaSet mantiene ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Deployments y ReplicaSets: cómo encajan la plantilla de Po… · Lección de CKAD">
+<meta property="og:description" content="Un Deployment es la forma estándar de ejecutar una app sin estado. No gestiona Pods directamente. En su lugar crea un ReplicaSet, y el ReplicaSet mantiene ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/deployments-and-replicasets-how-the-pod-template-labels-and-selectors/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/deployments-and-replicasets-how-the-pod-template-labels-and-selectors/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/deployments-and-replicasets-how-the-pod-template-labels-and-selectors/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>Deployments y ReplicaSets: cómo encajan la plantilla de Pod, las etiquetas y los selectores</h1>
+<article class="lbody">
+<p>Un Deployment es la forma estándar de ejecutar una app sin estado. No gestiona Pods directamente. En su lugar crea un ReplicaSet, y el ReplicaSet mantiene en ejecución el número solicitado de réplicas de Pod, creando nuevas cuando los Pods mueren y eliminando las sobrantes. La función propia del Deployment es gestionar los ReplicaSets a lo largo del tiempo, lo que hace posibles los rolling updates y los rollbacks.</p>
+<p>Tres partes de la spec del Deployment trabajan juntas. <code>replicas</code> es cuántos Pods quieres. <code>template</code> es la plantilla de Pod: los metadatos (incluidas las etiquetas) y la spec de Pod a partir de los cuales se crea cada réplica. <code>selector</code> le dice al controlador qué Pods le pertenecen, usando <code>matchLabels</code> (o <code>matchExpressions</code>).</p>
+<pre class="code" tabindex="0"><code>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels:
+    app: web
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+        tier: frontend
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.27</code></pre>
+<p>La regla es que el selector debe coincidir con las etiquetas de la plantilla; el API server rechaza un Deployment en el que no coincidan. La plantilla puede llevar etiquetas adicionales (como <code>tier</code> arriba) que el selector ignora. En <code>apps/v1</code> el selector es inmutable tras la creación, así que elígelo con cuidado. Las etiquetas en el <code>metadata</code> propio del Deployment son solo etiquetas del objeto Deployment y no afectan a la selección.</p>
+<p>Cuando cambias cualquier cosa en la plantilla de Pod, como la imagen, una variable de entorno o una etiqueta, el Deployment calcula un hash de la plantilla y crea un nuevo ReplicaSet con un nombre basado en él, por ejemplo <code>web-7d9c6b8f5</code>. Luego escala hacia arriba el nuevo ReplicaSet y hacia abajo el antiguo. Los ReplicaSets antiguos permanecen con cero réplicas como historial de revisiones para el rollback, hasta <code>revisionHistoryLimit</code> (por defecto 10). Cambiar solo <code>replicas</code> no crea un nuevo ReplicaSet; simplemente escala el actual.</p>
+<p>Los Pods reciben nombres formados por el nombre del ReplicaSet más un sufijo aleatorio, y una etiqueta adicional <code>pod-template-hash</code> que evita que los ReplicaSets se apropien de los Pods de otros. Puedes ver la cadena con <code>kubectl get deploy,rs,pods -l app=web</code> y <code>kubectl describe rs</code>, cuya línea 'Controlled By' apunta al Deployment.</p>
+<p>Los selectores también conectan otros objetos: un Service con <code>selector: app: web</code> envía tráfico a estos Pods. Si creas un Pod suelto con la etiqueta <code>app: web</code>, el Service también le enviará tráfico, aunque el Deployment no lo gestione (los ReplicaSets del Deployment también seleccionan por <code>pod-template-hash</code>, así que no lo adoptan). Sin embargo, un ReplicaSet independiente con un selector simple <code>app: web</code> sí adoptaría ese Pod y eliminaría uno para mantener correcto su número. Entender este vínculo por etiquetas explica muchas sorpresas. Generación rápida: <code>kubectl create deployment web --image=nginx:1.27 --replicas=3 --dry-run=client -o yaml</code> produce automáticamente etiquetas de selector y de plantilla que coinciden (<code>app: web</code>).</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>ReplicaSet</dt><dd>Controlador que mantiene en ejecución un número fijo de Pods idénticos; normalmente lo gestiona un Deployment.</dd><dt>Pod template (plantilla de Pod)</dt><dd>Los metadatos y la spec de Pod dentro de un controlador a partir de los cuales se crea cada réplica.</dd><dt>Label selector (selector de etiquetas)</dt><dd>Una consulta sobre etiquetas, como matchLabels app: web, que decide qué Pods gestiona o apunta un objeto.</dd><dt>pod-template-hash</dt><dd>Etiqueta añadida por el Deployment para distinguir los Pods de distintos ReplicaSets.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un desarrollador edita la imagen de un Deployment. <code>kubectl get rs</code> muestra entonces dos ReplicaSets: el nuevo escalando de 0 a 3 y el antiguo de 3 a 0. Tras el rollout, el ReplicaSet antiguo se queda con 0 réplicas, listo para usarse si ejecutan <code>kubectl rollout undo</code>.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si <code>kubectl apply</code> falla con 'selector does not match template labels', haz que spec.selector.matchLabels sea un subconjunto de spec.template.metadata.labels. En apps/v1 el selector no puede cambiarse después.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué objeto crea directamente un Deployment?</summary><p>Un ReplicaSet, que a su vez crea los Pods.</p></details>
+<details class="sq"><summary>¿Escalar un Deployment de 3 a 5 réplicas crea un nuevo ReplicaSet?</summary><p>No; solo los cambios en la plantilla de Pod crean un nuevo ReplicaSet. Escalar ajusta el actual.</p></details>
+<details class="sq"><summary>¿Qué debe cumplirse entre el selector de un Deployment y las etiquetas de su plantilla?</summary><p>Cada etiqueta del selector debe aparecer con el mismo valor en las etiquetas de la plantilla.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../mounting-volumes-with-volumemounts-mountpath-subpath-and-readonly/">← Montar volúmenes con volumeMounts, mountPath, subPath y read</a><a href="../rolling-updates-maxsurge-maxunavailable-minreadyseconds-the-recreate-s/">Rolling updates: maxSurge, maxUnavailable, minReadySeconds;  →</a></nav>
+</main>
+</body>
+</html>

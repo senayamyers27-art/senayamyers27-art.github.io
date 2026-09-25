@@ -2116,4 +2116,4 @@ CertHub.addLessons("fortinet-fortigate", [
    ]
   ]
  }
-]);
+], { reviewed: "2026-09-25" });

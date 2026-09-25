@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Referencias entre recursos y dependencias implícitas · Lección de Terraform Associate</title>
+<meta name="description" content="Los recursos rara vez están solos. Una subred pertenece a una red, una instancia está en una subred, un registro DNS apunta a un balanceador de carga. En T">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Referencias entre recursos y dependencias implícitas · Lección de Terraform Associate">
+<meta property="og:description" content="Los recursos rara vez están solos. Una subred pertenece a una red, una instancia está en una subred, un registro DNS apunta a un balanceador de carga. En T">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/terraform/lessons/cross-resource-references-and-implicit-dependencies/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/terraform/lessons/cross-resource-references-and-implicit-dependencies/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../terraform/">Terraform Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../terraform/lessons/cross-resource-references-and-implicit-dependencies/" hreflang="en" lang="en">English</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004)</p>
+<h1>Referencias entre recursos y dependencias implícitas</h1>
+<article class="lbody">
+<p>Los recursos rara vez están solos. Una subred pertenece a una red, una instancia está en una subred, un registro DNS apunta a un balanceador de carga. En Terraform los conectas con referencias: expresiones que usan los atributos de otro objeto como valores de argumentos.</p>
+<pre class="code" tabindex="0"><code>resource &quot;aws_vpc&quot; &quot;main&quot; {
+  cidr_block = &quot;10.0.0.0/16&quot;
+}
+
+resource &quot;aws_subnet&quot; &quot;app&quot; {
+  vpc_id     = aws_vpc.main.id
+  cidr_block = &quot;10.0.1.0/24&quot;
+}
+
+resource &quot;aws_instance&quot; &quot;web&quot; {
+  subnet_id     = aws_subnet.app.id
+  ami           = var.ami_id
+  instance_type = &quot;t3.micro&quot;
+}</code></pre>
+<p>Las formas de referencia comunes son: <code>TYPE.NAME.ATTRIBUTE</code> para recursos; <code>data.TYPE.NAME.ATTRIBUTE</code> para data sources; <code>var.NAME</code> para variables de entrada; <code>local.NAME</code> para valores locales; <code>module.NAME.OUTPUT</code> para los outputs de un módulo hijo; y <code>path.module</code>, <code>path.root</code> y <code>terraform.workspace</code> para información del sistema de archivos y del workspace. Puedes referenciar los argumentos que estableces y los atributos que calcula el provider, como <code>id</code>, <code>arn</code> o <code>public_ip</code>; la documentación del provider lista ambos en las referencias de argumentos y atributos.</p>
+<p>Cada referencia a otro recurso o data source crea una dependencia implícita. En el ejemplo, Terraform ve que la subred usa <code>aws_vpc.main.id</code>, así que la red debe existir antes de poder crear la subred. La instancia referencia la subred, así que espera a la subred. Nunca indicas el orden; Terraform lo deduce y construye el grafo de dependencias. Los recursos sin referencias entre sí pueden crearse en paralelo.</p>
+<p>Las dependencias implícitas también explican <code>(known after apply)</code> en los planes. El ID de la red no existe hasta que el provider la crea, así que durante la planificación el <code>vpc_id</code> de la subred es desconocido. Terraform arrastra el valor desconocido y lo completa durante el apply una vez creada la red. Para destroy, se usan las mismas aristas en sentido inverso: primero la instancia, luego la subred y después la red.</p>
+<p>Prefiere las dependencias implícitas siempre que sea posible. Son precisas, porque Terraform sabe exactamente qué atributo se necesita, y se documentan solas en el código. El <code>depends_on</code> explícito solo se necesita cuando existe una dependencia que ninguna referencia a un atributo expresa, como una aplicación dentro de una máquina virtual que necesita que primero exista una política de permisos. Eso se cubre en una lección posterior.</p>
+<p>Una referencia también es un contrato. Si renombras un recurso, todas las expresiones que se refieren a él también deben cambiar, y de lo contrario Terraform verá el cambio de nombre como una destrucción y una creación; usa un bloque <code>moved</code> para decirle a Terraform que el objeto es el mismo.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Reference (referencia)</dt><dd>Una expresión que usa un valor de otro objeto, como <code>aws_vpc.main.id</code> o <code>var.region</code>.</dd><dt>Implicit dependency (dependencia implícita)</dt><dd>Una relación de orden que Terraform deduce automáticamente a partir de una referencia entre objetos.</dd><dt>Computed attribute (atributo calculado)</dt><dd>Un atributo que el provider establece después de la creación, como un ID, que a menudo se muestra como known after apply.</dd><dt>moved block (bloque moved)</dt><dd>Un bloque que le dice a Terraform que la dirección de un recurso cambió, para que actualice el estado en lugar de reemplazar el objeto.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un ingeniero agrega un security group y configura <code>vpc_security_group_ids = [aws_security_group.web.id]</code> en una instancia existente. El plan crea primero el security group y luego actualiza la instancia, sin ningún orden explícito, porque la referencia creó una dependencia.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Terraform ordena las operaciones usando referencias, no el orden de los archivos. Si una pregunta pide cómo sabe Terraform que debe crear la red antes que la subred, la respuesta es la dependencia implícita de <code>aws_vpc.main.id</code>.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué crea una dependencia implícita entre dos recursos?</summary><p>Que el argumento de un recurso referencie los atributos del otro, como <code>vpc_id = aws_vpc.main.id</code>.</p></details>
+<details class="sq"><summary>¿Por qué el <code>vpc_id</code> de una subred muestra <code>(known after apply)</code> cuando la red es nueva?</summary><p>El provider asigna el ID de la red solo cuando la crea durante el apply, así que es desconocido en el momento del plan.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Terraform Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../terraform/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../resource-blocks-vs-data-blocks-and-addressing-them-type-name-data-type/">← Bloques resource frente a bloques data, y cómo direccionarlo</a><a href="../input-variables-type-default-description-sensitive-nullable-and-value/">Variables de entrada: `type`, `default`, `description`, `sen →</a></nav>
+</main>
+</body>
+</html>

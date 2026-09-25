@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sincronización de hora: chrony, timedatectl, efectos del d… · Lección de Linux+</title>
+<meta name="description" content="Una hora exacta parece un detalle menor, pero muchos sistemas dependen de ella. La correlación de logs entre servidores, las tareas programadas, la validac">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Sincronización de hora: chrony, timedatectl, efectos del d… · Lección de Linux+">
+<meta property="og:description" content="Una hora exacta parece un detalle menor, pero muchos sistemas dependen de ella. La correlación de logs entre servidores, las tareas programadas, la validac">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/linux-plus/lessons/time-sync-chrony-timedatectl-clock-skew-effects-on-tls-and-kerberos/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/linux-plus/lessons/time-sync-chrony-timedatectl-clock-skew-effects-on-tls-and-kerberos/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../linux-plus/">Linux+</a> / <a href="../">Lecciones</a> · <a href="../../../../linux-plus/lessons/time-sync-chrony-timedatectl-clock-skew-effects-on-tls-and-kerberos/" hreflang="en" lang="en">English</a></p>
+<p class="note">CompTIA Linux+ XK0-006</p>
+<h1>Sincronización de hora: chrony, timedatectl, efectos del desfase de reloj en TLS y Kerberos</h1>
+<article class="lbody">
+<p>Una hora exacta parece un detalle menor, pero muchos sistemas dependen de ella. La correlación de logs entre servidores, las tareas programadas, la validación de certificados, los protocolos de autenticación, las bases de datos distribuidas y los respaldos fallan de formas confusas cuando los relojes no coinciden. Linux+ espera que configures la sincronización de hora y reconozcas los síntomas del desfase de reloj (clock skew).</p>
+<p>Linux tiene dos relojes: el reloj del sistema, que mantiene el kernel mientras funciona, y el reloj de hardware, también llamado RTC (real-time clock), que conserva la hora mientras la máquina está apagada. <code>timedatectl</code> muestra ambos, junto con la zona horaria y si la sincronización está activa ('System clock synchronized: yes' y 'NTP service: active'). Usa <code>timedatectl set-timezone America/Chicago</code> para cambiar la zona (<code>timedatectl list-timezones</code> las lista), <code>timedatectl set-ntp true</code> para habilitar la sincronización automática y <code>timedatectl set-time</code> solo cuando NTP está desactivado. Los servidores suelen mantener el RTC en UTC (Coordinated Universal Time). <code>hwclock --systohc</code> copia la hora del sistema al reloj de hardware.</p>
+<p>NTP (Network Time Protocol) mantiene exacto el reloj del sistema consultando servidores de hora, por el puerto UDP 123. En la mayoría de las distribuciones actuales, la implementación de NTP es chrony, cuyo demonio es <code>chronyd</code> y cuya configuración es <code>/etc/chrony.conf</code> (o <code>/etc/chrony/chrony.conf</code>). <code>server ntp1.example.com iburst</code> agrega un servidor, e <code>iburst</code> acelera la sincronización inicial; las líneas <code>pool</code> usan un conjunto de servidores de un pool; <code>makestep 1.0 3</code> permite que el reloj salte en lugar de ajustarse gradualmente cuando está muy desviado durante las primeras actualizaciones; y <code>allow 10.0.0.0/8</code> permite que chrony sirva la hora a otros hosts. Algunos sistemas usan en su lugar el cliente más sencillo <code>systemd-timesyncd</code>; solo debe ejecutarse un servicio de hora a la vez.</p>
+<p>Verifica con <code>chronyc</code>: <code>chronyc sources -v</code> lista los servidores, donde <code>^*</code> marca la fuente seleccionada actualmente y <code>^?</code> una inalcanzable; <code>chronyc tracking</code> muestra el desfase actual respecto de la hora real, el estrato (stratum) y el error de frecuencia; <code>chronyc makestep</code> fuerza una corrección inmediata. Si ninguna fuente es alcanzable, revisa el firewall para el UDP 123 saliente, la resolución DNS de los nombres de los servidores y si los propios servidores están sanos. Las máquinas virtuales pueden desviarse notablemente después de pausarse o migrarse, así que también necesitan sincronización.</p>
+<p>Los efectos del desfase de reloj son favoritos del examen. Los certificados TLS (Transport Layer Security) tienen fechas de validez 'not before' y 'not after', así que un cliente con el reloj equivocado puede rechazar un certificado válido por considerarlo expirado o todavía no válido, provocando fallas en HTTPS, en los repositorios de paquetes y en las API con errores que mencionan la validez del certificado. Los tickets de Kerberos llevan marcas de tiempo para evitar ataques de repetición (replay), y de forma predeterminada el KDC rechaza las solicitudes si los relojes del cliente y del servidor difieren en más de unos cinco minutos, produciendo errores 'Clock skew too great' e inicios de sesión de dominio fallidos a través de SSSD. Las contraseñas de un solo uso basadas en tiempo que se usan para MFA también fallan cuando el reloj está desviado. Más allá de las fallas directas, los relojes desfasados hacen imposible alinear los logs de distintos hosts durante la investigación de un incidente, y pueden hacer que las tareas de cron y los timers se ejecuten en momentos inesperados.</p>
+<p>Así que cuando veas errores de certificado en una sola máquina, fallas de autenticación de Kerberos o Active Directory, o códigos MFA rechazados, revisa primero la hora con <code>timedatectl</code> y <code>chronyc tracking</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>NTP</dt><dd>Network Time Protocol, que sincroniza los relojes con servidores de hora por el puerto UDP 123.</dd><dt>chrony</dt><dd>La implementación común de NTP en Linux (demonio chronyd, cliente chronyc, /etc/chrony.conf).</dd><dt>timedatectl</dt><dd>Herramienta de systemd para ver y establecer la hora, la zona horaria y si la sincronización NTP está habilitada.</dd><dt>RTC</dt><dd>Real-time clock: el reloj de hardware que conserva la hora mientras el sistema está apagado.</dd><dt>Clock skew (desfase de reloj)</dt><dd>La diferencia entre los relojes de distintos sistemas; Kerberos tolera de forma predeterminada solo unos cinco minutos.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Los usuarios de una estación de trabajo Linux no pueden iniciar sesión con sus cuentas de Active Directory, y los logs de SSSD mencionan un desfase de reloj. timedatectl muestra 'System clock synchronized: no', y chronyc sources muestra todos los servidores como inalcanzables porque una nueva regla de firewall bloquea el UDP 123 saliente. Después de permitirlo, chronyc makestep corrige el reloj y los inicios de sesión de dominio vuelven a funcionar.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Los errores de certificado 'not yet valid' en un solo host, los mensajes de Kerberos 'clock skew too great' y los códigos MFA rechazados son señales clásicas de un reloj del sistema incorrecto.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué comando muestra si el reloj del sistema está sincronizado actualmente?</summary><p>timedatectl (busca 'System clock synchronized: yes'), o chronyc tracking para ver los detalles.</p></details>
+<details class="sq"><summary>¿Qué significa ^* en la salida de chronyc sources?</summary><p>Marca la fuente de hora que chrony ha seleccionado actualmente para la sincronización.</p></details>
+<details class="sq"><summary>¿Por qué un reloj equivocado puede romper las conexiones HTTPS?</summary><p>Las fechas de validez de los certificados se comparan con el reloj local, así que un certificado válido puede parecer expirado o todavía no válido.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Linux+ gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../linux-plus/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../hardware-dmesg-lspci-lsusb-smartctl-failing-disks-and-raid-degradation/">← Hardware: dmesg, lspci, lsusb, smartctl, discos que fallan y</a><a href="../package-problems-broken-dependencies-repository-errors-held-packages/">Problemas de paquetes: dependencias rotas, errores de reposi →</a></nav>
+</main>
+</body>
+</html>

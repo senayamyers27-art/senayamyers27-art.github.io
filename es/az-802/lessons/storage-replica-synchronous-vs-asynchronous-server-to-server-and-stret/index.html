@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Storage Replica: sincrónica frente a asincrónica, de servi… · Lección de AZ-802</title>
+<meta name="description" content="Storage Replica es una característica de Windows Server que replica volúmenes a nivel de bloque a otro servidor o clúster, principalmente para la recuperac">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Storage Replica: sincrónica frente a asincrónica, de servi… · Lección de AZ-802">
+<meta property="og:description" content="Storage Replica es una característica de Windows Server que replica volúmenes a nivel de bloque a otro servidor o clúster, principalmente para la recuperac">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-802/lessons/storage-replica-synchronous-vs-asynchronous-server-to-server-and-stret/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-802/lessons/storage-replica-synchronous-vs-asynchronous-server-to-server-and-stret/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-802/">AZ-802</a> / <a href="../">Lecciones</a> · <a href="../../../../az-802/lessons/storage-replica-synchronous-vs-asynchronous-server-to-server-and-stret/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802</p>
+<h1>Storage Replica: sincrónica frente a asincrónica, de servidor a servidor y clúster extendido; clústeres de invitados con VHDX compartido</h1>
+<article class="lbody">
+<p>Storage Replica es una característica de Windows Server que replica volúmenes a nivel de bloque a otro servidor o clúster, principalmente para la recuperación ante desastres. Como funciona por debajo del sistema de archivos, replica todo lo que hay en el volumen, incluidos los archivos abiertos, y desconoce qué aplicación escribió los bloques. Usa SMB 3 como transporte.</p>
+<p>Cada volumen replicado necesita un volumen de registro correspondiente en ambos lados; las escrituras van primero al registro y luego al volumen de datos. Las particiones de datos de origen y destino deben tener el mismo tamaño, y el volumen de destino se desmonta y no es accesible mientras es un destino de replicación. Antes de configurar, ejecuta <code>Test-SRTopology</code> para medir el rendimiento de la red y del disco y obtener un informe sobre si tu enlace puede seguir el ritmo. Creas una asociación con <code>New-SRPartnership</code>, indicando los equipos de origen y destino, los grupos de replicación y los volúmenes de datos y de registro.</p>
+<p>Storage Replica funciona en dos modos. En el modo sincrónico, una escritura solo se confirma a la aplicación después de haberse escrito en el registro tanto en el origen como en el destino. Esto da un objetivo de punto de recuperación (RPO) de cero: no se pierde ningún dato confirmado si el origen falla. El precio es que cada escritura espera el viaje de ida y vuelta, así que la replicación sincrónica necesita un enlace rápido y de baja latencia, normalmente a distancia metropolitana con un tiempo de ida y vuelta de pocos milisegundos. En el modo asincrónico, la escritura se confirma en cuanto llega al registro de origen, y los datos se envían al destino después. Tolera una latencia mayor y distancias más largas, pero el RPO no es cero; una falla puede perder las escrituras más recientes.</p>
+<p>Hay tres escenarios. De servidor a servidor replica entre dos servidores independientes. De clúster a clúster replica entre dos clústeres de conmutación por error separados. Un clúster extendido (stretch cluster) es un único clúster de conmutación por error cuyos nodos están divididos entre dos sitios, cada uno con su propio almacenamiento, y Storage Replica mantiene el almacenamiento sincronizado para que el clúster pueda conmutar por error automáticamente entre sitios. Los clústeres extendidos son el único escenario con conmutación por error automática; los demás requieren que cambies la dirección manualmente, por ejemplo con <code>Set-SRPartnership</code>. La edición Windows Server Standard incluye Storage Replica con límites en el número y el tamaño de los volúmenes, mientras que Datacenter no tiene esos límites.</p>
+<p>La agrupación en clústeres de invitados es una idea de alta disponibilidad diferente: construyes un clúster de conmutación por error a partir de máquinas virtuales, de modo que una aplicación queda protegida incluso si el sistema operativo invitado de una VM falla o necesita revisiones. Los invitados necesitan almacenamiento compartido, y en Hyper-V la forma preferida es un disco duro virtual compartido con el formato VHD Set (un archivo <code>.vhds</code>). Lo agregas a cada VM invitada en un controlador SCSI con el uso compartido habilitado. El VHD Set debe residir en un Cluster Shared Volume o en un recurso compartido de Scale-Out File Server. En comparación con el antiguo <code>.vhdx</code> compartido, los VHD Set admiten el cambio de tamaño en línea, la copia de seguridad a nivel de host e Hyper-V Replica. Las alternativas para el almacenamiento compartido de invitados son iSCSI dentro del invitado y Fibre Channel virtual.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Storage Replica</dt><dd>Replicación de volúmenes a nivel de bloque sobre SMB 3 entre servidores o clústeres, que requiere volúmenes de datos y de registro en ambos lados.</dd><dt>Synchronous replication (replicación sincrónica)</dt><dd>Las escrituras se confirman solo después de llegar a ambos sitios, lo que da un RPO de cero pero requiere baja latencia.</dd><dt>Asynchronous replication (replicación asincrónica)</dt><dd>Las escrituras se confirman en el origen y se envían más tarde, lo que permite distancias largas con un RPO distinto de cero.</dd><dt>Stretch cluster (clúster extendido)</dt><dd>Un único clúster de conmutación por error dividido entre dos sitios con almacenamiento replicado, que admite la conmutación por error automática entre sitios.</dd><dt>VHD Set</dt><dd>El formato de disco virtual compartido .vhds para clústeres de invitados, almacenado en CSV o SOFS y compatible con el cambio de tamaño en línea y la copia de seguridad del host.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un hospital con dos centros de datos a 10 km de distancia construye un clúster extendido con Storage Replica en modo sincrónico para que no se pierda ninguna escritura de historiales de pacientes. También replica a un tercer sitio a 800 km de distancia usando una asociación separada de clúster a clúster en modo asincrónico, aceptando unos segundos de posible pérdida de datos para los desastres regionales.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Cero pérdida de datos equivale a sincrónico y distancia corta; distancia larga equivale a asincrónico. Conmutación por error automática solo en un clúster extendido. El VHDX compartido para clústeres de invitados va en CSV o SOFS, conectado mediante SCSI.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cuál es el RPO de Storage Replica sincrónico y por qué?</summary><p>Cero, porque la aplicación recibe la confirmación solo después de que la escritura se registra tanto en el origen como en el destino.</p></details>
+<details class="sq"><summary>¿Pueden los usuarios leer el volumen de destino mientras Storage Replica replica en él?</summary><p>No, el volumen de destino está desmontado e inaccesible mientras es un destino de replicación.</p></details>
+<details class="sq"><summary>¿Dónde debe almacenarse un VHD Set usado para un clúster de invitados de Hyper-V?</summary><p>En un Cluster Shared Volume o en un recurso compartido SMB de Scale-Out File Server.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AZ-802 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-802/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../storage-spaces-direct-minimum-nodes-cache-resiliency-scale-out-file-se/">← Storage Spaces Direct: nodos mínimos, caché, resiliencia; Sc</a><a href="../security-baselines-osconfig-on-windows-server-2025-microsoft-security/">Líneas base de seguridad: OSConfig en Windows Server 2025, l →</a></nav>
+</main>
+</body>
+</html>

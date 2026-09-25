@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fallas de servicios: códigos de salida en systemctl status… · Lección de Linux+</title>
+<meta name="description" content="Cuando un servicio no arranca o se cae una y otra vez, la respuesta casi siempre está en su estado y en sus logs. Una rutina consistente, primero el estado">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Fallas de servicios: códigos de salida en systemctl status… · Lección de Linux+">
+<meta property="og:description" content="Cuando un servicio no arranca o se cae una y otra vez, la respuesta casi siempre está en su estado y en sus logs. Una rutina consistente, primero el estado">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/linux-plus/lessons/service-failures-systemctl-status-exit-codes-journalctl-dependencies-p/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/linux-plus/lessons/service-failures-systemctl-status-exit-codes-journalctl-dependencies-p/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../linux-plus/">Linux+</a> / <a href="../">Lecciones</a> · <a href="../../../../linux-plus/lessons/service-failures-systemctl-status-exit-codes-journalctl-dependencies-p/" hreflang="en" lang="en">English</a></p>
+<p class="note">CompTIA Linux+ XK0-006</p>
+<h1>Fallas de servicios: códigos de salida en systemctl status, journalctl, dependencias, conflictos de puertos</h1>
+<article class="lbody">
+<p>Cuando un servicio no arranca o se cae una y otra vez, la respuesta casi siempre está en su estado y en sus logs. Una rutina consistente, primero el estado, luego los logs, luego la configuración y por último las dependencias y el entorno, resuelve rápidamente la mayoría de las fallas.</p>
+<p><code>systemctl status nombre</code> es el primer paso. La línea Active muestra estados como <code>active (running)</code>, <code>inactive (dead)</code>, <code>activating (auto-restart)</code> o <code>failed</code>, con un <code>Result:</code> como <code>exit-code</code>, <code>signal</code>, <code>timeout</code> o <code>start-limit-hit</code>. La línea del proceso muestra cómo terminó el proceso principal, por ejemplo <code>code=exited, status=1/FAILURE</code>. Los estados de salida de 200 en adelante los establece el propio systemd y apuntan a problemas de preparación antes de que el programa llegara a ejecutarse: <code>203/EXEC</code> significa que el ejecutable de <code>ExecStart=</code> faltaba, no era ejecutable o tenía un intérprete incorrecto; <code>217/USER</code> significa que la cuenta de <code>User=</code> no existe; <code>200/CHDIR</code> un directorio de trabajo incorrecto; <code>226/NAMESPACE</code> un problema al preparar las rutas del aislamiento (sandboxing). Un estado de 1 o 2 suele ser la propia aplicación informando su error, y <code>signal=SEGV</code> o <code>KILL</code> significa que el proceso fue terminado por una señal, posiblemente por el OOM killer. <code>start-limit-hit</code> significa que systemd dejó de reintentar tras demasiados reinicios en poco tiempo; corrige la causa y luego ejecuta <code>systemctl reset-failed nombre</code>.</p>
+<p>Después, lee los logs. <code>journalctl -u nombre -b</code> muestra los mensajes de la unidad en este arranque, <code>-e</code> salta al final, <code>-x</code> agrega explicaciones y <code>-f</code> sigue la salida mientras la reinicias en otra terminal. Muchas aplicaciones también escriben sus propios logs en <code>/var/log/&lt;app&gt;/</code>. Los errores de sintaxis de configuración son la causa más frecuente, así que usa el verificador propio de la aplicación antes de reiniciar: <code>nginx -t</code>, <code>apachectl configtest</code>, <code>sshd -t</code>, <code>named-checkconf</code>, <code>postfix check</code> y similares.</p>
+<p>Las dependencias importan porque las unidades arrancan en un orden definido por <code>Requires=</code>, <code>Wants=</code>, <code>After=</code> y <code>Before=</code>. Si una unidad requerida falla, la unidad dependiente también falla, con un mensaje como 'Dependency failed'. <code>systemctl list-dependencies nombre</code> muestra el árbol y <code>systemctl list-dependencies --reverse nombre</code> muestra qué depende de ella. Un caso común es un servicio que necesita la red o un montaje: debería declarar <code>After=network-online.target</code> y <code>Wants=network-online.target</code>, o <code>RequiresMountsFor=/data</code>. Una unidad enmascarada informa que está enmascarada y no puede arrancar hasta que se desenmascare.</p>
+<p>Los conflictos de puertos provocan errores como 'Address already in use' o 'bind() failed'. Solo un proceso puede escuchar en una dirección y un puerto determinados. <code>ss -tlpn 'sport = :80'</code> o <code>ss -tlpn | grep :80</code> identifica qué proceso tiene el puerto; <code>lsof -i :80</code> también funciona. Resuélvelo deteniendo o deshabilitando el otro servicio, o moviendo uno a un puerto diferente. En sistemas con SELinux, un puerto no estándar también necesita una etiqueta con <code>semanage port</code>, o el bind se deniega aunque nada más esté escuchando; revisa <code>ausearch -m avc</code> si el error es 'Permission denied'.</p>
+<p>Revisa también los permisos y los recursos: el usuario del servicio debe poder leer su configuración y escribir en sus directorios de datos, logs y PID; el disco no debe estar lleno; y los archivos de entorno requeridos deben existir. Después de corregir archivos de unidad, recuerda <code>systemctl daemon-reload</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>203/EXEC</dt><dd>Estado de salida de systemd que significa que el programa de ExecStart no se pudo ejecutar (falta, no es ejecutable o tiene un intérprete incorrecto).</dd><dt>start-limit-hit</dt><dd>Un resultado de falla que significa que la unidad se reinició demasiadas veces en un intervalo corto; se limpia con systemctl reset-failed.</dd><dt>Requires= / After=</dt><dd>Configuraciones de dependencia de unidades: Requires establece una dependencia fuerte; After solo establece el orden de arranque.</dd><dt>Address already in use</dt><dd>Un error de bind que indica que otro proceso ya está escuchando en ese puerto.</dd><dt>Config test (prueba de configuración)</dt><dd>La verificación de sintaxis propia de una aplicación, como nginx -t o sshd -t, que se ejecuta antes de reiniciar un servicio.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Después de una actualización, httpd falla con 'Address already in use: AH00072: make_sock: could not bind to address [::]:80'. ss -tlpn | grep :80 muestra que nginx, instalado como dependencia de una herramienta de monitoreo, está escuchando en el puerto 80. Deshabilitas y detienes nginx con systemctl disable --now nginx y luego inicias httpd con éxito.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Los códigos de salida en los 200 vienen de systemd antes de que se ejecute el programa, así que revisa el archivo de unidad (rutas, User=, directorios); los códigos pequeños como 1 normalmente significan que la propia aplicación informó un error en sus logs.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Una unidad falla con status=203/EXEC. ¿Qué deberías revisar primero?</summary><p>La ruta de ExecStart: que el archivo exista, sea ejecutable y tenga un shebang o intérprete válido.</p></details>
+<details class="sq"><summary>¿Cómo averiguas qué proceso ya está usando el puerto TCP 443?</summary><p>ss -tlpn | grep :443 (o lsof -i :443).</p></details>
+<details class="sq"><summary>¿Cuál es la diferencia entre Requires= y After=?</summary><p>Requires= incorpora otra unidad como dependencia fuerte (combinado con After=, la unidad no arrancará si esa otra falla); After= solo ordena el arranque y no incorpora nada por sí mismo.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Linux+ gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../linux-plus/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../boot-problems-grub-menu-previous-kernels-emergency-and-rescue-targets/">← Problemas de arranque: menú de GRUB, kernels anteriores, tar</a><a href="../security-issues-selinux-denials-file-permissions-ssh-key-permissions-l/">Problemas de seguridad: denegaciones de SELinux, permisos de →</a></nav>
+</main>
+</body>
+</html>

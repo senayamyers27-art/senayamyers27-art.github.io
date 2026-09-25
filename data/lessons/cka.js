@@ -2144,4 +2144,4 @@ CertHub.addLessons("cka", [
    ]
   ]
  }
-]);
+], { reviewed: "2026-09-25" });

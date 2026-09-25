@@ -2331,4 +2331,4 @@ CertHub.addLessons("az-104", [
    ]
   ]
  }
-]);
+], { reviewed: "2026-09-25" });

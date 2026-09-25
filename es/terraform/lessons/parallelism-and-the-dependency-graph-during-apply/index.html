@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Paralelismo y el grafo de dependencias durante el apply · Lección de Terraform Associate</title>
+<meta name="description" content="Terraform no procesa los recursos uno por uno en el orden de los archivos. Construye un grafo de dependencias: un grafo acíclico dirigido (un grafo con dir">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Paralelismo y el grafo de dependencias durante el apply · Lección de Terraform Associate">
+<meta property="og:description" content="Terraform no procesa los recursos uno por uno en el orden de los archivos. Construye un grafo de dependencias: un grafo acíclico dirigido (un grafo con dir">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/terraform/lessons/parallelism-and-the-dependency-graph-during-apply/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/terraform/lessons/parallelism-and-the-dependency-graph-during-apply/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../terraform/">Terraform Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../terraform/lessons/parallelism-and-the-dependency-graph-during-apply/" hreflang="en" lang="en">English</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004)</p>
+<h1>Paralelismo y el grafo de dependencias durante el apply</h1>
+<article class="lbody">
+<p>Terraform no procesa los recursos uno por uno en el orden de los archivos. Construye un grafo de dependencias: un grafo acíclico dirigido (un grafo con direcciones y sin ciclos) en el que cada nodo es un recurso, data source, provider, variable, output u objeto similar, y cada arista significa que un nodo debe procesarse antes que otro. Las aristas provienen de las referencias entre bloques, como una subred que usa <code>aws_vpc.main.id</code>, y de los argumentos explícitos <code>depends_on</code>.</p>
+<p>Cuando planificas o aplicas, Terraform recorre este grafo. Cualquier nodo cuyas dependencias estén completas puede empezar. Los recursos que no dependen entre sí, como diez buckets de almacenamiento no relacionados, pueden crearse al mismo tiempo. Los recursos en una cadena, como red, luego subred y luego instancia, se procesan en secuencia. Durante destroy el grafo se recorre en sentido inverso, así que los dependientes se eliminan antes que aquello de lo que dependen.</p>
+<p>Terraform limita cuántas operaciones se ejecutan a la vez. De forma predeterminada realiza hasta 10 operaciones concurrentes. Puedes cambiarlo con <code>-parallelism=n</code> en plan, apply y destroy. Aumentarlo puede acelerar configuraciones grandes con muchos recursos independientes. Reducirlo, incluso a <code>-parallelism=1</code>, puede ayudar cuando la API de un provider impone límites de tasa (rate limits), al depurar para ver las operaciones una por una, o cuando la máquina que ejecuta Terraform tiene pocos recursos. El ajuste controla solo la concurrencia; nunca cambia el orden que requieren las dependencias.</p>
+<pre class="code" tabindex="0"><code>terraform apply -parallelism=4
+terraform graph | dot -Tsvg &gt; graph.svg</code></pre>
+<p><code>terraform graph</code> muestra el grafo de dependencias en el lenguaje DOT, que herramientas como Graphviz pueden convertir en una imagen. Es una forma práctica de entender por qué Terraform ordena las cosas como lo hace o de detectar una dependencia inesperada.</p>
+<p>Si una operación falla durante el apply, Terraform deja de iniciar nuevas operaciones que dependan de ella, deja terminar las operaciones que ya están en curso y registra en el estado todo lo que tuvo éxito. El error se informa al final. Por eso un apply puede dejar algunos recursos creados y otros no, y por eso el siguiente apply simplemente continúa desde el estado registrado.</p>
+<p>Los ciclos no están permitidos. Si el recurso A referencia a B y B referencia a A, directamente o a través de una cadena, Terraform informa un error de ciclo durante el plan. La solución es reestructurar: a menudo moviendo un atributo a un recurso separado, como una regla de security group separada en lugar de una regla en línea, para que la dependencia vaya en un solo sentido.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Dependency graph (grafo de dependencias)</dt><dd>Grafo acíclico dirigido de los objetos de la configuración que Terraform usa para ordenar las operaciones.</dd><dt>-parallelism</dt><dd>Opción que establece el número máximo de operaciones concurrentes durante plan, apply o destroy; el valor predeterminado es 10.</dd><dt>terraform graph</dt><dd>Comando que genera el grafo de dependencias en formato DOT para visualizarlo.</dd><dt>Cycle (ciclo)</dt><dd>Una dependencia circular entre objetos que hace imposible ordenar el grafo; Terraform la informa como error.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un apply que crea 200 registros DNS falla una y otra vez con errores de limitación (throttling) de la API del provider de DNS. Ejecutar <code>terraform apply -parallelism=2</code> distribuye las solicitudes para que el provider ya no las limite, a costa de una ejecución más lenta.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El paralelismo tiene un valor predeterminado de 10 y cambia cuántas operaciones se ejecutan a la vez, nunca el orden. El orden viene del grafo: referencias implícitas más <code>depends_on</code>, invertido para destroy.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué decide el orden en que Terraform crea los recursos?</summary><p>El grafo de dependencias construido a partir de las referencias y <code>depends_on</code>; los recursos independientes pueden crearse de forma concurrente.</p></details>
+<details class="sq"><summary>¿Por qué podrías reducir <code>-parallelism</code>?</summary><p>Para evitar límites de tasa o throttling de la API, para simplificar la depuración o para reducir la carga en la máquina que ejecuta Terraform.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Terraform Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../terraform/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../resource-replacement-with-replace-instead-of-the-deprecated-terraform/">← Reemplazo de recursos con `-replace` en lugar del obsoleto `</a><a href="../resource-blocks-vs-data-blocks-and-addressing-them-type-name-data-type/">Bloques resource frente a bloques data, y cómo direccionarlo →</a></nav>
+</main>
+</body>
+</html>

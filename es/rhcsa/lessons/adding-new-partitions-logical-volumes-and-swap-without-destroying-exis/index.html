@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Añadir nuevas particiones, volúmenes lógicos y swap sin de… · Lección de RHCSA</title>
+<meta name="description" content="Muchas tareas de almacenamiento del RHCSA se plantean sobre discos que ya contienen datos o configuración que debes conservar. El evaluador comprueba tanto">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Añadir nuevas particiones, volúmenes lógicos y swap sin de… · Lección de RHCSA">
+<meta property="og:description" content="Muchas tareas de almacenamiento del RHCSA se plantean sobre discos que ya contienen datos o configuración que debes conservar. El evaluador comprueba tanto">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/adding-new-partitions-logical-volumes-and-swap-without-destroying-exis/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/adding-new-partitions-logical-volumes-and-swap-without-destroying-exis/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/adding-new-partitions-logical-volumes-and-swap-without-destroying-exis/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Añadir nuevas particiones, volúmenes lógicos y swap sin destruir los datos existentes</h1>
+<article class="lbody">
+<p>Muchas tareas de almacenamiento del RHCSA se plantean sobre discos que ya contienen datos o configuración que debes conservar. El evaluador comprueba tanto que tu nuevo almacenamiento funcione como que las particiones, volúmenes y sistemas de archivos existentes sigan intactos. La habilidad aquí es añadir almacenamiento sin destruir nada: usar el espacio libre, no volver a crear nada que ya exista y verificar antes y después.</p>
+<p>Empieza haciendo un reconocimiento. <code>lsblk</code>, <code>lsblk -f</code>, <code>fdisk -l</code> o <code>parted DEVICE print free</code>, <code>pvs</code>, <code>vgs</code> y <code>swapon --show</code> te dicen qué existe, qué está montado y dónde hay espacio libre. Busca espacio sin asignar al final de un disco, un disco completamente sin usar o extensiones libres en un grupo de volúmenes.</p>
+<p>Para añadir una partición, abre el disco con fdisk, gdisk o parted y crea una nueva partición solo en el espacio libre. No crees una nueva tabla de particiones (fdisk <code>g</code>/<code>o</code>, parted <code>mklabel</code>); eso descarta todas las particiones existentes. Acepta el primer sector predeterminado, que es el inicio del espacio libre, y especifica un tamaño con <code>+SIZE</code>. Después de escribir, si el disco tiene particiones montadas, puede que el kernel no vuelva a leer la tabla de inmediato; <code>partprobe</code> o <code>udevadm settle</code> suelen resolverlo, y <code>lsblk</code> debería mostrar la nueva partición.</p>
+<p>Para añadir un volumen lógico, revisa <code>vgs</code> en busca de espacio libre. Si hay suficiente, <code>lvcreate</code> en el VG existente no toca los otros LV. Si no, añade primero una nueva partición o disco como PV y amplía el VG con <code>vgextend</code>. Nunca ejecutes <code>pvcreate</code> ni <code>mkfs</code> en un dispositivo que ya contiene datos: ambos sobrescriben lo que hay.</p>
+<p>El swap es espacio en disco que el kernel usa como memoria de desbordamiento. Para añadir swap sin destruir nada, crea una nueva partición (tipo Linux swap) o un LV, y luego:</p>
+<pre class="code" tabindex="0"><code>mkswap /dev/vdb3                 # escribe una firma de swap, imprime el UUID
+swapon /dev/vdb3                 # activar ahora
+echo 'UUID=&lt;uuid-from-mkswap&gt; none swap defaults 0 0' &gt;&gt; /etc/fstab
+swapoff /dev/vdb3 &amp;&amp; swapon -a   # probar la entrada de fstab
+swapon --show ; free -h          # confirmar que aumentó el swap total</code></pre>
+<p>Fíjate en el <code>&gt;&gt;</code> para añadir al final; un solo <code>&gt;</code> borraría fstab. <code>swapon -a</code> activa todas las entradas de swap de fstab y es la prueba para ellas, como <code>mount -a</code> para los sistemas de archivos. Una tarea puede decir que añadas swap conservando el swap existente, así que el total en <code>free -h</code> debería aumentar en lugar de que un área reemplace a la otra. Las prioridades (opción <code>pri=</code>) establecen qué swap se usa primero, pero rara vez se exigen.</p>
+<p>Termina cada tarea de almacenamiento de la misma forma: <code>lsblk</code> para ver la distribución, <code>mount -a</code> y <code>swapon -a</code> para probar fstab, un reinicio y luego <code>findmnt</code>, <code>swapon --show</code> y un vistazo a los datos antiguos para confirmar que no se perdió nada.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Free space (espacio libre)</dt><dd>Área sin asignar en un disco o extensiones libres en un grupo de volúmenes, donde se puede añadir almacenamiento de forma segura.</dd><dt>Swap space (espacio swap)</dt><dd>Espacio en disco que usa el kernel para guardar páginas de memoria cuando la RAM está bajo presión.</dd><dt>mkswap</dt><dd>Escribe una firma de swap en un dispositivo, preparándolo para usarse como swap.</dd><dt>swapon / swapoff</dt><dd>Activan o desactivan áreas de swap; swapon -a activa todas las entradas de swap de fstab.</dd><dt>swapon --show</dt><dd>Lista las áreas de swap activas con su tamaño, uso y prioridad.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un disco /dev/vdb tiene una partición XFS de 1 GiB montada en /data y 4 GiB libres. Añades una partición swap de 512 MiB con fdisk (n, inicio predeterminado, +512M, t swap, w), ejecutas <code>mkswap</code> y <code>swapon</code>, añades su UUID al final de /etc/fstab con &gt;&gt;, y tras un reinicio <code>free -h</code> muestra el swap adicional mientras /data conserva sus archivos.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Nunca vuelvas a crear una tabla de particiones ni ejecutes pvcreate/mkfs sobre algo que contiene datos. Añade a fstab con &gt;&gt; (o edítalo) y prueba con mount -a y swapon -a antes de reiniciar.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué comandos de fdisk destruirían todas las particiones existentes de un disco?</summary><p>g (nueva tabla GPT) u o (nueva tabla DOS), seguidos de w.</p></details>
+<details class="sq"><summary>¿Cómo activas una nueva partición swap y pruebas su entrada de fstab?</summary><p>Aplícale mkswap y swapon, añade una línea con el UUID a fstab, luego haz swapoff y ejecuta swapon -a para confirmar que fstab la activa.</p></details>
+<details class="sq"><summary>Un VG no tiene espacio libre pero necesitas un nuevo LV. ¿Qué haces primero?</summary><p>Añadir un nuevo PV (partición o disco) y ampliar el VG con vgextend, y luego lvcreate.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../mounting-file-systems-at-boot-by-uuid-or-label-in-etc-fstab/">← Montar sistemas de archivos al arrancar por UUID o etiqueta </a><a href="../creating-and-enabling-swap-mkswap-swapon-swapon-show-and-making-it-per/">Crear y habilitar swap (mkswap, swapon, swapon --show) y hac →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sondas IP SLA y object tracking · Lección de ENCOR</title>
+<meta name="description" content="IP SLA (IP service level agreement) es una función de Cisco IOS que genera tráfico sintético para medir continuamente el desempeño de la red: alcanzabilida">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Sondas IP SLA y object tracking · Lección de ENCOR">
+<meta property="og:description" content="IP SLA (IP service level agreement) es una función de Cisco IOS que genera tráfico sintético para medir continuamente el desempeño de la red: alcanzabilida">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/ip-sla-probes-and-object-tracking/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/ip-sla-probes-and-object-tracking/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ccnp-encor/">ENCOR</a> / <a href="../">Lecciones</a> · <a href="../../../../ccnp-encor/lessons/ip-sla-probes-and-object-tracking/" hreflang="en" lang="en">English</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2</p>
+<h1>Sondas IP SLA y object tracking</h1>
+<article class="lbody">
+<p>IP SLA (IP service level agreement) es una función de Cisco IOS que genera tráfico sintético para medir continuamente el desempeño de la red: alcanzabilidad, tiempo de ida y vuelta, jitter, pérdida de paquetes e incluso respuestas de aplicaciones como DNS o HTTP. Como el router sondea activamente, puedes detectar problemas antes que los usuarios y tomar decisiones de enrutamiento basadas en la salud real de la ruta y no solo en el estado del enlace.</p>
+<p>Una operación IP SLA define qué enviar, a dónde y con qué frecuencia. La más común es <code>icmp-echo</code>, que hace ping a un objetivo. <code>udp-jitter</code> envía paquetes UDP y mide el retardo, el jitter y la pérdida en cada dirección, lo cual es ideal para la voz; necesita un IP SLA responder en el dispositivo Cisco remoto (<code>ip sla responder</code>) para agregar marcas de tiempo. Otros tipos incluyen <code>tcp-connect</code>, <code>http</code>, <code>dns</code> y <code>udp-echo</code>.</p>
+<pre class="code" tabindex="0"><code>ip sla 10
+ icmp-echo 203.0.113.1 source-interface GigabitEthernet0/0
+ frequency 10
+ threshold 500
+ timeout 1000
+ip sla schedule 10 life forever start-time now
+!
+track 1 ip sla 10 reachability
+ delay down 10 up 30
+!
+ip route 0.0.0.0 0.0.0.0 203.0.113.1 track 1
+ip route 0.0.0.0 0.0.0.0 198.51.100.1 10</code></pre>
+<p>Esta sonda hace ping al gateway del ISP principal cada 10 segundos. Una operación no hace nada hasta que se programa, lo cual es un error frecuente en los laboratorios. Los resultados aparecen en <code>show ip sla statistics</code> y la configuración en <code>show ip sla configuration</code>.</p>
+<p>El object tracking conecta las mediciones con acciones. Un objeto track vigila algo y reporta up o down. Puede seguir la <code>reachability</code> de una operación IP SLA (up si la operación tiene éxito) o su <code>state</code> (up solo si el código de retorno es OK y, para algunas operaciones, dentro del umbral), el protocolo de línea de una interfaz (<code>track 2 interface Gi0/1 line-protocol</code>), o si una ruta está en la tabla de enrutamiento (<code>track 3 ip route 10.0.0.0 255.0.0.0 reachability</code>). Los tracks pueden combinarse con lógica booleana (<code>track 10 list boolean and</code>). El comando <code>delay</code> amortigua las oscilaciones esperando antes de cambiar de estado.</p>
+<p>Los clientes del tracking incluyen las rutas estáticas (la ruta se elimina cuando el track está down, lo que permite que una ruta estática flotante con mayor distancia administrativa tome el control, como en el ejemplo anterior), HSRP y VRRP (reducen la prioridad cuando falla un uplink rastreado o un objetivo remoto, para que el otro router se vuelva activo), PBR (<code>set ip next-hop verify-availability</code> con un track) y los applets de EEM que reaccionan a los cambios de track.</p>
+<p>La idea clave es que una interfaz puede seguir arriba mientras la ruta más allá de ella está rota. Un módem de banda ancha, por ejemplo, mantiene Ethernet arriba incluso cuando falla el ISP. Rastrear solo la interfaz no detectaría eso; rastrear una sonda IP SLA hacia un objetivo remoto sí lo detecta. Elige un objetivo que realmente represente la ruta, como el siguiente salto del ISP o una dirección remota conocida alcanzable solo a través de ese enlace, y usa como origen de la sonda la interfaz correcta. Revisa el tracking con <code>show track</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>IP SLA operation (operación IP SLA)</dt><dd>Una sonda sintética configurada, como icmp-echo o udp-jitter, que mide una ruta.</dd><dt>IP SLA responder</dt><dd>Una función de los dispositivos Cisco que responde y pone marcas de tiempo a sondas como udp-jitter para obtener mediciones precisas.</dd><dt>Track object (objeto track)</dt><dd>Un objeto cuyo estado up o down sigue a una IP SLA, una interfaz o una ruta y que usan otras funciones.</dd><dt>Floating static route (ruta estática flotante)</dt><dd>Una ruta estática de respaldo con mayor distancia administrativa que se usa solo cuando desaparece la principal.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>El enlace del ISP principal del router de una sucursal sigue físicamente arriba durante una caída del proveedor, así que el tráfico termina en un agujero negro. Después de agregar una IP SLA icmp-echo hacia el gateway del ISP, un objeto track y una ruta predeterminada con tracking, el router elimina la ruta predeterminada principal a los pocos segundos de la caída y la estática flotante a través del respaldo LTE toma el control.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Las operaciones IP SLA deben programarse con ip sla schedule o nunca se ejecutan. Rastrear una interfaz no detecta las fallas más allá del enlace; rastrear una IP SLA sí las detecta.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué usar tracking con IP SLA en lugar de tracking de interfaz para un uplink a internet?</summary><p>La interfaz puede seguir arriba mientras la ruta del proveedor está caída; una sonda IP SLA hacia un objetivo remoto detecta la falla de extremo a extremo.</p></details>
+<details class="sq"><summary>¿Qué operación IP SLA mide el jitter para la voz y qué necesita en el extremo remoto?</summary><p>udp-jitter, que necesita un IP SLA responder en el dispositivo Cisco remoto.</p></details>
+<details class="sq"><summary>¿Cómo proporciona conmutación por falla una ruta estática con tracking?</summary><p>Cuando el track pasa a down, la ruta con tracking se elimina de la tabla de enrutamiento y se activa una ruta estática flotante con mayor distancia administrativa.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia ENCOR gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ccnp-encor/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../span-rspan-and-erspan/">← SPAN, RSPAN y ERSPAN</a><a href="../catalyst-center-formerly-dna-center-workflows-assurance-health-scores/">Flujos de trabajo de Catalyst Center (antes DNA Center): ass →</a></nav>
+</main>
+</body>
+</html>

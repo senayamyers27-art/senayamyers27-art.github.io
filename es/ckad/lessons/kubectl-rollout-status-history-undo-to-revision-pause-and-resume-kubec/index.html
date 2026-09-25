@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>kubectl rollout status, history, undo (--to-revision), pau… · Lección de CKAD</title>
+<meta name="description" content="Los Deployments guardan un historial de revisiones, una por cada cambio en la plantilla de Pod, y kubectl te da un pequeño conjunto de comandos para dirigi">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="kubectl rollout status, history, undo (--to-revision), pau… · Lección de CKAD">
+<meta property="og:description" content="Los Deployments guardan un historial de revisiones, una por cada cambio en la plantilla de Pod, y kubectl te da un pequeño conjunto de comandos para dirigi">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/kubectl-rollout-status-history-undo-to-revision-pause-and-resume-kubec/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/kubectl-rollout-status-history-undo-to-revision-pause-and-resume-kubec/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/kubectl-rollout-status-history-undo-to-revision-pause-and-resume-kubec/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>kubectl rollout status, history, undo (--to-revision), pause y resume; kubectl set image y scale</h1>
+<article class="lbody">
+<p>Los Deployments guardan un historial de revisiones, una por cada cambio en la plantilla de Pod, y kubectl te da un pequeño conjunto de comandos para dirigirlas e inspeccionarlas. Estos comandos son rápidos de escribir y aparecen constantemente en el examen, así que vale la pena sabérselos de memoria.</p>
+<p><code>kubectl set image deployment/web nginx=nginx:1.27</code> cambia la imagen del contenedor llamado <code>nginx</code> en el Deployment <code>web</code>, lo que inicia un rolling update. La parte antes de <code>=</code> es el nombre del contenedor, no el nombre de la imagen; si te equivocas, kubectl informa que no se encontró el contenedor. <code>kubectl scale deployment/web --replicas=5</code> cambia el número de réplicas sin crear una nueva revisión. <code>kubectl rollout restart deployment/web</code> lanza un rollout nuevo con la misma spec (añade una anotación con marca de tiempo a la plantilla), útil para recoger un ConfigMap modificado que se consume como variables de entorno.</p>
+<p><code>kubectl rollout status deployment/web</code> espera e informa del progreso hasta que el rollout termina o falla, devolviendo un código de salida distinto de cero si falla. <code>kubectl rollout history deployment/web</code> lista las revisiones, y <code>--revision=3</code> muestra la plantilla de Pod de una concreta. La columna CHANGE-CAUSE se rellena desde la anotación <code>kubernetes.io/change-cause</code>; defínela tú mismo con <code>kubectl annotate deployment/web kubernetes.io/change-cause=&quot;upgrade to 1.27&quot;</code>, ya que la antigua opción <code>--record</code> está obsoleta.</p>
+<pre class="code" tabindex="0"><code>kubectl set image deploy/web nginx=nginx:1.27
+kubectl rollout status deploy/web
+kubectl rollout history deploy/web
+kubectl rollout history deploy/web --revision=2
+kubectl rollout undo deploy/web
+kubectl rollout undo deploy/web --to-revision=1</code></pre>
+<p><code>kubectl rollout undo deployment/web</code> vuelve a la revisión anterior; <code>--to-revision=N</code> elige una concreta. Undo funciona copiando hacia adelante esa plantilla antigua, así que la plantilla restaurada recibe un número de revisión nuevo y más alto, y el número antiguo desaparece de la lista. El rollback solo afecta a la plantilla de Pod; no deshace cambios en el número de réplicas ni restaura los ConfigMaps o Secrets que leen los Pods.</p>
+<p><code>kubectl rollout pause deployment/web</code> impide que el controlador actúe ante cambios en la plantilla. Mientras está pausado puedes hacer varias ediciones, por ejemplo <code>set image</code> y <code>set resources</code>, sin lanzar un rollout por cada una. <code>kubectl rollout resume deployment/web</code> las despliega luego juntas como una sola revisión. El escalado sigue funcionando en pausa. No puedes hacer undo de un Deployment pausado; reanúdalo primero.</p>
+<p>Estos comandos también aceptan la forma corta <code>deploy/web</code> y funcionan con DaemonSets y StatefulSets para status, history, undo y restart. Después de cualquier cambio, confirma el resultado con <code>kubectl get deploy web -o wide</code> (que muestra las imágenes) o <code>kubectl describe deploy web</code>, cuyos eventos muestran cada paso de escalado de los ReplicaSets.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Revision (revisión)</dt><dd>Una versión numerada de la plantilla de Pod de un Deployment que se guarda para el rollback.</dd><dt>rollout undo</dt><dd>Devuelve el Deployment a la revisión anterior o a una elegida volviendo a aplicar su plantilla.</dd><dt>rollout pause / resume</dt><dd>Detiene y reanuda temporalmente los rollouts para que varios cambios se apliquen como uno solo.</dd><dt>change-cause</dt><dd>La anotación kubernetes.io/change-cause que se muestra en rollout history.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Tras <code>kubectl set image deploy/api api=api:2.1</code>, las tasas de error se disparan. El desarrollador de guardia ejecuta <code>kubectl rollout history deploy/api</code> para localizar la última revisión buena, luego <code>kubectl rollout undo deploy/api --to-revision=4</code>, y observa <code>kubectl rollout status deploy/api</code> hasta que informa de éxito.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> En <code>kubectl set image</code>, el lado izquierdo es el nombre del contenedor. Usa <code>kubectl get deploy web -o jsonpath='{.spec.template.spec.containers[*].name}'</code> si no estás seguro.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿<code>kubectl scale</code> crea una nueva revisión de rollout?</summary><p>No; solo los cambios en la plantilla de Pod crean revisiones.</p></details>
+<details class="sq"><summary>Tras hacer undo a la revisión 2 desde la revisión 4, ¿en qué número de revisión está el Deployment?</summary><p>En la revisión 5; la plantilla antigua se copia hacia adelante con un número nuevo, y la revisión 2 ya no aparece por separado.</p></details>
+<details class="sq"><summary>¿Por qué pausar un Deployment?</summary><p>Para agrupar varios cambios de plantilla en un solo rollout en lugar de un rollout por cada cambio.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../rolling-updates-maxsurge-maxunavailable-minreadyseconds-the-recreate-s/">← Rolling updates: maxSurge, maxUnavailable, minReadySeconds; </a><a href="../blue-green-deployments-by-switching-a-service-selector-between-two-dep/">Despliegues blue/green cambiando el selector de un Service e →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Revisar outputs y dependencias con `terraform output -json… · Lección de Terraform Associate</title>
+<meta name="description" content="Las configuraciones de Terraform rara vez están solas. Los scripts, los pipelines y otras herramientas necesitan valores que produjo Terraform, y las perso">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Revisar outputs y dependencias con `terraform output -json… · Lección de Terraform Associate">
+<meta property="og:description" content="Las configuraciones de Terraform rara vez están solas. Los scripts, los pipelines y otras herramientas necesitan valores que produjo Terraform, y las perso">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/terraform/lessons/reviewing-outputs-and-dependencies-with-terraform-output-json-and-terr/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/terraform/lessons/reviewing-outputs-and-dependencies-with-terraform-output-json-and-terr/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../terraform/">Terraform Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../terraform/lessons/reviewing-outputs-and-dependencies-with-terraform-output-json-and-terr/" hreflang="en" lang="en">English</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004)</p>
+<h1>Revisar outputs y dependencias con `terraform output -json` y `terraform graph`</h1>
+<article class="lbody">
+<p>Las configuraciones de Terraform rara vez están solas. Los scripts, los pipelines y otras herramientas necesitan valores que produjo Terraform, y las personas necesitan entender cómo dependen los recursos unos de otros. Dos comandos ayudan: <code>terraform output -json</code> para compartir resultados de forma legible por máquina, y <code>terraform graph</code> para visualizar las dependencias.</p>
+<p><code>terraform output -json</code> muestra todos los outputs del módulo raíz como un objeto JSON. Cada output aparece con su <code>value</code>, su <code>type</code> y un indicador <code>sensitive</code>. A diferencia de la vista de texto predeterminada, la forma JSON incluye los valores sensibles en texto plano, ya que está pensada para programas. También puedes pedir un solo output: <code>terraform output -json subnet_ids</code> muestra solo ese valor como JSON, lo que es útil para listas y mapas que <code>-raw</code> no puede mostrar.</p>
+<pre class="code" tabindex="0"><code>$ terraform output -json | jq -r '.web_ip.value'
+203.0.113.10
+
+$ terraform graph | dot -Tsvg &gt; graph.svg</code></pre>
+<p>En la práctica, los pipelines usan <code>terraform output -json</code> para pasar valores a pasos posteriores, como entregar el endpoint de un clúster a un job de despliegue o escribir un archivo de inventario para una herramienta de gestión de configuración. Como los outputs vienen del estado, el comando es rápido y no contacta a los providers. Protege el lugar donde termine el JSON, ya que puede contener secretos.</p>
+<p><code>terraform graph</code> muestra el grafo de dependencias de Terraform en el lenguaje DOT que usa Graphviz. Cada nodo es un recurso, data source, provider o elemento de módulo, y cada arista muestra que uno depende de otro. Terraform construye este grafo a partir de las referencias entre bloques (dependencias implícitas) y de <code>depends_on</code> (dependencias explícitas), y luego lo usa para decidir el orden de creación y destrucción y qué operaciones pueden ejecutarse en paralelo. Pasar la salida al comando <code>dot</code> de Graphviz genera una imagen que puedes inspeccionar. La opción <code>-type</code> muestra el grafo para una operación concreta, como <code>plan</code> o <code>apply</code>.</p>
+<p>¿Por qué importa esto para el mantenimiento? Un grafo hace visible el acoplamiento oculto: puedes ver que un cambio en un security group afectará a las instancias, o que un módulo depende del output de otro módulo. Ayuda a explicar por qué Terraform quiere reemplazar algo o por qué un apply ocurre en un orden concreto, y es útil cuando agregas <code>depends_on</code> para confirmar que la arista realmente aparece. En configuraciones grandes el grafo puede ser enorme, así que filtra o céntrate en un módulo al leerlo.</p>
+<p>Juntos, estos comandos permiten buenas revisiones: los outputs te dicen qué produjo la configuración, y el grafo te dice cómo se conectan las piezas.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>terraform output -json</dt><dd>Muestra los outputs raíz como JSON con los campos value, type y sensitive, revelando los valores sensibles.</dd><dt>terraform graph</dt><dd>Muestra el grafo de dependencias de la configuración o del plan en formato DOT.</dd><dt>DOT / Graphviz</dt><dd>Un lenguaje de descripción de grafos y el conjunto de herramientas (incluido el comando dot) que lo convierte en una imagen.</dd><dt>Implicit dependency (dependencia implícita)</dt><dd>Una dependencia que Terraform deduce de una expresión que referencia los atributos de otro recurso.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un pipeline de CI aplica la infraestructura y luego ejecuta terraform output -json &gt; outputs.json. La siguiente etapa lee de ese archivo el nombre DNS del balanceador de carga y el endpoint de la base de datos para configurar el despliegue de la aplicación, sin copiar valores a mano.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> terraform output -json muestra los valores sensibles en texto plano; terraform graph produce DOT, que renderizas con Graphviz.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué formato produce terraform graph?</summary><p>DOT, el lenguaje de descripción de grafos de Graphviz.</p></details>
+<details class="sq"><summary>¿terraform output -json oculta los outputs sensibles?</summary><p>No. La salida JSON incluye los valores sensibles en texto plano junto con un indicador sensitive.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Terraform Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../terraform/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../when-to-use-logs-provider-errors-crashes-and-bug-reports/">← Cuándo usar los logs: errores de providers, fallos (crashes)</a><a href="../hcp-terraform-formerly-terraform-cloud-remote-state-remote-runs-a-free/">HCP Terraform (antes Terraform Cloud): estado remoto, ejecuc →</a></nav>
+</main>
+</body>
+</html>

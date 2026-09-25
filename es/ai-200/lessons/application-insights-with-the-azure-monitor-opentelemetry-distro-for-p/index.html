@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Application Insights con la Azure Monitor OpenTelemetry Di… · Lección de AI-200</title>
+<meta name="description" content="Application Insights es la característica de supervisión del rendimiento de aplicaciones de Azure Monitor. Recopila solicitudes, dependencias (llamadas sal">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Application Insights con la Azure Monitor OpenTelemetry Di… · Lección de AI-200">
+<meta property="og:description" content="Application Insights es la característica de supervisión del rendimiento de aplicaciones de Azure Monitor. Recopila solicitudes, dependencias (llamadas sal">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/application-insights-with-the-azure-monitor-opentelemetry-distro-for-p/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/application-insights-with-the-azure-monitor-opentelemetry-distro-for-p/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/application-insights-with-the-azure-monitor-opentelemetry-distro-for-p/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Application Insights con la Azure Monitor OpenTelemetry Distro para Python: cadenas de conexión, trazas, spans y métricas personalizadas</h1>
+<article class="lbody">
+<p>Application Insights es la característica de supervisión del rendimiento de aplicaciones de Azure Monitor. Recopila solicitudes, dependencias (llamadas salientes), excepciones, registros y métricas de tu app y los almacena en un área de trabajo de Log Analytics, donde puedes buscarlos, graficarlos y crear alertas sobre ellos. Para Python, la forma recomendada por Microsoft de enviar esta telemetría es la Azure Monitor OpenTelemetry Distro, el paquete <code>azure-monitor-opentelemetry</code>.</p>
+<p>OpenTelemetry es el estándar abierto y neutral respecto al proveedor para la telemetría: una API que usan tu código y las bibliotecas para producir trazas, métricas y registros, más SDK y exportadores que los envían a algún destino. La distro incluye el SDK de OpenTelemetry, el exportador de Azure Monitor y la instrumentación de bibliotecas populares como Flask, Django, FastAPI, requests, urllib y psycopg2, y lo configura todo con una sola llamada.</p>
+<pre class="code" tabindex="0"><code>from azure.monitor.opentelemetry import configure_azure_monitor
+configure_azure_monitor()   # lee APPLICATIONINSIGHTS_CONNECTION_STRING
+
+from opentelemetry import trace, metrics
+tracer = trace.get_tracer(__name__)
+meter = metrics.get_meter(__name__)
+tokens = meter.create_counter(&quot;llm_tokens&quot;, unit=&quot;tokens&quot;)
+
+def answer(question):
+    with tracer.start_as_current_span(&quot;rag.answer&quot;) as span:
+        span.set_attribute(&quot;rag.top_k&quot;, 5)
+        result = call_model(question)
+        tokens.add(result.usage, {&quot;model&quot;: &quot;chat-small&quot;})
+        return result</code></pre>
+<p>La app encuentra su recurso de Application Insights mediante una cadena de conexión, que contiene la clave de instrumentación y el punto de conexión de ingesta de tu región. Defínela en la variable de entorno <code>APPLICATIONINSIGHTS_CONNECTION_STRING</code> (el enfoque habitual en App Service, Functions y Container Apps) o pasa <code>connection_string=</code> a <code>configure_azure_monitor</code>. Las cadenas de conexión reemplazan la configuración anterior basada solo en la clave de instrumentación. La cadena de conexión identifica adónde enviar los datos, pero no es un secreto fuerte para leerlos; para un control más estricto, puedes exigir la autenticación de Microsoft Entra para la ingesta. Llama a <code>configure_azure_monitor()</code> temprano, antes de importar o crear la app del framework web, para que las instrumentaciones puedan engancharse.</p>
+<p>En OpenTelemetry, una traza (trace) es el recorrido completo de una operación, como una solicitud de usuario, y está formada por spans. Cada span es una unidad de trabajo con tiempo medido, que tiene un nombre, una hora de inicio y de fin, atributos (detalles clave-valor), un estado y un span padre. Application Insights asigna los spans según su tipo: los spans de servidor entrantes se convierten en entradas de la tabla <code>requests</code>, los spans de cliente salientes (llamadas HTTP, consultas a bases de datos, llamadas a modelos) se convierten en <code>dependencies</code> y los spans internos que creas también aparecen como dependencias. Las excepciones registradas en los spans llegan a <code>exceptions</code>, y la salida de <code>logging</code> de Python que recopila la distro llega a <code>traces</code>, un detalle de nomenclatura confuso pero importante: en Application Insights, la tabla traces contiene mensajes de registro.</p>
+<p>Las métricas personalizadas usan la API de métricas de OpenTelemetry: contadores (valores que solo aumentan, como los tokens usados), histogramas (distribuciones, como la latencia o el número de fragmentos) y medidores (gauges). Los atributos de cada medición se convierten en dimensiones. Aparecen en la tabla <code>customMetrics</code> y en el explorador de métricas, donde puedes graficarlas y crear alertas. Prefiere las métricas para números de gran volumen que agregas, y los atributos de span o los registros para los detalles de cada operación.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Azure Monitor OpenTelemetry Distro</dt><dd>El paquete azure-monitor-opentelemetry que configura OpenTelemetry para enviar la telemetría de Python a Application Insights.</dd><dt>Connection string (cadena de conexión)</dt><dd>La configuración que indica adónde va la telemetría, incluida la clave de instrumentación y el punto de conexión de ingesta.</dd><dt>Span</dt><dd>Una unidad de trabajo con tiempo medido dentro de una traza, con atributos, estado y un span padre.</dd><dt>Custom metric (métrica personalizada)</dt><dd>Una medición definida por la aplicación, como un contador o un histograma, almacenada en la tabla customMetrics.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una API de RAG solo mostraba solicitudes lentas en Application Insights, sin ningún detalle. El desarrollador llamó a configure_azure_monitor al iniciar, envolvió la recuperación y las llamadas al modelo en spans con atributos para top_k y el nombre del modelo, y agregó un contador de tokens. La vista de extremo a extremo ahora muestra que la mayor parte de la latencia es la llamada al modelo, y un gráfico de tokens por modelo alimenta una alerta de costos.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Define APPLICATIONINSIGHTS_CONNECTION_STRING y llama a configure_azure_monitor temprano. Recuerda la correspondencia: los spans de servidor van a requests, los spans de cliente a dependencies, la salida de logging a traces y las mediciones del meter a customMetrics.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué tabla de Application Insights contiene los mensajes de logging de Python que envía la distro?</summary><p>La tabla traces, pese a su nombre; los spans van a requests y dependencies.</p></details>
+<details class="sq"><summary>¿Qué proporciona una cadena de conexión que una clave de instrumentación sola no proporciona?</summary><p>El punto de conexión de ingesta y otras configuraciones junto con la clave, para que la telemetría llegue al punto de conexión regional correcto.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../azure-app-configuration-key-values-labels-feature-flags-key-vault-refe/">← Azure App Configuration: pares clave-valor, etiquetas, marca</a><a href="../distributed-tracing-across-services-sampling-and-live-metrics/">Seguimiento distribuido entre servicios, muestreo y métricas →</a></nav>
+</main>
+</body>
+</html>

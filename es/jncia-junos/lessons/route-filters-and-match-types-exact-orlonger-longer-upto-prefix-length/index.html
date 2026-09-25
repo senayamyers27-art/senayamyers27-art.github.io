@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Route filters y tipos de coincidencia: exact, orlonger, lo… · Lección de JNCIA-Junos</title>
+<meta name="description" content="La mayoría de las políticas necesitan hacer coincidencia con prefijos específicos. Junos lo hace con la condición de coincidencia route-filter, que combina">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Route filters y tipos de coincidencia: exact, orlonger, lo… · Lección de JNCIA-Junos">
+<meta property="og:description" content="La mayoría de las políticas necesitan hacer coincidencia con prefijos específicos. Junos lo hace con la condición de coincidencia route-filter, que combina">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/jncia-junos/lessons/route-filters-and-match-types-exact-orlonger-longer-upto-prefix-length/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/jncia-junos/lessons/route-filters-and-match-types-exact-orlonger-longer-upto-prefix-length/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../jncia-junos/">JNCIA-Junos</a> / <a href="../">Lecciones</a> · <a href="../../../../jncia-junos/lessons/route-filters-and-match-types-exact-orlonger-longer-upto-prefix-length/" hreflang="en" lang="en">English</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106</p>
+<h1>Route filters y tipos de coincidencia: exact, orlonger, longer, upto, prefix-length-range; prefix lists</h1>
+<article class="lbody">
+<p>La mayoría de las políticas necesitan hacer coincidencia con prefijos específicos. Junos lo hace con la condición de coincidencia <code>route-filter</code>, que combina un prefijo con un tipo de coincidencia (match type) que describe qué rutas dentro de ese prefijo, o iguales a él, deben coincidir. La sintaxis es <code>from route-filter &lt;prefix&gt;/&lt;length&gt; &lt;match-type&gt;</code>.</p>
+<p>Los tipos de coincidencia, usando 192.168.0.0/16 como prefijo del filtro, son: <code>exact</code> coincide solo con 192.168.0.0/16. <code>orlonger</code> coincide con 192.168.0.0/16 y con cualquier ruta más específica dentro de él, como 192.168.5.0/24 o 192.168.5.1/32. <code>longer</code> coincide solo con rutas más específicas que /16 dentro de él, pero no con la propia /16. <code>upto /24</code> coincide con rutas dentro de 192.168.0.0/16 con longitudes de prefijo desde /16 hasta /24, así que 192.168.0.0/16 y 192.168.7.0/24 coinciden pero 192.168.7.128/25 no. <code>prefix-length-range /20-/24</code> coincide con rutas dentro de la /16 cuyas longitudes están entre /20 y /24; la propia /16 no coincide. También existe <code>through</code>, que coincide con una cadena de prefijos entre dos prefijos dados, pero se usa con menos frecuencia.</p>
+<pre class="code" tabindex="0"><code>set policy-options policy-statement FROM-CUST term OK from route-filter 203.0.113.0/24 upto /26
+set policy-options policy-statement FROM-CUST term OK then accept
+set policy-options policy-statement FROM-CUST term REST then reject</code></pre>
+<p>Recuerda siempre que la ruta primero debe caer dentro del prefijo del filtro; luego el tipo de coincidencia revisa su longitud. Una ruta hacia 10.0.0.0/24 nunca coincide con <code>route-filter 192.168.0.0/16 orlonger</code>, sin importar la longitud.</p>
+<p>Cuando un solo término contiene varios route filters, Junos no los prueba simplemente uno por uno. Primero encuentra el route filter cuyo prefijo es la coincidencia más larga para la ruta, y luego revisa solo el tipo de coincidencia de ese filtro. Si esa revisión falla, la ruta no coincide con el término, aunque un filtro más corto del mismo término sí hubiera coincidido. Por ejemplo, con <code>10.0.0.0/8 orlonger</code> y <code>10.1.0.0/16 exact</code> en el mismo término, una ruta hacia 10.1.1.0/24 se compara con el filtro /16 (la coincidencia más larga), falla <code>exact</code> y, por lo tanto, no coincide en absoluto con el término. Si quieres revisiones independientes, pon los filtros en términos separados.</p>
+<p>Las prefix lists son listas de prefijos con nombre definidas bajo <code>policy-options prefix-list</code>. Son reutilizables: la misma lista puede referenciarse en muchas políticas y en firewall filters. En una política, <code>from prefix-list NAME</code> coincide con rutas que son exactamente iguales a una entrada de la lista. Cuando necesitas un tipo de coincidencia con una lista, usa <code>from prefix-list-filter NAME orlonger</code> (o exact, longer, etc.). Una función práctica es <code>apply-path</code>, que construye una prefix list automáticamente a partir de otras partes de la configuración, por ejemplo de todas las direcciones de vecinos BGP configuradas.</p>
+<pre class="code" tabindex="0"><code>set policy-options prefix-list CUSTOMER-NETS 203.0.113.0/24
+set policy-options prefix-list CUSTOMER-NETS 198.51.100.0/24
+set policy-options policy-statement P term 1 from prefix-list-filter CUSTOMER-NETS orlonger</code></pre>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>exact</dt><dd>Coincide solo con la ruta igual al prefijo y la longitud del filtro.</dd><dt>orlonger</dt><dd>Coincide con el prefijo del filtro y con cualquier ruta más específica dentro de él.</dd><dt>longer</dt><dd>Coincide solo con rutas más específicas que el prefijo del filtro, no con el prefijo en sí.</dd><dt>upto</dt><dd>Coincide con rutas dentro del prefijo con longitudes desde la longitud del propio prefijo hasta la longitud indicada.</dd><dt>prefix-length-range</dt><dd>Coincide con rutas dentro del prefijo cuyas longitudes están entre dos longitudes indicadas.</dd><dt>Prefix list</dt><dd>Una lista de prefijos con nombre y reutilizable, que coincide de forma exacta con <code>prefix-list</code> o con un tipo de coincidencia mediante <code>prefix-list-filter</code>.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un proveedor permite que un cliente anuncie su 203.0.113.0/24 y cualquier subred hasta /26 para ingeniería de tráfico, pero nada más pequeño. La política de importación usa <code>route-filter 203.0.113.0/24 upto /26</code> con accept, y un término final de rechazo. Los anuncios de /27 o del espacio de cualquier otro se rechazan.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Conoce la diferencia entre orlonger (incluye el prefijo) y longer (lo excluye), y entre upto (empieza en la longitud del prefijo) y prefix-length-range (empieza donde tú digas). Varios route filters en un mismo término usan primero la coincidencia más larga y luego el tipo de coincidencia.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿172.16.0.0/12 coincide con <code>route-filter 172.16.0.0/12 longer</code>?</summary><p>No. <code>longer</code> coincide solo con rutas más específicas, no con el prefijo en sí.</p></details>
+<details class="sq"><summary>¿Qué rutas coinciden con <code>route-filter 10.0.0.0/8 prefix-length-range /16-/24</code>?</summary><p>Las rutas dentro de 10.0.0.0/8 con longitudes de prefijo de /16 a /24.</p></details>
+<details class="sq"><summary>¿Cómo aplicas el tipo de coincidencia <code>orlonger</code> a cada entrada de una prefix list?</summary><p>Usa <code>from prefix-list-filter NAME orlonger</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia JNCIA-Junos gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../jncia-junos/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../policy-chains-and-evaluation-order-falling-through-to-the-default-poli/">← Cadenas de políticas y orden de evaluación, y la caída a la </a><a href="../testing-with-test-policy/">Pruebas con `test policy` →</a></nav>
+</main>
+</body>
+</html>

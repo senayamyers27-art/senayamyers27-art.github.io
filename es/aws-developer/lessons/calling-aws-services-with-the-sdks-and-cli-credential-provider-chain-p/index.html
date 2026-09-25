@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Llamar a servicios de AWS con los SDK y la CLI: cadena de … · Lección de Developer Associate</title>
+<meta name="description" content="Cada llamada que tu código hace a AWS, ya sea mediante un SDK de AWS (para Python es Boto3, para JavaScript es AWS SDK for JavaScript v3, y así sucesivamen">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Llamar a servicios de AWS con los SDK y la CLI: cadena de … · Lección de Developer Associate">
+<meta property="og:description" content="Cada llamada que tu código hace a AWS, ya sea mediante un SDK de AWS (para Python es Boto3, para JavaScript es AWS SDK for JavaScript v3, y así sucesivamen">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/calling-aws-services-with-the-sdks-and-cli-credential-provider-chain-p/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/calling-aws-services-with-the-sdks-and-cli-credential-provider-chain-p/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/calling-aws-services-with-the-sdks-and-cli-credential-provider-chain-p/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Llamar a servicios de AWS con los SDK y la CLI: cadena de proveedores de credenciales, paginación, waiters, manejo de errores</h1>
+<article class="lbody">
+<p>Cada llamada que tu código hace a AWS, ya sea mediante un SDK de AWS (para Python es Boto3, para JavaScript es AWS SDK for JavaScript v3, y así sucesivamente) o mediante la AWS Command Line Interface (CLI), es una solicitud HTTPS a la API de un servicio, firmada con Signature Version 4 (SigV4) usando credenciales. Saber de dónde vienen esas credenciales y cómo manejar resultados de varias páginas, operaciones largas y errores es un conocimiento central para un desarrollador.</p>
+<p>Los SDK y la CLI buscan credenciales en un orden fijo llamado cadena predeterminada de proveedores de credenciales (default credential provider chain). El orden exacto varía un poco según el SDK, pero en términos generales es: credenciales pasadas explícitamente en el código, variables de entorno (<code>AWS_ACCESS_KEY_ID</code>, <code>AWS_SECRET_ACCESS_KEY</code>, <code>AWS_SESSION_TOKEN</code>), los archivos compartidos de credenciales y configuración (<code>~/.aws/credentials</code> y <code>~/.aws/config</code>, incluidos perfiles con nombre, perfiles de IAM Identity Center (SSO) y perfiles de asunción de rol) y, por último, las credenciales del entorno de cómputo: un rol de ejecución de Lambda, un rol de tarea de Amazon ECS o un perfil de instancia de Amazon EC2 a través del servicio de metadatos de instancia. Gana la primera fuente que proporciona credenciales. Por eso la forma correcta de dar permisos al código en AWS es asociar un rol y no poner ninguna clave en el código ni en la configuración; la cadena encuentra automáticamente las credenciales del rol y las renueva antes de que expiren. Un caso clásico de solución de problemas: una instancia EC2 usa permisos inesperados porque alguien dejó claves de acceso en variables de entorno o en un archivo de credenciales, que tienen prioridad sobre el perfil de instancia.</p>
+<p>Las API de listado y descripción devuelven resultados en páginas. Una respuesta incluye un token como <code>NextToken</code>, <code>Marker</code> o, en DynamoDB, <code>LastEvaluatedKey</code>, y lo pasas de nuevo para obtener la página siguiente hasta que ya no se devuelva ningún token. Los SDK ofrecen paginadores que hacen el bucle por ti. La CLI pagina automáticamente por defecto; <code>--max-items</code> y <code>--starting-token</code> la controlan, y <code>--page-size</code> cambia cuántos elementos obtiene cada llamada interna, lo que puede ayudar a evitar tiempos de espera agotados sin cambiar el resultado total.</p>
+<pre class="code" tabindex="0"><code>import boto3
+s3 = boto3.client('s3')
+for page in s3.get_paginator('list_objects_v2').paginate(Bucket='my-bucket'):
+    for obj in page.get('Contents', []):
+        print(obj['Key'])</code></pre>
+<p>Los waiters sondean una llamada de descripción hasta que un recurso alcanza un estado deseado, como <code>bucket_exists</code>, una instancia EC2 en <code>instance_running</code> o <code>table_exists</code> de DynamoDB, y entonces regresan, o lanzan un error tras un número máximo de intentos. En la CLI se ven así: <code>aws dynamodb wait table-exists --table-name Orders</code>. Úsalos en lugar de escribir tus propios bucles con sleep.</p>
+<p>Para el manejo de errores, los SDK lanzan excepciones de servicio que llevan un código de error y un estado HTTP. Captura códigos específicos: <code>ConditionalCheckFailedException</code>, <code>ResourceNotFoundException</code>, <code>AccessDeniedException</code>, <code>ThrottlingException</code>. Los SDK reintentan automáticamente la limitación y los errores transitorios con retroceso exponencial; puedes configurar el modo de reintento (<code>standard</code> o <code>adaptive</code> en muchos SDK) y el número máximo de intentos en el código o con <code>AWS_RETRY_MODE</code> y <code>AWS_MAX_ATTEMPTS</code>. Registra el ID de solicitud de las llamadas fallidas, ya que AWS Support y CloudTrail lo usan para rastrear una solicitud. Para depurar desde la CLI, <code>--debug</code> muestra la solicitud y la respuesta completas, y <code>aws sts get-caller-identity</code> muestra a qué identidad se resuelven realmente tus credenciales.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Default credential provider chain (cadena predeterminada de proveedores de credenciales)</dt><dd>La lista ordenada de lugares donde un SDK o la CLI buscan credenciales, que termina con las credenciales del rol del entorno de cómputo.</dd><dt>Paginator (paginador)</dt><dd>Una ayuda del SDK que sigue automáticamente los tokens de continuación para devolver todas las páginas de resultados de una API de listado.</dd><dt>Waiter (esperador)</dt><dd>Una ayuda del SDK o de la CLI que sondea hasta que un recurso alcanza un estado especificado o se llega a un número máximo de intentos.</dd><dt>SigV4</dt><dd>Signature Version 4, el proceso que firma las solicitudes a la API de AWS con credenciales para que el servicio pueda autenticarlas.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un script ejecutado por un job de CI lista todos los objetos de un bucket con 50,000 objetos, pero solo procesa los primeros 1,000. El desarrollador cambia una única llamada a list_objects_v2 por el paginador de list_objects_v2, y ahora el script sigue el ContinuationToken por todas las páginas.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si el código en EC2, ECS o Lambda usa los permisos equivocados, sospecha que hay credenciales codificadas o en variables de entorno que ganan sobre el rol en la cadena de credenciales. Ejecuta aws sts get-caller-identity para confirmar quién eres.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué el código de Lambda no debe contener claves de acceso?</summary><p>Las credenciales temporales del rol de ejecución se proporcionan automáticamente mediante la cadena de credenciales y se rotan; las claves incrustadas son de larga duración, pueden filtrarse y anulan el rol previsto.</p></details>
+<details class="sq"><summary>Un Scan de DynamoDB devuelve un LastEvaluatedKey. ¿Qué significa?</summary><p>Los resultados están paginados; pasa esa clave como ExclusiveStartKey en la siguiente solicitud para continuar hasta que ya no se devuelva LastEvaluatedKey.</p></details>
+<details class="sq"><summary>¿Para qué sirve un waiter?</summary><p>Sondea el estado de un recurso hasta que alcanza un estado deseado, como que una tabla pase a ACTIVE, reemplazando los bucles escritos a mano de esperar y comprobar.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../aws-step-functions-standard-vs-express-workflows-retry-catch-task-toke/">← AWS Step Functions: flujos de trabajo Standard vs Express, r</a><a href="../lambda-configuration-memory-timeout-15-minute-max-ephemeral-tmp-storag/">Configuración de Lambda: memoria, tiempo de espera (máximo d →</a></nav>
+</main>
+</body>
+</html>

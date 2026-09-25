@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Azure Container Apps: entornos, ingress (externo vs intern… · Lección de AI-200</title>
+<meta name="description" content="Azure Container Apps es una plataforma de contenedores sin servidor (serverless) construida sobre Kubernetes y componentes de código abierto como KEDA (Kub">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Azure Container Apps: entornos, ingress (externo vs intern… · Lección de AI-200">
+<meta property="og:description" content="Azure Container Apps es una plataforma de contenedores sin servidor (serverless) construida sobre Kubernetes y componentes de código abierto como KEDA (Kub">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/azure-container-apps-environments-ingress-external-vs-internal-secrets/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/azure-container-apps-environments-ingress-external-vs-internal-secrets/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/azure-container-apps-environments-ingress-external-vs-internal-secrets/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Azure Container Apps: entornos, ingress (externo vs interno), secretos e identidad administrada</h1>
+<article class="lbody">
+<p>Azure Container Apps es una plataforma de contenedores sin servidor (serverless) construida sobre Kubernetes y componentes de código abierto como KEDA (Kubernetes Event-driven Autoscaling), Envoy y Dapr, sin exponer la API de Kubernetes. Despliegas imágenes de contenedor y describes el escalado y la red; Azure ejecuta el clúster. Encaja con APIs, procesadores en segundo plano y microservicios que necesitan escalar, incluso hasta cero.</p>
+<p>Cada container app vive en un entorno de Container Apps (Container Apps environment), un límite seguro alrededor de un grupo de apps. Las apps del mismo entorno comparten una red virtual y escriben registros en el mismo área de trabajo de Log Analytics, y pueden llamarse entre sí por nombre. Creas uno con <code>az containerapp env create</code>, opcionalmente en tu propia VNet. Coloca en un mismo entorno las apps que se comunican o comparten ciclo de vida; separa entornos cuando necesites aislamiento, por ejemplo entre producción y pruebas.</p>
+<p>El ingress controla cómo llega el tráfico HTTP o TCP a tu app. Con el ingress deshabilitado, la app no recibe tráfico entrante, lo cual sirve para workers de colas. Con ingress externo, la app obtiene un nombre de dominio completo (FQDN) público accesible desde internet (o desde la VNet, en un entorno configurado con un balanceador de carga interno). Con ingress interno, la app solo es accesible desde dentro del entorno, por ejemplo desde otras container apps, que es la configuración habitual para servicios de back end. También defines el puerto de destino en el que escucha tu contenedor, el transporte (HTTP/1, HTTP/2 o TCP) y si se permite HTTP no seguro.</p>
+<pre class="code" tabindex="0"><code>az containerapp create -n orders -g rg --environment prod-env \
+  --image myregistry.azurecr.io/orders-api:20260914.3 \
+  --ingress internal --target-port 8000 \
+  --secrets db-pass=$DB_PASS \
+  --env-vars DB_PASSWORD=secretref:db-pass \
+  --user-assigned &lt;identity-resource-id&gt;</code></pre>
+<p>Los secretos se definen a nivel de app y están disponibles para todas las revisiones. Luego los referencias desde variables de entorno con <code>secretref:</code> (como arriba) o los montas como archivos en un volumen. Cambiar el valor de un secreto no crea una nueva revisión ni reinicia las existentes; debes reiniciar o crear una nueva revisión para que las réplicas en ejecución lo tomen. En lugar de guardar el valor directamente, un secreto puede ser una referencia de Key Vault, en la que Container Apps lo lee de Key Vault usando una identidad administrada.</p>
+<p>Container Apps admite identidades administradas tanto asignadas por el sistema como asignadas por el usuario. La misma identidad puede descargar imágenes de ACR (AcrPull), leer secretos de Key Vault y llamar a servicios de datos como Cosmos DB o Service Bus mediante <code>DefaultAzureCredential</code> en tu código Python, de modo que la app no tiene ninguna cadena de conexión. Recuerda que el ingress entrante y la identidad saliente son asuntos separados: el ingress decide quién puede llegar a la app; la identidad decide a qué puede llegar la app.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Container Apps environment (entorno de Container Apps)</dt><dd>Un límite que agrupa container apps que comparten una red virtual y un área de trabajo de Log Analytics.</dd><dt>External ingress (ingress externo)</dt><dd>Ingress que expone la app fuera del entorno, normalmente con un punto de conexión público.</dd><dt>Internal ingress (ingress interno)</dt><dd>Ingress que hace que la app solo sea accesible desde dentro de su entorno.</dd><dt>secretref</dt><dd>El prefijo que se usa en una variable de entorno de una container app para tomar su valor de un secreto a nivel de app.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una tienda ejecuta un front end web público y una API de pedidos privada. Ambas son container apps en un mismo entorno: el front end tiene ingress externo en el puerto 8000 y la API de pedidos tiene ingress interno, así que solo el front end puede llamarla por nombre. Cada app tiene una identidad asignada por el usuario con AcrPull y Key Vault Secrets User, y las contraseñas de base de datos son referencias de Key Vault expuestas mediante variables de entorno con secretref.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Los servicios de back end a los que solo deben llamar otras apps del entorno usan ingress interno; los workers que solo procesan colas no necesitan ingress. Recuerda también que actualizar un secreto no reinicia las réplicas por sí solo.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué comparten las apps del mismo entorno de Container Apps?</summary><p>Un límite de red virtual y un área de trabajo de Log Analytics, y pueden comunicarse directamente entre sí.</p></details>
+<details class="sq"><summary>¿Cómo lee un contenedor un secreto a nivel de app como variable de entorno?</summary><p>Estableciendo el valor de la variable en secretref:&lt;nombre-del-secreto&gt;, que inyecta el secreto en tiempo de ejecución.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../app-service-custom-containers-on-linux-websites-port-continuous-deploy/">← Contenedores personalizados de App Service en Linux: WEBSITE</a><a href="../container-apps-revisions-single-vs-multiple-revision-mode-traffic-spli/">Revisiones de Container Apps: modo de revisión única vs múlt →</a></nav>
+</main>
+</body>
+</html>

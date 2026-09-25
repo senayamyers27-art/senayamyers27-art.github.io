@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Container Apps jobs: manuales, programados y controlados p… · Lección de AI-200</title>
+<meta name="description" content="Una container app está diseñada para ejecutarse de forma continua (o escalar a cero y despertar cuando se necesita) y atender solicitudes o procesar un flu">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Container Apps jobs: manuales, programados y controlados p… · Lección de AI-200">
+<meta property="og:description" content="Una container app está diseñada para ejecutarse de forma continua (o escalar a cero y despertar cuando se necesita) y atender solicitudes o procesar un flu">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/container-apps-jobs-manual-scheduled-and-event-driven/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/container-apps-jobs-manual-scheduled-and-event-driven/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/container-apps-jobs-manual-scheduled-and-event-driven/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Container Apps jobs: manuales, programados y controlados por eventos</h1>
+<article class="lbody">
+<p>Una container app está diseñada para ejecutarse de forma continua (o escalar a cero y despertar cuando se necesita) y atender solicitudes o procesar un flujo. Sin embargo, parte del trabajo debe ejecutarse hasta terminar y detenerse: un informe nocturno, una migración de base de datos, un lote de embeddings que procesa documentos nuevos. Los Container Apps jobs están hechos para eso. Un job ejecuta contenedores que se inician, hacen una tarea finita y terminan; cada ejecución se llama execution.</p>
+<p>Los jobs viven en el mismo entorno de Container Apps que tus apps, comparten su red y su registro, y admiten las mismas descargas de imágenes, secretos e identidades administradas. La diferencia principal es el tipo de desencadenador (trigger type), y hay tres.</p>
+<p>Un job manual solo se ejecuta cuando tú lo inicias, con <code>az containerapp job start</code> o la API REST. Úsalo para tareas bajo demanda, como ejecutar una migración durante un lanzamiento, o cuando un pipeline u otro servicio decide exactamente cuándo debe hacerse el trabajo.</p>
+<p>Un job programado se ejecuta según una expresión cron, por ejemplo <code>0 2 * * *</code> para las 2:00 todos los días. Las expresiones cron de Container Apps usan el formato estándar de cinco campos y se evalúan en UTC (tiempo universal coordinado), así que ten en cuenta las zonas horarias. Úsalo para limpiezas nocturnas, reindexaciones periódicas o informes.</p>
+<p>Un job controlado por eventos usa reglas de escalado de KEDA, igual que el escalado de una container app, pero en lugar de agregar réplicas de larga duración inicia nuevas ejecuciones cuando hay eventos en espera. Por ejemplo, con una regla <code>azure-servicebus</code>, en cada intervalo de sondeo el job revisa la cola e inicia ejecuciones para procesar los mensajes. Cada ejecución suele procesar uno o unos pocos mensajes y termina. Esto sirve para elementos de trabajo pesados e independientes, como renderizar un video o generar embeddings de un documento grande.</p>
+<pre class="code" tabindex="0"><code>az containerapp job create -n nightly-embed -g rg --environment prod-env \
+  --trigger-type Schedule --cron-expression &quot;0 2 * * *&quot; \
+  --replica-timeout 1800 --replica-retry-limit 2 \
+  --parallelism 1 --replica-completion-count 1 \
+  --image myregistry.azurecr.io/embedder:20260920.1
+az containerapp job execution list -n nightly-embed -g rg -o table</code></pre>
+<p>Algunas configuraciones controlan cada ejecución: el tiempo de espera de réplica (replica timeout, el tiempo máximo de ejecución en segundos), el límite de reintentos para una réplica fallida, el paralelismo (cuántas réplicas se ejecutan a la vez) y el número de réplicas completadas (cuántas deben tener éxito para que la ejecución cuente como exitosa). El contenedor de un job indica éxito o fallo con su código de salida: 0 significa éxito; cualquier otro valor significa fallo y puede provocar un reintento. Los registros van al área de trabajo de Log Analytics del entorno, y el historial de ejecuciones muestra el estado de cada ejecución.</p>
+<p>Elige un job en lugar de una container app cuando el trabajo tiene un final claro; elige una app cuando escucha de forma continua.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Container Apps job</dt><dd>Un recurso de Container Apps que ejecuta contenedores hasta que terminan, en lugar de hacerlo de forma continua.</dd><dt>Execution (ejecución)</dt><dd>Una sola ejecución de un job, que contiene una o más réplicas que deben terminar correctamente.</dd><dt>Trigger type (tipo de desencadenador)</dt><dd>Cómo se inicia un job: Manual, Schedule (cron) o Event (reglas de escalado de KEDA).</dd><dt>Replica timeout (tiempo de espera de réplica)</dt><dd>El número máximo de segundos que puede ejecutarse una réplica de un job antes de detenerse y considerarse fallida.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una aplicación RAG debe generar embeddings de los documentos recién subidos. Las subidas colocan un mensaje en una cola de Service Bus, y un Container Apps job controlado por eventos con una regla azure-servicebus inicia una ejecución para los mensajes pendientes. Cada ejecución genera los embeddings de un documento, escribe los vectores en Cosmos DB y termina con código 0, mientras que un job programado aparte vuelve a revisar todo el índice cada noche a las 02:00 UTC.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El trabajo que se ejecuta hasta terminar apunta a Container Apps jobs: elige Manual para bajo demanda, Schedule para horarios basados en cron (UTC) y Event para trabajo impulsado por colas que maneja KEDA.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué distingue a un Container Apps job de una container app?</summary><p>Un job ejecuta contenedores que terminan y salen, registrados como ejecuciones, mientras que una app se ejecuta de forma continua o escala bajo demanda para atender tráfico.</p></details>
+<details class="sq"><summary>¿Cómo informa un fallo una ejecución de un job?</summary><p>El contenedor termina con un código de salida distinto de cero, lo que marca la réplica como fallida y puede provocar reintentos hasta el límite de reintentos.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../container-apps-scaling-http-rules-keda-event-rules-for-example-service/">← Escalado de Container Apps: reglas HTTP, reglas de eventos d</a><a href="../aks-basics-for-developers-deployment-and-service-manifests-kubectl-app/">Fundamentos de AKS para desarrolladores: manifiestos Deploym →</a></nav>
+</main>
+</body>
+</html>

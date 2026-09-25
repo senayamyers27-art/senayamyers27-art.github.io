@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VPNs redundantes: dos túneles, distancia/prioridad de ruta… · Lección de FortiGate Admin</title>
+<meta name="description" content="Las sucursales que dependen de una VPN necesitan que sobreviva a la falla de un solo enlace o túnel. FortiGate construye la redundancia de VPN ejecutando d">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="VPNs redundantes: dos túneles, distancia/prioridad de ruta… · Lección de FortiGate Admin">
+<meta property="og:description" content="Las sucursales que dependen de una VPN necesitan que sobreviva a la falla de un solo enlace o túnel. FortiGate construye la redundancia de VPN ejecutando d">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/fortinet-fortigate/lessons/redundant-vpns-two-tunnels-route-distance-priority-dpd-tunnel-monitori/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/fortinet-fortigate/lessons/redundant-vpns-two-tunnels-route-distance-priority-dpd-tunnel-monitori/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../fortinet-fortigate/">FortiGate Admin</a> / <a href="../">Lecciones</a> · <a href="../../../../fortinet-fortigate/lessons/redundant-vpns-two-tunnels-route-distance-priority-dpd-tunnel-monitori/" hreflang="en" lang="en">English</a></p>
+<p class="note">Fortinet NSE 4 - FortiOS 7.6 Administrator NSE4_FGT_AD-7.6</p>
+<h1>VPNs redundantes: dos túneles, distancia/prioridad de rutas, DPD, monitoreo de túneles</h1>
+<article class="lbody">
+<p>Las sucursales que dependen de una VPN necesitan que sobreviva a la falla de un solo enlace o túnel. FortiGate construye la redundancia de VPN ejecutando dos (o más) túneles y usando el enrutamiento más la detección de actividad para hacer failover entre ellos automáticamente. La mecánica, distancia/prioridad y dead peer detection, es exactamente lo que evalúa el examen.</p>
+<p>El diseño consiste en construir un túnel por camino, por ejemplo uno por cada uno de los dos ISP de la sucursal, cada uno como túnel route-based con su propia interfaz de túnel. Luego agregas una ruta hacia la subred remota a través de cada túnel, pero con distancias administrativas (o prioridades) diferentes para que uno sea el principal y el otro quede en espera. Una ruta de menor distancia en el túnel principal significa que solo ella está activa mientras ambos están sanos; la ruta de mayor distancia en el túnel de respaldo espera en la base de datos de enrutamiento y solo se activa si se retira la ruta principal. (Como alternativa, una distancia igual con prioridades diferentes mantiene ambas rutas en la tabla con una preferida.)</p>
+<p>Para que el failover realmente ocurra, el FortiGate debe darse cuenta de cuándo muere el túnel principal y retirar su ruta. Esa es la tarea de dead peer detection (DPD, detección de pares inactivos): DPD envía sondeos periódicos de actividad al par y, si el par deja de responder, declara el túnel muerto y lo baja. Cuando el túnel se cae, su ruta se retira y la ruta de mayor distancia del túnel de respaldo toma el control. Sin DPD, un túnel muerto puede aparecer activo (un agujero negro), su ruta permanece en la tabla y el tráfico se sigue enviando a un túnel que no pasa datos, así que el failover nunca se dispara. El monitoreo del túnel (un link monitor a través del túnel, o el comportamiento de auto-negotiate/keepalive) también puede detectar un túnel roto y provocar cambios de rutas.</p>
+<p>Así que la receta para VPNs de sucursal redundantes es: dos túneles route-based, rutas con distancias (o prioridades) diferentes que hacen a uno principal y al otro de respaldo, DPD habilitado para que se detecte un túnel muerto y se retire su ruta, y políticas de firewall que permitan el tráfico por ambos túneles para que el respaldo funcione en el momento en que se activa. Habilitar DPD es la pieza que la gente olvida, y es la razón por la que 'dos túneles con DPD desactivado' es una respuesta incorrecta: el túnel muerto permanecería y el tráfico no se movería.</p>
+<p>Este mismo patrón es la base de los diseños con dos hubs y dos ISP, y complementa a SD-WAN, que puede dirigir el tráfico por varios miembros de túnel según el SLA. El punto a nivel de examen es la interacción: el enrutamiento decide la preferencia y DPD/el monitoreo proporcionan el disparador para cambiarla.</p>
+<p>En un laboratorio con dos túneles desactivas el camino principal y, con DPD habilitado, observas cómo cae la ruta principal y el tráfico pasa al respaldo; luego lo comparas con DPD desactivado para ver cómo el túnel permanece.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Redundant tunnels (túneles redundantes)</dt><dd>Dos o más túneles por caminos diferentes para que la VPN sobreviva a la falla de un solo enlace o túnel.</dd><dt>Route distance/priority for failover (distancia/prioridad de rutas para failover)</dt><dd>Distancias administrativas (o prioridades) diferentes en las rutas de los túneles hacen a uno principal y al otro de respaldo.</dd><dt>Dead peer detection, DPD (detección de pares inactivos)</dt><dd>Sondeos periódicos de actividad que detectan un par que no responde, bajan el túnel y permiten que su ruta se retire.</dd><dt>Tunnel monitoring (monitoreo de túneles)</dt><dd>Monitoreo del enlace a través de un túnel que detecta un camino roto y provoca cambios de rutas para el failover.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una sucursal construye dos túneles route-based hacia la sede, uno por ISP, le da a la ruta del túnel principal una distancia menor y habilita DPD; cuando falla el ISP principal, DPD baja ese túnel, su ruta se elimina y el tráfico pasa al túnel de respaldo.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El failover de VPN redundante necesita ambas partes: distancias/prioridades de ruta diferentes para definir principal vs respaldo, y DPD (o monitoreo del túnel) para detectar un túnel muerto y que se retire su ruta. Con DPD desactivado, el failover no funciona.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo haces que las VPNs de una sucursal hagan failover entre dos ISP?</summary><p>Construyes un túnel route-based por ISP, le das al principal una distancia (o prioridad) de ruta menor, habilitas DPD para que se detecte un túnel muerto y permites el tráfico en ambos túneles en las políticas.</p></details>
+<details class="sq"><summary>¿Qué hace dead peer detection?</summary><p>Envía sondeos de actividad y, cuando el par deja de responder, baja el túnel para que su ruta pueda retirarse y un respaldo tome el control.</p></details>
+<details class="sq"><summary>¿Por qué 'dos túneles con DPD desactivado' es un mal diseño?</summary><p>Sin DPD, un túnel muerto puede aparecer activo, su ruta sigue activa, el tráfico se pierde en él y el failover nunca se dispara.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia FortiGate Admin gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../fortinet-fortigate/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../routes-and-firewall-policies-needed-for-tunnel-traffic/">← Rutas y políticas de firewall necesarias para el tráfico del</a><a href="../topologies-hub-and-spoke-full-mesh-partial-mesh-advpn-short-cuts/">Topologías: hub and spoke, malla completa, malla parcial, at →</a></nav>
+</main>
+</body>
+</html>

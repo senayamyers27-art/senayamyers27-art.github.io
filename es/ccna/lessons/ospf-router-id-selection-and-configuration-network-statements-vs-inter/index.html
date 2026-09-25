@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Selección y configuración del router ID de OSPF (sentencia… · Lección de CCNA</title>
+<meta name="description" content="Todo router OSPF necesita un router ID (RID), un valor de 32 bits escrito como una dirección IPv4, que lo identifica en la LSDB, en las tablas de vecinos y">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Selección y configuración del router ID de OSPF (sentencia… · Lección de CCNA">
+<meta property="og:description" content="Todo router OSPF necesita un router ID (RID), un valor de 32 bits escrito como una dirección IPv4, que lo identifica en la LSDB, en las tablas de vecinos y">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ccna/lessons/ospf-router-id-selection-and-configuration-network-statements-vs-inter/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ccna/lessons/ospf-router-id-selection-and-configuration-network-statements-vs-inter/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ccna/">CCNA</a> / <a href="../">Lecciones</a> · <a href="../../../../ccna/lessons/ospf-router-id-selection-and-configuration-network-statements-vs-inter/" hreflang="en" lang="en">English</a></p>
+<p class="note">Cisco CCNA 200-301 v2.0</p>
+<h1>Selección y configuración del router ID de OSPF (sentencias network vs comandos de interfaz, interfaces pasivas)</h1>
+<article class="lbody">
+<p>Todo router OSPF necesita un router ID (RID), un valor de 32 bits escrito como una dirección IPv4, que lo identifica en la LSDB, en las tablas de vecinos y en las elecciones de DR. No tiene que ser una dirección alcanzable, pero debe ser único dentro del dominio OSPF.</p>
+<p>IOS elige el router ID en este orden. Primero, un <code>router-id</code> configurado manualmente bajo el proceso OSPF. Si no lo hay, la dirección IPv4 más alta de cualquier interfaz loopback activa. Si no hay loopbacks, la dirección IPv4 más alta de cualquier interfaz física activa. Se prefieren las loopbacks porque nunca se caen a menos que se apaguen deliberadamente, lo que mantiene estable el RID. La buena práctica es definirlo explícitamente: <code>router ospf 1</code> y luego <code>router-id 1.1.1.1</code>.</p>
+<p>El RID se elige cuando arranca el proceso OSPF y no cambia por sí solo. Si cambias el router ID configurado, IOS te avisa que tendrá efecto después de un reinicio (reload) o de un <code>clear ip ospf process</code>. Los router ID duplicados provocan fallas de adyacencia y mensajes de log, así que una configuración copiada que repite un RID es un error común de laboratorio.</p>
+<p>Hay dos formas de habilitar OSPF en las interfaces. La forma tradicional usa sentencias network bajo el proceso: <code>network 10.1.1.0 0.0.0.255 area 0</code>. La dirección y la wildcard mask forman un patrón: cualquier interfaz cuya dirección IP coincida con el patrón ejecuta OSPF en esa área, y se anuncia su subred conectada. La wildcard es una máscara inversa, donde los bits en 0 deben coincidir y los bits en 1 se ignoran. Puedes ser amplio (<code>network 10.0.0.0 0.255.255.255 area 0</code>) o preciso, haciendo coincidir exactamente una interfaz con <code>network 10.1.1.1 0.0.0.0 area 0</code>. La sentencia network no decide qué prefijo se anuncia; eso lo deciden la dirección y la máscara de la propia interfaz.</p>
+<p>La forma más nueva es habilitar OSPF directamente en la interfaz: <code>interface g0/1</code> y luego <code>ip ospf 1 area 0</code>. Es explícita y fácil de leer, y tiene prioridad sobre cualquier sentencia network para esa interfaz. Ambos métodos producen el mismo resultado, y el examen espera que sepas leer cualquiera de los dos.</p>
+<pre class="code" tabindex="0"><code>router ospf 1
+ router-id 1.1.1.1
+ network 192.168.10.0 0.0.0.255 area 0
+ passive-interface g0/2
+!
+interface g0/1
+ ip ospf 1 area 0</code></pre>
+<p>Una interfaz pasiva es aquella en la que OSPF anuncia la subred conectada pero no envía hellos, así que no se forman vecinos. Úsala en las interfaces LAN que dan hacia los usuarios, donde no hay routers: evita hellos innecesarios e impide que un dispositivo no autorizado forme una adyacencia e inyecte rutas. Configura <code>passive-interface g0/2</code>, o haz pasivas todas las interfaces con <code>passive-interface default</code> y luego vuelve a habilitar las que necesitan vecinos con <code>no passive-interface g0/0</code>. Las interfaces loopback se anuncian como rutas de host /32 de forma predeterminada; <code>ip ospf network point-to-point</code> en la loopback hace que se anuncie su máscara configurada.</p>
+<p>Verifica con <code>show ip protocols</code>, que muestra el RID, las sentencias network, las interfaces pasivas y los orígenes de información de enrutamiento, y con <code>show ip ospf interface brief</code>, que lista las interfaces que ejecutan OSPF, su área, su costo y su estado.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Router ID</dt><dd>Un identificador OSPF único de 32 bits elegido de router-id, la IP de loopback más alta o la IP de interfaz activa más alta, en ese orden.</dd><dt>Network statement (sentencia network)</dt><dd>Un comando del proceso OSPF que usa una dirección y una wildcard para seleccionar qué interfaces ejecutan OSPF en un área.</dd><dt>ip ospf area</dt><dd>Comando de interfaz (ip ospf &lt;process&gt; area &lt;area&gt;) que habilita OSPF directamente en una interfaz.</dd><dt>Passive interface (interfaz pasiva)</dt><dd>Una interfaz cuya subred anuncia OSPF pero en la que no envía hellos ni forma vecinos.</dd><dt>Wildcard mask</dt><dd>Una máscara inversa en la que los bits en 0 deben coincidir y los bits en 1 se ignoran.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>R2 tiene la loopback 0 en 2.2.2.2 y las interfaces 10.0.12.2 y 192.168.20.1. Sin comando router-id, su RID es 2.2.2.2, tomado de la loopback. El ingeniero agrega <code>router-id 22.22.22.22</code>, ve el mensaje de que tendrá efecto después de un reload o un clear, ejecuta <code>clear ip ospf process</code> y hace pasiva la LAN de usuarios para que las PC nunca reciban hellos.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Orden de selección del RID: router-id manual, luego la loopback más alta, luego la interfaz física más alta. 'Más alta' se refiere a la dirección numérica, no al número de interfaz.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Un router no tiene comando router-id, tiene las loopbacks 10.1.1.1 y 10.9.9.9, y G0/0 en 192.168.1.1. ¿Cuál es su RID?</summary><p>10.9.9.9, la dirección de loopback más alta; las loopbacks tienen preferencia sobre las interfaces físicas aunque una dirección física sea más alta.</p></details>
+<details class="sq"><summary>¿En qué interfaces habilita OSPF network 172.16.0.0 0.0.255.255 area 0?</summary><p>En cualquier interfaz con una dirección de 172.16.0.0 a 172.16.255.255.</p></details>
+<details class="sq"><summary>¿Qué hace passive-interface con la subred conectada de esa interfaz?</summary><p>La subred se sigue anunciando en OSPF, pero no se envían hellos ni se forman vecinos en esa interfaz.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CCNA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ccna/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../single-area-ospfv2-neighbors-and-adjacencies-point-to-point-vs-broadca/">← OSPFv2 de área única: vecinos y adyacencias, redes punto a p</a><a href="../ospf-cost-and-reference-bandwidth/">Costo de OSPF y ancho de banda de referencia →</a></nav>
+</main>
+</body>
+</html>

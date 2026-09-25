@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Seguridad de SMB: cifrado, firma, SMB over QUIC, eliminaci… · Lección de AZ-802</title>
+<meta name="description" content="Server Message Block (SMB) es el protocolo detrás de los recursos compartidos de archivos de Windows, y transporta datos confidenciales y credenciales. Los">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Seguridad de SMB: cifrado, firma, SMB over QUIC, eliminaci… · Lección de AZ-802">
+<meta property="og:description" content="Server Message Block (SMB) es el protocolo detrás de los recursos compartidos de archivos de Windows, y transporta datos confidenciales y credenciales. Los">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-802/lessons/smb-security-encryption-signing-smb-over-quic-removing-smbv1/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-802/lessons/smb-security-encryption-signing-smb-over-quic-removing-smbv1/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-802/">AZ-802</a> / <a href="../">Lecciones</a> · <a href="../../../../az-802/lessons/smb-security-encryption-signing-smb-over-quic-removing-smbv1/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802</p>
+<h1>Seguridad de SMB: cifrado, firma, SMB over QUIC, eliminación de SMBv1</h1>
+<article class="lbody">
+<p>Server Message Block (SMB) es el protocolo detrás de los recursos compartidos de archivos de Windows, y transporta datos confidenciales y credenciales. Los atacantes lo atacan para leer el tráfico, manipularlo, retransmitir la autenticación y explotar versiones antiguas del protocolo. Windows Server te da cuatro controles principales: cifrado, firma, SMB over QUIC y la eliminación de SMB versión 1.</p>
+<p>El cifrado de SMB, disponible en SMB 3.0 y posteriores, cifra los datos de extremo a extremo entre el cliente y el servidor usando modos de AES (Advanced Encryption Standard) como AES-128-GCM y, en versiones más recientes, AES-256. Puedes habilitarlo por recurso compartido con <code>Set-SmbShare -Name Finance -EncryptData $true</code> o para todo el servidor con <code>Set-SmbServerConfiguration -EncryptData $true</code>. De forma predeterminada, un recurso compartido cifrado rechaza a los clientes que no pueden cifrar (clientes SMB 2 más antiguos); la configuración <code>RejectUnencryptedAccess</code> controla eso. El cifrado protege la confidencialidad en redes no confiables sin implementar IPsec ni hardware especial.</p>
+<p>La firma de SMB agrega una firma criptográfica a cada mensaje para que el receptor pueda detectar manipulaciones y para que un intermediario (man-in-the-middle) no pueda retransmitir una sesión. La firma no oculta los datos; demuestra la integridad y la autenticidad. La exiges con configuraciones de directiva de grupo como Microsoft network server: Digitally sign communications (always), o con <code>Set-SmbServerConfiguration -RequireSecuritySignature $true</code>. Los controladores de dominio exigen desde hace tiempo la firma para SYSVOL y NETLOGON, y las versiones recientes de Windows, incluido Windows Server 2025, exigen la firma de forma más amplia de manera predeterminada. Si una conexión está cifrada, no se necesita además la firma, ya que el cifrado ya proporciona integridad.</p>
+<p>SMB over QUIC permite a los clientes llegar a los recursos compartidos de archivos a través de internet sin una VPN. QUIC es un transporte que se ejecuta sobre el puerto UDP 443 y siempre usa TLS 1.3, así que toda la sesión SMB, incluida la autenticación, está cifrada. El servidor necesita un certificado en el que confíen los clientes, asignado con <code>New-SmbServerCertificateMapping</code>, y puedes restringir qué clientes pueden conectarse con el control de acceso de clientes. En Windows Server 2022 estaba limitado a Azure Edition; Windows Server 2025 lo lleva a sus ediciones normales. Es muy adecuado para usuarios móviles y dispositivos de sucursal donde el puerto TCP 445 está bloqueado, como suele ocurrir en las redes públicas.</p>
+<p>SMB versión 1 tiene décadas de antigüedad, carece de protecciones modernas y fue explotado por gusanos como WannaCry. No está instalado de forma predeterminada en las versiones actuales de Windows Server, pero los sistemas actualizados o más antiguos pueden tenerlo todavía. Primero audita quién lo usa con <code>Set-SmbServerConfiguration -AuditSmb1Access $true</code> y lee el registro Microsoft-Windows-SMBServer/Audit. Luego deshabilítalo con <code>Set-SmbServerConfiguration -EnableSMB1Protocol $false</code> y elimina la característica con <code>Uninstall-WindowsFeature FS-SMB1</code>. Cualquier cosa que aún necesite SMBv1, como un escáner antiguo, debe actualizarse o aislarse.</p>
+<p>Usa <code>Get-SmbConnection</code> en un cliente para ver el dialecto en uso y <code>Get-SmbSession</code> en un servidor para ver los clientes conectados.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>SMB encryption (cifrado de SMB)</dt><dd>Una característica de SMB 3.x que cifra el tráfico de archivos de extremo a extremo, habilitada por recurso compartido o para todo el servidor.</dd><dt>SMB signing (firma de SMB)</dt><dd>Firma criptográfica de los mensajes SMB que detecta manipulaciones y bloquea los ataques de retransmisión, sin ocultar el contenido.</dd><dt>SMB over QUIC</dt><dd>SMB transportado sobre QUIC en UDP 443 con TLS 1.3, que permite un acceso seguro a archivos a través de internet sin VPN.</dd><dt>SMBv1</dt><dd>El dialecto SMB original, inseguro y en desuso, que debe auditarse, deshabilitarse y eliminarse.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un despacho jurídico habilita el cifrado en su recurso compartido Contracts para que el tráfico que cruza un enlace de sucursal compartido sea ilegible, exige la firma en todo el dominio mediante directiva de grupo y activa la auditoría de SMBv1 durante dos semanas. El registro de auditoría muestra una copiadora antigua que usa SMBv1; después de reemplazarla, el administrador ejecuta Uninstall-WindowsFeature FS-SMB1 en todos los servidores de archivos.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Firma equivale a integridad y protección contra la retransmisión; cifrado equivale a confidencialidad más integridad. SMB over QUIC significa UDP 443, TLS 1.3 y un certificado. Audita SMBv1 antes de eliminarlo.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué puerto y protocolo usa SMB over QUIC?</summary><p>El puerto UDP 443, usando QUIC con cifrado TLS 1.3.</p></details>
+<details class="sq"><summary>¿Impide la firma de SMB que alguien que intercepta la red lea el contenido de los archivos?</summary><p>No. La firma solo demuestra la integridad y la autenticidad; necesitas el cifrado de SMB para ocultar el contenido.</p></details>
+<details class="sq"><summary>¿Cómo puedes averiguar qué clientes siguen usando SMBv1 antes de deshabilitarlo?</summary><p>Habilitando la auditoría de acceso SMB1 con Set-SmbServerConfiguration -AuditSmb1Access $true y revisando el registro de eventos Microsoft-Windows-SMBServer/Audit.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AZ-802 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-802/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../azure-files-with-ad-ds-authentication-share-level-rbac-vs-ntfs-permiss/">← Azure Files con autenticación de AD DS; RBAC de nivel de rec</a><a href="../file-server-resource-manager-quotas-and-file-screens-dfs-namespaces-an/">Cuotas y filtros de archivos de File Server Resource Manager →</a></nav>
+</main>
+</body>
+</html>

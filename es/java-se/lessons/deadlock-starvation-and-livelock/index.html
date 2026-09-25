@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Deadlock, inanición (starvation) y livelock · Lección de OCP Java</title>
+<meta name="description" content="Estos tres son problemas de vivacidad (liveness): el programa no falla, pero algunos o todos los hilos dejan de avanzar de forma útil. El examen espera que">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Deadlock, inanición (starvation) y livelock · Lección de OCP Java">
+<meta property="og:description" content="Estos tres son problemas de vivacidad (liveness): el programa no falla, pero algunos o todos los hilos dejan de avanzar de forma útil. El examen espera que">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/java-se/lessons/deadlock-starvation-and-livelock/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/java-se/lessons/deadlock-starvation-and-livelock/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../java-se/">OCP Java</a> / <a href="../">Lecciones</a> · <a href="../../../../java-se/lessons/deadlock-starvation-and-livelock/" hreflang="en" lang="en">English</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25)</p>
+<h1>Deadlock, inanición (starvation) y livelock</h1>
+<article class="lbody">
+<p>Estos tres son problemas de vivacidad (liveness): el programa no falla, pero algunos o todos los hilos dejan de avanzar de forma útil. El examen espera que identifiques cada uno a partir de una descripción o de un ejemplo de código y que sepas cómo prevenirlo.</p>
+<p>El deadlock (interbloqueo) ocurre cuando dos o más hilos tienen cada uno un lock que el otro necesita, y cada uno espera para siempre a que el otro lo libere. El caso clásico: el hilo 1 bloquea A y luego intenta bloquear B, mientras que el hilo 2 bloquea B y luego intenta bloquear A. Ambos quedan atascados en el estado BLOCKED (o WAITING, con locks explícitos), y nada cambiará nunca. Se requieren las cuatro condiciones: exclusión mutua, retener un recurso mientras se espera otro, ninguna liberación forzada y una espera circular.</p>
+<pre class="code" tabindex="0"><code>// Hilo 1                       // Hilo 2
+synchronized (a) {               synchronized (b) {
+    synchronized (b) { ... }         synchronized (a) { ... }
+}                                }
+// Solución: ambos hilos adquieren primero a, luego b.</code></pre>
+<p>Para prevenir el deadlock, rompe una de las condiciones. La solución más común es un orden de locks consistente: todos los hilos adquieren los locks en el mismo orden global, por ejemplo por ID de cuenta, para que no pueda formarse una espera circular. Otras técnicas son retener un solo lock a la vez cuando sea posible, mantener pequeñas las regiones synchronized y usar <code>tryLock</code> con timeout para que un hilo que no consigue el segundo lock libere el primero y reintente. Para diagnosticar un deadlock en vivo, toma un volcado de hilos (thread dump), por ejemplo con la herramienta <code>jstack</code> o <code>jcmd &lt;pid&gt; Thread.print</code>; la JVM informa de los hilos en deadlock y de los locks que esperan.</p>
+<p>La inanición (starvation) ocurre cuando un hilo está listo para ejecutarse pero rara vez o nunca obtiene el recurso que necesita porque otros lo siguen tomando. Algunos ejemplos son un hilo que siempre pierde al competir por un lock injusto, un hilo de baja prioridad que otros hilos siguen desplazando, o un hilo que retiene un lock durante muchísimo tiempo. La solución es la equidad: locks justos como <code>new ReentrantLock(true)</code>, secciones críticas más cortas y colas de trabajo acotadas.</p>
+<p>El livelock ocurre cuando los hilos no están bloqueados pero siguen reaccionando unos a otros de modo que ninguno avanza, como dos personas en un pasillo que se hacen a un lado repetidamente hacia el mismo lado. En código, dos hilos que detectan un conflicto, retroceden, liberan y reintentan en el mismo momento pueden repetirlo para siempre mientras consumen CPU. Los estados de los hilos muestran RUNNABLE, que es lo que distingue el livelock del deadlock. Agregar una espera aleatoria (randomized backoff), o hacer que un lado ceda según su prioridad, rompe la simetría.</p>
+<p>Una forma rápida de recordarlo: deadlock significa que todos esperan y nadie se mueve; livelock significa que todos se mueven pero nadie llega a ningún lado; inanición significa que algunos hilos obtienen el recurso y otros nunca.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Deadlock (interbloqueo)</dt><dd>Dos o más hilos que esperan para siempre cada uno un lock que tiene otro, formando un ciclo.</dd><dt>Starvation (inanición)</dt><dd>A un hilo se le niega perpetuamente el acceso a un recurso que necesita porque otros hilos lo siguen obteniendo.</dd><dt>Livelock</dt><dd>Los hilos siguen activos, respondiéndose repetidamente unos a otros, pero no avanzan.</dd><dt>Lock ordering (orden de locks)</dt><dd>Una técnica de prevención en la que todos los hilos adquieren varios locks en el mismo orden global.</dd><dt>Thread dump (volcado de hilos)</dt><dd>Una instantánea del estado y la pila de cada hilo, usada para encontrar deadlocks e hilos bloqueados.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un servicio bancario se congela de vez en cuando durante transferencias simultáneas entre las mismas dos cuentas. Un volcado de hilos muestra dos hilos, cada uno con el lock de una cuenta y esperando el de la otra. Bloquear las cuentas en orden de número de cuenta lo soluciona.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Los hilos en deadlock están BLOCKED o WAITING; los hilos en livelock están RUNNABLE y ocupados. La solución estándar de deadlock en las opciones de respuesta es adquirir los locks en un orden consistente.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Dos hilos liberan y reintentan un lock repetidamente en respuesta el uno al otro, sin terminar nunca, mientras el uso de CPU se mantiene alto. ¿Qué problema es este?</summary><p>Livelock.</p></details>
+<details class="sq"><summary>¿Cuál es la forma más sencilla de prevenir el deadlock de lock A / lock B?</summary><p>Hacer que todos los hilos adquieran los locks en el mismo orden.</p></details>
+<details class="sq"><summary>¿Qué salida de herramienta ayuda a confirmar un deadlock en una JVM en ejecución?</summary><p>Un volcado de hilos, por ejemplo de jstack o jcmd Thread.print, que informa de los hilos en deadlock.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia OCP Java gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../java-se/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../concurrent-collections-concurrenthashmap-copyonwritearraylist-blocking/">← Colecciones concurrentes: ConcurrentHashMap, CopyOnWriteArra</a><a href="../scoped-values-java-25-scopedvalue-where-run-as-an-alternative-to-threa/">Scoped values (Java 25): ScopedValue.where(...).run(...) com →</a></nav>
+</main>
+</body>
+</html>

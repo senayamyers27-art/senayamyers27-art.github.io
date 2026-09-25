@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Conmutadores virtuales de Hyper-V (externo, interno, priva… · Lección de AZ-802</title>
+<meta name="description" content="Un conmutador virtual de Hyper-V es un conmutador de capa 2 por software dentro del host que conecta los adaptadores de red virtuales de las VM entre sí y,">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Conmutadores virtuales de Hyper-V (externo, interno, priva… · Lección de AZ-802">
+<meta property="og:description" content="Un conmutador virtual de Hyper-V es un conmutador de capa 2 por software dentro del host que conecta los adaptadores de red virtuales de las VM entre sí y,">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-802/lessons/hyper-v-virtual-switches-external-internal-private-and-switch-embedded/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-802/lessons/hyper-v-virtual-switches-external-internal-private-and-switch-embedded/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-802/">AZ-802</a> / <a href="../">Lecciones</a> · <a href="../../../../az-802/lessons/hyper-v-virtual-switches-external-internal-private-and-switch-embedded/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802</p>
+<h1>Conmutadores virtuales de Hyper-V (externo, interno, privado) y Switch Embedded Teaming</h1>
+<article class="lbody">
+<p>Un conmutador virtual de Hyper-V es un conmutador de capa 2 por software dentro del host que conecta los adaptadores de red virtuales de las VM entre sí y, opcionalmente, con el mundo exterior. Creas conmutadores en el Virtual Switch Manager de Hyper-V Manager o con <code>New-VMSwitch</code>. Hay tres tipos, y elegir el correcto es una pregunta común del examen.</p>
+<p>Un conmutador externo está vinculado a un adaptador de red físico, por lo que las VM pueden llegar a la red física y más allá. Cuando lo creas, la opción Allow management operating system to share this network adapter crea una NIC virtual del host en el conmutador, de modo que el host conserva el acceso a la red a través del mismo puerto físico. Si desactivas esa opción, la NIC física queda dedicada al tráfico de las VM. Un conmutador interno conecta las VM entre sí y con el host, pero no con la red física. Es útil para la comunicación entre host y VM y, combinado con <code>New-NetNat</code>, para dar a las VM NAT saliente a través del host. Un conmutador privado conecta las VM solo entre sí; ni siquiera el host puede comunicarse en él. Es adecuado para laboratorios aislados y redes de prueba, como un segmento de análisis de malware o una red aislada de conmutación por error de prueba.</p>
+<p>Los adaptadores de red de las VM también tienen configuraciones: ID de VLAN (<code>Set-VMNetworkAdapterVlan -VMName APP01 -Access -VlanId 20</code>), administración del ancho de banda, protección DHCP (DHCP guard) y protección de enrutador (router guard) (que descartan mensajes DHCP o anuncios de enrutador no autorizados provenientes de una VM), suplantación de direcciones MAC, creación de reflejo del puerto y, en las VM de generación 2, arranque PXE con el adaptador estándar.</p>
+<p>Los hosts necesitan redundancia y ancho de banda, que tradicionalmente provenían de la formación de equipos de NIC (LBFO, equilibrio de carga y conmutación por error) configurada en Windows, con un conmutador virtual construido sobre el equipo. Switch Embedded Teaming (SET), introducido en Windows Server 2016, integra en cambio la formación de equipos directamente en el conmutador virtual de Hyper-V. SET es el enfoque recomendado para los hosts de Hyper-V y es obligatorio para las características de redes definidas por software y para los diseños convergentes que usan RDMA (acceso directo a memoria remota) para el tráfico de almacenamiento y de migración en vivo. Construir un conmutador virtual nuevo sobre un equipo LBFO está en desuso y bloqueado de forma predeterminada en las versiones recientes de Windows Server, así que usa SET.</p>
+<p>SET tiene reglas específicas. Admite hasta ocho adaptadores físicos, y deben ser idénticos: mismo fabricante, modelo, firmware y controlador. Funciona solo en modo independiente del conmutador, por lo que los conmutadores físicos no necesitan ninguna configuración especial como LACP. Ofrece dos modos de equilibrio de carga: Hyper-V Port (el tráfico de cada VM se vincula a un miembro del equipo) y Dynamic (el tráfico saliente se equilibra por flujos).</p>
+<pre class="code" tabindex="0"><code>New-VMSwitch -Name SETswitch -NetAdapterName 'NIC1','NIC2' -EnableEmbeddedTeaming $true -AllowManagementOS $true
+Set-VMSwitchTeam -Name SETswitch -LoadBalancingAlgorithm HyperVPort
+Add-VMNetworkAdapter -ManagementOS -Name LiveMigration -SwitchName SETswitch
+```
+La última línea agrega una NIC virtual del host para el tráfico de migración en vivo en el mismo equipo convergente.</code></pre>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>External switch (conmutador externo)</dt><dd>Un conmutador virtual vinculado a una NIC física para que las VM puedan llegar a la red física.</dd><dt>Internal switch (conmutador interno)</dt><dd>Un conmutador virtual que conecta las VM y el host, sin acceso a la red física.</dd><dt>Private switch (conmutador privado)</dt><dd>Un conmutador virtual que conecta solo las VM entre sí; el host queda excluido.</dd><dt>Switch Embedded Teaming</dt><dd>Formación de equipos de NIC integrada en el conmutador virtual de Hyper-V, hasta ocho adaptadores idénticos, independiente del conmutador.</dd><dt>DHCP guard (protección DHCP)</dt><dd>Una configuración del adaptador de la VM que bloquea los mensajes de servidor DHCP de VM no autorizadas.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un laboratorio necesita tres VM que puedan comunicarse entre sí, pero que nunca deben llegar al host ni a la red corporativa. El administrador crea un conmutador privado y conecta las tres a él. Más adelante, para hosts de producción con dos NIC RDMA de 25 GbE, el equipo construye un conmutador SET con vNIC del host para administración, almacenamiento y migración en vivo.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Acceso al host pero sin red física significa interno; solo VM significa privado. Para la formación de equipos en los hosts de Hyper-V modernos, elige SET, que usa el modo independiente del conmutador y necesita NIC idénticas, no LBFO.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué tipo de conmutador virtual permite que las VM se comuniquen con el host, pero no con la red física?</summary><p>El interno.</p></details>
+<details class="sq"><summary>¿Qué modo de formación de equipos admite SET?</summary><p>Solo independiente del conmutador; sin LACP ni formación de equipos estática.</p></details>
+<details class="sq"><summary>¿Cuál es el número máximo de adaptadores físicos en un equipo SET?</summary><p>Ocho, y deben ser idénticos.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AZ-802 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-802/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../checkpoints-production-vs-standard-why-checkpoints-are-not-backups/">← Puntos de control: de producción frente a estándar; por qué </a><a href="../live-migration-and-storage-migration-between-hyper-v-hosts-kerberos-vs/">Migración en vivo y migración de almacenamiento entre hosts  →</a></nav>
+</main>
+</body>
+</html>

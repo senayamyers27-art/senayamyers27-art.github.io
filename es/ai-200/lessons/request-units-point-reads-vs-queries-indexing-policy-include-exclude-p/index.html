@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Request Units: lecturas puntuales vs consultas, rutas incl… · Lección de AI-200</title>
+<meta name="description" content="Cosmos DB mide cada operación en Request Units (RU, unidades de solicitud), una moneda única que combina CPU, memoria y E/S. Aprovisionas el rendimiento co">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Request Units: lecturas puntuales vs consultas, rutas incl… · Lección de AI-200">
+<meta property="og:description" content="Cosmos DB mide cada operación en Request Units (RU, unidades de solicitud), una moneda única que combina CPU, memoria y E/S. Aprovisionas el rendimiento co">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/request-units-point-reads-vs-queries-indexing-policy-include-exclude-p/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/request-units-point-reads-vs-queries-indexing-policy-include-exclude-p/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/request-units-point-reads-vs-queries-indexing-policy-include-exclude-p/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Request Units: lecturas puntuales vs consultas, rutas include/exclude de la directiva de indexación, niveles de coherencia y su costo en RU</h1>
+<article class="lbody">
+<p>Cosmos DB mide cada operación en Request Units (RU, unidades de solicitud), una moneda única que combina CPU, memoria y E/S. Aprovisionas el rendimiento como RU por segundo (manual o con escalado automático) o pagas por RU consumida en el modo serverless. Si superas tus RU/s aprovisionadas, las solicitudes se limitan con HTTP 429 y una indicación de cuándo reintentar (retry-after). Cada respuesta informa su costo en el encabezado <code>x-ms-request-charge</code>, que el SDK de Python expone a través de los últimos encabezados de respuesta, así que puedes medir en lugar de adivinar.</p>
+<p>La referencia es una lectura puntual: leer un elemento de 1 KB por id y clave de partición cuesta alrededor de 1 RU. Las escrituras cuestan más que las lecturas porque el elemento debe almacenarse e indexarse, y los elementos más grandes cuestan más. Las consultas varían mucho: el costo crece con el número de elementos examinados, el tamaño del resultado, la complejidad de los filtros y funciones, y si la consulta abarca varias particiones. Una consulta que devuelve un solo elemento puede costar fácilmente varias veces lo que cuesta una lectura puntual de ese mismo elemento, así que el diseño más barato lee por id y clave de partición siempre que sea posible.</p>
+<p>La directiva de indexación (indexing policy) afecta mucho el costo de escritura. De forma predeterminada, Cosmos DB indexa cada propiedad de cada elemento (la ruta incluida <code>/*</code>), lo que hace rápido cualquier filtro pero obliga a cada escritura a pagar por actualizar muchas entradas del índice. Si nunca filtras por un campo grande, como el cuerpo de un documento o un arreglo de embeddings, exclúyelo. También puedes invertir el enfoque: excluir <code>/*</code> e incluir solo las rutas que consultas.</p>
+<pre class="code" tabindex="0"><code>{
+  &quot;indexingMode&quot;: &quot;consistent&quot;,
+  &quot;includedPaths&quot;: [ { &quot;path&quot;: &quot;/customerId/?&quot; }, { &quot;path&quot;: &quot;/status/?&quot; } ],
+  &quot;excludedPaths&quot;: [ { &quot;path&quot;: &quot;/*&quot; } ],
+  &quot;compositeIndexes&quot;: [[ { &quot;path&quot;: &quot;/status&quot; }, { &quot;path&quot;: &quot;/orderDate&quot;, &quot;order&quot;: &quot;descending&quot; } ]]
+}</code></pre>
+<p>Una ruta que termina en <code>/?</code> indexa un valor escalar, y <code>/*</code> indexa todo lo que hay por debajo de ese punto. Los índices compuestos permiten un ORDER BY eficiente sobre varias propiedades. Establecer <code>indexingMode</code> en <code>none</code> deshabilita la indexación por completo, lo que sirve para una carga de trabajo puramente clave-valor que solo hace lecturas puntuales.</p>
+<p>Los niveles de coherencia, del más fuerte al más débil, son Strong, Bounded Staleness, Session, Consistent Prefix y Eventual. Session es el predeterminado: un cliente siempre lee sus propias escrituras, lo cual encaja con la mayoría de las apps. Strong y Bounded Staleness hacen que las lecturas cuesten aproximadamente el doble de RU que los niveles más débiles, porque las lecturas se atienden con un quórum de réplicas, y Strong además agrega latencia de escritura entre regiones. Las lecturas en Session, Consistent Prefix y Eventual cuestan más o menos lo mismo. Estableces un nivel predeterminado en la cuenta, y un cliente puede solicitar un nivel más débil (nunca uno más fuerte) por cliente o por solicitud.</p>
+<p>Cuando una pregunta te pide cómo reducir el consumo de RU, busca estas palancas: cambiar consultas por lecturas puntuales, agregar la clave de partición a los filtros, excluir del índice las rutas que no se consultan y relajar la coherencia desde Strong o Bounded Staleness si el escenario lo permite.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Request Unit (RU, unidad de solicitud)</dt><dd>La unidad de costo normalizada para las operaciones de Cosmos DB; una lectura puntual de 1 KB cuesta alrededor de 1 RU.</dd><dt>Indexing policy (directiva de indexación)</dt><dd>Configuración del contenedor que elige qué rutas se indexan, el modo de indexación y los índices compuestos o vectoriales.</dd><dt>Session consistency (coherencia de sesión)</dt><dd>El nivel predeterminado, que garantiza que un cliente lea sus propias escrituras dentro de su sesión.</dd><dt>HTTP 429</dt><dd>El estado que se devuelve cuando las solicitudes superan el rendimiento aprovisionado; los clientes deben reintentar después del retraso indicado.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un almacén de documentos tenía cargos de RU altos en cada escritura. Al revisar x-ms-request-charge se vio que las inserciones grandes costaban mucho más de lo esperado, porque la directiva predeterminada indexaba un campo de texto grande y cada elemento de un embedding de 1536 números. Excluir esas rutas redujo mucho el costo de escritura, y cambiar las lecturas de una consulta por id a read_item bajó los cargos de lectura a alrededor de 1 RU cada una.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Las lecturas en Strong y Bounded Staleness cuestan aproximadamente el doble; excluir rutas no usadas reduce las RU de escritura; una lectura puntual supera a cualquier consulta. Los clientes pueden relajar la coherencia por solicitud, pero no pueden hacerla más fuerte que el valor predeterminado de la cuenta.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo puedes reducir el costo en RU de las escrituras de elementos con un campo de texto grande por el que nunca se filtra?</summary><p>Excluyendo esa ruta en la directiva de indexación para que las escrituras no mantengan entradas de índice para ella.</p></details>
+<details class="sq"><summary>¿Qué niveles de coherencia duplican aproximadamente el costo en RU de las lecturas?</summary><p>Strong y Bounded Staleness, porque las lecturas requieren un quórum de réplicas.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../partition-key-design-high-cardinality-even-spread-point-reads-hierarch/">← Diseño de la clave de partición: alta cardinalidad, distribu</a><a href="../cosmos-db-vector-search-container-vector-policy-path-data-type-dimensi/">Búsqueda vectorial en Cosmos DB: directiva vectorial del con →</a></nav>
+</main>
+</body>
+</html>

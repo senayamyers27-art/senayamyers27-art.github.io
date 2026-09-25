@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Plantillas ARM y archivos Bicep: interpretar y modificar, … · Lección de Azure Administrator</title>
+<meta name="description" content="La infraestructura como código significa describir los recursos de Azure en archivos y dejar que Azure Resource Manager (ARM) los cree, en lugar de hacer c">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Plantillas ARM y archivos Bicep: interpretar y modificar, … · Lección de Azure Administrator">
+<meta property="og:description" content="La infraestructura como código significa describir los recursos de Azure en archivos y dejar que Azure Resource Manager (ARM) los cree, en lugar de hacer c">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-104/lessons/arm-templates-and-bicep-files-interpret-and-modify-deploy-export-a-dep/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-104/lessons/arm-templates-and-bicep-files-interpret-and-modify-deploy-export-a-dep/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-104/">Azure Administrator</a> / <a href="../">Lecciones</a> · <a href="../../../../az-104/lessons/arm-templates-and-bicep-files-interpret-and-modify-deploy-export-a-dep/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure Administrator Associate AZ-104</p>
+<h1>Plantillas ARM y archivos Bicep: interpretar y modificar, implementar, exportar una implementación como plantilla y convertir ARM JSON a Bicep</h1>
+<article class="lbody">
+<p>La infraestructura como código significa describir los recursos de Azure en archivos y dejar que Azure Resource Manager (ARM) los cree, en lugar de hacer clic en el portal. Los archivos son repetibles, revisables y quedan bajo control de versiones. Los formatos nativos de Azure son las plantillas ARM, escritas en JSON, y Bicep, un lenguaje más sencillo que se compila a ARM JSON. El examen espera que sepas leer ambos, cambiar un valor e implementar.</p>
+<p>Una plantilla ARM tiene una estructura fija: <code>$schema</code> y <code>contentVersion</code>, luego <code>parameters</code> (valores que se proporcionan en el momento de la implementación, como el nombre de una VM), <code>variables</code> (valores calculados dentro de la plantilla), <code>resources</code> (lo que se va a implementar, cada uno con <code>type</code>, <code>apiVersion</code>, <code>name</code>, <code>location</code> y <code>properties</code>) y <code>outputs</code> (valores que se devuelven después de la implementación). Las expresiones entre corchetes llaman a funciones de plantilla, por ejemplo <code>[resourceGroup().location]</code> o <code>[parameters('storageName')]</code>. <code>dependsOn</code> indica el orden entre recursos.</p>
+<p>Bicep expresa lo mismo con menos sintaxis. Esta es una cuenta de almacenamiento con un parámetro y una salida:</p>
+<pre class="code" tabindex="0"><code>param storageName string
+param location string = resourceGroup().location
+
+resource sa 'Microsoft.Storage/storageAccounts@2023-01-01' = {
+  name: storageName
+  location: location
+  sku: { name: 'Standard_LRS' }
+  kind: 'StorageV2'
+}
+
+output blobEndpoint string = sa.properties.primaryEndpoints.blob</code></pre>
+<p>Léela de arriba hacia abajo: <code>param</code> declara entradas (con un valor predeterminado opcional), <code>resource</code> declara un recurso con un nombre simbólico (<code>sa</code>), un tipo y una versión de API, y <code>output</code> devuelve un valor. Bicep resuelve las dependencias automáticamente cuando un recurso hace referencia al nombre simbólico de otro. Para cambiar la redundancia, editarías <code>Standard_LRS</code> a <code>Standard_GRS</code>. Las piezas reutilizables van en módulos (<code>module net './network.bicep' = { ... }</code>). Los valores de los parámetros pueden venir de un archivo de parámetros (<code>.json</code> o <code>.bicepparam</code>) para que la misma plantilla implemente desarrollo y producción con valores diferentes.</p>
+<p>Puedes obtener una plantilla a partir de recursos existentes. En el portal, un grupo de recursos o un recurso tiene Export template en Automation, que genera una plantilla de los recursos actuales; una implementación anterior en la lista Deployments del grupo de recursos también ofrece su plantilla original. Las plantillas exportadas son un punto de partida: a menudo tienen valores fijos en el código, incluyen propiedades de solo lectura y pueden no admitir todos los tipos de recurso, así que las parametrizas y las limpias antes de reutilizarlas.</p>
+<p>La conversión entre formatos se hace con la CLI de Bicep, incluida en la Azure CLI. <code>az bicep decompile --file main.json</code> convierte una plantilla ARM JSON en un archivo Bicep en la medida de lo posible, que luego revisas para corregir las advertencias. <code>az bicep build --file main.bicep</code> compila Bicep a ARM JSON. Rara vez necesitas compilar manualmente, porque <code>az deployment group create</code> y <code>New-AzResourceGroupDeployment</code> aceptan archivos <code>.bicep</code> directamente. La página Deploy a custom template del portal acepta ARM JSON y te permite editarlo antes de implementarlo.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>ARM template (plantilla ARM)</dt><dd>Un archivo JSON que declara recursos, parámetros, variables y salidas de Azure para que Azure Resource Manager los implemente.</dd><dt>Bicep</dt><dd>Un lenguaje específico de dominio para Azure que se compila a ARM JSON, con una sintaxis más sencilla y dependencias automáticas.</dd><dt>Parameter (parámetro)</dt><dd>Un valor que se proporciona en el momento de la implementación para que una plantilla se pueda reutilizar con distintas entradas.</dd><dt>Decompile (descompilar)</dt><dd>Convertir una plantilla ARM JSON a Bicep con az bicep decompile.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un administrador creó a mano en el portal un entorno de aplicación web que funciona y quiere recrearlo para un equipo de pruebas. Usa Export template en el grupo de recursos, descompila el JSON a Bicep, reemplaza los nombres fijos por parámetros y lo implementa en un grupo de recursos nuevo con un archivo de parámetros de prueba.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Ten claro de dónde vienen los valores: los parámetros se proporcionan en la implementación, las variables se calculan en la plantilla y las salidas se devuelven después. az bicep decompile convierte JSON a Bicep; az bicep build hace lo contrario.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué sección de la plantilla editarías para que el tamaño de la VM se pueda elegir en el momento de la implementación?</summary><p>Agrega un parámetro para el tamaño en la sección parameters (param en Bicep) y haz referencia a él en el recurso de la VM.</p></details>
+<details class="sq"><summary>¿Cómo conviertes una plantilla ARM JSON existente a Bicep?</summary><p>Ejecuta az bicep decompile --file template.json y revisa el resultado.</p></details>
+<details class="sq"><summary>¿Dónde puedes obtener una plantilla de recursos que se crearon manualmente en el portal?</summary><p>Con Export template en el grupo de recursos o el recurso (en Automation), y luego la limpias y la parametrizas.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Azure Administrator gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-104/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../azure-files-create-and-configure-file-shares-snapshots-soft-delete-and/">← Azure Files: crear y configurar recursos compartidos de arch</a><a href="../deployment-modes-incremental-vs-complete-and-deploying-with-az-deploym/">Modos de implementación (incremental vs. completo) e impleme →</a></nav>
+</main>
+</body>
+</html>

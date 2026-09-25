@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Qué provoca el fallo de cada probe: reiniciar el contenedo… · Lección de CKAD</title>
+<meta name="description" content="Los tres tipos de probe se diferencian sobre todo en lo que ocurre cuando fallan. Confundirlos lleva a reinicios innecesarios o a enviar tráfico a Pods que">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Qué provoca el fallo de cada probe: reiniciar el contenedo… · Lección de CKAD">
+<meta property="og:description" content="Los tres tipos de probe se diferencian sobre todo en lo que ocurre cuando fallan. Confundirlos lleva a reinicios innecesarios o a enviar tráfico a Pods que">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/what-each-probe-failure-does-restart-the-container-vs-remove-the-pod-f/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/what-each-probe-failure-does-restart-the-container-vs-remove-the-pod-f/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/what-each-probe-failure-does-restart-the-container-vs-remove-the-pod-f/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>Qué provoca el fallo de cada probe: reiniciar el contenedor vs quitar el Pod de los endpoints del Service</h1>
+<article class="lbody">
+<p>Los tres tipos de probe se diferencian sobre todo en lo que ocurre cuando fallan. Confundirlos lleva a reinicios innecesarios o a enviar tráfico a Pods que no pueden atenderlo, así que el examen evalúa directamente estas consecuencias.</p>
+<p>Cuando un liveness probe falla <code>failureThreshold</code> veces seguidas, el kubelet mata el contenedor y lo reinicia según el <code>restartPolicy</code> del Pod. El Pod se queda en el mismo nodo con el mismo nombre e IP; solo se reemplaza el contenedor, y el contador RESTARTS de <code>kubectl get pods</code> sube. Los fallos repetidos de liveness provocan retrasos de back-off crecientes y el estado CrashLoopBackOff. Los eventos muestran <code>Liveness probe failed</code> seguido de <code>Container api failed liveness probe, will be restarted</code>.</p>
+<p>Cuando falla un readiness probe, no se reinicia nada. El kubelet marca el contenedor como no listo, la condición Ready del Pod pasa a False (la columna READY muestra <code>0/1</code>) y la dirección del Pod se marca como no lista en las EndpointSlices del Service, así que los Services e Ingresses dejan de enviarle tráfico nuevo. Cuando el probe vuelve a pasar, el Pod se agrega de nuevo automáticamente. La readiness sigue ejecutándose durante toda la vida del contenedor, así que puede sacar a un Pod de la rotación temporalmente, por ejemplo mientras está sobrecargado o una dependencia está caída.</p>
+<p>Cuando un startup probe falla <code>failureThreshold</code> veces, el contenedor se mata y se reinicia, igual que con un fallo de liveness. Hasta que tiene éxito, el contenedor tampoco está listo, así que no recibe tráfico.</p>
+<pre class="code" tabindex="0"><code>Probe      Al fallar                           ¿Pod sale del Service?  ¿Contenedor reiniciado?
+startup    matar + reiniciar tras el umbral    sí (aún no listo)       sí
+liveness   matar + reiniciar tras el umbral    (mientras reinicia)     sí
+readiness  marcar como no listo                sí                      no</code></pre>
+<p>La readiness también dirige los rollouts: un Deployment cuenta un Pod nuevo como disponible solo cuando está listo, así que un readiness probe que falla detiene un rolling update y protege a los usuarios de una versión rota. Un Pod sin readiness probe se considera listo en cuanto arrancan sus contenedores.</p>
+<p>De aquí se desprenden pautas de diseño. Haz que las verificaciones de liveness sean simples y locales, probando solo si este proceso está vivo; si la liveness depende de una base de datos, una caída de la base de datos reinicia todos los Pods a la vez y empeora las cosas. Pon las verificaciones de dependencias en la readiness, para que los Pods salgan de la rotación sin reiniciarse. Al diagnosticar, un contador de reinicios creciente apunta a fallos de liveness o startup, mientras que Pods en Running pero con <code>0/1</code> listos, y un Service sin endpoints listos, apuntan a readiness.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Restart (reinicio)</dt><dd>La acción ante fallo de liveness/startup: el kubelet mata el contenedor y lo vuelve a iniciar en el mismo Pod.</dd><dt>Not ready (no listo)</dt><dd>El estado ante fallo de readiness: el Pod sigue en ejecución pero se quita de los endpoints del Service.</dd><dt>Ready condition (condición Ready)</dt><dd>Condición de estado del Pod mostrada en la columna READY que decide si el Pod recibe tráfico del Service.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Durante una reconstrucción de caché, el endpoint de readiness de un Pod de API devuelve 503 durante un minuto. <code>kubectl get pods</code> lo muestra como Running 0/1, el Service lo esquiva y, cuando termina la reconstrucción, vuelve a 1/1 con cero reinicios. Si se hubiera usado la misma verificación para liveness, el Pod se habría reiniciado a mitad de la reconstrucción.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Falla liveness: el contenedor se reinicia. Falla readiness: el Pod sale del Service pero sigue ejecutándose. Si una pregunta menciona reinicios que suben, piensa en liveness; si menciona que no hay tráfico pero tampoco reinicios, piensa en readiness.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Un Pod muestra Running, READY 0/1 y 0 reinicios. ¿Qué probe está fallando?</summary><p>El readiness probe; los fallos de readiness no reinician el contenedor.</p></details>
+<details class="sq"><summary>¿Por qué un liveness probe no debería verificar una base de datos compartida?</summary><p>Una caída de la base de datos haría que todos los Pods fallaran la liveness y se reiniciaran a la vez, causando más interrupciones sin arreglar nada.</p></details>
+<details class="sq"><summary>¿Qué hace un startup probe fallido tras alcanzar su umbral?</summary><p>Mata y reinicia el contenedor, como un fallo de liveness.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../liveness-readiness-and-startup-probes-httpget-tcpsocket-exec-and-grpc/">← Probes de liveness, readiness y startup; handlers httpGet, t</a><a href="../kubectl-get-describe-get-events-top-pod-node-metrics-server-for-monito/">kubectl get, describe, get events y top pod/node (metrics-se →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bloqueo del estado: por qué evita la corrupción, qué backe… · Lección de Terraform Associate</title>
+<meta name="description" content="Imagina a dos ingenieros ejecutando terraform apply contra el mismo estado en el mismo momento. Ambos leen el mismo estado inicial, ambos hacen cambios en ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Bloqueo del estado: por qué evita la corrupción, qué backe… · Lección de Terraform Associate">
+<meta property="og:description" content="Imagina a dos ingenieros ejecutando terraform apply contra el mismo estado en el mismo momento. Ambos leen el mismo estado inicial, ambos hacen cambios en ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/terraform/lessons/state-locking-why-it-prevents-corruption-which-backends-support-it-loc/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/terraform/lessons/state-locking-why-it-prevents-corruption-which-backends-support-it-loc/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../terraform/">Terraform Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../terraform/lessons/state-locking-why-it-prevents-corruption-which-backends-support-it-loc/" hreflang="en" lang="en">English</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004)</p>
+<h1>Bloqueo del estado: por qué evita la corrupción, qué backends lo admiten, `-lock-timeout` y `terraform force-unlock`</h1>
+<article class="lbody">
+<p>Imagina a dos ingenieros ejecutando <code>terraform apply</code> contra el mismo estado en el mismo momento. Ambos leen el mismo estado inicial, ambos hacen cambios en la nube y ambos intentan escribir un estado nuevo. El que escribe segundo sobrescribe al primero, y el estado ya no coincide con la realidad. El bloqueo del estado evita esto permitiendo que se ejecute solo una operación a la vez que pueda escribir el estado.</p>
+<p>Cuando un backend admite bloqueo, Terraform adquiere el bloqueo automáticamente antes de cualquier operación que pueda escribir el estado, como <code>plan</code>, <code>apply</code>, <code>destroy</code>, <code>import</code> y los subcomandos de <code>state</code> que cambian el estado, y lo libera al final. Si otra persona tiene el bloqueo, tu comando falla con un error que muestra el ID del bloqueo, quién lo tiene, la operación y cuándo se tomó. No tienes que hacer nada para habilitar el bloqueo aparte de elegir un backend que lo admita.</p>
+<p>No todos los backends admiten bloqueo. El backend local bloquea usando el bloqueo de archivos del sistema operativo. Entre los backends remotos, azurerm usa leases de blobs, gcs usa un archivo de bloqueo en el bucket, consul y pg (PostgreSQL) admiten bloqueo de forma nativa, y HCP Terraform bloquea los workspaces durante las ejecuciones. El backend s3 históricamente necesitaba una tabla de DynamoDB separada para el bloqueo; las versiones más recientes de Terraform pueden usar en su lugar un archivo de bloqueo en el propio bucket de S3 con <code>use_lockfile = true</code>, y el enfoque con DynamoDB se está retirando gradualmente. Revisa siempre la documentación del backend, porque un backend sin bloqueo te deja expuesto.</p>
+<p>Dos indicadores controlan el comportamiento del bloqueo. <code>-lock-timeout=DURATION</code>, como <code>-lock-timeout=5m</code>, le dice a Terraform que siga reintentando durante ese tiempo antes de rendirse, lo que es útil en CI, donde los jobs podrían superponerse brevemente. El comportamiento predeterminado es fallar de inmediato. <code>-lock=false</code> deshabilita el bloqueo para un comando; es peligroso y debe evitarse salvo en situaciones de recuperación poco comunes.</p>
+<pre class="code" tabindex="0"><code>$ terraform force-unlock 6f1c2a3b-9d4e-4a7b-8c21-0e5f7d9a1b22
+Do you really want to force-unlock?
+  Only 'yes' will be accepted to confirm.</code></pre>
+<p>A veces queda un bloqueo abandonado, por ejemplo si se cancela un job de CI o una laptop pierde la red en medio de un apply. <code>terraform force-unlock LOCK_ID</code> lo elimina. Recibe el ID de bloqueo que muestra el mensaje de error y solo desbloquea el estado de la configuración actual. Úsalo solo cuando estés seguro de que ninguna otra operación se está ejecutando realmente; forzar el desbloqueo de una ejecución activa provoca exactamente la corrupción que el bloqueo debía evitar.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>State locking (bloqueo del estado)</dt><dd>Una función del backend que permite solo una operación de Terraform que escriba el estado a la vez, para evitar la corrupción.</dd><dt>-lock-timeout</dt><dd>Un indicador que hace que Terraform reintente adquirir un bloqueo ocupado durante un tiempo dado antes de fallar.</dd><dt>terraform force-unlock</dt><dd>Elimina manualmente un bloqueo abandonado usando su ID de bloqueo; solo debe usarse cuando no hay ninguna operación en ejecución.</dd><dt>Lock ID (ID de bloqueo)</dt><dd>El identificador que se muestra en un error de bloqueo y que force-unlock necesita para liberar ese bloqueo específico.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un job de CI que aplica cambios de red se cancela a mitad de camino y deja bloqueado el backend S3. El siguiente pipeline falla con un error de bloqueo. Después de confirmar en el sistema de CI que ningún job sigue ejecutándose, una ingeniera ejecuta terraform force-unlock con el ID de bloqueo del error y luego vuelve a ejecutar el pipeline.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El bloqueo es automático en los backends que lo admiten. force-unlock necesita el ID de bloqueo y es un último recurso; -lock-timeout espera un bloqueo en lugar de fallar de inmediato.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué argumento requiere terraform force-unlock?</summary><p>El ID del bloqueo que se va a eliminar, que se muestra en el mensaje de error de bloqueo.</p></details>
+<details class="sq"><summary>Tu pipeline a veces falla porque otro job tiene el bloqueo brevemente. ¿Qué indicador ayuda?</summary><p>-lock-timeout, por ejemplo -lock-timeout=5m, para que Terraform reintente en lugar de fallar de inmediato.</p></details>
+<details class="sq"><summary>¿Necesitas habilitar manualmente el bloqueo en un backend que lo admite?</summary><p>No. Terraform adquiere y libera los bloqueos automáticamente para las operaciones que podrían escribir el estado.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Terraform Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../terraform/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../the-default-local-backend-and-the-terraform-tfstate-file-terraform-tfs/">← El backend local predeterminado y los archivos `terraform.tf</a><a href="../the-backend-block-inside-terraform-remote-backends-such-as-s3-azurerm/">El bloque `backend` dentro de `terraform {}`: backends remot →</a></nav>
+</main>
+</body>
+</html>

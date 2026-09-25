@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Elegir un workload: Deployment, StatefulSet, DaemonSet, Jo… · Lección de CKAD</title>
+<meta name="description" content="Un Pod es la unidad desplegable más pequeña en Kubernetes: uno o más contenedores que comparten un network namespace y pueden compartir volúmenes. Rara vez">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Elegir un workload: Deployment, StatefulSet, DaemonSet, Jo… · Lección de CKAD">
+<meta property="og:description" content="Un Pod es la unidad desplegable más pequeña en Kubernetes: uno o más contenedores que comparten un network namespace y pueden compartir volúmenes. Rara vez">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/choosing-a-workload-deployment-statefulset-daemonset-job-cronjob-bare/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/choosing-a-workload-deployment-statefulset-daemonset-job-cronjob-bare/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/choosing-a-workload-deployment-statefulset-daemonset-job-cronjob-bare/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>Elegir un workload: Deployment, StatefulSet, DaemonSet, Job, CronJob, Pod suelto</h1>
+<article class="lbody">
+<p>Un Pod es la unidad desplegable más pequeña en Kubernetes: uno o más contenedores que comparten un network namespace y pueden compartir volúmenes. Rara vez creas Pods directamente en producción, porque un Pod suelto (bare Pod) no se reemplaza si se elimina o si su nodo falla. En su lugar creas un controlador de workload, que contiene una plantilla de Pod y trabaja continuamente para que la realidad coincida con lo que pediste. Elegir el controlador correcto es una habilidad central del CKAD.</p>
+<p>Un Deployment ejecuta un conjunto de réplicas intercambiables y sin estado, como un front end web o un servidor de API. Administra ReplicaSets por ti y admite rolling updates y rollbacks. Cualquier Pod puede eliminarse y reemplazarse por otro idéntico. Es la opción por defecto para la mayoría de las aplicaciones.</p>
+<p>Un StatefulSet es para réplicas que necesitan una identidad estable. Sus Pods reciben nombres predecibles como <code>db-0</code>, <code>db-1</code>, arrancan y se detienen en orden, y cada uno puede tener su propio PersistentVolumeClaim mediante <code>volumeClaimTemplates</code>, que lo acompaña entre reinicios. Normalmente trabaja con un Service headless para que cada Pod tenga un nombre DNS estable. Úsalo para bases de datos, colas de mensajes y sistemas en clúster donde hay que distinguir a los miembros.</p>
+<p>Un DaemonSet ejecuta una copia de un Pod en cada nodo (o en cada nodo que coincida con un selector). A medida que se unen nodos, reciben el Pod automáticamente. Usos típicos son los agentes a nivel de nodo: recolectores de logs, exportadores de monitoreo y plugins de red. No defines un número de réplicas; lo decide la cantidad de nodos.</p>
+<p>Un Job ejecuta Pods hasta que una tarea se completa con éxito y luego se detiene. Es para trabajo por lotes como una migración de base de datos, un reporte o una importación de datos. Un CronJob crea Jobs según una programación repetitiva, como la utilidad cron de Unix, para backups nocturnos o limpiezas cada hora. Jobs y CronJobs usan <code>restartPolicy: Never</code> u <code>OnFailure</code>, nunca <code>Always</code>.</p>
+<p>Un Pod suelto está bien para cosas rápidas y desechables: un Pod temporal de busybox para probar DNS, o una sesión de depuración puntual. Para cualquier cosa que deba seguir ejecutándose, envuélvela en un controlador.</p>
+<pre class="code" tabindex="0"><code>kubectl create deployment web --image=nginx --replicas=3
+kubectl create job migrate --image=busybox -- echo done
+kubectl create cronjob tidy --image=busybox --schedule=&quot;0 * * * *&quot; -- echo tidy
+kubectl run tmp --image=busybox --rm -it --restart=Never -- sh</code></pre>
+<p>Observa que kubectl tiene generadores <code>create</code> para Deployments, Jobs y CronJobs, pero no para StatefulSets ni DaemonSets. Para estos, un truco común en el examen es generar un Deployment con <code>--dry-run=client -o yaml</code>, cambiar el <code>kind</code> y quitar los campos que no aplican (un DaemonSet no tiene <code>replicas</code> ni <code>strategy</code>; un StatefulSet normalmente define <code>serviceName</code> para su Service headless).</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Deployment</dt><dd>Controlador para réplicas sin estado e intercambiables, con rolling updates y rollback.</dd><dt>StatefulSet</dt><dd>Controlador que da a cada réplica un nombre estable, arranque ordenado y su propio almacenamiento persistente.</dd><dt>DaemonSet</dt><dd>Controlador que ejecuta un Pod por cada nodo elegible.</dd><dt>Job / CronJob</dt><dd>Controladores para trabajo que se ejecuta hasta completarse, una vez o según una programación.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una tienda ejecuta su tienda en línea como un Deployment con cinco réplicas, su clúster de PostgreSQL como un StatefulSet con volúmenes por réplica, un enviador de logs como DaemonSet en cada nodo y un reporte nocturno de ventas como CronJob. Cada elección corresponde a si el trabajo es sin estado, con estado, por nodo o de ejecución hasta completarse.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Busca las palabras clave: 'uno por nodo' significa DaemonSet, 'identidad estable u ordenado' significa StatefulSet, 'se ejecuta hasta completarse' significa Job, 'según una programación' significa CronJob y 'app escalable sin estado' significa Deployment.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué workload debería ejecutar un agente de monitoreo de nodos en cada nodo, incluidos los nuevos?</summary><p>Un DaemonSet, porque programa automáticamente un Pod por cada nodo elegible.</p></details>
+<details class="sq"><summary>¿Por qué un Pod suelto es una mala elección para un servicio de larga duración?</summary><p>Nada lo recrea si se elimina o si su nodo falla; un controlador como un Deployment lo reemplazaría.</p></details>
+<details class="sq"><summary>¿Qué valores de restartPolicy son válidos para los Pods de un Job?</summary><p>Never u OnFailure; Always no está permitido para Jobs.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../how-pod-command-and-args-override-the-image-entrypoint-and-cmd/">← Cómo `command` y `args` del Pod sobrescriben ENTRYPOINT y CM</a><a href="../jobs-completions-parallelism-backofflimit-activedeadlineseconds-restar/">Jobs: completions, parallelism, backoffLimit, activeDeadline →</a></nav>
+</main>
+</body>
+</html>

@@ -2520,4 +2520,4 @@ CertHub.addLessons("ccnp-encor", [
    ]
   ]
  }
-]);
+], { reviewed: "2026-09-25" });

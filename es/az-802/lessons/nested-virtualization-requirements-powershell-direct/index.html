@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Requisitos de la virtualización anidada; PowerShell Direct · Lección de AZ-802</title>
+<meta name="description" content="La virtualización anidada significa ejecutar Hyper-V dentro de una máquina virtual de Hyper-V, de modo que esa VM pueda hospedar sus propias VM. Se usa par">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Requisitos de la virtualización anidada; PowerShell Direct · Lección de AZ-802">
+<meta property="og:description" content="La virtualización anidada significa ejecutar Hyper-V dentro de una máquina virtual de Hyper-V, de modo que esa VM pueda hospedar sus propias VM. Se usa par">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-802/lessons/nested-virtualization-requirements-powershell-direct/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-802/lessons/nested-virtualization-requirements-powershell-direct/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-802/">AZ-802</a> / <a href="../">Lecciones</a> · <a href="../../../../az-802/lessons/nested-virtualization-requirements-powershell-direct/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802</p>
+<h1>Requisitos de la virtualización anidada; PowerShell Direct</h1>
+<article class="lbody">
+<p>La virtualización anidada significa ejecutar Hyper-V dentro de una máquina virtual de Hyper-V, de modo que esa VM pueda hospedar sus propias VM. Se usa para laboratorios y capacitación, para probar clústeres de Hyper-V sin hardware adicional, para ejecutar contenedores de Windows con aislamiento de Hyper-V dentro de una VM y para construir entornos en Azure. El rendimiento es menor que en hardware físico, así que en general se usa para desarrollo, pruebas y capacitación, y no para producción exigente.</p>
+<p>Los requisitos se dan en ambos niveles. El host físico necesita una CPU con virtualización de hardware y traducción de direcciones de segundo nivel: Intel VT-x con EPT, o AMD-V con RVI en procesadores y versiones de Windows que admitan la virtualización anidada en AMD (la compatibilidad llegó más tarde para AMD que para Intel). El host y la VM que ejecutará Hyper-V deben tener versiones recientes de Windows Server o Windows, y la VM debe usar una versión de configuración reciente. La VM debe estar apagada cuando habilitas la característica.</p>
+<pre class="code" tabindex="0"><code>Set-VMProcessor -VMName HV-NESTED -ExposeVirtualizationExtensions $true
+Set-VMMemory -VMName HV-NESTED -DynamicMemoryEnabled $false -StartupBytes 8GB
+Get-VMNetworkAdapter -VMName HV-NESTED | Set-VMNetworkAdapter -MacAddressSpoofing On</code></pre>
+<p>Cada línea resuelve un problema conocido. Exponer las extensiones de virtualización transfiere las características de la CPU a la VM para que Hyper-V pueda instalarse allí. La memoria dinámica no es compatible con una VM que ejecuta Hyper-V anidado, así que dale memoria estática con suficiente RAM para sus propias VM. La red de las VM internas necesita que se habilite la suplantación de direcciones MAC (MAC address spoofing) en el adaptador de la VM externa (para que se permita la salida de las tramas de las VM internas con sus propias direcciones MAC) o un conmutador virtual NAT dentro de la VM externa. Algunas otras características, como los puntos de control o la migración en vivo del host anidado, han estado restringidas en algunas versiones, así que consulta la documentación de tu versión. En Azure, solo los tamaños de VM que admiten la virtualización anidada pueden ejecutar Hyper-V en su interior, y muchos tamaños actuales de uso general y optimizados para memoria lo admiten.</p>
+<p>PowerShell Direct es una característica distinta que también usa el canal entre host e invitado. Te permite ejecutar PowerShell dentro de una VM desde su host de Hyper-V a través del VMBus, sin conectividad de red, configuración de administración remota ni reglas de firewall en el invitado. Eso es invaluable cuando la red de una VM está mal configurada, está en un conmutador aislado o privado, o estás automatizando la primera configuración de una VM recién implementada.</p>
+<p>Usas los conocidos cmdlets de comunicación remota, pero apuntas a la VM en lugar de a un equipo: <code>Enter-PSSession -VMName DC01</code>, <code>Invoke-Command -VMName DC01 -ScriptBlock { ... }</code>, o <code>-VMId</code> con el GUID de la VM. También puedes crear una sesión con <code>New-PSSession -VMName</code> y copiar archivos con <code>Copy-Item -ToSession</code>. Requisitos: debes ejecutar el comando en el host de Hyper-V que ejecuta la VM, como administrador de Hyper-V; la VM debe estar en ejecución y el sistema operativo invitado debe ser Windows 10 o Windows Server 2016 o posterior; y debes proporcionar credenciales válidas dentro del invitado, porque PowerShell Direct no transfiere las credenciales del host a la VM.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Nested virtualization (virtualización anidada)</dt><dd>Ejecutar Hyper-V dentro de una VM para que esa VM pueda hospedar sus propias VM.</dd><dt>ExposeVirtualizationExtensions</dt><dd>Parámetro de Set-VMProcessor que transfiere las características de virtualización de hardware a una VM.</dd><dt>MAC address spoofing (suplantación de direcciones MAC)</dt><dd>Permitir que el adaptador de una VM envíe tramas con direcciones MAC distintas de la suya, necesario para la red de las VM internas.</dd><dt>PowerShell Direct</dt><dd>Ejecutar PowerShell en una VM desde su host de Hyper-V a través del VMBus sin necesidad de red.</dd><dt>VMBus</dt><dd>El canal de alta velocidad entre un host de Hyper-V y sus invitados, usado por los servicios de integración y PowerShell Direct.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una instructora construye un laboratorio de clúster de conmutación por error de dos nodos en una sola computadora portátil. Crea dos VM, las apaga, expone las extensiones de virtualización, da a cada una 8 GB de memoria estática, habilita la suplantación de MAC, instala Hyper-V dentro de ambas y las configura con Invoke-Command -VMName incluso antes de configurar su red.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Hyper-V anidado no se instala dentro de una VM cuando ExposeVirtualizationExtensions no está configurado (y la VM debe estar apagada para configurarlo). Las VM internas sin red normalmente indican que falta la suplantación de direcciones MAC. PowerShell Direct necesita credenciales del invitado y debe ejecutarse en el mismo host.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué debe cumplirse en la VM antes de ejecutar Set-VMProcessor -ExposeVirtualizationExtensions $true?</summary><p>Debe estar apagada.</p></details>
+<details class="sq"><summary>¿Por qué habilitar la suplantación de direcciones MAC en una VM que hospeda VM anidadas?</summary><p>Para que las tramas de red de las VM internas, que usan sus propias direcciones MAC, puedan pasar por el adaptador de la VM externa.</p></details>
+<details class="sq"><summary>¿Puedes usar PowerShell Direct desde tu estación de trabajo de administración hacia una VM en un host remoto?</summary><p>No. Solo funciona desde el host de Hyper-V que ejecuta la VM (aunque podrías conectarte primero al host de forma remota).</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AZ-802 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-802/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../hyper-v-vm-configuration-generation-1-vs-2-dynamic-memory-integration/">← Configuración de máquinas virtuales de Hyper-V: generación 1</a><a href="../virtual-disks-vhd-vs-vhdx-fixed-dynamic-and-differencing-disks-shared/">Discos virtuales: VHD frente a VHDX, discos fijos, dinámicos →</a></nav>
+</main>
+</body>
+</html>

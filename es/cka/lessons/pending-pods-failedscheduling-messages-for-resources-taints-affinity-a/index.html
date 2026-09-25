@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pods en Pending: mensajes FailedScheduling por recursos, t… · Lección de CKA</title>
+<meta name="description" content="Un Pod en Pending no se ha ubicado en un nodo, o se ha ubicado pero todavía no arrancó. Cuando el scheduler no puede ubicarlo, registra un evento FailedSch">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Pods en Pending: mensajes FailedScheduling por recursos, t… · Lección de CKA">
+<meta property="og:description" content="Un Pod en Pending no se ha ubicado en un nodo, o se ha ubicado pero todavía no arrancó. Cuando el scheduler no puede ubicarlo, registra un evento FailedSch">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/pending-pods-failedscheduling-messages-for-resources-taints-affinity-a/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/pending-pods-failedscheduling-messages-for-resources-taints-affinity-a/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/pending-pods-failedscheduling-messages-for-resources-taints-affinity-a/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Pods en Pending: mensajes FailedScheduling por recursos, taints, affinity y PVCs sin vincular</h1>
+<article class="lbody">
+<p>Un Pod en <code>Pending</code> no se ha ubicado en un nodo, o se ha ubicado pero todavía no arrancó. Cuando el scheduler no puede ubicarlo, registra un evento <code>FailedScheduling</code>, y leer ese mensaje con atención normalmente te dice la solución exacta. Ejecuta <code>kubectl describe pod &lt;name&gt;</code> y mira los Events al final.</p>
+<p>El mensaje resume todos los nodos. Se ve así: <code>0/4 nodes are available: 1 node(s) had untolerated taint {node-role.kubernetes.io/control-plane: }, 2 Insufficient cpu, 1 node(s) didn't match Pod's node affinity/selector.</code> Cada frase es un filtro que descartó nodos, y los conteos suman el total. Puede agregar una nota sobre si la preemption podría ayudar.</p>
+<p><code>Insufficient cpu</code> o <code>Insufficient memory</code> significa que los requests del Pod no caben en la capacidad allocatable restante de ningún nodo. Recuerda que cuentan los requests, no el uso real. Compara los requests del Pod con <code>kubectl describe node</code> (Allocated resources). Soluciones: bajar los requests si no son realistas, liberar capacidad reduciendo la escala de algo o agregar nodos. Un problema de ResourceQuota se ve distinto: el Pod ni siquiera llega a crearse.</p>
+<p><code>had untolerated taint {key: value}</code> significa que el taint del nodo no se tolera. Agrega una toleration (si el Pod debe ir ahí) o quita el taint con <code>kubectl taint node &lt;node&gt; key=value:Effect-</code> (si no debería estar ahí). <code>node(s) were unschedulable</code> significa que el nodo tiene cordon; hazle uncordon si el mantenimiento terminó.</p>
+<p><code>didn't match Pod's node affinity/selector</code> significa que ningún nodo tiene las etiquetas que el Pod requiere; compara <code>kubectl get nodes --show-labels</code> con el nodeSelector o la node affinity required del Pod y corrige lo que esté mal. <code>didn't match pod affinity rules</code> o <code>didn't match pod anti-affinity rules</code> significa que no se pueden cumplir las reglas entre Pods, por ejemplo más réplicas que nodos con una anti-affinity de una por nodo. <code>didn't match pod topology spread constraints</code> es el equivalente para las reglas de distribución.</p>
+<p>Los problemas de almacenamiento aparecen como <code>pod has unbound immediate PersistentVolumeClaims</code> (el PVC está en Pending, así que haz describe del PVC para ver por qué: no hay PV coincidente, clase equivocada, el provisioner falla) o como <code>node(s) had volume node affinity conflict</code> (el volumen vinculado solo se puede usar en nodos donde el Pod no puede ejecutarse).</p>
+<pre class="code" tabindex="0"><code>kubectl get pods --field-selector=status.phase=Pending -A
+kubectl describe pod web-7d9 | sed -n '/Events/,$p'
+kubectl get events -n app --field-selector reason=FailedScheduling</code></pre>
+<p>Si un Pod en Pending no tiene ningún evento, probablemente el scheduler no se está ejecutando o el Pod indica un schedulerName inexistente. Si el Pod tiene un nodo asignado pero sigue en Pending, la programación tuvo éxito y el problema está en el nodo: descargas de imágenes, montajes de volúmenes o el CNI, visibles en la misma lista de eventos.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>FailedScheduling</dt><dd>Motivo de evento que se registra cuando el scheduler no encuentra un nodo adecuado.</dd><dt>Insufficient cpu/memory</dt><dd>Mensaje del scheduler que significa que los requests del Pod superan la capacidad allocatable libre de todos los nodos.</dd><dt>Untolerated taint (taint no tolerado)</dt><dd>Mensaje del scheduler que significa que el taint de un nodo no tiene una toleration coincidente en el Pod.</dd><dt>Unbound immediate PersistentVolumeClaims</dt><dd>Mensaje del scheduler que significa que un PVC que necesita el Pod no está vinculado.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un Pod está en Pending con '0/3 nodes are available: 1 node(s) had untolerated taint {node-role.kubernetes.io/control-plane: }, 2 Insufficient memory.' El Pod solicita 8Gi, pero los workers tienen 4Gi allocatable. Reducir el request a un valor realista de 1Gi permite que se programe en un worker.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Lee el mensaje FailedScheduling completo: los conteos te dicen por qué se rechazó cada grupo de nodos, y la solución es distinta en cada caso. Recuerda que el scheduler usa los requests, no el uso en vivo.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué significa 'node(s) were unschedulable' en un evento FailedScheduling?</summary><p>Que esos nodos tienen cordon (spec.unschedulable en true).</p></details>
+<details class="sq"><summary>Un Pod está en Pending con 'pod has unbound immediate PersistentVolumeClaims'. ¿Qué revisas a continuación?</summary><p>Haz describe del PVC para ver por qué no se vincula: problemas de clase, modo de acceso, tamaño o provisioner.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../control-plane-problems-static-pod-manifests-crictl-ps-logs-when-the-ap/">← Problemas del control plane: manifiestos de static Pods, cri</a><a href="../resource-monitoring-metrics-server-kubectl-top-nodes-pods-sort-by-desc/">Monitoreo de recursos: metrics-server, kubectl top nodes/pod →</a></nav>
+</main>
+</body>
+</html>

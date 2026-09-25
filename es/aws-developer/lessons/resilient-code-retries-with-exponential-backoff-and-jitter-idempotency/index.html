@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Código resiliente: reintentos con retroceso exponencial y … · Lección de Developer Associate</title>
+<meta name="description" content="Los sistemas distribuidos fallan de maneras pequeñas todo el tiempo: una solicitud es limitada (throttled), una llamada de red agota su tiempo de espera, u">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Código resiliente: reintentos con retroceso exponencial y … · Lección de Developer Associate">
+<meta property="og:description" content="Los sistemas distribuidos fallan de maneras pequeñas todo el tiempo: una solicitud es limitada (throttled), una llamada de red agota su tiempo de espera, u">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/resilient-code-retries-with-exponential-backoff-and-jitter-idempotency/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/resilient-code-retries-with-exponential-backoff-and-jitter-idempotency/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/resilient-code-retries-with-exponential-backoff-and-jitter-idempotency/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Código resiliente: reintentos con retroceso exponencial y jitter, idempotencia, tiempos de espera, fallas parciales y colas de mensajes fallidos</h1>
+<article class="lbody">
+<p>Los sistemas distribuidos fallan de maneras pequeñas todo el tiempo: una solicitud es limitada (throttled), una llamada de red agota su tiempo de espera, un servicio de destino devuelve un error por un momento. El código resiliente cuenta con esto. El examen DVA-C02 evalúa si conoces las técnicas estándar y qué fallas corrige cada una.</p>
+<p>Los reintentos son la primera herramienta, pero solo para errores transitorios como la limitación (<code>ThrottlingException</code>, HTTP 429), los errores de servidor HTTP 5xx y los tiempos de espera de red. Reintentar un error de validación o un <code>AccessDenied</code> solo repite la falla. Reintentar de inmediato en un bucle cerrado es dañino, porque todos los clientes golpean al servicio en apuros al mismo tiempo. El retroceso exponencial (exponential backoff) espera más tiempo después de cada intento fallido, por ejemplo 100 ms, 200 ms, 400 ms, 800 ms, hasta un límite y un número máximo de intentos. El jitter añade aleatoriedad a cada espera para que miles de clientes que fallaron en el mismo momento no reintenten todos en el mismo momento. Los SDK de AWS ya implementan reintentos con retroceso y jitter para las llamadas a la API de AWS; tú configuras el modo de reintento y el número máximo de intentos en lugar de escribirlo tú mismo, pero sí debes agregarlo tú para las llamadas a tus propios servicios o a servicios de terceros.</p>
+<p>La idempotencia hace que los reintentos sean seguros. Una operación es idempotente si realizarla dos veces tiene el mismo efecto que realizarla una vez. Como los reintentos, la entrega al menos una vez de las colas estándar de SQS y los reintentos asíncronos de Lambda pueden entregar la misma solicitud más de una vez, tu código debe detectar duplicados. Las técnicas comunes son una clave de idempotencia proporcionada por el cliente (por ejemplo, un ID de pedido), una escritura condicional en DynamoDB como <code>attribute_not_exists(orderId)</code> que falla si el elemento ya fue procesado, y la idempotencia natural (asignar un valor en lugar de incrementarlo).</p>
+<p>Los tiempos de espera (timeouts) evitan que una dependencia lenta consuma todos tus recursos. Configura tiempos de espera explícitos de conexión y de lectura en los clientes HTTP y del SDK que sean más cortos que el tiempo de espera de tu función o solicitud, para que tu código pueda registrar, reintentar o fallar de forma controlada en lugar de ser terminado a mitad de la operación. Una función Lambda detrás de API Gateway, por ejemplo, debería abandonar una llamada lenta a un servicio de destino bastante antes del propio tiempo de espera de integración de API Gateway.</p>
+<p>La falla parcial ocurre cuando un lote contiene elementos buenos y malos. Si un registro de un lote de diez falla y lanzas un error, se reintenta todo el lote, incluidos los nueve que tuvieron éxito. Las API por lotes como <code>BatchWriteItem</code> de DynamoDB devuelven <code>UnprocessedItems</code>, y <code>SendMessageBatch</code> de SQS devuelve fallas por entrada; tu código debe reintentar solo esos. Para Lambda leyendo de SQS o de streams, las respuestas parciales de lote (partial batch responses) te permiten informar solo los elementos fallidos.</p>
+<p>Una cola de mensajes fallidos (dead-letter queue, DLQ) es adonde van los mensajes después de fallar un número determinado de veces, para que un mensaje envenenado (uno que nunca se podrá procesar) deje de bloquear la cola y de desperdiciar cómputo. SQS usa una política de redrive con <code>maxReceiveCount</code>; las invocaciones asíncronas de Lambda pueden enviar los eventos fallidos a una DLQ de cola SQS o de tema SNS, o a un destino on-failure. Una DLQ solo es útil si configuras una alarma sobre su profundidad e investigas lo que llega allí.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Exponential backoff (retroceso exponencial)</dt><dd>Una estrategia de reintento en la que la espera entre intentos crece de forma multiplicativa, reduciendo la presión sobre un servicio en apuros.</dd><dt>Jitter (variación aleatoria)</dt><dd>Variación aleatoria añadida a los retrasos de reintento para que muchos clientes no reintenten en oleadas sincronizadas.</dd><dt>Idempotency (idempotencia)</dt><dd>La propiedad de que repetir una operación produce el mismo resultado que hacerla una vez, lo que hace seguros los reintentos y las entregas duplicadas.</dd><dt>Poison message (mensaje envenenado)</dt><dd>Un mensaje que falla al procesarse cada vez que se recibe y que se repetiría para siempre sin una cola de mensajes fallidos.</dd><dt>Dead-letter queue (DLQ, cola de mensajes fallidos)</dt><dd>Una cola que recibe los mensajes o eventos cuyo procesamiento falló después de un número configurado de intentos, para inspeccionarlos más tarde.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una función Lambda de pagos procesa mensajes de SQS. Registra cada ID de pago en DynamoDB con un put condicional que usa attribute_not_exists, así que un mensaje entregado dos veces se cobra una sola vez. Su cola SQS tiene una política de redrive con maxReceiveCount de 5 y una DLQ, y una alarma de CloudWatch se dispara cuando la DLQ contiene algún mensaje.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si una pregunta menciona errores de limitación como ProvisionedThroughputExceededException o ThrottlingException, la respuesta casi siempre es reintentos con retroceso exponencial (y jitter), no simplemente agregar más reintentos ni aumentar los tiempos de espera.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué agregar jitter al retroceso exponencial?</summary><p>Sin aleatoriedad, los clientes que fallaron juntos reintentan juntos y recrean el pico de carga; el jitter reparte los reintentos a lo largo del tiempo.</p></details>
+<details class="sq"><summary>¿Qué errores no deben reintentarse?</summary><p>Los errores del cliente que volverán a fallar sin cambios, como errores de validación, solicitudes mal formadas o AccessDenied; reintenta solo errores transitorios como la limitación, los 5xx y los tiempos de espera agotados.</p></details>
+<details class="sq"><summary>¿Cómo ayuda una DLQ con un mensaje envenenado en SQS?</summary><p>Cuando el contador de recepciones del mensaje supera maxReceiveCount, SQS lo mueve a la DLQ, así deja de reintentarse y de bloquear el procesamiento, y puedes inspeccionarlo.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../architectural-patterns-event-driven-microservices-fan-out-choreography/">← Patrones de arquitectura: orientada a eventos, microservicio</a><a href="../messaging-and-streaming-sqs-standard-vs-fifo-message-groups-deduplicat/">Mensajería y streaming: SQS estándar vs FIFO (grupos de mens →</a></nav>
+</main>
+</body>
+</html>

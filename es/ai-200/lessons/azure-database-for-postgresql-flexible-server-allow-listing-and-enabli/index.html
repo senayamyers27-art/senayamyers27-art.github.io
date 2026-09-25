@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Azure Database for PostgreSQL flexible server: incluir en … · Lección de AI-200</title>
+<meta name="description" content="Azure Database for PostgreSQL flexible server es el servicio administrado de PostgreSQL de Azure. Azure se encarga de las actualizaciones, las copias de se">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Azure Database for PostgreSQL flexible server: incluir en … · Lección de AI-200">
+<meta property="og:description" content="Azure Database for PostgreSQL flexible server es el servicio administrado de PostgreSQL de Azure. Azure se encarga de las actualizaciones, las copias de se">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/azure-database-for-postgresql-flexible-server-allow-listing-and-enabli/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/azure-database-for-postgresql-flexible-server-allow-listing-and-enabli/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/azure-database-for-postgresql-flexible-server-allow-listing-and-enabli/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Azure Database for PostgreSQL flexible server: incluir en la lista de permitidos y habilitar la extensión vector (pgvector)</h1>
+<article class="lbody">
+<p>Azure Database for PostgreSQL flexible server es el servicio administrado de PostgreSQL de Azure. Azure se encarga de las actualizaciones, las copias de seguridad, la alta disponibilidad y el escalado del proceso y el almacenamiento, y tú obtienes un PostgreSQL estándar que funciona con psycopg, SQLAlchemy y cualquier otra herramienta de PostgreSQL. Muchas apps de IA ya tienen datos relacionales en PostgreSQL, y pgvector les permite agregar búsqueda vectorial a esa misma base de datos.</p>
+<p>pgvector es una extensión de código abierto de PostgreSQL que agrega un tipo de datos <code>vector</code>, operadores de distancia e índices de vecinos más cercanos aproximados. En un servidor que administras tú mismo, la instalas y ejecutas <code>CREATE EXTENSION vector;</code>. En un flexible server administrado hay un paso adicional, y es justo lo que evalúa el examen: las extensiones deben estar en la lista de permitidos (allow-listed) antes de poder crearse.</p>
+<p>El primer paso es la lista de permitidos. Flexible server tiene un parámetro de servidor llamado <code>azure.extensions</code> que enumera las extensiones que los usuarios pueden crear. Agregas <code>VECTOR</code> en el portal (Server parameters) o con la CLI. Si te saltas este paso, <code>CREATE EXTENSION vector</code> falla con un error que indica que la extensión no está en la lista de permitidos. Algunas extensiones también necesitan <code>shared_preload_libraries</code> y un reinicio, pero pgvector no.</p>
+<pre class="code" tabindex="0"><code>az postgres flexible-server parameter set -g rg --server-name pg-ai \
+  --name azure.extensions --value VECTOR
+# conserva las entradas existentes: usa una lista separada por comas, por ejemplo VECTOR,PG_TRGM</code></pre>
+<p>El segundo paso es crear la extensión en cada base de datos que la vaya a usar. Las extensiones son por base de datos, no por servidor. Conéctate a la base de datos de destino con un rol que tenga permiso (el administrador del servidor o un miembro del rol <code>azure_pg_admin</code>) y ejecuta la instrucción. Ten en cuenta que el nombre SQL de la extensión es <code>vector</code>, aunque el proyecto se llame pgvector.</p>
+<pre class="code" tabindex="0"><code>CREATE EXTENSION IF NOT EXISTS vector;
+SELECT extname, extversion FROM pg_extension WHERE extname = 'vector';</code></pre>
+<p>Para la conectividad, elige entre acceso público con reglas de firewall y acceso privado mediante integración con VNet o un private endpoint. Para la autenticación, flexible server admite Microsoft Entra ID, así que la identidad administrada de tu app puede obtener un token de acceso con <code>DefaultAzureCredential</code> y usarlo como contraseña en lugar de almacenar una. Dimensiona el proceso para cargas vectoriales: los índices de vecinos más cercanos aproximados, especialmente HNSW (Hierarchical Navigable Small World), rinden mejor cuando caben en memoria, y su construcción se beneficia de un <code>maintenance_work_mem</code> más alto.</p>
+<p>Una extensión relacionada, <code>azure_ai</code>, permite que SQL llame a los servicios de Azure AI (por ejemplo, para crear embeddings dentro de la base de datos). Sigue la misma regla de lista de permitidos, lo que hace que valga la pena recordar el patrón: agrega la extensión a <code>azure.extensions</code> y luego ejecuta <code>CREATE EXTENSION</code> en cada base de datos.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Flexible server (servidor flexible)</dt><dd>La opción de implementación de Azure Database for PostgreSQL que ofrece PostgreSQL administrado con proceso, alta disponibilidad y redes configurables.</dd><dt>azure.extensions</dt><dd>El parámetro de servidor que define la lista de extensiones permitidas que se pueden crear en un flexible server.</dd><dt>pgvector</dt><dd>Una extensión de código abierto de PostgreSQL, creada como vector, que agrega un tipo vector, operadores de distancia e índices ANN.</dd><dt>azure_pg_admin</dt><dd>Un rol de flexible server cuyos miembros pueden realizar acciones administrativas, como crear extensiones permitidas.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un desarrollador ejecuta CREATE EXTENSION vector en un flexible server nuevo y recibe un error que indica que la extensión no está en la lista de permitidos. Agrega VECTOR al parámetro de servidor azure.extensions, se vuelve a conectar a la base de datos de la app y ejecuta la instrucción de nuevo, y esta vez funciona. Más tarde, un colega descubre que falta el tipo en una segunda base de datos y aprende que las extensiones deben crearse en cada base de datos.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Dos pasos en orden: agrega VECTOR al parámetro de servidor azure.extensions y luego ejecuta CREATE EXTENSION vector en cada base de datos; el nombre SQL de la extensión es vector, no pgvector.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué falla CREATE EXTENSION vector en un flexible server nuevo?</summary><p>La extensión no está en la lista de permitidos; primero agrega VECTOR al parámetro de servidor azure.extensions.</p></details>
+<details class="sq"><summary>¿Una extensión se crea una vez por servidor o una vez por base de datos?</summary><p>Una vez por base de datos; cada base de datos que use vectores necesita su propio CREATE EXTENSION.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../change-feed-change-feed-processor-with-a-lease-container-azure-functio/">← Change feed: change feed processor con un contenedor de leas</a><a href="../pgvector-vector-n-columns-distance-operators-l2-cosine-inner-product-h/">pgvector: columnas vector(n), operadores de distancia (&lt;-&gt; L →</a></nav>
+</main>
+</body>
+</html>

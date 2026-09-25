@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Montar y desmontar sistemas de archivos de red NFS (mount … · Lección de RHCSA</title>
+<meta name="description" content="NFS (Network File System) permite que un servidor comparta, o exporte, directorios que los clientes montan por la red como si fueran locales. El RHCSA eval">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Montar y desmontar sistemas de archivos de red NFS (mount … · Lección de RHCSA">
+<meta property="og:description" content="NFS (Network File System) permite que un servidor comparta, o exporte, directorios que los clientes montan por la red como si fueran locales. El RHCSA eval">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/mounting-and-unmounting-nfs-network-file-systems-mount-t-nfs-netdev/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/mounting-and-unmounting-nfs-network-file-systems-mount-t-nfs-netdev/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/mounting-and-unmounting-nfs-network-file-systems-mount-t-nfs-netdev/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Montar y desmontar sistemas de archivos de red NFS (mount -t nfs, _netdev)</h1>
+<article class="lbody">
+<p>NFS (Network File System) permite que un servidor comparta, o exporte, directorios que los clientes montan por la red como si fueran locales. El RHCSA evalúa el lado del cliente: encontrar un recurso compartido, montarlo a mano y hacer que se monte al arrancar. Las herramientas del cliente vienen del paquete nfs-utils, que a menudo ya está instalado.</p>
+<p>Un origen NFS se escribe <code>server:/exported/path</code>. Para ver lo que exporta un servidor, <code>showmount -e server</code> funciona cuando el servidor también ofrece los servicios más antiguos de NFSv3; con un servidor solo NFSv4 puede fallar, y en su lugar puedes montar la exportación raíz del servidor y explorarla. Los clientes RHEL intentan primero la versión 4 de NFS por defecto, y puedes forzar una versión con <code>-o nfsvers=4.2</code> o <code>vers=3</code>.</p>
+<pre class="code" tabindex="0"><code>dnf install -y nfs-utils
+mkdir -p /mnt/share
+mount -t nfs server1.example.com:/exports/share /mnt/share
+findmnt /mnt/share      # muestra el tipo nfs4 y las opciones
+umount /mnt/share</code></pre>
+<p>Para un montaje persistente, la línea de fstab usa el origen NFS como dispositivo, <code>nfs</code> como tipo, e incluye <code>_netdev</code>. Esa opción marca el sistema de archivos como dependiente de la red, así que systemd espera a que la red esté activa antes de montarlo y lo desmonta antes de que la red se detenga al apagar. Dump y fsck son 0 porque no hay nada local que revisar.</p>
+<pre class="code" tabindex="0"><code>server1.example.com:/exports/share  /mnt/share  nfs  defaults,_netdev  0 0</code></pre>
+<p>La resolución de problemas sigue el camino de la petición. ¿Puedes resolver y alcanzar el servidor (<code>ping</code>, <code>getent hosts server1</code>)? ¿La ruta de exportación está escrita exactamente como se exportó? ¿Importa el firewall del cliente? Normalmente no, porque el cliente hace conexiones salientes, pero el firewall del servidor debe permitir el servicio nfs. Los errores de acceso denegado suelen significar que el servidor no exporta a la dirección de tu cliente. Los errores de permisos después de montar suelen deberse a UID que no coinciden o a root squash, donde el servidor asigna el usuario root del cliente a un usuario sin privilegios.</p>
+<p>Si un servidor está caído, los montajes NFS pueden dejar colgados los procesos que los tocan, ya que el montaje hard predeterminado reintenta para siempre. Es así por diseño para proteger los datos, pero es otra razón para probar los montajes antes de reiniciar. Cuando la tarea pida montaje bajo demanda en lugar de uno permanente, usa autofs, que se trata a continuación.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>NFS</dt><dd>Network File System; un protocolo para compartir directorios desde un servidor para que los clientes puedan montarlos por la red.</dd><dt>Export (exportación)</dt><dd>Un directorio que un servidor NFS pone a disposición de los clientes.</dd><dt>_netdev</dt><dd>Una opción de fstab que marca un sistema de archivos como dependiente de la red para que se monte después de que la red arranque.</dd><dt>Root squash</dt><dd>Un comportamiento del servidor NFS que asigna el usuario root del cliente a una cuenta sin privilegios; es lo predeterminado en las exportaciones.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una tarea dice que montes server1:/exports/projects en /projects en cada arranque. Creas /projects, lo pruebas con mount -t nfs server1:/exports/projects /projects, lo desmontas, añades server1:/exports/projects /projects nfs defaults,_netdev 0 0 a /etc/fstab y luego ejecutas systemctl daemon-reload y mount -a para confirmarlo.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Incluye _netdev en los montajes de red de /etc/fstab. Documenta que el montaje necesita la red, mantiene correcto el orden de arranque y apagado, y es la opción que buscan las respuestas del examen.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cuál es el campo de dispositivo de un montaje NFS en /etc/fstab?</summary><p>El nombre o la dirección del servidor y la ruta exportada, escritos server:/path.</p></details>
+<details class="sq"><summary>¿Por qué showmount -e podría fallar contra un servidor NFS que funciona?</summary><p>Depende de los servicios de NFSv3; un servidor que solo ofrece NFSv4 puede no responderle, aunque los montajes funcionen.</p></details>
+<details class="sq"><summary>Los archivos que creas como root en un montaje NFS aparecen con propietario nobody. ¿Por qué?</summary><p>El servidor usa root squash, que asigna el root del cliente a un usuario sin privilegios.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../etc-fstab-fields-device-mount-point-type-options-dump-fsck-order/">← Campos de /etc/fstab: dispositivo, punto de montaje, tipo, o</a><a href="../configuring-autofs-etc-auto-master-d-autofs-map-files-and-wildcard-and/">Configurar autofs: /etc/auto.master.d/*.autofs, archivos de  →</a></nav>
+</main>
+</body>
+</html>

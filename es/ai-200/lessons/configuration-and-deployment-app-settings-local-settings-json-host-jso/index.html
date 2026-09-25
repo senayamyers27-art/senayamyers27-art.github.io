@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Configuración e implementación: configuración de la app, l… · Lección de AI-200</title>
+<meta name="description" content="Una function app lee su configuración de varios lugares, y saber qué hace cada archivo evita muchos problemas del tipo &quot;funciona en local, falla en Azure&quot;.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Configuración e implementación: configuración de la app, l… · Lección de AI-200">
+<meta property="og:description" content="Una function app lee su configuración de varios lugares, y saber qué hace cada archivo evita muchos problemas del tipo &quot;funciona en local, falla en Azure&quot;.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/configuration-and-deployment-app-settings-local-settings-json-host-jso/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/configuration-and-deployment-app-settings-local-settings-json-host-jso/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/configuration-and-deployment-app-settings-local-settings-json-host-jso/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Configuración e implementación: configuración de la app, local.settings.json, host.json, conexiones basadas en identidad y `func azure functionapp publish`</h1>
+<article class="lbody">
+<p>Una function app lee su configuración de varios lugares, y saber qué hace cada archivo evita muchos problemas del tipo &quot;funciona en local, falla en Azure&quot;.</p>
+<p>La configuración de la app (app settings) son las variables de entorno de la function app en Azure. Contienen detalles de conexión, interruptores de características y configuraciones obligatorias del runtime, como <code>FUNCTIONS_WORKER_RUNTIME=python</code> y <code>AzureWebJobsStorage</code>. Tu código las lee con <code>os.environ</code>, y los enlaces las referencian por nombre mediante el argumento <code>connection</code>. Las administras en la página Environment variables del portal o con <code>az functionapp config appsettings set</code>. Los valores pueden ser referencias de Key Vault para que los secretos vivan en Key Vault.</p>
+<p><code>local.settings.json</code> cumple la misma función en tu máquina. Core Tools carga su sección <code>Values</code> como variables de entorno cuando ejecutas <code>func start</code>. Es solo para desarrollo local: no se implementa de forma predeterminada y debe incluirse en <code>.gitignore</code> porque a menudo contiene secretos. Con Azurite, el emulador de almacenamiento local, puedes definir <code>AzureWebJobsStorage</code> como <code>UseDevelopmentStorage=true</code>.</p>
+<pre class="code" tabindex="0"><code>{
+  &quot;IsEncrypted&quot;: false,
+  &quot;Values&quot;: {
+    &quot;FUNCTIONS_WORKER_RUNTIME&quot;: &quot;python&quot;,
+    &quot;AzureWebJobsStorage&quot;: &quot;UseDevelopmentStorage=true&quot;,
+    &quot;ServiceBusConn__fullyQualifiedNamespace&quot;: &quot;shop-sb.servicebus.windows.net&quot;
+  }
+}</code></pre>
+<p><code>host.json</code> configura el runtime de Functions para todas las funciones de la app, y se implementa junto con tu código. Contiene los niveles de registro y el muestreo de Application Insights, la configuración de las extensiones (por ejemplo, la simultaneidad de Service Bus o si los mensajes se completan automáticamente), el <code>functionTimeout</code>, la configuración de reintentos y la versión del paquete de extensiones (extension bundle) que proporciona los enlaces que no son HTTP. Un cambio en host.json afecta a todas las funciones; la configuración de la app puede reemplazar valores de host.json cuando necesitas diferencias por entorno.</p>
+<p>Las conexiones basadas en identidad reemplazan las cadenas de conexión por una identidad administrada. En lugar de una configuración llamada <code>ServiceBusConn</code> que contiene un secreto, creas configuraciones que comparten el prefijo, como <code>ServiceBusConn__fullyQualifiedNamespace</code> para Service Bus, <code>DocsStorage__blobServiceUri</code> o <code>DocsStorage__accountName</code> para Storage y <code>CosmosConn__accountEndpoint</code> para Cosmos DB. El runtime usa de forma predeterminada la identidad asignada por el sistema de la app; para una identidad asignada por el usuario, agrega <code>__credential</code> con el valor <code>managedidentity</code> y <code>__clientId</code>. Luego asigna a la identidad los roles de datos adecuados, como Azure Service Bus Data Receiver o Storage Blob Data Owner para la cuenta de almacenamiento del host. En local, las mismas configuraciones usan tu inicio de sesión de desarrollador mediante la cadena de credenciales de Azure.</p>
+<p>La implementación con Core Tools es <code>func azure functionapp publish &lt;APP_NAME&gt;</code>. Empaqueta el proyecto, lo sube y (en Python) inicia una compilación remota que instala <code>requirements.txt</code> para Linux. Agrega <code>--publish-local-settings -i</code> si quieres enviar los valores locales a la configuración de la app en Azure, con cuidado de no sobrescribir valores de producción. En CI/CD usarías GitHub Actions o Azure Pipelines con la misma implementación basada en zip. Después de publicar, <code>func azure functionapp list-functions &lt;APP_NAME&gt;</code> confirma qué funciones se indexaron.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>App settings (configuración de la app)</dt><dd>Variables de entorno de una function app en Azure, que el código lee y los enlaces referencian.</dd><dt>local.settings.json</dt><dd>Un archivo solo local cuya sección Values carga Core Tools como variables de entorno; no se implementa de forma predeterminada.</dd><dt>host.json</dt><dd>Un archivo de configuración del runtime para toda la app (registro, extensiones, tiempos de espera y muestreo) que se implementa con el código.</dd><dt>Identity-based connection (conexión basada en identidad)</dt><dd>Una conexión de enlace definida por configuraciones como Prefijo__fullyQualifiedNamespace que se autentica con una identidad administrada.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una función funcionaba en local, pero en Azure fallaba con un error de configuración faltante. El desarrollador había agregado ServiceBusConn__fullyQualifiedNamespace solo en local.settings.json, que no se publica. Agregó la configuración de la app en Azure, asignó a la identidad de la function app el rol Azure Service Bus Data Receiver sobre la cola, volvió a implementar con func azure functionapp publish y el trigger empezó a procesar.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> local.settings.json es solo local y no se implementa; host.json es la configuración del runtime para toda la app y sí se implementa; las conexiones basadas en identidad usan configuraciones con doble guion bajo, como __fullyQualifiedNamespace, más un rol de RBAC.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Dónde configuras la simultaneidad o el completado automático de Service Bus para todas las funciones de una app?</summary><p>En host.json, en la configuración de la extensión de Service Bus.</p></details>
+<details class="sq"><summary>¿Qué configuración de la app permite que un trigger de Service Bus se conecte con una identidad administrada en lugar de una cadena de conexión?</summary><p>Una configuración llamada &lt;connection&gt;__fullyQualifiedNamespace con el nombre de host del namespace, más un rol de datos sobre el namespace o la entidad.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../hosting-plans-flex-consumption-premium-and-dedicated-cold-starts-scale/">← Planes de hospedaje: Flex Consumption, Premium y Dedicated; </a><a href="../managed-identities-system-assigned-vs-user-assigned-defaultazurecreden/">Identidades administradas: asignadas por el sistema vs asign →</a></nav>
+</main>
+</body>
+</html>

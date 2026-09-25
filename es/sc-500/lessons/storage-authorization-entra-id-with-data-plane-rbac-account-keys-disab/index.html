@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Autorización de Storage: Entra ID con RBAC del plano de da… · Lección de SC-500</title>
+<meta name="description" content="Toda solicitud para leer o escribir datos en Azure Storage (blobs, archivos, colas, tablas) debe estar autorizada. Hay varias formas, y el examen quiere qu">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Autorización de Storage: Entra ID con RBAC del plano de da… · Lección de SC-500">
+<meta property="og:description" content="Toda solicitud para leer o escribir datos en Azure Storage (blobs, archivos, colas, tablas) debe estar autorizada. Hay varias formas, y el examen quiere qu">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/sc-500/lessons/storage-authorization-entra-id-with-data-plane-rbac-account-keys-disab/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/sc-500/lessons/storage-authorization-entra-id-with-data-plane-rbac-account-keys-disab/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../sc-500/">SC-500</a> / <a href="../">Lecciones</a> · <a href="../../../../sc-500/lessons/storage-authorization-entra-id-with-data-plane-rbac-account-keys-disab/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Cloud and AI Security Engineer Associate (replaces Azure Security Engineer Associate / AZ-500) SC-500</p>
+<h1>Autorización de Storage: Entra ID con RBAC del plano de datos, claves de cuenta, deshabilitar Shared Key, rotación de claves</h1>
+<article class="lbody">
+<p>Toda solicitud para leer o escribir datos en Azure Storage (blobs, archivos, colas, tablas) debe estar autorizada. Hay varias formas, y el examen quiere que sepas ordenarlas. La más sólida es la autorización con Microsoft Entra ID: quien llama presenta un token OAuth 2.0 de un usuario, grupo, service principal o identidad administrada, y Azure comprueba sus roles de RBAC del plano de datos. No existe un secreto compartido que pueda filtrarse, el acceso está ligado a la identidad y puede revocarse, y cada solicitud es atribuible en los registros.</p>
+<p>Los roles del plano de datos son distintos de los roles de administración. Owner o Contributor en una cuenta de almacenamiento te permiten administrarla, pero por sí solos no conceden acceso a los datos basado en Entra. Para blobs usas Storage Blob Data Reader, Storage Blob Data Contributor o Storage Blob Data Owner (que además puede definir ACL POSIX en Data Lake Storage Gen2); para colas, Storage Queue Data Reader y Contributor; para tablas, Storage Table Data Reader y Contributor; y para Azure Files por REST o SMB con autenticación basada en identidad, los roles Storage File Data. Asígnalos en el ámbito más reducido que funcione, hasta un contenedor individual.</p>
+<p>La autorización Shared Key usa una de las dos claves de acceso de la cuenta de 512 bits. Una clave concede acceso total a todos los datos de la cuenta, nunca caduca por sí sola y no está ligada a ninguna identidad, así que los registros no pueden decirte quién la usó. Tener el rol que incluye <code>listKeys</code> (como Contributor o Storage Account Key Operator Service Role) significa en la práctica acceso total a los datos, y por eso Contributor es más poderoso de lo que parece a primera vista. Las firmas de acceso compartido (que se tratan a continuación) también se derivan de las claves, salvo la user delegation SAS.</p>
+<p>Puedes establecer Allow storage account key access en Disabled en la cuenta (la propiedad <code>allowSharedKeyAccess</code>). A partir de ahí, se rechazan las solicitudes firmadas con claves de cuenta y los tokens SAS de servicio o de cuenta firmados con ellas; solo funcionan Entra ID y la user delegation SAS. Antes de deshabilitarla, revisa las métricas o registros de almacenamiento en busca de solicitudes que usen Shared Key para no romper aplicaciones heredadas, y usa Azure Policy para auditar o denegar las cuentas donde siga habilitada. Además, establece en el portal la autorización de Entra como predeterminada para que los usuarios exploren los datos con su identidad.</p>
+<p>Si las claves deben mantenerse, rótalas. Hay dos claves para que puedas rotar sin tiempo de inactividad: pasa las aplicaciones a key2, regenera key1, vuelve a pasarlas o déjalas, y luego regenera key2 más adelante. Guardar las claves en Key Vault y configurar una directiva de caducidad de claves (key expiration policy) en la cuenta, que avisa y marca las claves más antiguas que el intervalo definido, ayuda a mantener la rotación al día. Regenerar una clave invalida de inmediato toda SAS que se haya firmado con ella.</p>
+<p>El acceso de lectura anónimo (público) a los contenedores es una configuración aparte, Allow Blob anonymous access, que debe deshabilitarse a menos que realmente hospedes contenido público.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Data-plane RBAC (RBAC del plano de datos)</dt><dd>Roles de Azure como Storage Blob Data Reader que autorizan el acceso a los datos dentro de una cuenta de almacenamiento.</dd><dt>Account access key (clave de acceso de la cuenta)</dt><dd>Una de las dos claves que conceden acceso total a todos los datos de una cuenta de almacenamiento mediante autorización Shared Key.</dd><dt>allowSharedKeyAccess</dt><dd>La propiedad de la cuenta de almacenamiento que, cuando es false, rechaza las solicitudes autorizadas con claves de cuenta o con SAS firmadas con claves.</dd><dt>Key expiration policy (directiva de caducidad de claves)</dt><dd>Una configuración de la cuenta de almacenamiento que marca las claves de cuenta que no se han rotado dentro de un número de días definido.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una auditoría muestra que los desarrolladores usan la clave de la cuenta de almacenamiento incrustada en un script. Concedes al grupo de desarrolladores Storage Blob Data Contributor en su contenedor, cambias el script para usar <code>az storage blob upload --auth-mode login</code>, confirmas en las métricas que las solicitudes con Shared Key se detienen, y luego deshabilitas el acceso con clave de la cuenta de almacenamiento y regeneras ambas claves.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Owner o Contributor por sí solos no dan acceso a los datos con Entra, pero sí permiten listar las claves, lo que da acceso total a los datos. La respuesta más segura para Storage casi siempre es Entra ID con un rol de datos y Shared Key deshabilitado.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Un usuario con Reader en una cuenta de almacenamiento no puede leer blobs con autenticación de Entra. ¿Qué rol lo corrige con el mínimo privilegio?</summary><p>Storage Blob Data Reader en el ámbito del contenedor o de la cuenta.</p></details>
+<details class="sq"><summary>¿Qué le pasa a una SAS de servicio después de deshabilitar el acceso con Shared Key?</summary><p>Deja de funcionar, porque las SAS de servicio y de cuenta se firman con claves de cuenta; solo la user delegation SAS sigue siendo válida.</p></details>
+<details class="sq"><summary>¿Por qué hay dos claves de cuenta?</summary><p>Para que puedas pasar los clientes a una clave mientras regeneras la otra, rotando sin tiempo de inactividad.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia SC-500 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../sc-500/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../finding-and-fixing-over-privileged-access-with-access-reviews-and-entr/">← Detectar y corregir el acceso con privilegios excesivos con </a><a href="../shared-access-signatures-user-delegation-vs-service-vs-account-sas-sto/">Firmas de acceso compartido: SAS de delegación de usuario vs →</a></nav>
+</main>
+</body>
+</html>

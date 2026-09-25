@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mantener los datos sensibles fuera del código y de los log… · Lección de Developer Associate</title>
+<meta name="description" content="Muchas filtraciones reales empiezan con un secreto en el lugar equivocado: una clave de acceso subida a un repositorio público, una contraseña de base de d">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Mantener los datos sensibles fuera del código y de los log… · Lección de Developer Associate">
+<meta property="og:description" content="Muchas filtraciones reales empiezan con un secreto en el lugar equivocado: una clave de acceso subida a un repositorio público, una contraseña de base de d">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/keeping-sensitive-data-out-of-code-and-logs-default-credential-chain-n/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/keeping-sensitive-data-out-of-code-and-logs-default-credential-chain-n/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/keeping-sensitive-data-out-of-code-and-logs-default-credential-chain-n/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Mantener los datos sensibles fuera del código y de los logs: cadena predeterminada de credenciales, sin claves codificadas, enmascaramiento con la protección de datos de CloudWatch Logs</h1>
+<article class="lbody">
+<p>Muchas filtraciones reales empiezan con un secreto en el lugar equivocado: una clave de acceso subida a un repositorio público, una contraseña de base de datos dentro de una imagen de contenedor o el número de tarjeta de un cliente impreso en un log de depuración. El examen comprueba que sepas adónde deben ir los datos sensibles y adónde no, y qué funciones de AWS ayudan.</p>
+<p>Nunca codifiques claves de acceso de AWS en el código fuente, archivos de configuración, imágenes de contenedor o variables de entorno en texto plano. El código que se ejecuta en AWS debe basarse en la cadena predeterminada de proveedores de credenciales, que encuentra automáticamente credenciales temporales del rol de ejecución de Lambda, el rol de tarea de ECS o el perfil de instancia de EC2 y las renueva. En la laptop de un desarrollador, usa perfiles con nombre con IAM Identity Center (SSO) o credenciales de corta duración en lugar de claves de larga duración de usuarios de IAM. En sistemas de CI/CD fuera de AWS, usa la federación OIDC con <code>AssumeRoleWithWebIdentity</code> en lugar de guardar claves como secretos de la canalización. Si alguna vez se expone una clave, desactívala y elimínala de inmediato, y luego investiga su uso en CloudTrail; asume que fue usada.</p>
+<p>Los secretos de la aplicación, como contraseñas de bases de datos y claves de API de terceros, van en Secrets Manager o en SecureString de Parameter Store, y se obtienen en tiempo de ejecución mediante un rol que tenga permiso para leer solo ese secreto. Mantenlos fuera del control de código fuente (usa <code>.gitignore</code> para los archivos env locales), fuera de las plantillas de CloudFormation (usa referencias dinámicas y parámetros <code>NoEcho</code>) y fuera de los logs de compilación. Las herramientas de detección de secretos en repositorios y canalizaciones de CI pueden señalar los secretos que se cuelan en el código.</p>
+<p>Los logs son la otra fuga. Registra lo que necesitas para solucionar problemas (ID de solicitud, nombres de operaciones, códigos de error, tiempos) pero no contraseñas, tokens, números de tarjeta completos ni datos personales. Evita registrar por defecto los eventos entrantes completos o los encabezados de las solicitudes, ya que pueden contener encabezados <code>Authorization</code> o información personal; registra en su lugar un subconjunto depurado. El logging estructurado en JSON con campos explícitos hace esto más fácil de controlar que imprimir objetos completos.</p>
+<p>La protección de datos de Amazon CloudWatch Logs agrega una red de seguridad. Asocias una política de protección de datos a un grupo de logs (o a toda la cuenta) que usa identificadores de datos administrados para tipos sensibles comunes, como direcciones de correo electrónico, números de tarjetas de crédito, claves secretas de AWS y diversos identificadores nacionales, y puede incluir identificadores personalizados que defines con expresiones regulares. Los datos que coinciden se enmascaran cuando se ven en la consola, Logs Insights, las suscripciones y las exportaciones; solo los principales con el permiso <code>logs:Unmask</code> pueden ver los valores originales. La política también puede producir hallazgos de auditoría, enviados a CloudWatch Logs, S3 o Amazon Data Firehose, para que sepas que se están registrando datos sensibles y puedas corregir el código. El enmascaramiento solo se aplica a los datos ingeridos después de que la política está en vigor.</p>
+<p>Otras capas: cifra los grupos de logs con una clave de KMS si es necesario, configura períodos de retención de logs en lugar de conservarlos para siempre y restringe con IAM quién puede leer los grupos de logs. Para los datos en S3, Amazon Macie puede descubrir datos sensibles en los buckets.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Hardcoded credentials (credenciales codificadas)</dt><dd>Claves de acceso o contraseñas escritas directamente en el código o en los artefactos, fáciles de filtrar y difíciles de rotar.</dd><dt>Data protection policy (política de protección de datos)</dt><dd>Una política de CloudWatch Logs que detecta y enmascara datos sensibles en los eventos de log usando identificadores de datos.</dd><dt>Managed data identifier (identificador de datos administrado)</dt><dd>Un patrón predefinido para un tipo de dato sensible, como números de tarjetas de crédito, usado por la protección de datos de CloudWatch Logs.</dd><dt>logs:Unmask</dt><dd>El permiso de IAM que permite a un principal ver los valores sensibles enmascarados en CloudWatch Logs.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un equipo de pagos descubre una instrucción de depuración que registra los cuerpos completos de las solicitudes, incluidos los números de tarjeta. La eliminan y además asocian a los grupos de logs del servicio una política de protección de datos con el identificador administrado de tarjetas de crédito. Las filtraciones accidentales futuras aparecen enmascaradas, solo el equipo de seguridad tiene logs:Unmask, y los hallazgos de auditoría les avisan si vuelven a aparecer datos de tarjetas.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Para el código en AWS, la respuesta correcta es un rol obtenido mediante la cadena predeterminada de credenciales, no claves de acceso en ningún lugar. Para los datos sensibles en los logs, la respuesta nativa de AWS es una política de protección de datos de CloudWatch Logs.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué debe hacer un desarrollador con una clave de acceso subida por accidente a un repositorio público?</summary><p>Desactivarla y eliminarla de inmediato, revisar su uso en CloudTrail y cambiar el código a credenciales temporales basadas en roles o federadas.</p></details>
+<details class="sq"><summary>¿Quién puede ver el valor original de los datos enmascarados por la protección de datos de CloudWatch Logs?</summary><p>Solo los principales a los que se concedió el permiso logs:Unmask.</p></details>
+<details class="sq"><summary>¿Una política de protección de datos enmascara los eventos ya almacenados antes de su creación?</summary><p>No; se aplica a los eventos de log ingeridos después de que la política está en vigor.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../secrets-and-configuration-secrets-manager-rotation-vs-systems-manager/">← Secretos y configuración: Secrets Manager (rotación) vs Syst</a><a href="../presigned-urls-for-temporary-s3-access-iam-access-analyzer-for-least-p/">URL prefirmadas para acceso temporal a S3; IAM Access Analyz →</a></nav>
+</main>
+</body>
+</html>

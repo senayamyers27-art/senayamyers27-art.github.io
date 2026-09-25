@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fundamentos de AWS CDK: constructs, cdk bootstrap, cdk syn… · Lección de Developer Associate</title>
+<meta name="description" content="AWS Cloud Development Kit (CDK) te permite definir la infraestructura en un lenguaje de programación de propósito general, como TypeScript, Python, Java, C">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Fundamentos de AWS CDK: constructs, cdk bootstrap, cdk syn… · Lección de Developer Associate">
+<meta property="og:description" content="AWS Cloud Development Kit (CDK) te permite definir la infraestructura en un lenguaje de programación de propósito general, como TypeScript, Python, Java, C">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/aws-cdk-basics-constructs-cdk-bootstrap-cdk-synth-cdk-deploy/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/aws-cdk-basics-constructs-cdk-bootstrap-cdk-synth-cdk-deploy/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/aws-cdk-basics-constructs-cdk-bootstrap-cdk-synth-cdk-deploy/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Fundamentos de AWS CDK: constructs, cdk bootstrap, cdk synth, cdk deploy</h1>
+<article class="lbody">
+<p>AWS Cloud Development Kit (CDK) te permite definir la infraestructura en un lenguaje de programación de propósito general, como TypeScript, Python, Java, C# o Go, en lugar de escribir YAML. Tu código se sintetiza en plantillas de CloudFormation, que luego CloudFormation despliega. Obtienes bucles, condiciones, clases, autocompletado en el IDE y pruebas unitarias para tu infraestructura, conservando la administración segura de stacks de CloudFormation.</p>
+<p>Todo en el CDK es un construct: un bloque de construcción que representa uno o más recursos de AWS. Los constructs se organizan en un árbol. En la parte superior hay una <code>App</code>; contiene uno o más constructs <code>Stack</code>, cada uno de los cuales se convierte en un stack de CloudFormation; los stacks contienen constructs de recursos. Los constructs vienen en tres niveles. Los constructs L1 se corresponden uno a uno con los recursos de CloudFormation y se nombran con el prefijo <code>Cfn</code>, como <code>CfnBucket</code>; tú configuras cada propiedad. Los constructs L2, como <code>s3.Bucket</code> o <code>lambda.Function</code>, son clases seleccionadas de más alto nivel, con valores predeterminados sensatos y métodos auxiliares. Los constructs L3, también llamados patrones, combinan varios recursos para una arquitectura común, por ejemplo una API Gateway respaldada por una función Lambda, o un servicio Fargate con balanceo de carga.</p>
+<pre class="code" tabindex="0"><code>from aws_cdk import App, Stack, aws_s3 as s3, aws_lambda as _lambda
+
+class ImageStack(Stack):
+    def __init__(self, scope, id, **kw):
+        super().__init__(scope, id, **kw)
+        bucket = s3.Bucket(self, 'Uploads', versioned=True)
+        fn = _lambda.Function(self, 'Resize',
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            handler='app.handler',
+            code=_lambda.Code.from_asset('src'))
+        bucket.grant_read(fn)  # agrega una política de IAM de mínimo privilegio
+
+app = App()
+ImageStack(app, 'ImageStack')
+app.synth()</code></pre>
+<p>La llamada a <code>grant_read</code> muestra una fortaleza de los constructs L2: los métodos auxiliares crean por ti permisos de IAM con el alcance correcto, así que escribes la intención en lugar de una política en JSON.</p>
+<p>El flujo de trabajo de la CLI tiene algunos comandos que debes conocer. <code>cdk init app --language python</code> crea un proyecto. <code>cdk bootstrap</code> debe ejecutarse una vez por cuenta y región antes del primer despliegue: crea un stack de CloudFormation (llamado <code>CDKToolkit</code> por defecto) con un bucket de S3 y un repositorio de ECR para los assets, como el código de Lambda y las imágenes de Docker, además de los roles de IAM que el CDK usa para desplegar. Si ves un error de que el entorno no está preparado (bootstrapped), o de que el bucket de assets no existe, ejecuta <code>cdk bootstrap aws://ACCOUNT-ID/REGION</code>. <code>cdk synth</code> ejecuta tu aplicación y emite la plantilla de CloudFormation (en el directorio <code>cdk.out</code>), lo cual es útil para revisarla y probarla. <code>cdk diff</code> compara tu código con lo que está desplegado. <code>cdk deploy</code> sintetiza, sube los assets y despliega los stacks mediante CloudFormation, pidiendo confirmación cuando se incluyen cambios relacionados con la seguridad, como nuevos permisos de IAM. <code>cdk destroy</code> elimina un stack.</p>
+<p>Como la salida es CloudFormation normal, se aplica todo el comportamiento de CloudFormation: reversiones ante fallas, desviaciones, políticas de retención (<code>removal_policy</code> en el CDK, donde muchos recursos con estado se conservan por defecto al eliminarse) y salidas (<code>CfnOutput</code>). Puedes hacer pruebas unitarias de las plantillas sintetizadas con el módulo de aserciones del CDK, por ejemplo comprobando que un bucket tenga el cifrado habilitado.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Construct</dt><dd>El bloque de construcción básico del CDK que representa uno o más recursos de AWS, organizado en un árbol bajo una App.</dd><dt>L2 construct (construct L2)</dt><dd>Una clase del CDK de más alto nivel con valores predeterminados sensatos y métodos auxiliares, como s3.Bucket.</dd><dt>cdk bootstrap</dt><dd>Crea el stack CDKToolkit con un bucket de assets, un repositorio de ECR y roles de despliegue en una cuenta y región.</dd><dt>cdk synth</dt><dd>Ejecuta la aplicación del CDK y produce plantillas de CloudFormation en el directorio cdk.out.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un desarrollador ejecuta cdk deploy en una región nueva y obtiene un error de que el stack requiere bootstrapping porque falta un bucket de assets. Ejecuta cdk bootstrap una vez para esa cuenta y región, y el siguiente cdk deploy sube el asset con el código de Lambda y crea el stack.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si un primer despliegue del CDK falla porque falta el bucket de staging o el stack de bootstrap, la respuesta es cdk bootstrap. Para ver la plantilla de CloudFormation que producirá el CDK, usa cdk synth.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Con qué despliegan finalmente las aplicaciones del CDK?</summary><p>Con AWS CloudFormation, usando las plantillas producidas por la síntesis.</p></details>
+<details class="sq"><summary>¿Cuál es la diferencia entre un construct L1 y uno L2?</summary><p>Los constructs L1 (prefijo Cfn) se corresponden directamente con recursos de CloudFormation y tú configuras todas las propiedades; los constructs L2 agregan valores predeterminados y métodos auxiliares, como las funciones grant.</p></details>
+<details class="sq"><summary>¿Con qué frecuencia debe ejecutarse cdk bootstrap?</summary><p>Una vez por cada combinación de cuenta y región (y de nuevo si la plantilla de bootstrap necesita actualizarse).</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../cloudformation-templates-parameters-outputs-and-exports-fn-importvalue/">← CloudFormation: plantillas, parámetros, salidas y exportacio</a><a href="../lambda-versions-and-aliases-weighted-aliases-codedeploy-canary-linear/">Versiones y alias de Lambda; alias ponderados; desplazamient →</a></nav>
+</main>
+</body>
+</html>

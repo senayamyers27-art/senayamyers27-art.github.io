@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Colecciones concurrentes: ConcurrentHashMap, CopyOnWriteAr… · Lección de OCP Java</title>
+<meta name="description" content="Las colecciones ordinarias, ArrayList, HashMap y demás, no son seguras para hilos. Si varios hilos modifican una sin coordinación puedes perder actualizaci">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Colecciones concurrentes: ConcurrentHashMap, CopyOnWriteAr… · Lección de OCP Java">
+<meta property="og:description" content="Las colecciones ordinarias, ArrayList, HashMap y demás, no son seguras para hilos. Si varios hilos modifican una sin coordinación puedes perder actualizaci">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/java-se/lessons/concurrent-collections-concurrenthashmap-copyonwritearraylist-blocking/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/java-se/lessons/concurrent-collections-concurrenthashmap-copyonwritearraylist-blocking/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../java-se/">OCP Java</a> / <a href="../">Lecciones</a> · <a href="../../../../java-se/lessons/concurrent-collections-concurrenthashmap-copyonwritearraylist-blocking/" hreflang="en" lang="en">English</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25)</p>
+<h1>Colecciones concurrentes: ConcurrentHashMap, CopyOnWriteArrayList, BlockingQueue</h1>
+<article class="lbody">
+<p>Las colecciones ordinarias, ArrayList, HashMap y demás, no son seguras para hilos. Si varios hilos modifican una sin coordinación puedes perder actualizaciones, corromper su estructura interna u obtener una <code>ConcurrentModificationException</code>. Envolverlas con <code>Collections.synchronizedList(list)</code> o <code>synchronizedMap</code> hace que cada llamada a método se sincronice con un único lock, lo cual es correcto pero serializa todo el acceso, y aun así debes sincronizar manualmente al recorrerlas. El paquete <code>java.util.concurrent</code> ofrece colecciones diseñadas para la concurrencia.</p>
+<p><code>ConcurrentHashMap</code> permite que muchos hilos lean y escriban a la vez con bloqueo interno de grano fino y lecturas sin locks. Sus iteradores son débilmente consistentes: nunca lanzan ConcurrentModificationException y reflejan el map en algún momento durante el recorrido. No permite claves ni valores null, y lanza NullPointerException si lo intentas. Las operaciones compuestas atómicas como <code>putIfAbsent</code>, <code>computeIfAbsent</code>, <code>compute</code> y <code>merge</code> te permiten actualizar de forma segura: <code>counts.merge(word, 1, Integer::sum)</code> cuenta palabras entre hilos sin un lock aparte. En cambio, una secuencia de get y luego put sigue siendo una condición de carrera.</p>
+<p><code>CopyOnWriteArrayList</code> (y <code>CopyOnWriteArraySet</code>) copia todo el arreglo subyacente en cada modificación. Los iteradores trabajan sobre una instantánea tomada cuando se crearon, así que nunca lanzan ConcurrentModificationException y no ven los cambios posteriores, y el <code>remove</code> del propio iterador no se admite. Esto es eficiente cuando las lecturas y recorridos superan con mucho a las escrituras, como una lista de listeners de eventos, y es un desperdicio cuando las escrituras son frecuentes.</p>
+<pre class="code" tabindex="0"><code>List&lt;String&gt; listeners = new CopyOnWriteArrayList&lt;&gt;(List.of(&quot;a&quot;, &quot;b&quot;));
+for (String s : listeners) listeners.add(s + &quot;!&quot;);  // sin excepción; el bucle solo ve a, b
+System.out.println(listeners);  // [a, b, a!, b!]
+
+BlockingQueue&lt;String&gt; q = new LinkedBlockingQueue&lt;&gt;(100);
+q.put(&quot;job&quot;);            // espera si la cola está llena
+String job = q.take();   // espera si la cola está vacía
+String maybe = q.poll(1, TimeUnit.SECONDS); // null si no llega nada a tiempo</code></pre>
+<p>Una <code>BlockingQueue</code> es la columna vertebral de los diseños productor-consumidor. Los productores agregan trabajo y los consumidores lo retiran, y la cola se encarga de las esperas. Sus métodos vienen en grupos: <code>add</code> y <code>remove</code> lanzan excepciones cuando la cola está llena o vacía; <code>offer</code> y <code>poll</code> devuelven false o null inmediatamente; <code>put</code> y <code>take</code> se bloquean hasta que hay espacio o un elemento disponible; <code>offer(e, timeout, unit)</code> y <code>poll(timeout, unit)</code> esperan un tiempo limitado. Entre las implementaciones están <code>ArrayBlockingQueue</code> (acotada, basada en arreglo), <code>LinkedBlockingQueue</code> (opcionalmente acotada) y <code>PriorityBlockingQueue</code>.</p>
+<p>Otros miembros que puedes ver son <code>ConcurrentLinkedQueue</code> (no bloqueante), <code>ConcurrentSkipListMap</code> y <code>ConcurrentSkipListSet</code> (versiones ordenadas y concurrentes de TreeMap y TreeSet) y <code>LinkedBlockingDeque</code>. El examen suele preguntar qué colección encaja en un escenario y qué ocurre cuando modificas durante un recorrido.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>ConcurrentHashMap</dt><dd>Un map seguro para hilos que permite lecturas y escrituras concurrentes, con iteradores débilmente consistentes y sin claves ni valores null.</dd><dt>CopyOnWriteArrayList</dt><dd>Una lista segura para hilos que copia su arreglo en cada escritura; los iteradores usan una instantánea y nunca lanzan ConcurrentModificationException.</dd><dt>BlockingQueue</dt><dd>Una cola cuyos métodos put y take esperan espacio o elementos, usada para el traspaso productor-consumidor.</dd><dt>Weakly consistent iterator (iterador débilmente consistente)</dt><dd>Un iterador que tolera modificaciones concurrentes sin lanzar excepciones y puede reflejar o no los cambios hechos después de su creación.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un enviador de logs tiene varios hilos lectores que ponen líneas procesadas en una ArrayBlockingQueue de capacidad 10,000 y un hilo emisor que las toma en lotes. Cuando la red se vuelve lenta, la cola llena hace que los lectores esperen en put en lugar de quedarse sin memoria.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Modificar un ArrayList mientras lo recorres lanza ConcurrentModificationException; un CopyOnWriteArrayList no, y el bucle ve la instantánea anterior. ConcurrentHashMap rechaza claves y valores null. put/take se bloquean, offer/poll no.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué método de BlockingQueue espera hasta que haya un elemento disponible?</summary><p>take() (o poll con un timeout para una espera limitada).</p></details>
+<details class="sq"><summary>¿Qué ocurre con map.put(&quot;k&quot;, null) en un ConcurrentHashMap?</summary><p>Lanza NullPointerException; no se permiten valores null.</p></details>
+<details class="sq"><summary>¿Por qué CopyOnWriteArrayList es una mala elección para una lista que se actualiza miles de veces por segundo?</summary><p>Cada escritura copia el arreglo entero, lo cual es costoso cuando las escrituras son frecuentes.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia OCP Java gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../java-se/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../atomic-classes-atomicinteger-atomiclong-and-locks-reentrantlock-tryloc/">← Clases atómicas (AtomicInteger, AtomicLong) y locks (Reentra</a><a href="../deadlock-starvation-and-livelock/">Deadlock, inanición (starvation) y livelock →</a></nav>
+</main>
+</body>
+</html>

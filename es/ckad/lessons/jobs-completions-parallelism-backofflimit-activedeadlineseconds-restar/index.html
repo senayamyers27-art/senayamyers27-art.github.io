@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jobs: completions, parallelism, backoffLimit, activeDeadli… · Lección de CKAD</title>
+<meta name="description" content="Un Job crea uno o más Pods y lleva la cuenta de cuántos terminan con éxito. Cuando se alcanza el número requerido de éxitos, el Job está completo y no se i">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Jobs: completions, parallelism, backoffLimit, activeDeadli… · Lección de CKAD">
+<meta property="og:description" content="Un Job crea uno o más Pods y lleva la cuenta de cuántos terminan con éxito. Cuando se alcanza el número requerido de éxitos, el Job está completo y no se i">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/jobs-completions-parallelism-backofflimit-activedeadlineseconds-restar/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/jobs-completions-parallelism-backofflimit-activedeadlineseconds-restar/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/jobs-completions-parallelism-backofflimit-activedeadlineseconds-restar/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>Jobs: completions, parallelism, backoffLimit, activeDeadlineSeconds, restartPolicy Never/OnFailure</h1>
+<article class="lbody">
+<p>Un Job crea uno o más Pods y lleva la cuenta de cuántos terminan con éxito. Cuando se alcanza el número requerido de éxitos, el Job está completo y no se inician Pods nuevos. Los Pods completados se conservan (en estado Completed) para que puedas leer sus logs, hasta que el Job se elimine o se limpie mediante <code>ttlSecondsAfterFinished</code> si lo defines.</p>
+<p><code>completions</code> es cuántas ejecuciones exitosas de Pod necesita el Job; por defecto es 1. <code>parallelism</code> es cuántos Pods pueden ejecutarse al mismo tiempo; también es 1 por defecto. Con <code>completions: 6</code> y <code>parallelism: 2</code>, el Job ejecuta dos Pods a la vez hasta que seis hayan tenido éxito. Si defines parallelism pero dejas completions sin definir, obtienes un Job de tipo cola de trabajo, en el que los Pods se coordinan entre sí y el Job se completa cuando uno tiene éxito y todos han terminado.</p>
+<p><code>backoffLimit</code> es el número de reintentos antes de que el Job se marque como Failed; el valor por defecto es 6. Los Pods fallidos se reintentan con un retraso creciente (back-off exponencial). <code>activeDeadlineSeconds</code> es un límite de tiempo estricto para todo el Job: cuando se cumple, Kubernetes termina los Pods en ejecución y marca el Job como Failed con el motivo DeadlineExceeded. El deadline tiene prioridad sobre backoffLimit, así que un Job puede fallar por tiempo aunque todavía le queden reintentos.</p>
+<p>El <code>restartPolicy</code> de la plantilla del Pod debe ser <code>Never</code> u <code>OnFailure</code>. Con <code>Never</code>, un contenedor fallido deja atrás un Pod fallido y el controlador del Job crea un Pod completamente nuevo para el reintento, así que ves varios Pods y puedes inspeccionar los logs de cada uno. Con <code>OnFailure</code>, el kubelet reinicia el contenedor dentro del mismo Pod, así que ves un solo Pod con un contador de reinicios creciente y los logs anteriores son más difíciles de alcanzar (usa <code>kubectl logs --previous</code>).</p>
+<pre class="code" tabindex="0"><code>apiVersion: batch/v1
+kind: Job
+metadata:
+  name: crunch
+spec:
+  completions: 6
+  parallelism: 2
+  backoffLimit: 3
+  activeDeadlineSeconds: 120
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: worker
+        image: busybox
+        command: [&quot;sh&quot;, &quot;-c&quot;, &quot;echo working; sleep 5&quot;]</code></pre>
+<p>Genera un punto de partida con <code>kubectl create job crunch --image=busybox --dry-run=client -o yaml -- sh -c 'echo working; sleep 5' &gt; job.yaml</code> y luego agrega los campos adicionales. Sigue el progreso con <code>kubectl get job crunch</code> (la columna COMPLETIONS muestra algo como 4/6) y <code>kubectl get pods -w</code>. El Job agrega la etiqueta <code>job-name=crunch</code> a sus Pods, así que <code>kubectl logs -l job-name=crunch</code> reúne su salida.</p>
+<p>La mayoría de los campos del Job en la plantilla del Pod no se pueden cambiar después de la creación. Si necesitas otra configuración, elimina el Job y créalo de nuevo.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>completions</dt><dd>Número de ejecuciones exitosas de Pod necesarias para que el Job termine (por defecto 1).</dd><dt>parallelism</dt><dd>Número máximo de Pods del Job ejecutándose a la vez (por defecto 1).</dd><dt>backoffLimit</dt><dd>Número de reintentos antes de que el Job se marque como Failed (por defecto 6).</dd><dt>activeDeadlineSeconds</dt><dd>Tiempo máximo de ejecución de todo el Job, tras el cual sus Pods se detienen y el Job falla.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un generador de miniaturas debe procesar 20 lotes, pero el clúster solo tiene capacidad libre para cuatro a la vez. El equipo define <code>completions: 20</code>, <code>parallelism: 4</code> y <code>activeDeadlineSeconds: 1800</code>, así que el trabajo termina en tandas de cuatro y nunca pasa de media hora.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Conoce los valores por defecto (completions 1, parallelism 1, backoffLimit 6) y que activeDeadlineSeconds gana sobre backoffLimit. Recuerda también que Never crea Pods nuevos en cada reintento, mientras que OnFailure reinicia el mismo Pod.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Un Job tiene completions 5 y parallelism 2. ¿Cuál es el máximo de Pods ejecutándose a la vez?</summary><p>Dos; parallelism limita los Pods concurrentes mientras el Job avanza hacia cinco éxitos.</p></details>
+<details class="sq"><summary>Un Job falla con el motivo DeadlineExceeded. ¿Qué campo lo causó?</summary><p>activeDeadlineSeconds, el límite de tiempo general del Job.</p></details>
+<details class="sq"><summary>¿En qué se diferencian los reintentos entre restartPolicy Never y OnFailure?</summary><p>Never crea un Pod nuevo en cada reintento; OnFailure reinicia el contenedor dentro del mismo Pod.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../choosing-a-workload-deployment-statefulset-daemonset-job-cronjob-bare/">← Elegir un workload: Deployment, StatefulSet, DaemonSet, Job,</a><a href="../cronjobs-schedule-syntax-concurrencypolicy-history-limits-running-a-jo/">CronJobs: sintaxis de schedule, concurrencyPolicy, límites d →</a></nav>
+</main>
+</body>
+</html>

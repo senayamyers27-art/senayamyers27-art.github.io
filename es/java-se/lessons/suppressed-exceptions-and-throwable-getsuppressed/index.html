@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Excepciones suprimidas y Throwable.getSuppressed() · Lección de OCP Java</title>
+<meta name="description" content="A veces ocurre más de una excepción durante la misma operación. En try-with-resources esto es común: el cuerpo lanza una excepción, y luego la llamada auto">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Excepciones suprimidas y Throwable.getSuppressed() · Lección de OCP Java">
+<meta property="og:description" content="A veces ocurre más de una excepción durante la misma operación. En try-with-resources esto es común: el cuerpo lanza una excepción, y luego la llamada auto">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/java-se/lessons/suppressed-exceptions-and-throwable-getsuppressed/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/java-se/lessons/suppressed-exceptions-and-throwable-getsuppressed/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../java-se/">OCP Java</a> / <a href="../">Lecciones</a> · <a href="../../../../java-se/lessons/suppressed-exceptions-and-throwable-getsuppressed/" hreflang="en" lang="en">English</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25)</p>
+<h1>Excepciones suprimidas y Throwable.getSuppressed()</h1>
+<article class="lbody">
+<p>A veces ocurre más de una excepción durante la misma operación. En try-with-resources esto es común: el cuerpo lanza una excepción, y luego la llamada automática a <code>close()</code> también lanza una. Java no puede lanzar ambas a la vez, así que tiene que elegir una como excepción principal y recordar la otra. La que conserva como principal es la excepción del bloque try. Cualquier excepción lanzada al cerrar recursos se le adjunta como excepción suprimida.</p>
+<p>Las excepciones suprimidas se guardan dentro del <code>Throwable</code> principal. El método <code>addSuppressed(Throwable)</code> agrega una, y <code>getSuppressed()</code> devuelve un arreglo <code>Throwable[]</code> con ellas, en el orden en que se agregaron. Con varios recursos, cada <code>close()</code> que falla agrega otra excepción suprimida, y como los recursos se cierran en orden inverso, el arreglo sigue ese orden inverso. Un bloque catch de la excepción principal puede recorrer el arreglo para registrar cada problema.</p>
+<p>Si el bloque try termina normalmente y solo <code>close()</code> lanza una excepción, no hay nada que suprimir: la excepción de <code>close()</code> se convierte en la excepción principal y se lanza normalmente. Si dos recursos fallan al cerrarse y el cuerpo tuvo éxito, la primera excepción de cierre (del último recurso declarado) se vuelve principal y la segunda queda suprimida dentro de ella.</p>
+<pre class="code" tabindex="0"><code>class Door implements AutoCloseable {
+    public void close() { throw new IllegalStateException(&quot;door stuck&quot;); }
+}
+
+try (Door d = new Door()) {
+    throw new RuntimeException(&quot;fire alarm&quot;);
+} catch (RuntimeException e) {
+    System.out.println(e.getMessage());          // fire alarm
+    for (Throwable t : e.getSuppressed()) {
+        System.out.println(&quot;suppressed: &quot; + t.getMessage()); // door stuck
+    }
+}</code></pre>
+<p>La supresión ocurre automáticamente solo en try-with-resources. Un <code>try/finally</code> clásico se comporta peor: si el <code>try</code> lanza una excepción y el <code>finally</code> también, la excepción de <code>finally</code> reemplaza a la original, y la original se pierde por completo a menos que la agregues tú mismo con <code>addSuppressed</code>. Esta es una de las razones más fuertes para preferir try-with-resources sobre la limpieza manual.</p>
+<p>Los stack traces impresos con <code>printStackTrace()</code> incluyen las excepciones suprimidas bajo un encabezado &quot;Suppressed:&quot;, que verás en la salida de los laboratorios. No confundas las excepciones suprimidas con la causa: <code>getCause()</code> devuelve la excepción que llevó a esta, establecida cuando una excepción envuelve a otra, mientras que <code>getSuppressed()</code> lista excepciones adicionales que ocurrieron junto con ella.</p>
+<p>En el examen, identifica qué excepción es la principal (la del cuerpo del try si la hay), y luego lista las excepciones de cierre en orden inverso de los recursos como suprimidas.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Suppressed exception (excepción suprimida)</dt><dd>Una excepción lanzada al cerrar un recurso que se adjunta a la excepción principal en lugar de reemplazarla.</dd><dt>Primary exception (excepción principal)</dt><dd>La excepción que realmente se propaga; en try-with-resources, la que lanza el bloque try si la hay.</dd><dt>getSuppressed()</dt><dd>Un método de Throwable que devuelve un arreglo con las excepciones suprimidas por esta.</dd><dt>getCause()</dt><dd>Un método de Throwable que devuelve la excepción que causó esta, lo cual es distinto de las excepciones suprimidas.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un trabajo de respaldo falla al escribir en una carpeta compartida de red, y luego también falla el cierre de la conexión. Como el trabajo usa try-with-resources, el log muestra el verdadero error de escritura como excepción principal, con el fallo de cierre listado bajo Suppressed, así que el equipo de operaciones corrige primero el problema correcto.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> En try-with-resources, la excepción del cuerpo gana y las excepciones de cierre quedan suprimidas. En un finally simple, una excepción nueva reemplaza a la original, que se pierde.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Si el cuerpo del try y el close() de un recurso lanzan excepciones, ¿cuál llega al bloque catch?</summary><p>La del cuerpo del try; la excepción de close() está disponible mediante getSuppressed().</p></details>
+<details class="sq"><summary>Si solo close() lanza una excepción, ¿se suprime algo?</summary><p>No. La excepción de close() se lanza como excepción principal.</p></details>
+<details class="sq"><summary>¿Cuál es la diferencia entre getCause() y getSuppressed()?</summary><p>getCause devuelve la excepción que causó esta; getSuppressed devuelve excepciones adicionales que se lanzaron junto con ella y fueron suprimidas.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia OCP Java gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../java-se/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../try-with-resources-autocloseable-and-reverse-close-order/">← try-with-resources, AutoCloseable y cierre en orden inverso</a><a href="../declaring-exceptions-with-throws-and-overriding-rules/">Declarar excepciones con throws y reglas de sobrescritura →</a></nav>
+</main>
+</body>
+</html>

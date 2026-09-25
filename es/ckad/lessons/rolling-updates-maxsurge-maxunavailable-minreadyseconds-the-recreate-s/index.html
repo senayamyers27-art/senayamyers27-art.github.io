@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rolling updates: maxSurge, maxUnavailable, minReadySeconds… · Lección de CKAD</title>
+<meta name="description" content="Cuando cambias la plantilla de Pod de un Deployment, el controlador tiene que reemplazar los Pods antiguos por nuevos. El campo strategy controla cómo. La ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Rolling updates: maxSurge, maxUnavailable, minReadySeconds… · Lección de CKAD">
+<meta property="og:description" content="Cuando cambias la plantilla de Pod de un Deployment, el controlador tiene que reemplazar los Pods antiguos por nuevos. El campo strategy controla cómo. La ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/rolling-updates-maxsurge-maxunavailable-minreadyseconds-the-recreate-s/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/rolling-updates-maxsurge-maxunavailable-minreadyseconds-the-recreate-s/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/rolling-updates-maxsurge-maxunavailable-minreadyseconds-the-recreate-s/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>Rolling updates: maxSurge, maxUnavailable, minReadySeconds; la estrategia Recreate</h1>
+<article class="lbody">
+<p>Cuando cambias la plantilla de Pod de un Deployment, el controlador tiene que reemplazar los Pods antiguos por nuevos. El campo <code>strategy</code> controla cómo. La opción por defecto, <code>RollingUpdate</code>, reemplaza los Pods gradualmente para que la app siga atendiendo durante el cambio. La alternativa, <code>Recreate</code>, elimina primero todos los Pods antiguos y solo después crea los nuevos.</p>
+<p>Dos ajustes dan forma a un rolling update. <code>maxSurge</code> es cuántos Pods por encima del número deseado de réplicas pueden existir durante la actualización. <code>maxUnavailable</code> es cuántos Pods por debajo del número deseado pueden estar no disponibles. Cada uno puede ser un número absoluto o un porcentaje de las réplicas; ambos valen 25% por defecto. Los porcentajes se redondean: surge redondea hacia arriba y unavailable hacia abajo. No pueden ser ambos cero, porque entonces el rollout nunca podría avanzar.</p>
+<pre class="code" tabindex="0"><code>spec:
+  replicas: 4
+  minReadySeconds: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0</code></pre>
+<p>Recorre el ejemplo. Con 4 réplicas, maxSurge 1 y maxUnavailable 0, el controlador puede ejecutar como máximo 5 Pods y debe mantener al menos 4 disponibles. Crea un Pod nuevo, espera a que esté disponible, elimina un Pod antiguo y repite. Es la configuración más segura sin tiempo de inactividad, pero necesita capacidad libre para el Pod extra. El extremo opuesto, maxSurge 0 y maxUnavailable 1, no usa capacidad extra pero funciona con un Pod menos durante la actualización.</p>
+<p>La disponibilidad depende de la preparación (readiness). Un Pod nuevo cuenta como disponible cuando su readiness probe pasa y ha permanecido listo durante <code>minReadySeconds</code> (por defecto 0). Aumentar minReadySeconds ralentiza un poco el rollout, pero detecta Pods que arrancan y luego fallan unos segundos después. Si los Pods nuevos nunca llegan a estar listos, el rollout se detiene en lugar de tumbar la versión antigua, lo cual es una propiedad de seguridad clave de los rolling updates. <code>progressDeadlineSeconds</code> (por defecto 600) marca ese rollout atascado como fallido en su estado; no hace rollback automáticamente.</p>
+<p><code>Recreate</code> no tiene ajustes de surge ni unavailable. Provoca tiempo de inactividad entre que terminan los Pods antiguos y los nuevos están listos, pero garantiza que nunca se ejecuten dos versiones a la vez. Elígelo cuando las versiones no pueden coexistir, por ejemplo cuando ambas escribirían en el mismo volumen ReadWriteOnce o cuando un cambio de esquema hace incompatible el código antiguo.</p>
+<pre class="code" tabindex="0"><code>spec:
+  strategy:
+    type: Recreate</code></pre>
+<p>Si cambias de RollingUpdate a Recreate editando el objeto, elimina también el bloque <code>rollingUpdate</code>, o el API server rechazará el cambio. Observa un rollout en acción con <code>kubectl rollout status deploy/web</code> y <code>kubectl get rs -w</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>RollingUpdate</dt><dd>Estrategia por defecto del Deployment que reemplaza los Pods gradualmente mientras la app sigue atendiendo.</dd><dt>maxSurge</dt><dd>Cuántos Pods por encima del número deseado pueden existir durante una actualización (por defecto 25%).</dd><dt>maxUnavailable</dt><dd>Cuántos Pods por debajo del número deseado pueden estar no disponibles durante una actualización (por defecto 25%).</dd><dt>minReadySeconds</dt><dd>Cuánto tiempo debe permanecer listo un Pod nuevo antes de contar como disponible.</dd><dt>Recreate</dt><dd>Estrategia que termina todos los Pods antiguos antes de crear los nuevos, causando una breve inactividad.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una API de pagos con 10 réplicas nunca debe bajar de su capacidad completa. El equipo define maxUnavailable 0, maxSurge 2 y minReadySeconds 15, así que el rollout añade dos Pods nuevos a la vez y retira los antiguos solo después de que los nuevos hayan estado sanos durante 15 segundos.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Haz la aritmética: Pods máximos = replicas + maxSurge, mínimo disponible = replicas - maxUnavailable. Elige Recreate cuando una tarea diga que la versión antigua y la nueva nunca deben ejecutarse juntas.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Con 10 réplicas y la estrategia por defecto, ¿cuántos Pods pueden existir como máximo durante una actualización?</summary><p>13: maxSurge del 25% de 10 es 2.5, redondeado hacia arriba a 3.</p></details>
+<details class="sq"><summary>¿Por qué elegirías la estrategia Recreate?</summary><p>Cuando dos versiones no pueden ejecutarse al mismo tiempo, aceptando una breve inactividad.</p></details>
+<details class="sq"><summary>¿Qué ocurre si los Pods nuevos nunca llegan a estar listos durante un rolling update?</summary><p>El rollout se detiene y los Pods antiguos siguen atendiendo; tras progressDeadlineSeconds se reporta como fallido, pero no se hace rollback automáticamente.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../deployments-and-replicasets-how-the-pod-template-labels-and-selectors/">← Deployments y ReplicaSets: cómo encajan la plantilla de Pod,</a><a href="../kubectl-rollout-status-history-undo-to-revision-pause-and-resume-kubec/">kubectl rollout status, history, undo (--to-revision), pause →</a></nav>
+</main>
+</body>
+</html>

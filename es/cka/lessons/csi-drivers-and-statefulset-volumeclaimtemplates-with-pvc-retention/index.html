@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Drivers CSI y volumeClaimTemplates de StatefulSet con rete… · Lección de CKA</title>
+<meta name="description" content="La Container Storage Interface (CSI) es la forma en que funciona el almacenamiento moderno de Kubernetes: los proveedores distribuyen drivers que el clúste">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Drivers CSI y volumeClaimTemplates de StatefulSet con rete… · Lección de CKA">
+<meta property="og:description" content="La Container Storage Interface (CSI) es la forma en que funciona el almacenamiento moderno de Kubernetes: los proveedores distribuyen drivers que el clúste">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/csi-drivers-and-statefulset-volumeclaimtemplates-with-pvc-retention/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/csi-drivers-and-statefulset-volumeclaimtemplates-with-pvc-retention/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/csi-drivers-and-statefulset-volumeclaimtemplates-with-pvc-retention/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Drivers CSI y volumeClaimTemplates de StatefulSet con retención de PVCs</h1>
+<article class="lbody">
+<p>La Container Storage Interface (CSI) es la forma en que funciona el almacenamiento moderno de Kubernetes: los proveedores distribuyen drivers que el clúster instala como cualquier otra carga de trabajo. Como administrador, deberías poder reconocer las partes de un driver y ver cómo los StatefulSets usan el almacenamiento que proporciona.</p>
+<p>Un driver CSI suele tener un componente controlador, un Deployment o StatefulSet que ejecuta el driver más sidecars como external-provisioner (crea volúmenes para los PVCs), external-attacher (adjunta volúmenes a los nodos), external-resizer (expansión) y external-snapshotter, y un componente de nodo, un DaemonSet con el driver y un sidecar node-driver-registrar que lo registra en cada kubelet y realiza los montajes reales. Inspecciónalo con <code>kubectl get csidrivers</code>, <code>kubectl get csinodes</code> y <code>kubectl get volumeattachments</code>. Una StorageClass se refiere al driver por su nombre en <code>provisioner</code>. Los snapshots de volúmenes usan las CRDs <code>VolumeSnapshot</code>, <code>VolumeSnapshotContent</code> y <code>VolumeSnapshotClass</code> más un snapshot controller, que debe instalarse por separado.</p>
+<p>Los StatefulSets usan esto mediante <code>volumeClaimTemplates</code>. En lugar de un PVC compartido por todas las réplicas, cada Pod obtiene su propio PVC creado a partir de la plantilla, con el nombre <code>&lt;template-name&gt;-&lt;statefulset-name&gt;-&lt;ordinal&gt;</code>, como <code>data-db-0</code>. Cuando <code>db-1</code> se reprograma en otro nodo, vuelve a adjuntar <code>data-db-1</code>, manteniendo juntos su identidad y sus datos.</p>
+<pre class="code" tabindex="0"><code>apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: db}
+spec:
+  serviceName: db
+  replicas: 3
+  selector: {matchLabels: {app: db}}
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Delete
+  template:
+    metadata: {labels: {app: db}}
+    spec:
+      containers:
+      - name: db
+        image: postgres:16
+        volumeMounts: [{name: data, mountPath: /var/lib/postgresql/data}]
+  volumeClaimTemplates:
+  - metadata: {name: data}
+    spec:
+      accessModes: [ReadWriteOnce]
+      storageClassName: fast
+      resources: {requests: {storage: 10Gi}}</code></pre>
+<p>Por defecto, los PVCs creados a partir de volumeClaimTemplates nunca se borran automáticamente, ya sea que reduzcas la escala o borres el StatefulSet. Esto protege los datos, pero deja atrás los claims y los costos de almacenamiento. El campo <code>persistentVolumeClaimRetentionPolicy</code> cambia eso con dos ajustes. <code>whenDeleted</code> se aplica cuando se borra el propio StatefulSet; <code>whenScaled</code> se aplica a los Pods eliminados al reducir la escala. Cada uno puede ser <code>Retain</code> (el predeterminado) o <code>Delete</code>. Con Delete, los PVCs se eliminan, y luego el PV sigue su reclaim policy, que para los volúmenes dinámicos normalmente también es Delete.</p>
+<p>Ten en cuenta que los volumeClaimTemplates quedan prácticamente fijos después de la creación; cambiar el tamaño en la plantilla no redimensiona los PVCs existentes. Para hacerlos crecer, expande cada PVC individualmente. Y un Pod de StatefulSet atascado en Pending a menudo apunta a su PVC: revisa <code>kubectl get pvc</code> para ese ordinal y haz describe para ver errores del provisioner o de topología.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>CSI driver (driver CSI)</dt><dd>Un plugin de almacenamiento del proveedor, dividido en componentes de controlador y por nodo, que implementa CSI.</dd><dt>volumeClaimTemplates</dt><dd>Campo del StatefulSet que crea un PVC por cada ordinal de Pod.</dd><dt>persistentVolumeClaimRetentionPolicy</dt><dd>Ajuste del StatefulSet que controla si los PVCs se borran cuando el conjunto se borra o se reduce su escala.</dd><dt>VolumeAttachment</dt><dd>Un objeto que registra que un volumen CSI está adjuntado a un nodo concreto.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Después de reducir un StatefulSet de prueba de 5 a 2 réplicas, <code>kubectl get pvc</code> todavía lista de data-web-2 a data-web-4, consumiendo almacenamiento. Definir <code>whenScaled: Delete</code> en la retention policy hace que las futuras reducciones de escala limpien los claims automáticamente, y los tres PVCs sobrantes se borran manualmente tras confirmar que los datos no se necesitan.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> La retención predeterminada es Retain tanto para whenDeleted como para whenScaled, así que borrar un StatefulSet no borra sus datos. Los nombres de los PVCs siguen el patrón plantilla-statefulset-ordinal.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cuál es el nombre del PVC del Pod cache-2 del StatefulSet cache con nombre de plantilla store?</summary><p>store-cache-2.</p></details>
+<details class="sq"><summary>¿Qué componente de CSI se ejecuta en cada nodo y realiza los montajes?</summary><p>El plugin de nodo, normalmente un DaemonSet con el driver y node-driver-registrar.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../static-pvs-hostpath-for-labs-local-volumes-with-nodeaffinity-nfs/">← PVs estáticos: hostPath para laboratorios, volúmenes local c</a><a href="../node-problems-notready-kubelet-status-and-journalctl-u-kubelet-kubelet/">Problemas de nodos: NotReady, estado del kubelet y journalct →</a></nav>
+</main>
+</body>
+</html>

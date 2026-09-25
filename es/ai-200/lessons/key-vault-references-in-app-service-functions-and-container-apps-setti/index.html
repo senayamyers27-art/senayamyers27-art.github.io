@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Referencias de Key Vault en la configuración de App Servic… · Lección de AI-200</title>
+<meta name="description" content="Muchas apps leen la configuración de variables de entorno, y quizá no quieras cambiar el código para llamar al SDK de Key Vault. Las referencias de Key Vau">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Referencias de Key Vault en la configuración de App Servic… · Lección de AI-200">
+<meta property="og:description" content="Muchas apps leen la configuración de variables de entorno, y quizá no quieras cambiar el código para llamar al SDK de Key Vault. Las referencias de Key Vau">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/key-vault-references-in-app-service-functions-and-container-apps-setti/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/key-vault-references-in-app-service-functions-and-container-apps-setti/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/key-vault-references-in-app-service-functions-and-container-apps-setti/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Referencias de Key Vault en la configuración de App Service, Functions y Container Apps</h1>
+<article class="lbody">
+<p>Muchas apps leen la configuración de variables de entorno, y quizá no quieras cambiar el código para llamar al SDK de Key Vault. Las referencias de Key Vault permiten que la plataforma obtenga un secreto de Key Vault y se lo presente a tu app como una configuración o secreto común. El valor nunca aparece en la configuración de la app, en el control de código fuente ni en las plantillas de implementación; solo aparece un puntero.</p>
+<p>En App Service y Azure Functions, defines el valor de una configuración de la app con una sintaxis de referencia especial en lugar del secreto en sí. Hay dos formas: una que nombra el almacén y el secreto, y otra que da el URI completo del secreto. Ambas van envueltas en <code>@Microsoft.KeyVault(...)</code>.</p>
+<pre class="code" tabindex="0"><code>DB_PASSWORD = @Microsoft.KeyVault(VaultName=shop-kv;SecretName=db-password)
+DB_PASSWORD = @Microsoft.KeyVault(VaultName=shop-kv;SecretName=db-password;SecretVersion=&lt;version-id&gt;)
+DB_PASSWORD = @Microsoft.KeyVault(SecretUri=&lt;vault-uri&gt;/secrets/db-password/)</code></pre>
+<p>Tu código de Python sigue llamando a <code>os.environ[&quot;DB_PASSWORD&quot;]</code> y recibe el secreto resuelto. Para que esto funcione, la app necesita una identidad administrada con acceso de lectura al secreto (Key Vault Secrets User en modo RBAC, o un permiso Get en una directiva de acceso), y el almacén debe ser accesible desde la red de la app. De forma predeterminada, la plataforma usa la identidad asignada por el sistema; para usar una identidad asignada por el usuario, define la propiedad <code>keyVaultReferenceIdentity</code> del sitio con el ID de recurso de esa identidad. El portal muestra un estado junto a cada referencia, que es el primer lugar donde mirar si una configuración muestra el texto de referencia sin procesar o un error: las causas comunes son un rol faltante, la identidad equivocada, un firewall que bloquea el acceso o un error de escritura en el nombre.</p>
+<p>Sin versión, la referencia se resuelve con la versión más reciente, y la plataforma la actualiza periódicamente (en aproximadamente un día) o cuando cambia la configuración o se reinicia la app, así que un secreto rotado se toma sin editar la configuración. Con versión, la referencia queda fijada y nunca cambia hasta que la actualices. Functions también puede usar referencias para configuraciones de conexión como <code>AzureWebJobsStorage</code>, aunque las conexiones basadas en identidad suelen ser mejores que almacenar esa cadena de conexión.</p>
+<p>Container Apps usa un modelo ligeramente distinto. Los secretos se definen a nivel de la app, y un secreto puede ser una referencia de Key Vault: indicas el URI del secreto de Key Vault y la identidad administrada que se usará (el ID de recurso de una identidad asignada por el usuario, o <code>system</code>). Luego, las variables de entorno apuntan a ese secreto con <code>secretref:</code>, como con cualquier otro secreto. Container Apps obtiene el valor de Key Vault y, cuando haces referencia a un secreto sin versión, se usa la versión más reciente; las réplicas en ejecución toman los cambios después de un reinicio o de una revisión nueva.</p>
+<pre class="code" tabindex="0"><code>az containerapp secret set -n orders -g rg \
+  --secrets &quot;db-pass=keyvaultref:&lt;key-vault-secret-uri&gt;,identityref:&lt;identity-resource-id&gt;&quot;
+az containerapp update -n orders -g rg --set-env-vars DB_PASSWORD=secretref:db-pass</code></pre>
+<p>La idea principal para el examen: el código sigue igual, el secreto vive solo en Key Vault y una identidad administrada con un rol de lectura del plano de datos une ambos.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Key Vault reference (referencia de Key Vault)</dt><dd>Un valor de configuración o secreto de la app que apunta a un secreto de Key Vault, que la plataforma resuelve en tiempo de ejecución.</dd><dt>@Microsoft.KeyVault(...)</dt><dd>La sintaxis de referencia que se usa en la configuración de las apps de App Service y Functions, con VaultName/SecretName o SecretUri.</dd><dt>keyVaultReferenceIdentity</dt><dd>La propiedad del sitio de App Service que selecciona una identidad asignada por el usuario para resolver las referencias de Key Vault.</dd><dt>keyvaultref</dt><dd>La sintaxis de secretos de Container Apps que obtiene el valor de un secreto a partir del URI de un secreto de Key Vault con una identidad.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una app de App Service mostraba el texto literal @Microsoft.KeyVault(VaultName=shop-kv;SecretName=db-password) como contraseña de la base de datos y no lograba conectarse. El estado de la referencia en el portal indicaba acceso denegado. La app usaba una identidad asignada por el usuario, pero keyVaultReferenceIdentity no estaba definida, así que la plataforma intentaba con la asignada por el sistema. Definir la propiedad y asignar Key Vault Secrets User lo resolvió.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si una app recibe el texto @Microsoft.KeyVault sin procesar, la referencia no se resolvió: revisa la identidad, su rol Secrets User, keyVaultReferenceIdentity para identidades asignadas por el usuario y la red del almacén. Omite la versión para seguir las rotaciones.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué necesita una app de App Service para que se resuelva una referencia de Key Vault?</summary><p>Una identidad administrada con acceso de lectura al secreto (como Key Vault Secrets User) y acceso de red al almacén.</p></details>
+<details class="sq"><summary>¿Cómo usa una variable de entorno de Container Apps un secreto respaldado por Key Vault?</summary><p>Define un secreto de la app con keyvaultref y un identityref, y luego asigna a la variable el valor secretref:&lt;nombre-del-secreto&gt;.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../secret-rotation-and-key-vault-events-secretnearexpiry-through-event-gr/">← Rotación de secretos y eventos de Key Vault (SecretNearExpir</a><a href="../azure-app-configuration-key-values-labels-feature-flags-key-vault-refe/">Azure App Configuration: pares clave-valor, etiquetas, marca →</a></nav>
+</main>
+</body>
+</html>

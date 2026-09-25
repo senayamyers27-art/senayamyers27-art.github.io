@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Localizar y leer los logs del sistema: /var/log/messages, … · Lección de RHCSA</title>
+<meta name="description" content="Los logs son el primer lugar donde buscar cuando algo falla: un servicio que no arranca, un inicio de sesión rechazado, un disco que no se monta. RHEL tien">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Localizar y leer los logs del sistema: /var/log/messages, … · Lección de RHCSA">
+<meta property="og:description" content="Los logs son el primer lugar donde buscar cuando algo falla: un servicio que no arranca, un inicio de sesión rechazado, un disco que no se monta. RHEL tien">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/locating-and-reading-system-logs-var-log-messages-var-log-secure-journ/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/locating-and-reading-system-logs-var-log-messages-var-log-secure-journ/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/locating-and-reading-system-logs-var-log-messages-var-log-secure-journ/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Localizar y leer los logs del sistema: /var/log/messages, /var/log/secure, journalctl -u, -p, -b, --since</h1>
+<article class="lbody">
+<p>Los logs son el primer lugar donde buscar cuando algo falla: un servicio que no arranca, un inicio de sesión rechazado, un disco que no se monta. RHEL tiene dos sistemas de registro que cooperan. systemd-journald recoge mensajes del kernel, del proceso de arranque, de los servicios y de los programas en un journal binario estructurado. rsyslog, un demonio syslog tradicional, recibe mensajes del journal y los escribe en archivos de texto plano en <code>/var/log/</code>, ordenados por tipo.</p>
+<p>Los archivos de texto son fáciles de revisar con <code>less</code>, <code>tail</code> y <code>grep</code>. <code>/var/log/messages</code> contiene la mayoría de los mensajes generales del sistema. <code>/var/log/secure</code> contiene los eventos de seguridad y autenticación: inicios de sesión, uso de sudo, conexiones SSH y contraseñas fallidas. <code>/var/log/cron</code> registra las tareas programadas, <code>/var/log/maillog</code> la actividad del correo y <code>/var/log/boot.log</code> los mensajes de arranque. <code>tail -f /var/log/secure</code> sigue un archivo en vivo, lo que es útil mientras reproduces un problema en otra terminal. Qué mensajes van a qué archivo lo deciden las reglas de <code>/etc/rsyslog.conf</code>. Muchos servicios también mantienen sus propios logs, por ejemplo el servidor web en <code>/var/log/httpd/</code>.</p>
+<p><code>journalctl</code> lee el journal y puede filtrarlo con mucha más precisión. Por sí solo lo muestra todo, lo más antiguo primero, en un paginador. <code>-e</code> salta al final y <code>-f</code> sigue las entradas nuevas. <code>-n 20</code> muestra las últimas 20 entradas. Los filtros más útiles son estos.</p>
+<pre class="code" tabindex="0"><code>journalctl -u sshd               # una unidad (servicio)
+journalctl -p err                # prioridad err y más graves
+journalctl -b                    # solo el arranque actual
+journalctl -b -1                 # arranque anterior (necesita persistencia)
+journalctl --since '1 hour ago'
+journalctl --since '2026-09-25 08:00' --until '2026-09-25 09:00'
+journalctl -u httpd -p warning --since today</code></pre>
+<p><code>-u UNIT</code> muestra los mensajes de una unidad de systemd, que es la forma más rápida de ver por qué falló un servicio; <code>systemctl status UNIT</code> también muestra sus últimas líneas del journal. <code>-p</code> filtra por prioridad e incluye todo lo que está en ese nivel y por encima. Las prioridades de syslog, de la más grave a la menos grave, son emerg (0), alert (1), crit (2), err (3), warning (4), notice (5), info (6) y debug (7). <code>-b</code> limita la salida a un arranque; <code>-b -1</code> es el anterior y <code>--list-boots</code> muestra los disponibles. <code>--since</code> y <code>--until</code> aceptan fechas como <code>'2026-09-25 14:00'</code> y palabras como <code>today</code>, <code>yesterday</code> o <code>'10 min ago'</code>.</p>
+<p>Otras opciones prácticas son <code>-o verbose</code> para mostrar todos los campos guardados de cada entrada, <code>_PID=1234</code> o <code>_COMM=sshd</code> para filtrar por campos y <code>-k</code> solo para mensajes del kernel. Necesitas ser root o miembro de un grupo con permiso para leer el journal del sistema, como <code>systemd-journal</code>, para ver todas las entradas; los demás usuarios normales solo ven las suyas.</p>
+<p>Recuerda que, por defecto en RHEL, el journal puede guardarse solo en memoria en <code>/run/log/journal</code>, así que pueden faltar las entradas del journal de arranques anteriores. Los archivos de texto de <code>/var/log</code> sobreviven a los reinicios de todos modos, porque rsyslog los escribe en disco.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>systemd-journald</dt><dd>Servicio que recoge los mensajes de log en el journal estructurado de systemd.</dd><dt>rsyslog</dt><dd>Demonio syslog que escribe los mensajes en archivos de texto bajo /var/log según /etc/rsyslog.conf.</dd><dt>/var/log/secure</dt><dd>Log de texto para los eventos de autenticación y seguridad, como inicios de sesión y sudo.</dd><dt>journalctl -u</dt><dd>Muestra las entradas del journal de una unidad de systemd concreta.</dd><dt>Syslog priority (prioridad de syslog)</dt><dd>Nivel de gravedad de emerg (0) a debug (7); journalctl -p muestra ese nivel y los más graves.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Los usuarios dicen que fallan los inicios de sesión por SSH en serverb. Ejecutas <code>tail -n 30 /var/log/secure</code> y ves líneas repetidas de 'Failed password' para una cuenta; luego <code>journalctl -u sshd --since '30 min ago'</code> muestra que sshd se reinició con una advertencia de configuración, lo que te lleva al ajuste incorrecto.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> journalctl -p err muestra err Y todo lo más grave (crit, alert, emerg). Los problemas de autenticación van a /var/log/secure, no a /var/log/messages.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué archivo registra los inicios de sesión SSH fallidos y el uso de sudo?</summary><p>/var/log/secure.</p></details>
+<details class="sq"><summary>¿Cómo muestras solo los mensajes de este arranque del servicio chronyd?</summary><p>journalctl -b -u chronyd.</p></details>
+<details class="sq"><summary>¿Qué incluye journalctl -p warning?</summary><p>Los mensajes con prioridad warning y todas las prioridades más graves (err, crit, alert, emerg).</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../managing-tuning-profiles-with-tuned-adm-active-recommend-profile/">← Gestionar perfiles de ajuste con tuned-adm (active, recommen</a><a href="../preserving-the-systemd-journal-across-reboots-storage-persistent-var-l/">Conservar el journal de systemd entre reinicios (Storage=per →</a></nav>
+</main>
+</body>
+</html>

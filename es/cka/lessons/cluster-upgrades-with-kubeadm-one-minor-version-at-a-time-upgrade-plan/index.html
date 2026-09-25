@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Actualizaciones del clúster con kubeadm: una versión minor… · Lección de CKA</title>
+<meta name="description" content="Kubernetes publica una nueva versión minor (1.x) con regularidad, y kubeadm solo admite actualizar una versión minor a la vez. Para pasar de 1.33 a 1.35, p">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Actualizaciones del clúster con kubeadm: una versión minor… · Lección de CKA">
+<meta property="og:description" content="Kubernetes publica una nueva versión minor (1.x) con regularidad, y kubeadm solo admite actualizar una versión minor a la vez. Para pasar de 1.33 a 1.35, p">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/cluster-upgrades-with-kubeadm-one-minor-version-at-a-time-upgrade-plan/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/cluster-upgrades-with-kubeadm-one-minor-version-at-a-time-upgrade-plan/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/cluster-upgrades-with-kubeadm-one-minor-version-at-a-time-upgrade-plan/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Actualizaciones del clúster con kubeadm: una versión minor a la vez, upgrade plan/apply/node, drain, actualización del kubelet, uncordon y version skew</h1>
+<article class="lbody">
+<p>Kubernetes publica una nueva versión minor (1.x) con regularidad, y kubeadm solo admite actualizar una versión minor a la vez. Para pasar de 1.33 a 1.35, primero actualizas a 1.34. Las versiones patch dentro de una minor se pueden saltar. El examen con frecuencia te da un clúster una minor atrás y te pide actualizar el control plane y un worker.</p>
+<p>Las reglas de version skew (desfase de versiones) explican el orden. El kubelet nunca debe ser más nuevo que el API server, y puede quedarse atrás algunas versiones minor. kubectl debe estar dentro de una versión minor respecto al API server. Por eso siempre actualizas primero el control plane y después los nodos.</p>
+<p>En el primer nodo del control plane, actualiza el paquete de kubeadm a la versión objetivo exacta, luego revisa el plan y aplícalo. <code>kubeadm upgrade plan</code> verifica que el clúster se pueda actualizar y muestra las versiones disponibles. <code>kubeadm upgrade apply v1.X.Y</code> actualiza los manifiestos de static Pods, CoreDNS y kube-proxy, y renueva los certificados. En los nodos adicionales del control plane ejecutas <code>kubeadm upgrade node</code> en lugar de apply.</p>
+<pre class="code" tabindex="0"><code># control plane (Debian/Ubuntu, ajusta la versión)
+sudo apt-mark unhold kubeadm &amp;&amp; sudo apt-get install -y kubeadm='1.X.Y-*' &amp;&amp; sudo apt-mark hold kubeadm
+sudo kubeadm upgrade plan
+sudo kubeadm upgrade apply v1.X.Y
+kubectl drain cp1 --ignore-daemonsets
+sudo apt-mark unhold kubelet kubectl &amp;&amp; sudo apt-get install -y kubelet='1.X.Y-*' kubectl='1.X.Y-*' &amp;&amp; sudo apt-mark hold kubelet kubectl
+sudo systemctl daemon-reload &amp;&amp; sudo systemctl restart kubelet
+kubectl uncordon cp1</code></pre>
+<p>Cada worker sigue un patrón similar. Desde una máquina con kubectl, haz drain del nodo para que sus Pods se muevan a otro lado: <code>kubectl drain node01 --ignore-daemonsets</code> (agrega <code>--delete-emptydir-data</code> si hay Pods que usan emptyDir). En el worker, actualiza el paquete de kubeadm y ejecuta <code>sudo kubeadm upgrade node</code>, que actualiza la configuración local del kubelet. Luego actualiza los paquetes de kubelet y kubectl, recarga systemd y reinicia el kubelet. Por último, haz uncordon del nodo para que vuelva a aceptar Pods.</p>
+<p>Ten en cuenta que los repositorios de paquetes de Kubernetes se publican por versión minor, así que pasar a una nueva minor puede requerir cambiar la definición del repositorio en cada nodo antes de que aparezcan los nuevos paquetes. Verifica con <code>kubectl get nodes</code>: la columna VERSION muestra la versión del kubelet de cada nodo, que es la forma más fácil de confirmar que un nodo realmente terminó.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>kubeadm upgrade plan</dt><dd>Verifica si se puede actualizar y lista las versiones objetivo sin cambiar nada.</dd><dt>kubeadm upgrade apply</dt><dd>Actualiza los componentes del primer nodo del control plane a una versión dada.</dd><dt>kubeadm upgrade node</dt><dd>Actualiza los nodos adicionales del control plane o la configuración del kubelet de un worker.</dd><dt>Version skew policy (política de desfase de versiones)</dt><dd>Reglas sobre cuánto pueden diferir las versiones de los componentes; los kubelets nunca pueden ser más nuevos que el API server.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Te piden actualizar el control plane y node01 al siguiente patch de la siguiente minor: actualizas kubeadm en cp1, ejecutas plan y apply, haces drain y actualizas el kubelet en cp1, le haces uncordon y luego repites drain, <code>kubeadm upgrade node</code>, actualización del kubelet y uncordon en node01. <code>kubectl get nodes</code> muestra ambos en la nueva versión.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Actualizar el paquete no basta: olvidar <code>systemctl daemon-reload &amp;&amp; systemctl restart kubelet</code> deja al nodo reportando la versión anterior. Recuerda también: <code>upgrade apply</code> solo en el primer nodo del control plane y <code>upgrade node</code> en todos los demás.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Puedes actualizar directamente de 1.33 a 1.35 con kubeadm?</summary><p>No; se actualiza una minor a la vez, de 1.33 a 1.34 y luego de 1.34 a 1.35.</p></details>
+<details class="sq"><summary>¿Por qué se actualiza el control plane antes que los kubelets de los workers?</summary><p>La version skew policy prohíbe que un kubelet sea más nuevo que el API server.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../static-pods-and-etc-kubernetes-manifests-kubeadm-certificates-check-ex/">← Static Pods y /etc/kubernetes/manifests; certificados de kub</a><a href="../etcd-backup-and-restore-with-etcdctl-etcdutl-and-the-etcd-pki-pointing/">Backup y restauración de etcd con etcdctl/etcdutl y la PKI d →</a></nav>
+</main>
+</body>
+</html>

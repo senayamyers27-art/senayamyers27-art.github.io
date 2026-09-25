@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Seguimiento distribuido entre servicios, muestreo y métric… · Lección de AI-200</title>
+<meta name="description" content="Las apps modernas son cadenas de servicios: un front-end llama a una API, que lee de Cosmos DB, envía un mensaje de Service Bus y llama al punto de conexió">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Seguimiento distribuido entre servicios, muestreo y métric… · Lección de AI-200">
+<meta property="og:description" content="Las apps modernas son cadenas de servicios: un front-end llama a una API, que lee de Cosmos DB, envía un mensaje de Service Bus y llama al punto de conexió">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/distributed-tracing-across-services-sampling-and-live-metrics/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/distributed-tracing-across-services-sampling-and-live-metrics/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/distributed-tracing-across-services-sampling-and-live-metrics/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Seguimiento distribuido entre servicios, muestreo y métricas en vivo</h1>
+<article class="lbody">
+<p>Las apps modernas son cadenas de servicios: un front-end llama a una API, que lee de Cosmos DB, envía un mensaje de Service Bus y llama al punto de conexión de un modelo, y un worker toma el mensaje más tarde. Cuando un usuario informa de una solicitud lenta o fallida, necesitas seguir esa solicitud a través de cada salto. El seguimiento distribuido (distributed tracing) lo logra dando a todo el trabajo de una operación un ID de traza compartido y vinculando cada pieza con su padre.</p>
+<p>El mecanismo es la propagación del contexto. OpenTelemetry usa el estándar W3C Trace Context: cuando tu app instrumentada hace una llamada HTTP saliente, agrega un encabezado <code>traceparent</code> que contiene el ID de traza y el ID del span actual. El servicio receptor, también instrumentado, lee el encabezado y crea sus propios spans como hijos dentro de la misma traza. Los SDK de mensajería, incluidos Service Bus y Event Hubs, llevan el mismo contexto en las propiedades del mensaje, para que el procesamiento de un consumidor quede vinculado con el productor. Si un servicio de la cadena no está instrumentado, o elimina los encabezados, la traza se rompe en piezas separadas.</p>
+<p>En Application Insights, el ID de traza aparece como <code>operation_Id</code> en cada elemento (requests, dependencies, exceptions, traces), y <code>operation_ParentId</code> vincula un elemento con su span padre. La vista de detalles de transacción de extremo a extremo del portal dibuja todo el árbol como una línea de tiempo, para que veas qué salto consumió el tiempo o lanzó el error. El mapa de aplicación (application map) agrega muchas trazas en un diagrama de componentes y sus llamadas, con las tasas de error y las duraciones en cada conexión. Cada servicio debe definir un nombre de rol en la nube distinto (por ejemplo, mediante la variable de entorno <code>OTEL_SERVICE_NAME</code> o los atributos del recurso) para que aparezca como su propio nodo en el mapa.</p>
+<p>Las apps con mucho tráfico pueden producir más telemetría de la que quieres pagar o analizar. El muestreo (sampling) conserva un subconjunto representativo. Con la Azure Monitor OpenTelemetry Distro, configuras una proporción de muestreo (por ejemplo, <code>configure_azure_monitor(sampling_ratio=0.1)</code> para conservar alrededor del 10 por ciento), y las versiones más recientes también ofrecen un muestreador con límite de frecuencia que limita las trazas por segundo. Las decisiones de muestreo se toman por traza, no por elemento, así que una traza conservada mantiene todos sus spans relacionados en todos los servicios, y nunca se muestra una solicitud a la que le falte la mitad de sus dependencias. Application Insights registra la tasa de muestreo en la columna <code>itemCount</code>, y los gráficos del portal la usan para estimar los totales reales; en tus propias consultas KQL, usa <code>sum(itemCount)</code> en lugar de <code>count()</code> cuando necesites recuentos precisos sobre datos muestreados.</p>
+<p>Live Metrics muestra un flujo casi en tiempo real de la tasa de solicitudes, la tasa de errores, las llamadas a dependencias, las excepciones, la CPU y la memoria de cada instancia en ejecución, con una latencia de alrededor de un segundo. No se basa en datos almacenados y no se ve afectado por el muestreo, así que es ideal mientras implementas una revisión nueva o durante un incidente, cuando esperar minutos a la ingesta es demasiado lento. Con la distro lo habilitas mediante una opción de configuración, y se puede proteger con la autenticación de Microsoft Entra.</p>
+<p>En la práctica: instrumenta todos los servicios, propaga el contexto a través de HTTP y la mensajería, muestrea con criterio, observa Live Metrics durante los despliegues y usa la vista de extremo a extremo y el mapa de aplicación para las investigaciones.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Trace context (contexto de traza)</dt><dd>El estándar de W3C para propagar los IDs de traza y de span entre servicios, que viaja en el encabezado traceparent.</dd><dt>operation_Id</dt><dd>El campo de Application Insights que contiene el ID de traza compartido por toda la telemetría de una operación.</dd><dt>Sampling (muestreo)</dt><dd>Conservar solo una parte de la telemetría, decidido por traza, para reducir costos sin dejar de ser representativo.</dd><dt>Live Metrics (métricas en vivo)</dt><dd>Una vista casi en tiempo real de las métricas de solicitudes, errores y recursos que no se ve afectada por el muestreo.</dd><dt>Application map (mapa de aplicación)</dt><dd>Una vista de Application Insights que muestra los componentes y sus dependencias con datos de rendimiento y errores.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Los usuarios informan que el proceso de pago a veces tarda ocho segundos. En la vista de transacción de extremo a extremo de un operation_Id lento, la solicitud del front-end contiene una llamada a la API cuya dependencia hija con el punto de conexión del modelo tarda siete segundos, mientras que las llamadas a Cosmos DB tardan milisegundos. El equipo agrega un tiempo de espera y una alternativa en caché, observa Live Metrics mientras se despliega la revisión nueva y ve que la latencia baja de inmediato.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El ID de traza compartido aparece como operation_Id; el muestreo es por traza y se registra en itemCount, así que cuenta con sum(itemCount); Live Metrics es en tiempo real y no se ve afectado por el muestreo.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo sabe un servicio posterior que pertenece a la misma traza que quien lo llamó?</summary><p>Quien llama propaga el encabezado traceparent (o las propiedades del mensaje) con el ID de traza y el ID del span padre.</p></details>
+<details class="sq"><summary>¿Por qué usar sum(itemCount) en lugar de count() en KQL sobre telemetría muestreada?</summary><p>Cada elemento almacenado representa itemCount elementos originales, así que sumarlo estima el total real.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../application-insights-with-the-azure-monitor-opentelemetry-distro-for-p/">← Application Insights con la Azure Monitor OpenTelemetry Dist</a><a href="../kql-where-project-summarize-bin-join-and-render-against-requests-depen/">KQL: where, project, summarize, bin(), join y render sobre r →</a></nav>
+</main>
+</body>
+</html>

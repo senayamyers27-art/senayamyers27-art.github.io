@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Static Pods y /etc/kubernetes/manifests; certificados de k… · Lección de CKA</title>
+<meta name="description" content="Un static Pod es un Pod que el kubelet ejecuta directamente a partir de un archivo de manifiesto en disco, sin que intervengan el API server ni el schedule">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Static Pods y /etc/kubernetes/manifests; certificados de k… · Lección de CKA">
+<meta property="og:description" content="Un static Pod es un Pod que el kubelet ejecuta directamente a partir de un archivo de manifiesto en disco, sin que intervengan el API server ni el schedule">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/static-pods-and-etc-kubernetes-manifests-kubeadm-certificates-check-ex/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/static-pods-and-etc-kubernetes-manifests-kubeadm-certificates-check-ex/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/static-pods-and-etc-kubernetes-manifests-kubeadm-certificates-check-ex/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Static Pods y /etc/kubernetes/manifests; certificados de kubeadm (check-expiration, renew) y archivos kubeconfig</h1>
+<article class="lbody">
+<p>Un static Pod es un Pod que el kubelet ejecuta directamente a partir de un archivo de manifiesto en disco, sin que intervengan el API server ni el scheduler. El kubelet vigila un directorio, <code>/etc/kubernetes/manifests</code> en los clústeres de kubeadm (definido por <code>staticPodPath</code> en la configuración del kubelet en <code>/var/lib/kubelet/config.yaml</code>). Coloca un archivo YAML de Pod ahí y el kubelet lo inicia; borra el archivo y el kubelet lo detiene.</p>
+<p>kubeadm usa esto para ejecutar el propio control plane: <code>etcd.yaml</code>, <code>kube-apiserver.yaml</code>, <code>kube-controller-manager.yaml</code> y <code>kube-scheduler.yaml</code> viven en ese directorio. Así se resuelve el problema del huevo y la gallina, porque el API server no puede programarse a sí mismo. El kubelet también crea un mirror Pod de solo lectura en la API para que puedas ver los static Pods con kubectl; sus nombres terminan con el nombre del nodo, como <code>kube-apiserver-cp1</code>. Borrar el mirror Pod con kubectl no tiene un efecto duradero, y editarlo no tiene ningún efecto. Para cambiar un componente del control plane, edita el archivo en el nodo; el kubelet lo detecta y recrea el Pod.</p>
+<p>kubeadm también construye una PKI (infraestructura de clave pública) privada en <code>/etc/kubernetes/pki</code>: la CA del clúster, el certificado de servidor del API server, los certificados de cliente del API server para hablar con el kubelet y con etcd, la CA de front-proxy y una CA de etcd separada en <code>pki/etcd</code>. Los certificados de cliente que genera kubeadm son válidos por un año por defecto, mientras que las CA duran mucho más.</p>
+<p>Revisa el vencimiento con <code>kubeadm certs check-expiration</code>. Renueva con <code>kubeadm certs renew all</code> (o uno solo, como <code>kubeadm certs renew apiserver</code>). Después de renovar, los static Pods del control plane deben reiniciarse para cargar los archivos nuevos; un enfoque común es sacar los manifiestos del directorio por un momento (unos 20 segundos, para que el kubelet lo note) y luego volver a ponerlos. Reiniciar solo el kubelet no reinicia los contenedores en ejecución. kubeadm también renueva los certificados automáticamente durante <code>kubeadm upgrade apply</code>, que es una de las razones por las que los clústeres que se actualizan con regularidad rara vez llegan al vencimiento.</p>
+<p>Los archivos kubeconfig lo unen todo. Un kubeconfig contiene clusters (URL del servidor y CA), users (credenciales como un certificado de cliente) y contexts (un cluster más un user más un namespace opcional). kubeadm escribe <code>admin.conf</code>, <code>super-admin.conf</code> en versiones recientes, <code>controller-manager.conf</code>, <code>scheduler.conf</code> y <code>kubelet.conf</code> en <code>/etc/kubernetes</code>. La mayoría de estos incrustan certificados de cliente, por lo que también se renuevan con <code>kubeadm certs renew</code>; <code>kubelet.conf</code> es la excepción, porque apunta al propio certificado de cliente del kubelet, que el kubelet rota automáticamente. Tu propio <code>~/.kube/config</code> suele ser una copia de admin.conf, así que después de renovar quizá necesites copiarlo de nuevo.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Static Pod (Pod estático)</dt><dd>Un Pod gestionado directamente por un kubelet a partir de un archivo en su staticPodPath, no por el API server.</dd><dt>Mirror Pod (Pod espejo)</dt><dd>El objeto de API de solo lectura que crea el kubelet para que un static Pod sea visible con kubectl.</dd><dt>kubeadm certs check-expiration</dt><dd>Lista cada certificado gestionado por kubeadm y cuándo vence.</dd><dt>Kubeconfig context (contexto)</dt><dd>Una combinación con nombre de un cluster, un user y un namespace por defecto.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una tarea te pide ejecutar un Pod de nginx en node01 que sobreviva incluso si el API server está caído. Te conectas por SSH a node01, confirmas <code>staticPodPath</code> en <code>/var/lib/kubelet/config.yaml</code>, escribes un manifiesto de Pod en ese directorio y <code>kubectl get pods</code> muestra <code>nginx-node01</code> unos segundos después.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Para cambiar un flag del control plane, edita el manifiesto en /etc/kubernetes/manifests de ese nodo, nunca el mirror Pod mediante kubectl. Guarda una copia de respaldo del manifiesto fuera de ese directorio, porque cada archivo YAML que haya dentro se trata como un Pod.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo averiguas de qué directorio lee un kubelet los static Pods?</summary><p>Mira <code>staticPodPath</code> en el archivo de configuración del kubelet, normalmente /var/lib/kubelet/config.yaml.</p></details>
+<details class="sq"><summary>¿Qué vigencia por defecto tienen los certificados de cliente emitidos por kubeadm y cómo los renuevas?</summary><p>Un año; ejecuta <code>kubeadm certs renew all</code> y reinicia los componentes del control plane.</p></details>
+<details class="sq"><summary>¿Qué pasa si haces <code>kubectl delete</code> del mirror Pod de un static Pod?</summary><p>El kubelet recrea el mirror Pod porque el archivo de manifiesto sigue en el disco.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../kubeadm-init-pod-network-cidr-control-plane-endpoint-installing-a-cni/">← kubeadm init (pod network CIDR, control-plane endpoint), ins</a><a href="../cluster-upgrades-with-kubeadm-one-minor-version-at-a-time-upgrade-plan/">Actualizaciones del clúster con kubeadm: una versión minor a →</a></nav>
+</main>
+</body>
+</html>

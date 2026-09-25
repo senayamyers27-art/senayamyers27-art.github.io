@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rutas por defecto y sumarización (rutas aggregate) · Lección de JNCIA-Junos</title>
+<meta name="description" content="Una ruta por defecto, escrita 0.0.0.0/0 para IPv4 y ::/0 para IPv6, coincide con cualquier destino porque su longitud de prefijo es cero. Gracias a la coin">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Rutas por defecto y sumarización (rutas aggregate) · Lección de JNCIA-Junos">
+<meta property="og:description" content="Una ruta por defecto, escrita 0.0.0.0/0 para IPv4 y ::/0 para IPv6, coincide con cualquier destino porque su longitud de prefijo es cero. Gracias a la coin">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/jncia-junos/lessons/default-routes-and-summarization-aggregate-routes/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/jncia-junos/lessons/default-routes-and-summarization-aggregate-routes/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../jncia-junos/">JNCIA-Junos</a> / <a href="../">Lecciones</a> · <a href="../../../../jncia-junos/lessons/default-routes-and-summarization-aggregate-routes/" hreflang="en" lang="en">English</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106</p>
+<h1>Rutas por defecto y sumarización (rutas aggregate)</h1>
+<article class="lbody">
+<p>Una ruta por defecto, escrita 0.0.0.0/0 para IPv4 y ::/0 para IPv6, coincide con cualquier destino porque su longitud de prefijo es cero. Gracias a la coincidencia del prefijo más largo, solo se usa cuando no existe una ruta más específica. Eso la convierte en la forma clásica de enviar todo el tráfico desconocido hacia un proveedor de internet o un router de núcleo. Puedes crearla como ruta estática (<code>set routing-options static route 0.0.0.0/0 next-hop 203.0.113.1</code>), aprenderla de un protocolo de enrutamiento o anunciarla en OSPF con una política de exportación para que otros routers la aprendan.</p>
+<p>La sumarización es la idea opuesta: en lugar de enviar muchas rutas específicas, anuncias un prefijo más amplio que las cubre. Si un sitio usa desde 10.20.0.0/24 hasta 10.20.255.0/24, puedes anunciar solo 10.20.0.0/16. La sumarización hace más pequeñas las tablas de enrutamiento, reduce el trabajo que hacen los routers cuando una sola subred oscila (porque el resumen se mantiene estable) y oculta el detalle interno a los vecinos.</p>
+<p>En Junos, un resumen se crea con una ruta aggregate bajo <code>routing-options aggregate</code>:</p>
+<pre class="code" tabindex="0"><code>set routing-options aggregate route 10.20.0.0/16
+user@R1&gt; show route 10.20.0.0/16 exact detail</code></pre>
+<p>Una ruta aggregate se vuelve activa solo cuando existe al menos una ruta contribuyente. Una ruta contribuyente (contributing route) es cualquier ruta activa que es más específica que la aggregate y cae dentro de ella, como 10.20.5.0/24. Si todas las rutas contribuyentes desaparecen, la aggregate también desaparece, así no anuncias un resumen de redes que no son alcanzables. <code>show route 10.20.0.0/16 exact detail</code> lista las rutas contribuyentes.</p>
+<p>El siguiente salto de una ruta aggregate es reject por defecto. Puede parecer raro al principio, pero tiene sentido. El router reenvía los paquetes de una subred específica usando la ruta contribuyente más específica, gracias a la coincidencia más larga. Los paquetes que coinciden solo con la aggregate van a partes no usadas del rango, y descartarlos evita bucles de enrutamiento, por ejemplo entre tú y un vecino que tiene una ruta por defecto que apunta de vuelta hacia ti. Puedes cambiar la acción a <code>discard</code> para descartes silenciosos. Las rutas aggregate tienen una preferencia por defecto de 130.</p>
+<p>Crear una aggregate no la anuncia. Igual necesitas una política de enrutamiento que la exporte a OSPF o BGP, por ejemplo un término que coincida con <code>from protocol aggregate</code> y <code>route-filter 10.20.0.0/16 exact</code> con <code>then accept</code>. A menudo también quieres evitar que se anuncien las rutas específicas, para que solo salga el resumen.</p>
+<p>Junos también tiene rutas generated, configuradas bajo <code>routing-options generate</code>. También dependen de rutas contribuyentes y tienen preferencia 130, pero en lugar de reject toman el siguiente salto de la ruta contribuyente primaria. Las rutas generated se usan a menudo para crear una ruta por defecto condicional que existe solo mientras están presentes ciertas rutas aguas arriba.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Default route (ruta por defecto)</dt><dd>La ruta 0.0.0.0/0 (o ::/0) que coincide con cualquier destino no cubierto por una ruta más específica.</dd><dt>Aggregate route (ruta aggregate)</dt><dd>Una ruta resumen bajo <code>routing-options aggregate</code>, activa solo cuando existe una ruta contribuyente, con un siguiente salto reject por defecto.</dd><dt>Contributing route (ruta contribuyente)</dt><dd>Una ruta activa y más específica que cae dentro de una ruta aggregate o generated y la mantiene activa.</dd><dt>Generated route (ruta generated)</dt><dd>Una ruta tipo resumen que toma el siguiente salto de su ruta contribuyente primaria en lugar de reject.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una oficina regional tiene 10.20.0.0/16, dividida en decenas de subredes /24. Su router de borde crea una aggregate para 10.20.0.0/16 y exporta solo esa en BGP hacia el núcleo. La tabla del núcleo contiene una ruta en lugar de decenas, y cuando una sola /24 oscila en la oficina, el núcleo no lo nota.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Una aggregate necesita al menos una ruta contribuyente para estar activa, usa preferencia 130, tiene reject como siguiente salto por defecto y no se anuncia hasta que una política de exportación la envía.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué debe existir para que una ruta aggregate se vuelva activa?</summary><p>Al menos una ruta contribuyente activa y más específica dentro del rango de la aggregate.</p></details>
+<details class="sq"><summary>¿Qué le pasa a un paquete que coincide solo con la ruta aggregate y con ninguna ruta contribuyente?</summary><p>Se rechaza (se descarta con ICMP unreachable) por defecto, o se descarta en silencio si se configuró con discard.</p></details>
+<details class="sq"><summary>¿En qué se diferencia una ruta generated de una ruta aggregate?</summary><p>Una ruta generated usa el siguiente salto de su ruta contribuyente primaria en lugar de reject.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia JNCIA-Junos gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../jncia-junos/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../static-routes-routing-options-static-next-hop-qualified-next-hop-with/">← Rutas estáticas: `routing-options static`, next-hop, qualifi</a><a href="../dynamic-routing-concepts-why-igps-and-egps-exist-ospf-and-bgp-at-a-hig/">Conceptos de enrutamiento dinámico: por qué existen los IGP  →</a></nav>
+</main>
+</body>
+</html>

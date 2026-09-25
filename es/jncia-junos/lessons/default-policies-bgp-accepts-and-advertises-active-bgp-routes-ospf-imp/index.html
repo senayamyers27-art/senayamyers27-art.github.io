@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Políticas por defecto: BGP acepta y anuncia las rutas BGP … · Lección de JNCIA-Junos</title>
+<meta name="description" content="Cada protocolo de enrutamiento en Junos tiene una política por defecto incorporada. Se aplica automáticamente al final de cualquier cadena de políticas, as">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Políticas por defecto: BGP acepta y anuncia las rutas BGP … · Lección de JNCIA-Junos">
+<meta property="og:description" content="Cada protocolo de enrutamiento en Junos tiene una política por defecto incorporada. Se aplica automáticamente al final de cualquier cadena de políticas, as">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/jncia-junos/lessons/default-policies-bgp-accepts-and-advertises-active-bgp-routes-ospf-imp/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/jncia-junos/lessons/default-policies-bgp-accepts-and-advertises-active-bgp-routes-ospf-imp/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../jncia-junos/">JNCIA-Junos</a> / <a href="../">Lecciones</a> · <a href="../../../../jncia-junos/lessons/default-policies-bgp-accepts-and-advertises-active-bgp-routes-ospf-imp/" hreflang="en" lang="en">English</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106</p>
+<h1>Políticas por defecto: BGP acepta y anuncia las rutas BGP activas; OSPF import acepta todo y export rechaza todo; RIP export rechaza todo</h1>
+<article class="lbody">
+<p>Cada protocolo de enrutamiento en Junos tiene una política por defecto incorporada. Se aplica automáticamente al final de cualquier cadena de políticas, así que decide qué pasa con una ruta que ninguna de tus políticas configuradas acepta o rechaza explícitamente. Si no configuras ninguna política, la política por defecto es lo único que se aplica. Conocer el valor por defecto de cada protocolo explica mucho comportamiento que sorprende a los principiantes.</p>
+<p>La política de importación por defecto de BGP acepta todas las rutas BGP recibidas de los vecinos, así que se colocan en la tabla de enrutamiento (sujetas a las verificaciones normales, como la detección de bucles). La política de exportación por defecto de BGP anuncia todas las rutas BGP activas a los vecinos BGP. Hay una restricción importante que viene del propio protocolo: las rutas aprendidas de un peer IBGP no se anuncian a otros peers IBGP, por eso IBGP normalmente necesita una malla completa (full mesh) o route reflectors. Fíjate en lo que el valor por defecto no hace: no anuncia rutas static, direct, OSPF ni aggregate en BGP. Para anunciar tus propios prefijos, necesitas una política de exportación.</p>
+<p>La política de importación por defecto de OSPF acepta todas las rutas OSPF. La política de exportación por defecto de OSPF rechaza todo. Eso suena alarmante hasta que recuerdas cómo funciona OSPF: los routers comparten sus propios enlaces y vecinos mediante LSA, que el propio protocolo genera e inunda, no la política. Así que OSPF sigue intercambiando toda la información OSPF interna con normalidad; el valor por defecto de exportación solo significa que no se inyectan rutas que no son de OSPF, como las estáticas o una ruta por defecto. Cuando quieres anunciar una ruta estática por defecto en OSPF, escribes una política de exportación para ella.</p>
+<p>La política de importación por defecto de RIP acepta las rutas RIP de los vecinos, pero su política de exportación por defecto rechaza todo. A diferencia de OSPF, RIP aprende y anuncia rutas a través de la tabla de enrutamiento, así que con la política de exportación por defecto un router Junos que ejecuta RIP recibe rutas pero no anuncia nada, ni siquiera sus redes directamente conectadas ni las rutas que aprendió por RIP. Para que RIP funcione siempre necesitas una política de exportación, normalmente una que acepte <code>from protocol [ rip direct ]</code>.</p>
+<pre class="code" tabindex="0"><code>set policy-options policy-statement RIP-OUT term 1 from protocol [ rip direct ]
+set policy-options policy-statement RIP-OUT term 1 then accept
+set protocols rip group NEIGHBORS export RIP-OUT
+set protocols rip group NEIGHBORS neighbor ge-0/0/1.0</code></pre>
+<p>Resumiendo los valores por defecto en un solo lugar: BGP acepta todas las rutas BGP recibidas y anuncia las rutas BGP activas; OSPF acepta todo y no exporta nada adicional (aunque sigue inundando su propia información de estado de enlace); RIP acepta las rutas RIP recibidas y no anuncia nada. Cuando un protocolo no se comporta como esperas, la primera pregunta es si tu cadena de políticas termina cayendo en uno de estos valores por defecto.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Default policy (política por defecto)</dt><dd>La política incorporada y específica de cada protocolo que se evalúa después de todas las políticas configuradas cuando ninguna tomó una decisión final.</dd><dt>BGP default export (export por defecto de BGP)</dt><dd>Anuncia las rutas BGP activas a los peers BGP, excepto que las rutas aprendidas por IBGP no se envían a otros peers IBGP.</dd><dt>OSPF default export (export por defecto de OSPF)</dt><dd>Rechaza todas las rutas; la propia información de estado de enlace de OSPF igual la inunda el protocolo.</dd><dt>RIP default export (export por defecto de RIP)</dt><dd>Rechaza todas las rutas, así que un router RIP no anuncia nada hasta que se configura una política de exportación.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un ingeniero habilita RIP en dos routers de laboratorio y no ve llegar rutas en ninguno. <code>show route protocol rip</code> está vacío en ambos. Como la política de exportación por defecto de RIP rechaza todo, ningún router está anunciando. Agregar en cada router una política de exportación que acepte las rutas RIP y direct hace que las rutas aparezcan en segundos.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> La trampa de RIP es común: RIP necesita una política de exportación incluso para anunciar sus propias redes conectadas. Para OSPF, 'export rechaza todo' no detiene el funcionamiento normal de OSPF; solo detiene la redistribución de otras rutas.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Sin ninguna política, ¿un router BGP de Junos anunciará sus rutas estáticas a los peers?</summary><p>No. El export por defecto de BGP anuncia solo las rutas BGP activas; las rutas estáticas necesitan una política de exportación.</p></details>
+<details class="sq"><summary>¿Por qué OSPF sigue funcionando con una política de exportación por defecto que rechaza todas las rutas?</summary><p>OSPF comparte su topología mediante LSA que inunda el propio protocolo, no mediante la política de exportación.</p></details>
+<details class="sq"><summary>¿Qué debes agregar para que un router Junos anuncie algo por RIP?</summary><p>Una política de exportación bajo el grupo RIP, por ejemplo una que acepte <code>from protocol [ rip direct ]</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia JNCIA-Junos gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../jncia-junos/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../routing-policy-uses-import-into-the-routing-table-and-export-out-of-th/">← Usos de la política de enrutamiento: import (hacia la tabla </a><a href="../policy-structure-terms-from-match-conditions-then-actions-terminating/">Estructura de una política: términos, condiciones de coincid →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Etapas y acciones de CodePipeline, aprobaciones manuales; … · Lección de Developer Associate</title>
+<meta name="description" content="La integración continua y la entrega continua (CI/CD) automatizan el camino desde un cambio de código hasta una versión en ejecución. En AWS, AWS CodePipel">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Etapas y acciones de CodePipeline, aprobaciones manuales; … · Lección de Developer Associate">
+<meta property="og:description" content="La integración continua y la entrega continua (CI/CD) automatizan el camino desde un cambio de código hasta una versión en ejecución. En AWS, AWS CodePipel">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/codepipeline-stages-and-actions-manual-approvals-codebuild-buildspec-p/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/codepipeline-stages-and-actions-manual-approvals-codebuild-buildspec-p/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/codepipeline-stages-and-actions-manual-approvals-codebuild-buildspec-p/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Etapas y acciones de CodePipeline, aprobaciones manuales; fases y artefactos del buildspec de CodeBuild</h1>
+<article class="lbody">
+<p>La integración continua y la entrega continua (CI/CD) automatizan el camino desde un cambio de código hasta una versión en ejecución. En AWS, AWS CodePipeline orquesta el flujo y AWS CodeBuild se encarga de compilar y probar.</p>
+<p>Una canalización de CodePipeline está formada por etapas que se ejecutan en orden, como Source, Build, Test, Approve y Deploy. Cada etapa contiene una o más acciones, que pueden ejecutarse de forma secuencial o en paralelo (usando el orden de ejecución, run order). Las categorías de acciones son source, build, test, deploy, approval e invoke. Las acciones de origen incluyen AWS CodeCommit, Amazon S3, Amazon ECR y repositorios de terceros como GitHub o Bitbucket mediante una conexión. Las acciones de compilación y prueba suelen usar CodeBuild. Las acciones de despliegue incluyen CodeDeploy, CloudFormation, Elastic Beanstalk, Amazon ECS y S3. Las acciones invoke pueden llamar a una función Lambda o ejecutar una máquina de estados de Step Functions para pasos personalizados. Las acciones se pasan archivos entre sí como artefactos, almacenados en el bucket de artefactos de S3 de la canalización: una acción declara artefactos de salida, y una acción posterior los nombra como artefactos de entrada. Una canalización se inicia con los cambios en el origen (mediante eventos o webhooks) y cada ejecución es una execution; si una acción falla, la etapa falla y la ejecución se detiene.</p>
+<p>Una acción de aprobación manual pausa la canalización hasta que alguien con los permisos de IAM adecuados la apruebe o la rechace, por ejemplo antes de desplegar en producción. Puede notificar a los revisores mediante un tema de SNS e incluir una URL para que la revisen, como un sitio de staging. Si nadie responde en siete días, la acción falla.</p>
+<p>CodeBuild es un servicio de compilación completamente administrado: cada compilación se ejecuta en un contenedor nuevo a partir de una imagen de compilación, instala herramientas, ejecuta tus comandos y sube las salidas. Describes la compilación en <code>buildspec.yml</code> en la raíz del código fuente (o especificas un archivo alternativo o un buildspec en línea en el proyecto).</p>
+<pre class="code" tabindex="0"><code>version: 0.2
+env:
+  variables:
+    STAGE: test
+  parameter-store:
+    DB_URL: /myapp/test/db-url
+phases:
+  install:
+    runtime-versions:
+      python: 3.12
+    commands:
+      - pip install -r requirements.txt
+  pre_build:
+    commands:
+      - pytest tests/unit
+  build:
+    commands:
+      - sam build
+  post_build:
+    commands:
+      - sam package --s3-bucket my-artifacts --output-template-file packaged.yaml
+artifacts:
+  files:
+    - packaged.yaml
+cache:
+  paths:
+    - /root/.cache/pip/**/*</code></pre>
+<p>Las fases se ejecutan en orden: <code>install</code> (instalar runtimes y herramientas), <code>pre_build</code> (iniciar sesión en ECR, ejecutar pruebas unitarias, obtener dependencias), <code>build</code> (compilar o empaquetar) y <code>post_build</code> (subir imágenes, empaquetar, notificar). La sección <code>env</code> proporciona variables simples y valores de Parameter Store o Secrets Manager, para que los secretos no queden escritos en el archivo. <code>artifacts</code> enumera los archivos que se suben como salida de la compilación, que CodePipeline pasa a la siguiente etapa. <code>reports</code> publica los resultados de las pruebas, y <code>cache</code> guarda las dependencias en S3 o localmente para acelerar compilaciones posteriores. Los logs de compilación van a CloudWatch Logs o a S3. El rol de servicio de CodeBuild necesita permisos para todo lo que hace la compilación, como subir a ECR o leer parámetros. CodeBuild también puede ejecutarse dentro de tu VPC para llegar a recursos privados, y puedes ejecutar compilaciones localmente con el agente local de CodeBuild para depurar.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Stage (etapa)</dt><dd>Un paso secuencial de una canalización de CodePipeline que contiene una o más acciones.</dd><dt>Action (acción)</dt><dd>Una tarea dentro de una etapa, como obtener el código fuente, una compilación de CodeBuild, un despliegue o una aprobación manual.</dd><dt>Artifact (artefacto)</dt><dd>Archivos producidos por una acción de la canalización y consumidos por otra, almacenados en el bucket de S3 de la canalización.</dd><dt>buildspec.yml</dt><dd>El archivo YAML que define el entorno, las fases, los artefactos, los informes y la caché de CodeBuild.</dd><dt>Manual approval (aprobación manual)</dt><dd>Una acción de la canalización que pausa la ejecución hasta que una persona autorizada la aprueba o la rechaza.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una canalización tiene Source (conexión con GitHub), Build (CodeBuild ejecuta pruebas unitarias y sam package), DeployStaging (CloudFormation), una acción de Approval que envía un correo a la líder de QA mediante SNS con la URL de staging, y DeployProd. La líder de QA aprueba después de revisar staging, y el mismo artefacto empaquetado se despliega en producción.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El orden de las fases del buildspec es install, pre_build, build, post_build. Los archivos que necesita la siguiente etapa de la canalización deben enumerarse en artifacts. Guarda los secretos en env con parameter-store o secrets-manager, nunca en el buildspec.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo obtiene una etapa de despliegue los archivos producidos por la etapa de compilación?</summary><p>La acción de compilación declara un artefacto de salida y la acción de despliegue lo usa como artefacto de entrada, almacenado en el bucket de artefactos de S3 de la canalización.</p></details>
+<details class="sq"><summary>¿En qué fase del buildspec ejecutarías normalmente pruebas unitarias o iniciarías sesión en ECR?</summary><p>pre_build (aunque las pruebas también pueden ejecutarse en build).</p></details>
+<details class="sq"><summary>¿Qué pasa si nadie actúa sobre una aprobación manual?</summary><p>Espera, y falla si no se aprueba ni se rechaza en siete días, lo que detiene la ejecución.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../elastic-beanstalk-deployment-policies-all-at-once-rolling-rolling-with/">← Políticas de despliegue de Elastic Beanstalk: todo a la vez,</a><a href="../codedeploy-appspec-yml-lifecycle-hooks-for-ec2-lambda-and-ecs-the-code/">Hooks del ciclo de vida de appspec.yml de CodeDeploy para EC →</a></nav>
+</main>
+</body>
+</html>

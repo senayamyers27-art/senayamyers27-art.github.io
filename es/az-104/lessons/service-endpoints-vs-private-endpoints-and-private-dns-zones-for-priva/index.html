@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Puntos de conexión de servicio vs. puntos de conexión priv… · Lección de Azure Administrator</title>
+<meta name="description" content="Muchos servicios de la plataforma Azure, como Azure Storage, Azure SQL Database y Key Vault, se alcanzan de forma predeterminada mediante puntos de conexió">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Puntos de conexión de servicio vs. puntos de conexión priv… · Lección de Azure Administrator">
+<meta property="og:description" content="Muchos servicios de la plataforma Azure, como Azure Storage, Azure SQL Database y Key Vault, se alcanzan de forma predeterminada mediante puntos de conexió">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-104/lessons/service-endpoints-vs-private-endpoints-and-private-dns-zones-for-priva/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-104/lessons/service-endpoints-vs-private-endpoints-and-private-dns-zones-for-priva/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-104/">Azure Administrator</a> / <a href="../">Lecciones</a> · <a href="../../../../az-104/lessons/service-endpoints-vs-private-endpoints-and-private-dns-zones-for-priva/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure Administrator Associate AZ-104</p>
+<h1>Puntos de conexión de servicio vs. puntos de conexión privados, y zonas DNS privadas para Private Link</h1>
+<article class="lbody">
+<p>Muchos servicios de la plataforma Azure, como Azure Storage, Azure SQL Database y Key Vault, se alcanzan de forma predeterminada mediante puntos de conexión públicos en internet. Dos características permiten que los recursos de una VNet lleguen a ellos de forma más segura: los puntos de conexión de servicio (service endpoints) y los puntos de conexión privados (private endpoints). Suenan parecidos pero funcionan de forma muy diferente, y elegir entre ellos es un escenario frecuente del examen.</p>
+<p>Un punto de conexión de servicio es una configuración de una subred, como <code>Microsoft.Storage</code> o <code>Microsoft.Sql</code>. Una vez habilitado, el tráfico desde esa subred hacia el servicio viaja por la red troncal de Azure y lleva la identidad de la subred. El firewall del servicio puede entonces permitir esa subred específica (una regla de red virtual) y denegar todo lo demás. El servicio sigue usando su dirección IP pública, y la VM sigue conectándose al nombre público. Los puntos de conexión de servicio son gratuitos, rápidos de configurar, solo funcionan para el tráfico que se origina en subredes de Azure (no desde el entorno local por VPN) y permiten el acceso a todas las instancias de ese tipo de servicio, a menos que agregues una directiva de punto de conexión de servicio (service endpoint policy, disponible para Storage) que limite a qué cuentas se puede llegar.</p>
+<p>Un punto de conexión privado es una interfaz de red colocada en tu subred con una dirección IP privada, conectada mediante Azure Private Link a un recurso específico, como el servicio blob de una cuenta de almacenamiento o un servidor SQL. Los clientes se conectan a esa IP privada. Como es una dirección real en tu VNet, es accesible desde VNet emparejadas y desde el entorno local mediante VPN o ExpressRoute, y luego puedes deshabilitar por completo el acceso de red público en el recurso. Como se asigna a una sola instancia de recurso, también ayuda a evitar la exfiltración de datos hacia otras cuentas. Los puntos de conexión privados se facturan por hora y por gigabyte procesado.</p>
+<p>Los puntos de conexión privados solo funcionan si los clientes resuelven el nombre normal del servicio a la IP privada. Cuando creas un punto de conexión privado, el nombre DNS público, como <code>contoso.blob.core.windows.net</code>, obtiene un CNAME hacia un nombre <code>privatelink</code>, como <code>contoso.privatelink.blob.core.windows.net</code>. Creas una zona DNS privada de Azure con ese nombre privatelink, la vinculas a tus VNet y agregas un registro A para la IP privada. El portal hace esto por ti cuando eliges 'Integrate with private DNS zone', asociando un grupo de zonas DNS al punto de conexión para que los registros se mantengan automáticamente. Ejemplos: <code>privatelink.blob.core.windows.net</code> para blobs, <code>privatelink.file.core.windows.net</code> para archivos, <code>privatelink.database.windows.net</code> para Azure SQL, <code>privatelink.vaultcore.azure.net</code> para Key Vault.</p>
+<p>En una red hub-and-spoke, mantén las zonas privatelink en un solo lugar y vincúlalas a cada VNet que necesite resolución. Los servidores DNS locales deben reenviar las consultas de esas zonas hacia Azure, normalmente a un punto de conexión de entrada de Azure DNS Private Resolver, porque las máquinas locales no pueden consultar directamente Azure DNS en 168.63.129.16. Un síntoma clásico de DNS roto: <code>nslookup</code> devuelve una IP pública en lugar de la privada, y la conexión se rechaza porque el acceso público está deshabilitado.</p>
+<p>Regla práctica: punto de conexión de servicio para una forma sencilla y gratuita de restringir un servicio a subredes de Azure; punto de conexión privado cuando necesitas una IP privada, acceso desde el entorno local, un ámbito por recurso o el acceso público deshabilitado.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Service endpoint (punto de conexión de servicio)</dt><dd>Una configuración de subred que envía el tráfico a un servicio de Azure por la red troncal con la identidad de la subred, mientras el servicio conserva su IP pública.</dd><dt>Private endpoint (punto de conexión privado)</dt><dd>Una NIC con una IP privada en tu VNet que se conecta a un recurso específico mediante Private Link.</dd><dt>Private DNS zone (zona DNS privada)</dt><dd>Una zona de Azure DNS que solo se puede resolver desde las VNet vinculadas, usada para asignar nombres privatelink a IP privadas.</dd><dt>Service endpoint policy (directiva de punto de conexión de servicio)</dt><dd>Una directiva que restringe el tráfico del punto de conexión de servicio a cuentas específicas de Azure Storage.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una base de datos SQL debe ser accesible solo desde una subred de aplicaciones en Azure y desde un servidor de informes local por VPN, con el acceso público deshabilitado. Un punto de conexión de servicio no puede atender al servidor local, así que el administrador crea un punto de conexión privado, lo integra con la zona privatelink.database.windows.net vinculada a la VNet y configura el DNS local para reenviar esa zona a un punto de conexión de entrada de DNS Private Resolver.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Acceso desde el entorno local, deshabilitar el acceso público o limitar el ámbito a una sola instancia de recurso significa punto de conexión privado. Si falla una conexión por punto de conexión privado, revisa primero el DNS: el nombre debe resolverse a la IP privada mediante una zona privatelink.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué opción da a una base de datos de Azure SQL una dirección IP privada en tu VNet?</summary><p>Un punto de conexión privado.</p></details>
+<details class="sq"><summary>Después de crear un punto de conexión privado, el nslookup de una VM sigue devolviendo una IP pública. ¿Qué falta?</summary><p>Una zona DNS privada (como privatelink.database.windows.net) vinculada a la VNet de la VM con un registro A para el punto de conexión.</p></details>
+<details class="sq"><summary>¿Cuál es gratuito y se configura en una subred: el punto de conexión de servicio o el punto de conexión privado?</summary><p>El punto de conexión de servicio.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Azure Administrator gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-104/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../azure-bastion-azurebastionsubnet-skus-browser-and-native-client-access/">← Azure Bastion: AzureBastionSubnet, SKU y acceso por explorad</a><a href="../azure-dns-public-zones-delegation-record-sets-alias-records-private-dn/">Azure DNS: zonas públicas, delegación, conjuntos de registro →</a></nav>
+</main>
+</body>
+</html>

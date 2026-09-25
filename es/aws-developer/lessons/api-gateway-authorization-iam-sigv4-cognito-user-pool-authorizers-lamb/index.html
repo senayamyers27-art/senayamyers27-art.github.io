@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Autorización en API Gateway: IAM (SigV4), autorizadores de… · Lección de Developer Associate</title>
+<meta name="description" content="Amazon API Gateway puede comprobar quién llama antes de que una solicitud llegue a tu backend. Cada método (o ruta, en las HTTP API) elige un tipo de autor">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Autorización en API Gateway: IAM (SigV4), autorizadores de… · Lección de Developer Associate">
+<meta property="og:description" content="Amazon API Gateway puede comprobar quién llama antes de que una solicitud llegue a tu backend. Cada método (o ruta, en las HTTP API) elige un tipo de autor">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/api-gateway-authorization-iam-sigv4-cognito-user-pool-authorizers-lamb/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/api-gateway-authorization-iam-sigv4-cognito-user-pool-authorizers-lamb/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/api-gateway-authorization-iam-sigv4-cognito-user-pool-authorizers-lamb/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Autorización en API Gateway: IAM (SigV4), autorizadores de grupos de usuarios de Cognito, autorizadores Lambda, claves de API y planes de uso</h1>
+<article class="lbody">
+<p>Amazon API Gateway puede comprobar quién llama antes de que una solicitud llegue a tu backend. Cada método (o ruta, en las HTTP API) elige un tipo de autorización, y el examen espera que asocies la opción con el tipo de cliente que llama.</p>
+<p>La autorización de IAM (<code>AWS_IAM</code>) exige que las solicitudes estén firmadas con AWS Signature Version 4 (SigV4) usando credenciales de AWS. API Gateway verifica la firma y comprueba que la política de IAM de quien llama permita <code>execute-api:Invoke</code> sobre el ARN del método. Es la opción natural para quienes ya tienen credenciales de AWS: otros servicios de AWS, herramientas internas o usuarios de la aplicación que recibieron credenciales temporales de un grupo de identidades de Cognito. Las políticas de recursos en las REST API pueden además restringir el acceso por cuenta, IP de origen o VPC endpoint, que es como se protegen las API privadas.</p>
+<p>Un autorizador de grupo de usuarios de Cognito valida un JWT de un grupo de usuarios de Cognito, que el cliente envía en un encabezado como <code>Authorization</code>. API Gateway comprueba por sí mismo la firma y la expiración, sin que tengas que escribir código. En las REST API, si configuras scopes de OAuth en el método, el cliente debe enviar un token de acceso que contenga uno de ellos; sin scopes, funciona un token de ID. Las HTTP API ofrecen un autorizador JWT general que funciona con Cognito o con cualquier emisor compatible con OIDC. Tu backend puede leer los claims verificados desde el contexto de la solicitud.</p>
+<p>Un autorizador Lambda (antes llamado autorizador personalizado) ejecuta tu propia función para decidir. Un autorizador basado en token recibe un único valor de encabezado, como un bearer token; un autorizador basado en solicitud recibe encabezados, cadenas de consulta, variables de etapa y contexto. La función valida la credencial como quieras (un proveedor OAuth de terceros, un sistema de sesiones heredado) y devuelve un documento de política de IAM que permite o deniega <code>execute-api:Invoke</code>, más un <code>principalId</code> y valores de contexto opcionales que se pasan al backend. API Gateway puede guardar en caché la política devuelta durante un TTL configurable (300 segundos por defecto), con la fuente de identidad como clave, lo que reduce la latencia y el costo; ten cuidado de que la política en caché cubra todos los recursos que llamará el usuario, o las solicitudes posteriores podrían denegarse por error.</p>
+<p>Las claves de API y los planes de uso no son autenticación. Una clave de API es un identificador que el cliente envía en el encabezado <code>x-api-key</code>; puede compartirse o filtrarse, así que solo identifica qué cliente está llamando. Los planes de uso asocian claves de API con límites de limitación (solicitudes por segundo y ráfaga) y cuotas (solicitudes por día, semana o mes) para etapas específicas. Uso típico: ofrecer niveles gratuitos y de pago de una API pública. Combina las claves de API con un autorizador real si la API necesita seguridad. Cuando un cliente supera los límites recibe HTTP 429 Too Many Requests; una clave ausente o inválida en un método que la exige devuelve 403 Forbidden.</p>
+<p>Resumen: quienes llaman desde dentro o con credenciales de AWS usan IAM; los usuarios que iniciaron sesión en tu aplicación usan un autorizador de Cognito; los tokens de otros sistemas de identidad o la lógica personalizada usan un autorizador Lambda; la medición y la limitación por cliente usan claves de API con planes de uso.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>IAM authorization (autorización de IAM)</dt><dd>Autorización de API Gateway que exige solicitudes firmadas con SigV4 y una política de IAM que permita execute-api:Invoke.</dd><dt>Cognito user pool authorizer (autorizador de grupo de usuarios de Cognito)</dt><dd>Un autorizador de API Gateway que valida los JWT emitidos por un grupo de usuarios de Cognito sin código personalizado.</dd><dt>Lambda authorizer (autorizador Lambda)</dt><dd>Una función que recibe un token o parámetros de la solicitud y devuelve una política de IAM que permite o deniega la solicitud.</dd><dt>Usage plan (plan de uso)</dt><dd>Una configuración de API Gateway que aplica límites de limitación y cuotas a las claves de API asociadas a ella.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una empresa expone una API del clima. Los usuarios móviles inician sesión con Cognito, así que las rutas públicas usan un autorizador de grupo de usuarios de Cognito. Los socios que se integran desde sus servidores reciben claves de API asociadas a un plan de uso Gold que permite 100 solicitudes por segundo, y cada solicitud de socio también pasa por un autorizador Lambda que valida un token firmado por el socio.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Las claves de API sirven para identificar clientes y aplicar planes de uso, no para proteger una API. Si una pregunta necesita validación de tokens personalizada o de terceros, elige un autorizador Lambda; para tokens de Cognito sin código, elige un autorizador de Cognito.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué devuelve un autorizador Lambda?</summary><p>Un documento de política de IAM que permite o deniega execute-api:Invoke, un principalId y valores de contexto opcionales.</p></details>
+<details class="sq"><summary>¿Qué tipo de autorización debe usar un servicio interno con un rol de IAM para llamar a una API?</summary><p>La autorización de IAM, firmando las solicitudes con SigV4.</p></details>
+<details class="sq"><summary>¿Qué respuesta recibe un cliente por superar la limitación de un plan de uso?</summary><p>HTTP 429 Too Many Requests.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../amazon-cognito-user-pools-sign-up-sign-in-id-access-refresh-tokens-vs/">← Amazon Cognito: grupos de usuarios (registro, inicio de sesi</a><a href="../encryption-at-rest-sse-s3-sse-kms-sse-c-s3-bucket-keys-client-side-enc/">Cifrado en reposo: SSE-S3, SSE-KMS, SSE-C, S3 Bucket Keys, c →</a></nav>
+</main>
+</body>
+</html>

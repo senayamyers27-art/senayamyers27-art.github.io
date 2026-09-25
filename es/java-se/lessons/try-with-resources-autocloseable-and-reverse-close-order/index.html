@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>try-with-resources, AutoCloseable y cierre en orden inverso · Lección de OCP Java</title>
+<meta name="description" content="Muchos objetos mantienen recursos fuera de la JVM, como archivos abiertos, sockets de red y conexiones a bases de datos, y deben cerrarse cuando terminas. ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="try-with-resources, AutoCloseable y cierre en orden inverso · Lección de OCP Java">
+<meta property="og:description" content="Muchos objetos mantienen recursos fuera de la JVM, como archivos abiertos, sockets de red y conexiones a bases de datos, y deben cerrarse cuando terminas. ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/java-se/lessons/try-with-resources-autocloseable-and-reverse-close-order/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/java-se/lessons/try-with-resources-autocloseable-and-reverse-close-order/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../java-se/">OCP Java</a> / <a href="../">Lecciones</a> · <a href="../../../../java-se/lessons/try-with-resources-autocloseable-and-reverse-close-order/" hreflang="en" lang="en">English</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25)</p>
+<h1>try-with-resources, AutoCloseable y cierre en orden inverso</h1>
+<article class="lbody">
+<p>Muchos objetos mantienen recursos fuera de la JVM, como archivos abiertos, sockets de red y conexiones a bases de datos, y deben cerrarse cuando terminas. Cerrarlos de forma confiable en un bloque <code>finally</code> es verboso y fácil de hacer mal. La sentencia try-with-resources lo automatiza: los recursos declarados entre paréntesis después de <code>try</code> se cierran automáticamente cuando termina el bloque, tanto si termina normalmente como si lanza una excepción.</p>
+<p>Un recurso debe implementar <code>java.lang.AutoCloseable</code>, cuyo único método es <code>void close() throws Exception</code>. <code>java.io.Closeable</code> la extiende con <code>close() throws IOException</code> y la implementan los streams, readers y writers. Declarar en la lista de recursos una variable de una clase que no implementa ninguna de las dos interfaces es un error de compilación. Tus propias clases pueden implementar <code>AutoCloseable</code> y usarse de la misma forma.</p>
+<p>Los recursos se declaran entre los paréntesis y se separan con punto y coma (se permite un punto y coma final). Cada variable de recurso es implícitamente <code>final</code> y está en alcance solo dentro del bloque <code>try</code>, no en <code>catch</code> ni en <code>finally</code>. Desde Java 9 también puedes listar una variable existente declarada antes de la sentencia, siempre que sea final o efectivamente final: <code>try (reader) { ... }</code>. Una sentencia try-with-resources puede no tener ningún <code>catch</code> ni <code>finally</code>, pero cualquier excepción checked lanzada por <code>close()</code> todavía debe manejarse o declararse.</p>
+<p>El orden es el detalle más evaluado. Los recursos se abren en el orden en que se declaran y se cierran en orden inverso, así que el último abierto se cierra primero. El cierre ocurre justo después de que termina el bloque <code>try</code>, antes de que se ejecute cualquier bloque <code>catch</code> o <code>finally</code>. Si la inicialización de un recurso lanza una excepción, solo se cierran los recursos que ya se habían abierto.</p>
+<pre class="code" tabindex="0"><code>class Res implements AutoCloseable {
+    private final String name;
+    Res(String name) { this.name = name; System.out.print(&quot;open-&quot; + name + &quot; &quot;); }
+    public void close() { System.out.print(&quot;close-&quot; + name + &quot; &quot;); }
+}
+
+try (var a = new Res(&quot;A&quot;); var b = new Res(&quot;B&quot;)) {
+    System.out.print(&quot;body &quot;);
+    throw new RuntimeException();
+} catch (RuntimeException e) {
+    System.out.print(&quot;catch &quot;);
+} finally {
+    System.out.print(&quot;finally&quot;);
+}
+// open-A open-B body close-B close-A catch finally</code></pre>
+<p>Observa que la implementación de <code>close()</code> en <code>Res</code> no declara ninguna excepción. Un método que sobrescribe puede lanzar menos excepciones que <code>AutoCloseable.close()</code>, y cuando lo hace, el compilador ya no te obliga a manejar <code>Exception</code>. Si mantienes el <code>throws Exception</code> en tu clase, cada try-with-resources que la use debe manejar o declarar <code>Exception</code>.</p>
+<p>En código real, usa try-with-resources para cada archivo o conexión que abras, como <code>try (var in = Files.newBufferedReader(path))</code>, en lugar de llamar a <code>close()</code> tú mismo.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>try-with-resources</dt><dd>Una sentencia try que declara recursos entre paréntesis y los cierra automáticamente al final del bloque.</dd><dt>AutoCloseable</dt><dd>La interfaz con un único método close() que un recurso debe implementar para usarse en try-with-resources.</dd><dt>Closeable</dt><dd>Una subinterfaz de AutoCloseable usada por las clases de E/S, cuyo close() lanza IOException.</dd><dt>Reverse close order (cierre en orden inverso)</dt><dd>Los recursos se cierran en el orden opuesto al de su declaración: el último abierto es el primero en cerrarse.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una exportación a CSV abre una conexión a la base de datos, un statement y un writer de archivo en un solo try-with-resources. Si falla la escritura de una fila, primero se cierra el writer, luego el statement, luego la conexión, y solo entonces el bloque catch registra el error, así que no se filtran recursos.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Rastrea el orden: abrir en orden de declaración, cuerpo, cerrar en orden inverso, luego catch, luego finally. Las variables de recurso son final y no son visibles en catch ni en finally.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>En <code>try (var x = new R(&quot;1&quot;); var y = new R(&quot;2&quot;))</code>, ¿qué recurso se cierra primero?</summary><p>y (&quot;2&quot;), porque los recursos se cierran en orden inverso a su declaración.</p></details>
+<details class="sq"><summary>¿Los recursos se cierran antes o después de que se ejecute el bloque catch?</summary><p>Antes. Se cierran en cuanto termina el bloque try, y luego se ejecutan catch y finally.</p></details>
+<details class="sq"><summary>¿Puedes usar una variable existente en try-with-resources?</summary><p>Sí, desde Java 9, si es final o efectivamente final: try (existingResource) { }.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia OCP Java gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../java-se/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../catch-block-ordering-and-unreachable-catch-compile-errors/">← Orden de los bloques catch y errores de compilación por catc</a><a href="../suppressed-exceptions-and-throwable-getsuppressed/">Excepciones suprimidas y Throwable.getSuppressed() →</a></nav>
+</main>
+</body>
+</html>

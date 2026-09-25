@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Listar e identificar contextos de SELinux de archivos y pr… · Lección de RHCSA</title>
+<meta name="description" content="Todo lo que decide SELinux se basa en etiquetas llamadas contextos de seguridad. Cada archivo, directorio, proceso, puerto y sesión de usuario tiene uno. A">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Listar e identificar contextos de SELinux de archivos y pr… · Lección de RHCSA">
+<meta property="og:description" content="Todo lo que decide SELinux se basa en etiquetas llamadas contextos de seguridad. Cada archivo, directorio, proceso, puerto y sesión de usuario tiene uno. A">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/listing-and-identifying-selinux-file-and-process-contexts-ls-z-ps-ez-i/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/listing-and-identifying-selinux-file-and-process-contexts-ls-z-ps-ez-i/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/listing-and-identifying-selinux-file-and-process-contexts-ls-z-ps-ez-i/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Listar e identificar contextos de SELinux de archivos y procesos (ls -Z, ps -eZ, id -Z)</h1>
+<article class="lbody">
+<p>Todo lo que decide SELinux se basa en etiquetas llamadas contextos de seguridad. Cada archivo, directorio, proceso, puerto y sesión de usuario tiene uno. Antes de poder corregir un problema de SELinux, necesitas leer estas etiquetas y darte cuenta de cuándo una está mal. Casi todas las tareas de SELinux del RHCSA empiezan con una opción <code>-Z</code>.</p>
+<p>Un contexto tiene cuatro campos separados por dos puntos: usuario, rol, tipo y nivel, por ejemplo <code>system_u:object_r:httpd_sys_content_t:s0</code>. El usuario y el rol de SELinux importan poco en la política targeted predeterminada. El tipo, que termina en <code>_t</code>, es la parte que importa: las reglas de la política targeted se escriben como qué tipo de proceso puede hacer qué con qué tipo de objeto. Esto se llama type enforcement (aplicación de tipos). El nivel (<code>s0</code>) se usa para la seguridad multinivel y normalmente se puede ignorar.</p>
+<p>Muchos comandos estándar aceptan <code>-Z</code>. <code>ls -Z</code> muestra los contextos de los archivos, y <code>ls -dZ</code> muestra el propio directorio. <code>ps -eZ</code> (o <code>ps axZ</code>) muestra el contexto de cada proceso, así que puedes ver que el servidor web se ejecuta como <code>httpd_t</code>. <code>id -Z</code> muestra tu propio contexto, normalmente <code>unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023</code> para un inicio de sesión normal, lo que significa que la política targeted no confina tu shell. <code>ss -Z</code> muestra los sockets con los contextos de los procesos.</p>
+<pre class="code" tabindex="0"><code>ls -Z /var/www/html/index.html
+# unconfined_u:object_r:httpd_sys_content_t:s0 /var/www/html/index.html
+ps -eZ | grep httpd
+# system_u:system_r:httpd_t:s0   1234 ?  00:00:00 httpd
+id -Z</code></pre>
+<p>Leerlos explica la mayoría de los fallos. Un proceso de tipo <code>httpd_t</code> puede leer archivos etiquetados como <code>httpd_sys_content_t</code>, pero no archivos etiquetados como <code>user_home_t</code> o <code>admin_home_t</code>. Así que cuando el archivo de una página web muestra el tipo equivocado, ese es tu problema, aunque sus bits de permiso estén bien.</p>
+<p>¿De dónde vienen las etiquetas de los archivos? Un archivo nuevo normalmente hereda el tipo del directorio en el que se crea. Por eso <code>cp</code> hacia <code>/var/www/html</code> da la etiqueta correcta, mientras que <code>mv</code> desde un directorio personal conserva la antigua etiqueta de home, porque mover no crea un archivo nuevo. <code>cp -a</code> y <code>tar</code> con la opción <code>--selinux</code> conservan las etiquetas originales. La lista de la política con la etiqueta que debería tener cada ruta se muestra con <code>semanage fcontext -l</code>, y <code>matchpathcon /path</code> imprime la etiqueta esperada para una ruta.</p>
+<p>Compara la etiqueta real de <code>ls -Z</code> con la esperada; una discrepancia es lo que corrige <code>restorecon</code>, de la siguiente lección.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Security context (contexto de seguridad)</dt><dd>Una etiqueta de SELinux de la forma user:role:type:level asociada a archivos, procesos y puertos.</dd><dt>Type (tipo)</dt><dd>El campo del contexto que termina en _t y que usa la política targeted para decidir el acceso.</dd><dt>Type enforcement (aplicación de tipos)</dt><dd>Reglas de la política de SELinux que permiten a un tipo de proceso un acceso concreto a tipos de objeto.</dd><dt>unconfined_t</dt><dd>El tipo de las sesiones de inicio de sesión de los usuarios normales, que la política targeted no restringe.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una página que moviste a /var/www/html da 403 Forbidden mientras las demás funcionan. ls -Z muestra que el archivo nuevo es admin_home_t mientras que los demás son httpd_sys_content_t, y ps -eZ muestra que el servidor se ejecuta como httpd_t. La discrepancia viene de usar mv en lugar de cp, y reetiquetar el archivo lo corrige.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> mv conserva el contexto anterior de un archivo, mientras que cp crea un archivo nuevo con el contexto del directorio. Un archivo movido con el tipo equivocado es una trampa clásica del examen.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué campo de un contexto de SELinux es el más importante en la política targeted?</summary><p>El campo del tipo, que termina en _t.</p></details>
+<details class="sq"><summary>¿Cómo ves el contexto de los procesos httpd en ejecución?</summary><p>ps -eZ | grep httpd (o ps axZ).</p></details>
+<details class="sq"><summary>¿Por qué un archivo movido con mv conserva el contexto equivocado?</summary><p>mv conserva el archivo existente y su etiqueta, mientras que un archivo recién creado hereda el tipo del directorio.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../setting-selinux-enforcing-and-permissive-modes-getenforce-setenforce-e/">← Establecer los modos enforcing y permissive de SELinux (gete</a><a href="../restoring-default-file-contexts-restorecon-rv-and-adding-rules-with-se/">Restaurar los contextos de archivo predeterminados (restorec →</a></nav>
+</main>
+</body>
+</html>

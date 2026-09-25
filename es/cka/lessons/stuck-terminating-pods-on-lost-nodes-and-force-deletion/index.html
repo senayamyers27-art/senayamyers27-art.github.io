@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pods atascados en Terminating en nodos perdidos y borrado … · Lección de CKA</title>
+<meta name="description" content="Borrar un Pod normalmente es una conversación. El API server marca el Pod con una marca de tiempo de borrado y un período de gracia, el kubelet de su nodo ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Pods atascados en Terminating en nodos perdidos y borrado … · Lección de CKA">
+<meta property="og:description" content="Borrar un Pod normalmente es una conversación. El API server marca el Pod con una marca de tiempo de borrado y un período de gracia, el kubelet de su nodo ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/stuck-terminating-pods-on-lost-nodes-and-force-deletion/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/stuck-terminating-pods-on-lost-nodes-and-force-deletion/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/stuck-terminating-pods-on-lost-nodes-and-force-deletion/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Pods atascados en Terminating en nodos perdidos y borrado forzado</h1>
+<article class="lbody">
+<p>Borrar un Pod normalmente es una conversación. El API server marca el Pod con una marca de tiempo de borrado y un período de gracia, el kubelet de su nodo detiene los contenedores, enviando SIGTERM y más tarde SIGKILL, y luego lo confirma, después de lo cual se elimina el objeto Pod. Si el nodo está apagado, aislado de la red o su kubelet está muerto, la confirmación nunca llega y el Pod se queda en <code>Terminating</code> indefinidamente.</p>
+<p>Esto es deliberado. El control plane no puede distinguir un nodo muerto de un nodo que simplemente es inalcanzable pero sigue ejecutando el Pod. Eliminar el objeto Pod demasiado pronto podría permitir que arranque un reemplazo mientras el original sigue ejecutándose y escribiendo en los mismos datos. Para los Deployments eso suele ser tolerable, así que después de que el taint unreachable del nodo surte efecto (la toleration predeterminada es de 300 segundos), el ReplicaSet crea Pods de reemplazo en otro lugar aunque los viejos sigan apareciendo como Terminating. Para los StatefulSets no es tolerable: un StatefulSet no creará un nuevo <code>db-1</code> hasta que el <code>db-1</code> anterior haya desaparecido de verdad, porque garantiza como máximo un Pod por identidad. Así que un Pod de StatefulSet en un nodo perdido se queda caído.</p>
+<p>Cuando tengas la certeza de que el nodo está realmente muerto o de que sus cargas de trabajo están detenidas, puedes forzar el borrado del Pod. Esto elimina el objeto de la API de inmediato, sin esperar al kubelet.</p>
+<pre class="code" tabindex="0"><code>kubectl get pods -o wide | grep Terminating
+kubectl get node node03            # NotReady / Unknown
+kubectl delete pod db-1 --grace-period=0 --force</code></pre>
+<p>kubectl advierte que el borrado inmediato no espera la confirmación de que el proceso se detuvo. Ese es el riesgo: si el nodo vuelve con el contenedor todavía en ejecución, tienes brevemente dos copias, lo que para una base de datos puede significar split-brain o corrupción. El borrado forzado es una decisión, no un paso rutinario de limpieza.</p>
+<p>Existen opciones más seguras y amplias. Borrar el objeto Node (<code>kubectl delete node node03</code>) después de confirmar que ya no existe permite que el recolector de basura de Pods elimine todos los Pods asignados a él. Para un nodo que se apagó sin hacer drain, Kubernetes admite el taint <code>node.kubernetes.io/out-of-service</code> (por ejemplo con el valor nodeshutdown y el efecto NoExecute): aplicarlo le dice al control plane que el nodo está realmente fuera de servicio, así que sus Pods se borran de forma forzada y los volúmenes se desadjuntan, lo que permite que los Pods de StatefulSet y sus volúmenes se muevan a otro lugar. Quita el taint una vez recuperado el nodo.</p>
+<p>A veces un Pod, o cualquier objeto, se queda atascado en Terminating por otra razón: un finalizer que ningún controlador va a quitar. <code>kubectl get pod x -o jsonpath='{.metadata.finalizers}'</code> lo muestra. Quitar los finalizers con un patch fuerza el borrado, pero se salta la limpieza que protegían, así que primero entiende quién es su dueño.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Terminating</dt><dd>Estado del Pod que se muestra cuando hay una marca de tiempo de borrado pero el borrado no se ha confirmado.</dd><dt>Force deletion (borrado forzado)</dt><dd>Eliminar un objeto Pod de inmediato con --grace-period=0 --force, sin confirmación del kubelet.</dd><dt>out-of-service taint (taint de fuera de servicio)</dt><dd>Un taint de nodo que lo marca como apagado para que se limpien sus Pods y las conexiones de sus volúmenes.</dd><dt>Grace period (período de gracia)</dt><dd>El tiempo permitido entre SIGTERM y SIGKILL para que un contenedor se detenga; 30 segundos por defecto.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>node03 se quedó sin energía. Los Pods del Deployment se recrearon en otro lugar después de unos cinco minutos, pero el Pod mq-2 del StatefulSet sigue en Terminating en node03 y no aparece ningún reemplazo. Después de confirmar con el equipo del centro de datos que node03 está apagado, fuerzas el borrado de mq-2; el StatefulSet lo recrea en node01 y vuelve a adjuntar su volumen una vez que se limpia la conexión anterior.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Los Pods de StatefulSet en un nodo perdido no se reemplazan automáticamente; el borrado forzado (o el taint out-of-service) es la solución, pero solo después de confirmar que el nodo está realmente caído.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué Kubernetes deja un Pod en Terminating en un nodo inalcanzable en lugar de borrarlo?</summary><p>No puede confirmar que los contenedores se detuvieron, y borrarlo demasiado pronto podría permitir que se ejecute una segunda copia al mismo tiempo.</p></details>
+<details class="sq"><summary>¿Qué comando fuerza el borrado de un Pod?</summary><p><code>kubectl delete pod &lt;name&gt; --grace-period=0 --force</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../output-handling-for-tasks-o-jsonpath-custom-columns-sort-by-writing-an/">← Manejo de la salida en las tareas: -o jsonpath, custom-colum</a></nav>
+</main>
+</body>
+</html>

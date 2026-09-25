@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Revisiones de Container Apps: modo de revisión única vs mú… · Lección de AI-200</title>
+<meta name="description" content="Una revisión es una instantánea inmutable de una versión de una container app. Cada vez que cambias una configuración con alcance de revisión, Container Ap">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Revisiones de Container Apps: modo de revisión única vs mú… · Lección de AI-200">
+<meta property="og:description" content="Una revisión es una instantánea inmutable de una versión de una container app. Cada vez que cambias una configuración con alcance de revisión, Container Ap">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/container-apps-revisions-single-vs-multiple-revision-mode-traffic-spli/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/container-apps-revisions-single-vs-multiple-revision-mode-traffic-spli/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/container-apps-revisions-single-vs-multiple-revision-mode-traffic-spli/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Revisiones de Container Apps: modo de revisión única vs múltiple, división del tráfico y etiquetas</h1>
+<article class="lbody">
+<p>Una revisión es una instantánea inmutable de una versión de una container app. Cada vez que cambias una configuración con alcance de revisión, Container Apps crea una nueva revisión con un nombre generado como <code>orders--abc123</code> (o un sufijo que elijas). Los cambios con alcance de revisión son cualquier cosa bajo la sección <code>template</code> de la app: la imagen del contenedor, las variables de entorno, la CPU y la memoria, las reglas de escalado y las sondas. Los cambios con alcance de aplicación, como la configuración de ingress, los valores de los secretos y las credenciales del registro, se aplican a todas las revisiones y no crean una revisión nueva.</p>
+<p>Las revisiones te permiten avanzar y retroceder de forma segura. La revisión anterior sigue existiendo después de una actualización, así que puedes reactivarla o enviarle tráfico de nuevo. Cuántas revisiones están activas a la vez depende del modo de revisión de la app.</p>
+<p>En el modo de revisión única (single revision mode, el predeterminado), solo hay una revisión activa. Cuando despliegas un cambio, Container Apps inicia la nueva revisión y, una vez que está lista (sus réplicas superan las sondas de estado), le traslada todo el tráfico y desactiva la anterior. Esto te da actualizaciones sin tiempo de inactividad sin que tengas que gestionar el tráfico. Sirve para la mayoría de las apps que simplemente avanzan versión por versión.</p>
+<p>En el modo de revisión múltiple (multiple revision mode), varias revisiones pueden estar activas al mismo tiempo y tú decides cómo se reparte el tráfico de ingress entre ellas mediante pesos porcentuales. Eso permite despliegues blue-green (la nueva revisión recibe 0 por ciento hasta que se prueba y luego 100 por ciento) y lanzamientos canary (envías 10 o 20 por ciento a la nueva revisión y vigilas los errores y la latencia). La división del tráfico requiere que el ingress esté habilitado, porque es el ingress el que distribuye las solicitudes.</p>
+<pre class="code" tabindex="0"><code>az containerapp revision set-mode -n orders -g rg --mode multiple
+az containerapp update -n orders -g rg --image myregistry.azurecr.io/orders-api:20260920.1 --revision-suffix v2
+az containerapp ingress traffic set -n orders -g rg \
+  --revision-weight orders--v1=80 orders--v2=20
+az containerapp revision label add -n orders -g rg --label blue --revision orders--v1</code></pre>
+<p>Las etiquetas (labels) le dan a una revisión una URL estable y predecible. Una etiqueta como <code>green</code> asociada a una revisión produce una dirección como el FQDN de la app con <code>---green</code> añadido al segmento del nombre de la app, y sigue a la revisión que tenga la etiqueta. Los testers siempre pueden llegar a la candidata en la URL green, incluso cuando recibe 0 por ciento del tráfico principal, y más tarde puedes mover la etiqueta o intercambiar etiquetas entre revisiones. También puedes dividir el tráfico por pesos de etiqueta en lugar de por nombres de revisión.</p>
+<p>Cuidado con una trampa: en el modo de revisión múltiple, una nueva revisión no recibe tráfico automáticamente a menos que la configuración de tráfico lo indique (por ejemplo, con el peso <code>latestRevision</code>). Si despliegas y nada cambia para los usuarios, revisa los pesos del tráfico. Las revisiones desactivadas detienen sus réplicas y no cuestan nada, pero siguen disponibles para reactivarse.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Revision (revisión)</dt><dd>Una instantánea inmutable de la configuración con alcance de revisión de una container app, que se crea cada vez que cambia la plantilla.</dd><dt>Single revision mode (modo de revisión única)</dt><dd>El modo predeterminado en el que hay una sola revisión activa y una nueva revisión reemplaza a la anterior en cuanto está lista.</dd><dt>Multiple revision mode (modo de revisión múltiple)</dt><dd>Un modo que mantiene varias revisiones activas y reparte el tráfico de ingress entre ellas por peso.</dd><dt>Revision label (etiqueta de revisión)</dt><dd>Un puntero con nombre a una revisión que le da una URL estable independiente de su nombre generado.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un equipo quiere probar un nuevo modelo de recomendaciones con el 10 por ciento de los usuarios. Cambian la app orders al modo de revisión múltiple, despliegan la nueva imagen como revisión v2, configuran el tráfico en v1=90 y v2=10, y etiquetan v2 como canary para que QA pueda acceder a ella directamente. Tras un día de métricas saludables, mueven el tráfico a v2=100 y desactivan v1.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Los escenarios de división del tráfico, blue-green y canary requieren el modo de revisión múltiple; cambiar un secreto o una configuración de ingress nunca crea una nueva revisión, porque tienen alcance de aplicación.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué tipos de cambios crean una nueva revisión?</summary><p>Los cambios con alcance de revisión en la plantilla, como la imagen, las variables de entorno, los recursos y las reglas de escalado; los cambios con alcance de app, como los secretos o el ingress, no la crean.</p></details>
+<details class="sq"><summary>¿Qué le agrega una etiqueta a una revisión?</summary><p>Una URL estable que sigue a la etiqueta, para que puedas probar una revisión específica directamente, sin importar los pesos del tráfico.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../azure-container-apps-environments-ingress-external-vs-internal-secrets/">← Azure Container Apps: entornos, ingress (externo vs interno)</a><a href="../container-apps-scaling-http-rules-keda-event-rules-for-example-service/">Escalado de Container Apps: reglas HTTP, reglas de eventos d →</a></nav>
+</main>
+</body>
+</html>

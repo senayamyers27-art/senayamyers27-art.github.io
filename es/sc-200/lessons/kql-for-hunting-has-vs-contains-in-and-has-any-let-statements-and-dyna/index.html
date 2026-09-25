@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KQL para hunting: has vs. contains, in y has_any, instrucc… · Lección de SC-200</title>
+<meta name="description" content="Las consultas de hunting necesitan más que lo básico. Esta lección cubre los operadores que hacen que las búsquedas sean rápidas, reutilizables y capaces d">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="KQL para hunting: has vs. contains, in y has_any, instrucc… · Lección de SC-200">
+<meta property="og:description" content="Las consultas de hunting necesitan más que lo básico. Esta lección cubre los operadores que hacen que las búsquedas sean rápidas, reutilizables y capaces d">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/sc-200/lessons/kql-for-hunting-has-vs-contains-in-and-has-any-let-statements-and-dyna/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/sc-200/lessons/kql-for-hunting-has-vs-contains-in-and-has-any-let-statements-and-dyna/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../sc-200/">SC-200</a> / <a href="../">Lecciones</a> · <a href="../../../../sc-200/lessons/kql-for-hunting-has-vs-contains-in-and-has-any-let-statements-and-dyna/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Security Operations Analyst Associate SC-200</p>
+<h1>KQL para hunting: has vs. contains, in y has_any, instrucciones let y listas dinámicas, tipos de join, union, parse_json y mv-expand, make-series con funciones de anomalías</h1>
+<article class="lbody">
+<p>Las consultas de hunting necesitan más que lo básico. Esta lección cubre los operadores que hacen que las búsquedas sean rápidas, reutilizables y capaces de combinar datos.</p>
+<p>Primero, la coincidencia de cadenas. <code>has</code> busca un término completo usando el índice que Kusto construye a partir de las palabras del texto, así que es rápido. <code>contains</code> busca cualquier subcadena y tiene que recorrer el texto, así que es más lento. <code>ProcessCommandLine has &quot;mimikatz&quot;</code> coincide con la palabra mimikatz; <code>contains &quot;katz&quot;</code> coincidiría dentro de una palabra más larga. Ambos no distinguen mayúsculas y minúsculas; <code>has_cs</code> y <code>contains_cs</code> son las formas que sí las distinguen. Usa <code>has</code> siempre que busques una palabra completa, y <code>startswith</code> o <code>endswith</code> cuando la posición importe.</p>
+<p>Para listas, <code>in</code> verifica la igualdad exacta contra un conjunto de valores, por ejemplo <code>FileName in (&quot;psexec.exe&quot;, &quot;wmic.exe&quot;)</code>, e <code>in~</code> lo hace sin distinguir mayúsculas y minúsculas. <code>has_any</code> verifica si una columna de texto contiene alguno de una lista de términos, lo cual es ideal para líneas de comandos. Las instrucciones <code>let</code> le dan nombre a un valor, una lista o incluso una consulta completa para que puedas reutilizarla. Una lista dinámica se ve así: <code>let SuspiciousTools = dynamic([&quot;procdump&quot;, &quot;rclone&quot;]);</code> y luego se usa en <code>where ProcessCommandLine has_any (SuspiciousTools)</code>. Las instrucciones let terminan con punto y coma y hacen que las consultas sean más fáciles de leer y mantener.</p>
+<p><code>join</code> combina dos tablas por columnas coincidentes. El tipo predeterminado es innerunique, que elimina las claves duplicadas del lado izquierdo antes de hacer la coincidencia y puede sorprenderte. <code>inner</code> conserva todas las combinaciones coincidentes, <code>leftouter</code> conserva cada fila izquierda aunque no tenga coincidencia, <code>leftanti</code> conserva las filas izquierdas sin coincidencia (excelente para 'cuentas que iniciaron sesión pero nunca pasaron MFA'), y <code>leftsemi</code> conserva las filas izquierdas que sí tienen coincidencia sin agregar columnas de la derecha. Pon la tabla más pequeña a la izquierda para mejorar el rendimiento, y filtra ambos lados por tiempo primero. <code>union</code> es diferente: apila filas de varias tablas, por ejemplo <code>union DeviceProcessEvents, DeviceNetworkEvents</code>, lo cual es útil cuando el mismo indicador podría aparecer en fuentes distintas.</p>
+<p>Muchas columnas contienen JSON, como <code>AdditionalFields</code> o <code>RawEventData</code>. <code>parse_json()</code> (también llamada <code>todynamic()</code>) convierte una cadena JSON en un objeto dinámico cuyas propiedades accedes con notación de punto o de corchetes. Cuando una propiedad es un arreglo, <code>mv-expand</code> crea una fila por cada elemento del arreglo, así que puedes filtrar o resumir elementos individuales, como cada permiso otorgado a una aplicación.</p>
+<pre class="code" tabindex="0"><code>let lookback = 14d;
+SigninLogs
+| where TimeGenerated &gt; ago(lookback)
+| make-series Signins = count() default = 0 on TimeGenerated from ago(lookback) to now() step 1h by UserPrincipalName
+| extend (Anomalies, Score, Baseline) = series_decompose_anomalies(Signins)</code></pre>
+<p><code>make-series</code> construye una serie temporal por grupo, llenando los intervalos vacíos con un valor predeterminado para que la serie sea regular. Luego las funciones de series la analizan: <code>series_decompose_anomalies()</code> marca los puntos que se desvían del patrón esperado, teniendo en cuenta la estacionalidad y la tendencia, y devuelve indicadores de anomalía, puntuaciones y una línea base. Normalmente aplicas <code>mv-expand</code> al resultado para ver qué horas fueron anómalas. Así encuentras a un usuario cuyo volumen de inicios de sesión se dispara de repente.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>has vs. contains</dt><dd>has coincide rápidamente con términos completos indexados; contains coincide con cualquier subcadena y es más lento.</dd><dt>let</dt><dd>Una instrucción que le da nombre a un valor, una lista o una consulta para reutilizarlos más adelante en la consulta.</dd><dt>leftanti join</dt><dd>Un join que devuelve las filas del lado izquierdo que no tienen coincidencia en el derecho.</dd><dt>make-series</dt><dd>Un operador que construye series temporales regulares para analizarlas con funciones como series_decompose_anomalies().</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una cazadora de amenazas define con let una lista de nombres de herramientas de acceso remoto, usa has_any contra ProcessCommandLine en DeviceProcessEvents y hace un leftanti join de los resultados contra una watchlist de hosts de administración aprobados. Quedan doce dispositivos, y dos de ellos también muestran conexiones salientes a un dominio poco común cuando agrega DeviceNetworkEvents con union.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Al examen le gusta preguntar qué tipo de join encuentra registros sin coincidencia (leftanti) y por qué se prefiere has sobre contains (rendimiento con términos completos). Recuerda que el tipo de join predeterminado es innerunique.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué operador convierte cada elemento de una columna de arreglo en su propia fila?</summary><p>mv-expand.</p></details>
+<details class="sq"><summary>¿Cuál es la diferencia entre union y join?</summary><p>union apila filas de varias tablas; join combina columnas de dos tablas donde los valores clave coinciden.</p></details>
+<details class="sq"><summary>¿Qué función marca puntos inusuales en una serie temporal construida con make-series?</summary><p>series_decompose_anomalies().</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia SC-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../sc-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../kql-basics-where-project-extend-summarize-count-bin-ago-order-by-take/">← Fundamentos de KQL: where, project, extend, summarize, count</a><a href="../advanced-hunting-schema-deviceprocessevents-devicenetworkevents-device/">Esquema de advanced hunting: DeviceProcessEvents, DeviceNetw →</a></nav>
+</main>
+</body>
+</html>

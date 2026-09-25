@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Preparar artefactos: paquetes .zip vs imágenes de contened… · Lección de Developer Associate</title>
+<meta name="description" content="Antes de que el código pueda ejecutarse en Lambda u otro servicio, debe empaquetarse como un artefacto de despliegue. El examen evalúa los dos formatos de ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Preparar artefactos: paquetes .zip vs imágenes de contened… · Lección de Developer Associate">
+<meta property="og:description" content="Antes de que el código pueda ejecutarse en Lambda u otro servicio, debe empaquetarse como un artefacto de despliegue. El examen evalúa los dos formatos de ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/preparing-artifacts-zip-packages-vs-container-images-in-ecr-lambda-lay/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/preparing-artifacts-zip-packages-vs-container-images-in-ecr-lambda-lay/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/preparing-artifacts-zip-packages-vs-container-images-in-ecr-lambda-lay/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Preparar artefactos: paquetes .zip vs imágenes de contenedor en ECR, capas de Lambda, empaquetado de dependencias, CodeArtifact</h1>
+<article class="lbody">
+<p>Antes de que el código pueda ejecutarse en Lambda u otro servicio, debe empaquetarse como un artefacto de despliegue. El examen evalúa los dos formatos de empaquetado de Lambda, sus límites y cómo administrar las dependencias de forma limpia.</p>
+<p>Un archivo .zip contiene tu código y sus dependencias. Puedes subirlo directamente (hasta 50 MB comprimido) o desde S3 para archivos más grandes, y el tamaño descomprimido de la función más todas sus capas debe ser como máximo de 250 MB. Lambda lo ejecuta en un runtime administrado como Python, Node.js o Java, que AWS parchea por ti. Una imagen de contenedor se construye a partir de un Dockerfile, normalmente basado en una imagen base proporcionada por AWS para tu runtime (que incluye el Lambda Runtime Interface Client), se sube a Amazon Elastic Container Registry (ECR) y la función la referencia. Las imágenes pueden tener hasta 10 GB, lo que se ajusta a dependencias grandes como las bibliotecas de machine learning, y te permiten reutilizar las herramientas de contenedores existentes. La contrapartida: debes reconstruir y volver a desplegar para recibir los parches del runtime, y la imagen debe estar en ECR en la misma región (el acceso a ECR entre cuentas es posible con permisos del repositorio). No puedes cambiar una función existente entre .zip e imagen; debes crear una función nueva.</p>
+<p>Las dependencias deben empaquetarse para el entorno de Lambda, que ejecuta Amazon Linux en x86_64 o arm64. Para los lenguajes interpretados, esto significa instalar las bibliotecas en el directorio del paquete, por ejemplo <code>pip install -r requirements.txt -t package/</code>, y luego comprimir la carpeta del paquete con tu handler. Las bibliotecas con código nativo compilado deben construirse para el sistema operativo y la arquitectura correctos; compilar en una Mac o en Windows puede producir binarios que fallan con errores de importación en Lambda. Compila dentro de un contenedor equivalente (por ejemplo con <code>sam build --use-container</code>) o usa wheels específicos de la plataforma. Mantén los paquetes pequeños excluyendo pruebas, dependencias de desarrollo y versiones del SDK que ya están en el runtime, a menos que necesites fijar una versión específica del SDK.</p>
+<p>Las capas de Lambda empaquetan por separado las dependencias compartidas o el código común para que muchas funciones puedan reutilizarlas y el paquete propio de cada función se mantenga pequeño (lo que además te permite editar el código en la consola). El contenido de las capas se extrae en <code>/opt</code>, y los runtimes buscan en subcarpetas específicas, por ejemplo <code>python/</code> para las bibliotecas de Python y <code>nodejs/node_modules/</code> para Node.js. Una función puede usar hasta cinco capas. Las capas también entregan extensiones de Lambda, como agentes de monitoreo.</p>
+<p>AWS CodeArtifact es un repositorio administrado de artefactos para paquetes de software: npm, PyPI, Maven, NuGet y otros. Un dominio agrupa repositorios, y los repositorios pueden tener repositorios upstream y conexiones externas (por ejemplo, al registro público de npm), así que tus compilaciones obtienen los paquetes públicos a través de una copia controlada y en caché, mientras que también publicas paquetes internos privados. Los desarrolladores y CodeBuild se autentican con un token de corta duración, por ejemplo <code>aws codeartifact login --tool pip --domain my-domain --repository my-repo</code>, que configura el gestor de paquetes. Esto da compilaciones consistentes, una auditoría de qué paquetes se usan y protección si un paquete público desaparece.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>.zip deployment package (paquete de despliegue .zip)</dt><dd>Un archivo con el código de la función y sus dependencias que se despliega en un runtime administrado de Lambda.</dd><dt>Container image function (función de imagen de contenedor)</dt><dd>Una función Lambda empaquetada como una imagen OCI de hasta 10 GB, almacenada en Amazon ECR.</dd><dt>Amazon ECR</dt><dd>Elastic Container Registry, el registro administrado de AWS para imágenes de contenedor.</dd><dt>AWS CodeArtifact</dt><dd>Un repositorio de paquetes administrado que actúa como proxy de registros públicos y aloja paquetes privados para las herramientas de compilación.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>La función de un equipo de ciencia de datos necesita 3 GB de bibliotecas de Python, muy por encima del límite de 250 MB descomprimidos para paquetes .zip. Construyen una imagen de contenedor a partir de la imagen base de Python de AWS, la suben a ECR y crean la función a partir del URI de la imagen.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Dependencias de más de 250 MB descomprimidas apuntan a imágenes de contenedor (hasta 10 GB). Los errores de importación de bibliotecas nativas suelen significar que el paquete se compiló en un sistema operativo o arquitectura distintos a los de Lambda.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cuál es el tamaño máximo de una imagen de contenedor de Lambda?</summary><p>10 GB.</p></details>
+<details class="sq"><summary>¿Dónde queda disponible el contenido de las capas dentro del entorno de ejecución?</summary><p>Bajo /opt, en subdirectorios específicos del runtime como /opt/python.</p></details>
+<details class="sq"><summary>¿Por qué usar las conexiones externas de CodeArtifact?</summary><p>Para obtener los paquetes públicos a través de un repositorio administrado y en caché, de modo que las compilaciones sean consistentes, auditables y resistentes a cambios en el registro público.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../presigned-urls-for-temporary-s3-access-iam-access-analyzer-for-least-p/">← URL prefirmadas para acceso temporal a S3; IAM Access Analyz</a><a href="../aws-sam-template-structure-sam-build-sam-deploy-guided-sam-local-invok/">AWS SAM: estructura de la plantilla, sam build, sam deploy - →</a></nav>
+</main>
+</body>
+</html>

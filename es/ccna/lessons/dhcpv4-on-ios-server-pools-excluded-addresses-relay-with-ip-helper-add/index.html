@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DHCPv4 en IOS: pools del servidor, direcciones excluidas, … · Lección de CCNA</title>
+<meta name="description" content="DHCP (Dynamic Host Configuration Protocol, protocolo de configuración dinámica de host) reparte direcciones IP y parámetros automáticamente para que no ten">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="DHCPv4 en IOS: pools del servidor, direcciones excluidas, … · Lección de CCNA">
+<meta property="og:description" content="DHCP (Dynamic Host Configuration Protocol, protocolo de configuración dinámica de host) reparte direcciones IP y parámetros automáticamente para que no ten">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ccna/lessons/dhcpv4-on-ios-server-pools-excluded-addresses-relay-with-ip-helper-add/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ccna/lessons/dhcpv4-on-ios-server-pools-excluded-addresses-relay-with-ip-helper-add/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ccna/">CCNA</a> / <a href="../">Lecciones</a> · <a href="../../../../ccna/lessons/dhcpv4-on-ios-server-pools-excluded-addresses-relay-with-ip-helper-add/" hreflang="en" lang="en">English</a></p>
+<p class="note">Cisco CCNA 200-301 v2.0</p>
+<h1>DHCPv4 en IOS: pools del servidor, direcciones excluidas, relay con ip helper-address, solución de problemas de concesiones</h1>
+<article class="lbody">
+<p>DHCP (Dynamic Host Configuration Protocol, protocolo de configuración dinámica de host) reparte direcciones IP y parámetros automáticamente para que no tengas que configurar cada host a mano. Un router Cisco o un switch multicapa puede actuar como servidor DHCP en sitios pequeños y, más comúnmente, como relay (retransmisor) que reenvía las solicitudes a un servidor central. Necesitas conocer ambas configuraciones y cómo resolver sus problemas.</p>
+<p>El intercambio DHCP tiene cuatro pasos, que se recuerdan como DORA. El cliente envía por broadcast un Discover. El servidor responde con un Offer que contiene una dirección propuesta. El cliente envía por broadcast un Request para aceptar esa oferta (por broadcast para que los demás servidores sepan que sus ofertas fueron rechazadas). El servidor confirma con un Acknowledgment. Los clientes usan el puerto UDP 68 y los servidores el puerto UDP 67. Las concesiones expiran, así que los clientes intentan renovar con el servidor a la mitad del tiempo de concesión.</p>
+<p>Para configurar un servidor DHCP en IOS, primero excluye las direcciones que asignas estáticamente, como el gateway, los servidores y las impresoras, y luego crea un pool. Las exclusiones son comandos globales y se aplican a todos los pools.</p>
+<pre class="code" tabindex="0"><code>ip dhcp excluded-address 192.168.10.1 192.168.10.10
+ip dhcp pool LAN10
+ network 192.168.10.0 255.255.255.0
+ default-router 192.168.10.1
+ dns-server 192.168.1.53
+ domain-name example.local
+ lease 7</code></pre>
+<p>Como los mensajes Discover son broadcasts, no atraviesan routers. Cuando el servidor DHCP está en otra subred, configura un relay en la interfaz del router que da hacia los clientes: <code>ip helper-address 10.1.1.20</code> en la interfaz g0/1 (o en la SVI de la VLAN). El router recibe el broadcast, completa el campo giaddr (gateway IP address) con la dirección de su interfaz y envía la solicitud por unicast al servidor. El servidor usa giaddr para elegir el pool cuya red coincide, por eso el servidor debe tener un pool para la subred de ese cliente. De forma predeterminada, <code>ip helper-address</code> también reenvía otros servicios de broadcast UDP, como DNS y TFTP.</p>
+<p>Comandos útiles de verificación son <code>show ip dhcp binding</code> para ver las direcciones concedidas y los identificadores de cliente, <code>show ip dhcp pool</code> para ver la utilización, <code>show ip dhcp conflict</code> para las direcciones que el servidor encontró ya en uso, y <code>debug ip dhcp server events</code>. Un router también puede ser cliente DHCP en una interfaz con <code>ip address dhcp</code>, algo común en un enlace WAN hacia un proveedor de internet.</p>
+<p>Fallas comunes: no hay helper address en la interfaz que da hacia los clientes, así que los clientes remotos obtienen APIPA; un helper que apunta al servidor equivocado; un pool cuya sentencia <code>network</code> no coincide con la subred de los clientes; olvidar <code>default-router</code>, así que los clientes obtienen dirección pero no pueden salir de la subred; faltan las exclusiones, así que el servidor reparte la dirección del gateway; el pool se queda sin direcciones; y DHCP snooping descarta las ofertas en un puerto no confiable.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>DORA</dt><dd>El intercambio DHCP: Discover, Offer, Request, Acknowledgment.</dd><dt>ip dhcp excluded-address</dt><dd>Comando global de IOS que impide que el servidor DHCP conceda un rango de direcciones.</dd><dt>ip helper-address</dt><dd>Comando de interfaz que retransmite los broadcasts DHCP de los clientes como unicasts hacia un servidor en otra subred.</dd><dt>giaddr</dt><dd>El campo gateway IP address que completa un agente relay para que el servidor sepa en qué subred está el cliente.</dd><dt>show ip dhcp binding</dt><dd>Comando que lista las direcciones que el servidor DHCP de IOS ha concedido y a qué clientes.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Se crea una nueva VLAN 30 y su SVI recibe 10.30.0.1/24, pero las PC en ella reciben direcciones 169.254. El servidor DHCP central de Windows está en 10.1.1.20. Agregar <code>ip helper-address 10.1.1.20</code> bajo <code>interface vlan 30</code> y crear un ámbito 10.30.0.0/24 en el servidor lo resuelve, y la lista de concesiones del servidor para el nuevo ámbito confirma que los clientes están obteniendo direcciones.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> La helper address va en la interfaz que recibe los broadcasts de los clientes, no en la interfaz que da hacia el servidor. Esta ubicación es una trampa común del examen.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué pone el agente relay en giaddr, y por qué importa?</summary><p>La dirección IP de la interfaz que recibió el broadcast del cliente; el servidor la usa para elegir el pool o ámbito que coincide con la subred del cliente.</p></details>
+<details class="sq"><summary>Los clientes obtienen direcciones pero no pueden llegar a nada fuera de su subred. ¿Qué comando del pool probablemente se olvidó?</summary><p>default-router, que proporciona el gateway predeterminado.</p></details>
+<details class="sq"><summary>¿Por qué deberías excluir del pool la dirección de la interfaz del router?</summary><p>Porque, si no, el servidor podría conceder esa dirección a un cliente y crear un conflicto de dirección duplicada con el gateway.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CCNA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ccna/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../troubleshoot-wired-and-wireless-client-connectivity-verify-ip-settings/">← Solución de problemas de conectividad de clientes cableados </a><a href="../switching-concepts-mac-learning-and-aging-frame-forwarding-flooding-of/">Conceptos de conmutación: aprendizaje y envejecimiento de MA →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Conservar el journal de systemd entre reinicios (Storage=p… · Lección de RHCSA</title>
+<meta name="description" content="Por defecto, el journal de systemd en RHEL puede vivir solo en memoria. En ese caso journald escribe en /run/log/journal/, un directorio en un sistema de a">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Conservar el journal de systemd entre reinicios (Storage=p… · Lección de RHCSA">
+<meta property="og:description" content="Por defecto, el journal de systemd en RHEL puede vivir solo en memoria. En ese caso journald escribe en /run/log/journal/, un directorio en un sistema de a">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/preserving-the-systemd-journal-across-reboots-storage-persistent-var-l/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/preserving-the-systemd-journal-across-reboots-storage-persistent-var-l/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/preserving-the-systemd-journal-across-reboots-storage-persistent-var-l/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Conservar el journal de systemd entre reinicios (Storage=persistent, /var/log/journal)</h1>
+<article class="lbody">
+<p>Por defecto, el journal de systemd en RHEL puede vivir solo en memoria. En ese caso journald escribe en <code>/run/log/journal/</code>, un directorio en un sistema de archivos temporal que se vacía en cada arranque, así que <code>journalctl -b -1</code> (el arranque anterior) no devuelve nada. Eso dificulta investigar un fallo o un arranque fallido después de ocurrido. Hacer persistente el journal significa guardarlo en disco en <code>/var/log/journal/</code>, y es una tarea estándar del RHCSA.</p>
+<p>El comportamiento lo controla el ajuste <code>Storage=</code> de la sección <code>[Journal]</code> de <code>/etc/systemd/journald.conf</code>, o de un archivo drop-in en <code>/etc/systemd/journald.conf.d/</code>. Sus valores son: <code>persistent</code>, que guarda en disco en <code>/var/log/journal</code> y crea ese directorio si hace falta; <code>volatile</code>, que mantiene los logs solo en memoria en <code>/run/log/journal</code>; <code>auto</code>, que guarda en disco solo si <code>/var/log/journal</code> ya existe y en memoria en caso contrario; y <code>none</code>, que descarta los datos del journal (los mensajes aún pueden reenviarse a rsyslog). El archivo viene con los ajustes comentados, mostrando los valores predeterminados compilados, así que descomentas y cambias la línea.</p>
+<pre class="code" tabindex="0"><code># /etc/systemd/journald.conf
+[Journal]
+Storage=persistent</code></pre>
+<pre class="code" tabindex="0"><code>vim /etc/systemd/journald.conf        # poner Storage=persistent
+systemctl restart systemd-journald
+ls /var/log/journal/                  # aparece un directorio con el ID de la máquina
+journalctl --list-boots               # tras el siguiente reinicio, varios arranques
+journalctl --disk-usage</code></pre>
+<p>Después de editar, reinicia el servicio con <code>systemctl restart systemd-journald</code> para que tome el ajuste y empiece a escribir en disco. Verás un subdirectorio con el nombre del ID de la máquina dentro de <code>/var/log/journal</code>. Una alternativa que funciona cuando el ajuste se deja en <code>auto</code> es simplemente crear el directorio: <code>mkdir -p /var/log/journal</code> seguido de <code>systemd-tmpfiles --create --prefix /var/log/journal</code> para establecer su propietario y permisos, y luego reiniciar journald. Establecer <code>Storage=persistent</code> explícitamente es más claro y es lo que suelen pedir las tareas del examen.</p>
+<p>Un journal persistente no crece para siempre. journald lo limita por defecto a una parte del sistema de archivos, y puedes establecer límites como <code>SystemMaxUse=</code> en el mismo archivo, o recortarlo manualmente con <code>journalctl --vacuum-size=</code> o <code>--vacuum-time=</code>. Ten en cuenta que los archivos del journal también se rotan, así que las entradas muy antiguas acaban desapareciendo.</p>
+<p>Para confirmar el cambio, reinicia y ejecuta <code>journalctl --list-boots</code>. Si lista más de un arranque, y <code>journalctl -b -1</code> muestra los mensajes del arranque anterior, el journal es persistente. Ese paso de verificación vale el minuto que tarda, porque un error de escritura en el ajuste (por ejemplo, un nombre de clave en minúsculas o una línea que se quedó comentada) mantiene en silencio el comportamiento anterior.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Storage=</dt><dd>Opción de journald.conf que elige dónde se guarda el journal: persistent, volatile, auto o none.</dd><dt>/var/log/journal</dt><dd>Ubicación en disco de un journal persistente.</dd><dt>/run/log/journal</dt><dd>Ubicación en memoria (tmpfs) de un journal volátil, que se pierde al reiniciar.</dd><dt>systemd-journald</dt><dd>El servicio del journal; reinícialo después de cambiar journald.conf.</dd><dt>journalctl --list-boots</dt><dd>Lista los arranques registrados en el journal; más de uno indica persistencia.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un servidor se reinició inesperadamente durante la noche, pero <code>journalctl -b -1</code> no muestra datos. Pones Storage=persistent en /etc/systemd/journald.conf y reinicias systemd-journald. Tras el siguiente incidente, <code>journalctl -b -1 -p err</code> muestra los errores previos al reinicio.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Storage=auto solo guarda de forma persistente si existe /var/log/journal; Storage=persistent lo crea. En cualquier caso, reinicia systemd-journald y confírmalo con journalctl --list-boots después de un reinicio.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Dónde se guarda el journal cuando no es persistente?</summary><p>En /run/log/journal, que se vacía en cada arranque.</p></details>
+<details class="sq"><summary>Después de establecer Storage=persistent, ¿qué debes hacer para que surta efecto?</summary><p>Reiniciar systemd-journald (systemctl restart systemd-journald).</p></details>
+<details class="sq"><summary>¿Cómo puedes probar que ahora el journal sobrevive a los reinicios?</summary><p>Reinicia; después journalctl --list-boots lista varios arranques y journalctl -b -1 muestra el anterior.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../locating-and-reading-system-logs-var-log-messages-var-log-secure-journ/">← Localizar y leer los logs del sistema: /var/log/messages, /v</a><a href="../starting-stopping-and-checking-network-services-systemctl-status-ss-tl/">Iniciar, detener y comprobar servicios de red (systemctl sta →</a></nav>
+</main>
+</body>
+</html>

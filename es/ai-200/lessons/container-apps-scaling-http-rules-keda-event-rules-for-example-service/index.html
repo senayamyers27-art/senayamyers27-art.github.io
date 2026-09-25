@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Escalado de Container Apps: reglas HTTP, reglas de eventos… · Lección de AI-200</title>
+<meta name="description" content="Container Apps escala horizontalmente: agrega o quita réplicas (copias en ejecución de una revisión) según las reglas de escalado que definas. El escalado ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Escalado de Container Apps: reglas HTTP, reglas de eventos… · Lección de AI-200">
+<meta property="og:description" content="Container Apps escala horizontalmente: agrega o quita réplicas (copias en ejecución de una revisión) según las reglas de escalado que definas. El escalado ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/container-apps-scaling-http-rules-keda-event-rules-for-example-service/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/container-apps-scaling-http-rules-keda-event-rules-for-example-service/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/container-apps-scaling-http-rules-keda-event-rules-for-example-service/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Escalado de Container Apps: reglas HTTP, reglas de eventos de KEDA (por ejemplo, longitud de una cola de Service Bus), réplicas mínimas/máximas y escalado a cero</h1>
+<article class="lbody">
+<p>Container Apps escala horizontalmente: agrega o quita réplicas (copias en ejecución de una revisión) según las reglas de escalado que definas. El escalado lo impulsa KEDA (Kubernetes Event-driven Autoscaling), que puede vigilar la carga HTTP, las conexiones TCP, la CPU o la memoria, y decenas de orígenes de eventos como colas y flujos. Cada revisión tiene su propia configuración de escalado, porque esa configuración forma parte de la plantilla de la revisión.</p>
+<p>Dos números acotan todo: el mínimo de réplicas y el máximo de réplicas. Con un mínimo de 0, la app puede escalar a cero cuando no hay tráfico ni eventos pendientes, y no pagas nada por réplicas en ejecución mientras está inactiva (en el perfil de consumo). El costo es un arranque en frío (cold start): la primera solicitud o mensaje después de la inactividad espera a que se inicie una réplica. Con un mínimo de 1 o más, la app siempre está caliente. El máximo limita el costo y protege a los sistemas posteriores, como una base de datos, de verse saturados.</p>
+<p>Una regla de escalado HTTP agrega réplicas según las solicitudes HTTP simultáneas por réplica. Si configuras 50 solicitudes simultáneas y hay 400 solicitudes en curso, KEDA apunta a unas ocho réplicas, dentro de tu mínimo y tu máximo. Si no defines ninguna regla en una app con ingress, se aplica una regla HTTP predeterminada. Las reglas TCP funcionan de forma parecida con las conexiones simultáneas.</p>
+<p>Las reglas controladas por eventos (personalizadas) usan un scaler de KEDA. Para una cola de Service Bus, el scaler <code>azure-servicebus</code> lee el número de mensajes de la cola y escala para que cada réplica maneje aproximadamente el número objetivo de mensajes. La regla necesita metadatos (espacio de nombres, nombre de la cola, número objetivo de mensajes) y autenticación, ya sea un secreto con una cadena de conexión o, preferiblemente, una identidad administrada con permiso para leer las métricas de la cola.</p>
+<pre class="code" tabindex="0"><code>az containerapp update -n order-worker -g rg \
+  --min-replicas 0 --max-replicas 20 \
+  --scale-rule-name sb-queue --scale-rule-type azure-servicebus \
+  --scale-rule-metadata queueName=orders namespace=shop-sb messageCount=20 \
+  --scale-rule-auth connection=sb-connection-secret</code></pre>
+<p>Las reglas de CPU y memoria escalan según el uso de recursos, pero no pueden escalar a cero, porque debe haber una réplica en ejecución para informar la CPU. Si el escalado a cero es importante, usa reglas HTTP o de eventos. Cuando hay varias reglas, la app escala para satisfacer la que necesite más réplicas. La reducción (scale-in) ocurre después de un período de enfriamiento, para que las bajadas breves no provoquen oscilaciones.</p>
+<p>Diseña tu worker pensando en el escalado: los mensajes deben procesarse de forma idempotente, ya que una réplica podría eliminarse a mitad del trabajo y otra tomará el mensaje cuando expire su bloqueo. En un laboratorio, envía una ráfaga de mensajes a la cola y observa cómo sube <code>az containerapp replica list</code>, y luego cómo vuelve a cero cuando la cola se vacía.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Replica (réplica)</dt><dd>Una instancia en ejecución de una revisión de una container app; el escalado cambia el número de réplicas.</dd><dt>KEDA</dt><dd>Kubernetes Event-driven Autoscaling, el motor de código abierto detrás de las reglas de escalado de Container Apps.</dd><dt>Scale to zero (escalado a cero)</dt><dd>Ejecutar cero réplicas cuando no hay actividad; es posible con un mínimo de 0 y reglas HTTP o controladas por eventos.</dd><dt>Scaler</dt><dd>Un componente de KEDA que lee una métrica de un origen de eventos, como el número de mensajes de Service Bus, para impulsar el escalado.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un worker de pedidos no tiene ingress y procesa una cola de Service Bus. Está configurado con mínimo 0, máximo 20 y una regla azure-servicebus con un objetivo de 20 mensajes por réplica. Durante la noche no ejecuta réplicas y casi no cuesta nada; durante una venta relámpago, 400 mensajes en cola lo llevan a 20 réplicas, y vuelve a cero cuando la cola se vacía.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si un escenario exige escalar a cero, descarta las reglas de escalado por CPU y memoria; usa una regla HTTP para tráfico web o una regla de eventos de KEDA como azure-servicebus para workers de colas, con el mínimo de réplicas en 0.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué una regla de escalado por CPU no puede escalar una app a cero?</summary><p>El uso de CPU tiene que medirse desde una réplica en ejecución, así que con cero réplicas no hay ninguna métrica que active el escalado horizontal.</p></details>
+<details class="sq"><summary>¿Qué significa el metadato messageCount en una regla de escalado azure-servicebus?</summary><p>El número objetivo de mensajes en cola por réplica; KEDA agrega réplicas a medida que la longitud de la cola supera esa proporción.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../container-apps-revisions-single-vs-multiple-revision-mode-traffic-spli/">← Revisiones de Container Apps: modo de revisión única vs múlt</a><a href="../container-apps-jobs-manual-scheduled-and-event-driven/">Container Apps jobs: manuales, programados y controlados por →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sesiones para el procesamiento ordenado, detección de dupl… · Lección de AI-200</title>
+<meta name="description" content="Los niveles Standard y Premium de Service Bus agregan características que resuelven problemas comunes de mensajería: orden estricto, duplicados accidentale">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Sesiones para el procesamiento ordenado, detección de dupl… · Lección de AI-200">
+<meta property="og:description" content="Los niveles Standard y Premium de Service Bus agregan características que resuelven problemas comunes de mensajería: orden estricto, duplicados accidentale">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/sessions-for-ordered-processing-duplicate-detection-scheduled-messages/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/sessions-for-ordered-processing-duplicate-detection-scheduled-messages/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/sessions-for-ordered-processing-duplicate-detection-scheduled-messages/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Sesiones para el procesamiento ordenado, detección de duplicados, mensajes programados y filtros de suscripción (SQL y correlación)</h1>
+<article class="lbody">
+<p>Los niveles Standard y Premium de Service Bus agregan características que resuelven problemas comunes de mensajería: orden estricto, duplicados accidentales, entrega diferida y enrutamiento. Cada una corresponde claramente a un escenario, así que apréndelas como pares de problema y solución.</p>
+<p>Las sesiones ofrecen procesamiento ordenado de mensajes relacionados. Habilitas las sesiones (requires session) al crear una cola o suscripción, y a partir de ahí cada mensaje debe llevar un <code>session_id</code>, como un ID de pedido o de cliente. Service Bus garantiza la entrega FIFO (primero en entrar, primero en salir) dentro de una sesión, y un receptor bloquea una sesión completa, así que solo un receptor procesa una sesión determinada a la vez mientras otros receptores atienden otras sesiones en paralelo. Las sesiones también ofrecen estado de sesión, un pequeño valor almacenado por sesión para llevar el control del progreso.</p>
+<pre class="code" tabindex="0"><code>from azure.servicebus import NEXT_AVAILABLE_SESSION
+sender.send_messages(ServiceBusMessage(body, session_id=&quot;order-1001&quot;))
+with client.get_queue_receiver(&quot;order-steps&quot;, session_id=NEXT_AVAILABLE_SESSION) as r:
+    print(r.session.session_id)
+    for msg in r.receive_messages(max_wait_time=5):
+        r.complete_message(msg)</code></pre>
+<p>La detección de duplicados resuelve el caso en que un emisor reintenta después de un error de red y el agente recibe el mismo mensaje dos veces. Cuando se habilita en una cola o tema al crearlo, Service Bus recuerda cada <code>message_id</code> durante una ventana configurable de historial de detección de duplicados y descarta en silencio cualquier mensaje posterior con el mismo ID dentro de esa ventana. Solo funciona si el emisor define un ID de mensaje significativo derivado de los datos de negocio, como el número de pedido, en lugar de un valor aleatorio.</p>
+<p>Los mensajes programados se envían ahora, pero solo se vuelven visibles en el momento elegido. Define <code>scheduled_enqueue_time_utc</code> en el mensaje o llama a <code>sender.schedule_messages(msg, when)</code>, que devuelve números de secuencia que puedes pasar a <code>cancel_scheduled_messages</code> si cambian los planes. Úsalos para recordatorios, reintentos diferidos o flujos de trabajo basados en tiempo. (La hora de puesta en cola programada también está disponible en Basic).</p>
+<p>Los filtros de suscripción deciden qué mensajes del tema recibe cada suscripción. Cada suscripción nueva empieza con una regla predeterminada que acepta todos los mensajes. Un filtro SQL usa una condición similar a SQL sobre las propiedades del mensaje, por ejemplo <code>region = 'EU' AND amount &gt; 100</code>; es flexible, pero su evaluación cuesta más. Un filtro de correlación coincide con valores exactos de propiedades del sistema (como subject, correlation ID, message ID o content type) y de propiedades de usuario; es más simple y eficiente, así que prefiérelo cuando solo necesites coincidencias por igualdad. Las reglas también pueden incluir una acción SQL que modifica las propiedades del mensaje cuando entra en la suscripción. Un filtro booleano true o false acepta todo o nada.</p>
+<pre class="code" tabindex="0"><code>az servicebus topic subscription rule create -g rg --namespace-name shop-sb \
+  --topic-name orders --subscription-name eu-large --name EuLarge \
+  --filter-sql-expression &quot;region = 'EU' AND amount &gt; 100&quot;</code></pre>
+<p>Recuerda eliminar la regla predeterminada cuando agregues tu propio filtro; de lo contrario, la suscripción seguirá recibiendo todos los mensajes.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Session (sesión)</dt><dd>Un grupo de mensajes que comparten un ID de sesión y que Service Bus entrega en orden a un receptor a la vez.</dd><dt>Duplicate detection (detección de duplicados)</dt><dd>Una configuración de cola o tema que descarta los mensajes cuyo ID de mensaje ya se vio dentro de una ventana de historial.</dd><dt>Scheduled message (mensaje programado)</dt><dd>Un mensaje que se acepta de inmediato, pero que queda disponible para los receptores solo a una hora UTC especificada.</dd><dt>SQL filter (filtro SQL)</dt><dd>Una regla de suscripción que usa una expresión similar a SQL sobre las propiedades del mensaje.</dd><dt>Correlation filter (filtro de correlación)</dt><dd>Una regla de suscripción que coincide con valores exactos de propiedades del sistema o de usuario, más económica que un filtro SQL.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Los eventos de un mismo pedido a veces se procesaban fuera de orden: el envío antes del pago. El equipo habilitó sesiones en la cola order-steps y usó el ID de pedido como ID de sesión, lo que obligó a procesar en orden cada pedido. También habilitaron la detección de duplicados basada en un ID de evento, porque el sistema de origen reintentaba los envíos, y usaron un filtro de correlación sobre subject para enrutar los reembolsos a una suscripción separada.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> FIFO por cliente o por pedido significa sesiones; los envíos reintentados que crean duplicados significan detección de duplicados con IDs de mensaje de negocio; para enrutar por valores exactos de propiedades, prefiere los filtros de correlación sobre los filtros SQL.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué debe definir un emisor para que funcione la detección de duplicados?</summary><p>Un message_id coherente derivado de los datos de negocio, para que un envío reintentado lleve el mismo ID y se descarte.</p></details>
+<details class="sq"><summary>¿Por qué una suscripción con un filtro SQL nuevo podría seguir recibiendo todos los mensajes?</summary><p>La regla predeterminada que acepta todos los mensajes sigue presente; hay que eliminarla.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../dead-letter-queues-max-delivery-count-ttl-expiry-reading-the-deadlette/">← Colas de mensajes fallidos: número máximo de entregas, expir</a><a href="../event-grid-system-and-custom-topics-event-subscriptions-filters-event/">Event Grid: temas del sistema y personalizados, suscripcione →</a></nav>
+</main>
+</body>
+</html>

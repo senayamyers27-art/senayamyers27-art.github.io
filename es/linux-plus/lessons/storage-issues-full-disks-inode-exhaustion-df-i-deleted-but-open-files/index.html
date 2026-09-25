@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Problemas de almacenamiento: discos llenos, agotamiento de… · Lección de Linux+</title>
+<meta name="description" content="Los problemas de almacenamiento están entre los incidentes más comunes de Linux: los servicios no arrancan, los logs dejan de escribirse, las bases de dato">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Problemas de almacenamiento: discos llenos, agotamiento de… · Lección de Linux+">
+<meta property="og:description" content="Los problemas de almacenamiento están entre los incidentes más comunes de Linux: los servicios no arrancan, los logs dejan de escribirse, las bases de dato">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/linux-plus/lessons/storage-issues-full-disks-inode-exhaustion-df-i-deleted-but-open-files/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/linux-plus/lessons/storage-issues-full-disks-inode-exhaustion-df-i-deleted-but-open-files/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../linux-plus/">Linux+</a> / <a href="../">Lecciones</a> · <a href="../../../../linux-plus/lessons/storage-issues-full-disks-inode-exhaustion-df-i-deleted-but-open-files/" hreflang="en" lang="en">English</a></p>
+<p class="note">CompTIA Linux+ XK0-006</p>
+<h1>Problemas de almacenamiento: discos llenos, agotamiento de inodos (df -i), archivos eliminados pero abiertos (lsof +L1), fsck/xfs_repair</h1>
+<article class="lbody">
+<p>Los problemas de almacenamiento están entre los incidentes más comunes de Linux: los servicios no arrancan, los logs dejan de escribirse, las bases de datos se caen y los usuarios no pueden guardar su trabajo. Los síntomas suelen parecerse, normalmente 'No space left on device', así que necesitas una forma sistemática de encontrar la causa real.</p>
+<p>Empieza con <code>df -h</code> para ver qué sistema de archivos está lleno. Luego profundiza con <code>du</code>: <code>du -xh --max-depth=1 /var | sort -h</code> lista los directorios más grandes solo en ese sistema de archivos (<code>-x</code> se queda en un solo sistema de archivos). <code>find /var -xdev -type f -size +500M</code> encuentra archivos grandes. Los culpables comunes son logs desbocados, volcados de memoria (core dumps), kernels antiguos en <code>/boot</code>, cachés de paquetes (<code>dnf clean all</code>, <code>apt clean</code>), imágenes y volúmenes de contenedores y respaldos olvidados. Recuerda que ext4 reserva de forma predeterminada un porcentaje de bloques para root (ajustable con <code>tune2fs -m</code>), así que un sistema de archivos puede estar lleno para los usuarios mientras root todavía puede escribir.</p>
+<p>El agotamiento de inodos es la clásica pregunta trampa. Cada archivo usa un inodo, y en ext4 la cantidad de inodos se fija al crear el sistema de archivos. Si millones de archivos diminutos, como archivos de sesión o entradas de la cola de correo, consumen todos los inodos, obtienes 'No space left on device' aunque <code>df -h</code> muestre mucho espacio libre. <code>df -i</code> muestra el uso de inodos; con <code>IUse%</code> al 100 por ciento has encontrado la causa. Encuentra los directorios con más archivos, por ejemplo con <code>find /var -xdev -type f | cut -d/ -f2-4 | sort | uniq -c | sort -rn | head</code>, luego elimina o archiva los archivos innecesarios y corrige lo que los crea. XFS asigna inodos de forma dinámica, así que es menos propenso a esto.</p>
+<p>Los archivos eliminados pero abiertos explican por qué <code>df</code> y <code>du</code> no coinciden. Cuando eliminas un archivo que un proceso todavía tiene abierto, el nombre desaparece, así que <code>du</code> ya no lo cuenta, pero el kernel conserva los bloques de datos hasta que el último proceso cierre el archivo, por lo que <code>df</code> sigue mostrando el espacio como usado. Esto suele pasar cuando alguien borra un log enorme en lugar de rotarlo. <code>lsof +L1</code> lista los archivos abiertos cuyo número de enlaces es menor que uno, es decir, eliminados; <code>lsof | grep deleted</code> también funciona. La solución es reiniciar o recargar el proceso que lo retiene (o hacer que vuelva a abrir sus logs). En una emergencia, truncar el archivo a través de <code>/proc/&lt;PID&gt;/fd/&lt;N&gt;</code> libera espacio, pero reiniciar el servicio es la solución limpia. Usa <code>logrotate</code> o trunca con <code>&gt; file</code> en lugar de <code>rm</code> para los logs activos.</p>
+<p>La corrupción del sistema de archivos, tras una caída, un corte de energía o un disco que falla, se repara con herramientas de verificación, y deben ejecutarse sobre sistemas de archivos desmontados (o sobre el sistema de archivos raíz en el arranque o desde un medio de rescate) para no causar más daño. Para ext2/3/4, <code>fsck /dev/sdb1</code> llama a <code>e2fsck</code>; <code>-y</code> responde que sí a las correcciones y <code>-f</code> fuerza una verificación. Configurar el sexto campo de fstab hace que las verificaciones en el arranque ocurran automáticamente. Para XFS, <code>fsck</code> no hace nada útil; usa <code>xfs_repair /dev/sdb1</code> sobre el dispositivo desmontado. Si se queja de un log sucio, montar y desmontar limpiamente el sistema de archivos reproduce el log; <code>xfs_repair -L</code> pone a cero el log, pero puede perder cambios recientes, así que es el último recurso. Btrfs usa <code>btrfs scrub</code> y <code>btrfs check</code>. Revisa siempre también la salud del disco (datos SMART, mensajes del kernel), porque la corrupción puede ser un síntoma de hardware que está fallando.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Inode exhaustion (agotamiento de inodos)</dt><dd>Un sistema de archivos que se queda sin inodos, lo que bloquea los archivos nuevos aunque quede espacio libre; se ve con df -i.</dd><dt>Deleted-but-open file (archivo eliminado pero abierto)</dt><dd>Un archivo cuyo nombre se eliminó mientras un proceso todavía lo mantiene abierto, por lo que su espacio no se libera.</dd><dt>lsof +L1</dt><dd>Lista los archivos abiertos con un número de enlaces menor que uno, revelando archivos eliminados que todavía consumen espacio.</dd><dt>fsck / e2fsck</dt><dd>Herramientas de verificación y reparación para sistemas de archivos de la familia ext, que se ejecutan sobre dispositivos desmontados.</dd><dt>xfs_repair</dt><dd>La herramienta de reparación para sistemas de archivos XFS; fsck no se usa con XFS.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un servidor de correo informa 'No space left on device', pero df -h muestra un 40 por ciento de uso. df -i muestra /var al 100 por ciento de uso de inodos, y al contar archivos se descubren millones de entradas obsoletas en un directorio de cola dejadas por una tarea atascada. Después de corregir la tarea y limpiar las entradas antiguas, el uso de inodos baja y el correo vuelve a fluir.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si df -h muestra espacio libre pero las escrituras fallan, piensa en inodos (df -i). Si df muestra lleno pero du no encuentra los datos, piensa en archivos eliminados pero abiertos (lsof +L1).</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué comando confirma el agotamiento de inodos?</summary><p>df -i, que muestra el uso de inodos (IUse%) de cada sistema de archivos.</p></details>
+<details class="sq"><summary>Eliminaste un log de 20 GB, pero df todavía muestra el espacio usado. ¿Por qué, y qué lo soluciona?</summary><p>El proceso que escribe el log todavía mantiene abierto el archivo eliminado; reinicia o envía una señal a ese proceso para que cierre el archivo, lo que libera el espacio.</p></details>
+<details class="sq"><summary>¿Qué herramienta repara un sistema de archivos XFS corrupto, y en qué estado debe estar?</summary><p>xfs_repair, ejecutado sobre el dispositivo desmontado.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Linux+ gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../linux-plus/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../responsible-use-of-ai-tools-for-scripting-review-testing-keeping-secre/">← Uso responsable de herramientas de IA para scripts: revisión</a><a href="../performance-load-average-top-htop-vmstat-iostat-sar-free-oom-killer/">Rendimiento: carga promedio, top/htop, vmstat, iostat, sar,  →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>kubeadm init (pod network CIDR, control-plane endpoint), i… · Lección de CKA</title>
+<meta name="description" content="Una vez preparados los hosts, kubeadm init convierte la primera máquina en un nodo del control plane. Genera una autoridad certificadora y certificados, es">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="kubeadm init (pod network CIDR, control-plane endpoint), i… · Lección de CKA">
+<meta property="og:description" content="Una vez preparados los hosts, kubeadm init convierte la primera máquina en un nodo del control plane. Genera una autoridad certificadora y certificados, es">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/kubeadm-init-pod-network-cidr-control-plane-endpoint-installing-a-cni/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/kubeadm-init-pod-network-cidr-control-plane-endpoint-installing-a-cni/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/kubeadm-init-pod-network-cidr-control-plane-endpoint-installing-a-cni/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>kubeadm init (pod network CIDR, control-plane endpoint), instalación de un plugin CNI, kubeadm join y bootstrap tokens</h1>
+<article class="lbody">
+<p>Una vez preparados los hosts, <code>kubeadm init</code> convierte la primera máquina en un nodo del control plane. Genera una autoridad certificadora y certificados, escribe archivos kubeconfig, crea manifiestos de static Pods para el API server, etcd, el scheduler y el controller-manager, los inicia a través del kubelet e instala CoreDNS y kube-proxy.</p>
+<p>Dos flags son los más importantes. <code>--pod-network-cidr</code> le indica al clúster qué rango de direcciones usarán los Pods; debe coincidir con lo que tu plugin de CNI tiene configurado y no debe solaparse con las redes de tus nodos ni de los Services. Por ejemplo, el manifiesto por defecto de Flannel espera <code>10.244.0.0/16</code>. <code>--control-plane-endpoint</code> establece un nombre DNS o IP estable para el API server, normalmente la dirección de un balanceador de carga. Debes definirlo en el momento del init si alguna vez quieres agregar más nodos al control plane, porque queda incrustado en los certificados y en los archivos kubeconfig.</p>
+<pre class="code" tabindex="0"><code>sudo kubeadm init --pod-network-cidr=10.244.0.0/16 \
+  --control-plane-endpoint=k8s-api.lab.local:6443
+mkdir -p $HOME/.kube
+sudo cp /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config</code></pre>
+<p>Después del init, <code>kubectl get nodes</code> muestra el nodo como NotReady y los Pods de CoreDNS se quedan en Pending. Eso es lo esperado: todavía no hay red de Pods. Instala un plugin CNI (Container Network Interface) como Calico, Cilium o Flannel, normalmente aplicando su manifiesto o instalando su operator. Cuando los Pods del CNI están en ejecución y escriben su configuración en <code>/etc/cni/net.d/</code>, el nodo pasa a Ready y CoreDNS arranca.</p>
+<p>Los worker nodes se unen con <code>kubeadm join</code>, usando el comando que init imprimió al final. Contiene el endpoint, un bootstrap token y un <code>--discovery-token-ca-cert-hash</code>. El token permite que el nuevo kubelet se autentique el tiempo justo para solicitar su propio certificado de cliente; el hash de la CA permite que el nodo que se une verifique que está hablando con el control plane real y no con un impostor.</p>
+<p>Los bootstrap tokens expiran, por defecto después de 24 horas. Si necesitas agregar un nodo más adelante, crea un token nuevo y el comando completo con <code>kubeadm token create --print-join-command</code>. <code>kubeadm token list</code> muestra los tokens existentes y su vencimiento. Para unir un nodo adicional al control plane agregas <code>--control-plane</code> y un <code>--certificate-key</code>, que se explican en la lección de alta disponibilidad.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>--pod-network-cidr</dt><dd>El rango de IP reservado para las direcciones de los Pods, del cual asigna el plugin CNI.</dd><dt>--control-plane-endpoint</dt><dd>Una dirección compartida y estable para el API server, necesaria para expandir a HA más adelante.</dd><dt>Bootstrap token (token de arranque)</dt><dd>Un token de corta duración que permite a un nodo que se une autenticarse para solicitar su certificado de kubelet.</dd><dt>discovery-token-ca-cert-hash</dt><dd>Un hash de la clave pública de la CA del clúster que el nodo que se une usa para verificar el control plane.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Tres días después de montar un clúster de laboratorio agregas un tercer worker, pero el comando de join que guardaste falla con un error de autenticación. Ejecutar <code>kubeadm token create --print-join-command</code> en el control plane te da un comando nuevo con un token válido, y el nodo se une.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Nodos NotReady y CoreDNS en Pending justo después del init casi siempre significan que todavía no hay un plugin CNI instalado, no que el clúster esté roto.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué --control-plane-endpoint debe definirse en el init si en el futuro quieres un clúster HA?</summary><p>Se escribe en los certificados y kubeconfigs; cambiarlo después implica regenerarlos.</p></details>
+<details class="sq"><summary>¿Cómo obtienes un comando de join que funcione cuando el token original ya expiró?</summary><p>Ejecuta <code>kubeadm token create --print-join-command</code> en un nodo del control plane.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../preparing-hosts-for-kubeadm-containerd-matching-systemd-cgroup-driver/">← Preparar los hosts para kubeadm: containerd, cgroup driver s</a><a href="../static-pods-and-etc-kubernetes-manifests-kubeadm-certificates-check-ex/">Static Pods y /etc/kubernetes/manifests; certificados de kub →</a></nav>
+</main>
+</body>
+</html>

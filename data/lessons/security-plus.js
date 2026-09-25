@@ -3449,4 +3449,4 @@ CertHub.addLessons("security-plus", [
    ]
   ]
  }
-]);
+], { reviewed: "2026-09-25" });

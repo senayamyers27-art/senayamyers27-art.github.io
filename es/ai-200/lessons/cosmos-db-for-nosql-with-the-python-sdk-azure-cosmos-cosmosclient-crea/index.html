@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cosmos DB for NoSQL con el SDK de Python (azure-cosmos): C… · Lección de AI-200</title>
+<meta name="description" content="Azure Cosmos DB for NoSQL es una base de datos distribuida globalmente que almacena documentos JSON llamados elementos (items). Los elementos viven en cont">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Cosmos DB for NoSQL con el SDK de Python (azure-cosmos): C… · Lección de AI-200">
+<meta property="og:description" content="Azure Cosmos DB for NoSQL es una base de datos distribuida globalmente que almacena documentos JSON llamados elementos (items). Los elementos viven en cont">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/cosmos-db-for-nosql-with-the-python-sdk-azure-cosmos-cosmosclient-crea/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/cosmos-db-for-nosql-with-the-python-sdk-azure-cosmos-cosmosclient-crea/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/cosmos-db-for-nosql-with-the-python-sdk-azure-cosmos-cosmosclient-crea/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Cosmos DB for NoSQL con el SDK de Python (azure-cosmos): CosmosClient, crear/upsert/leer/eliminar elementos y consultas parametrizadas</h1>
+<article class="lbody">
+<p>Azure Cosmos DB for NoSQL es una base de datos distribuida globalmente que almacena documentos JSON llamados elementos (items). Los elementos viven en contenedores, los contenedores viven en bases de datos y las bases de datos viven en una cuenta. Cada elemento tiene un <code>id</code> y un valor para la clave de partición del contenedor; juntos identifican el elemento de forma única. El SDK de Python es el paquete <code>azure-cosmos</code>.</p>
+<p>Todo empieza con <code>CosmosClient</code>. Crea uno por aplicación y reutilízalo, porque mantiene conexiones y almacena metadatos en caché; crear un cliente por solicitud es un error de rendimiento común. Autentícate con Microsoft Entra ID pasando una credencial como <code>DefaultAzureCredential()</code>, que funciona con una identidad administrada en Azure y con tu inicio de sesión de desarrollador en local. Las claves de cuenta también funcionan, pero son secretos que tendrías que proteger.</p>
+<pre class="code" tabindex="0"><code>from azure.cosmos import CosmosClient
+from azure.identity import DefaultAzureCredential
+
+client = CosmosClient(ACCOUNT_ENDPOINT, credential=DefaultAzureCredential())
+container = client.get_database_client(&quot;shop&quot;).get_container_client(&quot;orders&quot;)
+
+order = {&quot;id&quot;: &quot;o-1001&quot;, &quot;customerId&quot;: &quot;c-42&quot;, &quot;total&quot;: 59.90, &quot;status&quot;: &quot;new&quot;}
+container.create_item(order)          # falla con 409 Conflict si id+pk ya existe
+order[&quot;status&quot;] = &quot;paid&quot;
+container.upsert_item(order)          # inserta o reemplaza
+item = container.read_item(item=&quot;o-1001&quot;, partition_key=&quot;c-42&quot;)
+container.delete_item(item=&quot;o-1001&quot;, partition_key=&quot;c-42&quot;)</code></pre>
+<p>Conoce la diferencia entre los métodos de escritura. <code>create_item</code> inserta y lanza un error de conflicto (HTTP 409) si ya existe un elemento con el mismo id en esa partición. <code>replace_item</code> sobrescribe un elemento existente y falla con no encontrado (404) si no existe. <code>upsert_item</code> hace cualquiera de las dos cosas, lo cual es práctico para el procesamiento idempotente. <code>patch_item</code> cambia campos específicos sin enviar el documento completo. <code>read_item</code> necesita tanto el id como el valor de la clave de partición, y es la operación más barata de Cosmos DB: una lectura puntual (point read).</p>
+<p>Las consultas usan un lenguaje similar a SQL sobre JSON. Pasa siempre la entrada del usuario como parámetros en lugar de construir cadenas; los parámetros evitan la inyección y permiten que el servicio reutilice los planes de consulta. Cada parámetro tiene un nombre que empieza con <code>@</code> y un valor.</p>
+<pre class="code" tabindex="0"><code>items = container.query_items(
+    query=&quot;SELECT c.id, c.total FROM c WHERE c.customerId = @cust AND c.total &gt; @min&quot;,
+    parameters=[{&quot;name&quot;: &quot;@cust&quot;, &quot;value&quot;: &quot;c-42&quot;}, {&quot;name&quot;: &quot;@min&quot;, &quot;value&quot;: 20}],
+    partition_key=&quot;c-42&quot;)
+for row in items:
+    print(row[&quot;id&quot;], row[&quot;total&quot;])</code></pre>
+<p>Proporcionar <code>partition_key</code> mantiene la consulta en una sola partición. Sin él, pasas <code>enable_cross_partition_query=True</code> y la consulta se distribuye a todas las particiones, lo que cuesta más Request Units. Los errores aparecen como <code>CosmosHttpResponseError</code> con un código de estado, como 404, 409, o 429 cuando superas el rendimiento aprovisionado; el SDK reintenta automáticamente los 429 un número limitado de veces. El cliente asíncrono en <code>azure.cosmos.aio</code> ofrece las mismas operaciones para apps con asyncio.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>CosmosClient</dt><dd>El punto de entrada de azure-cosmos que se conecta a una cuenta; crea uno y reutilízalo durante toda la vida de la app.</dd><dt>Upsert</dt><dd>Una operación que inserta un elemento si no existe o lo reemplaza si ya existe.</dd><dt>Point read (lectura puntual)</dt><dd>Leer un elemento por id y clave de partición con read_item; es la operación más barata de Cosmos DB.</dd><dt>Parameterized query (consulta parametrizada)</dt><dd>Una consulta cuyos valores se pasan por separado como parámetros @nombre en lugar de concatenar cadenas.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un servicio de pedidos llama a create_item para cada pedido entrante y, de vez en cuando, recibe el mismo mensaje dos veces desde su cola, lo que provoca 409 Conflict. El equipo cambia a upsert_item, haciendo que el procesamiento sea idempotente, y reemplaza una consulta construida con cadenas por una parametrizada que incluye la clave de partición del cliente, lo que reduce el costo en RU y elimina un riesgo de inyección.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> read_item siempre necesita el id del elemento y la clave de partición; create_item falla con duplicados mientras que upsert_item no, y las consultas entre particiones necesitan enable_cross_partition_query=True.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué método deberías usar para escrituras idempotentes en las que un mensaje podría procesarse dos veces?</summary><p>upsert_item, porque inserta o reemplaza sin fallar cuando el elemento ya existe.</p></details>
+<details class="sq"><summary>¿Por qué usar parámetros en query_items en lugar de f-strings?</summary><p>Los parámetros evitan la inyección en las consultas y permiten que el servicio trate los valores de forma segura y coherente.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../aks-basics-for-developers-deployment-and-service-manifests-kubectl-app/">← Fundamentos de AKS para desarrolladores: manifiestos Deploym</a><a href="../partition-key-design-high-cardinality-even-spread-point-reads-hierarch/">Diseño de la clave de partición: alta cardinalidad, distribu →</a></nav>
+</main>
+</body>
+</html>

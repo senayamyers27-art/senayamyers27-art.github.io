@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Esquema de advanced hunting: DeviceProcessEvents, DeviceNe… · Lección de SC-200</title>
+<meta name="description" content="Advanced hunting en el portal de Defender expone los datos de Defender XDR como tablas agrupadas por fuente. Saber qué tabla contiene qué tipo de evento, y">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Esquema de advanced hunting: DeviceProcessEvents, DeviceNe… · Lección de SC-200">
+<meta property="og:description" content="Advanced hunting en el portal de Defender expone los datos de Defender XDR como tablas agrupadas por fuente. Saber qué tabla contiene qué tipo de evento, y">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/sc-200/lessons/advanced-hunting-schema-deviceprocessevents-devicenetworkevents-device/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/sc-200/lessons/advanced-hunting-schema-deviceprocessevents-devicenetworkevents-device/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../sc-200/">SC-200</a> / <a href="../">Lecciones</a> · <a href="../../../../sc-200/lessons/advanced-hunting-schema-deviceprocessevents-devicenetworkevents-device/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Security Operations Analyst Associate SC-200</p>
+<h1>Esquema de advanced hunting: DeviceProcessEvents, DeviceNetworkEvents, DeviceLogonEvents, EmailEvents, EmailUrlInfo, IdentityLogonEvents, CloudAppEvents, AlertInfo y AlertEvidence</h1>
+<article class="lbody">
+<p>Advanced hunting en el portal de Defender expone los datos de Defender XDR como tablas agrupadas por fuente. Saber qué tabla contiene qué tipo de evento, y cómo se vinculan las tablas, es la diferencia entre una búsqueda rápida y una frustrante. La referencia del esquema en el portal lista todas las columnas; aquí están las tablas en las que se enfoca el SC-200.</p>
+<p>Las tablas de dispositivos vienen de Defender for Endpoint. DeviceProcessEvents registra la creación de procesos: FileName, FolderPath, ProcessCommandLine, el hash SHA256, la cuenta y el proceso padre mediante las columnas InitiatingProcess, como InitiatingProcessFileName. Es donde buscas PowerShell codificado, binarios living-off-the-land o aplicaciones de Office que inician shells. DeviceNetworkEvents registra conexiones de red: RemoteIP, RemotePort, RemoteUrl, el ActionType (por ejemplo, conexión exitosa o fallida) y el proceso que la inició. DeviceLogonEvents registra los inicios de sesión en dispositivos, con AccountName, LogonType (como interactive, network o remote interactive) y ActionType que muestra éxito o fallo. Otras tablas de dispositivos cubren archivos, registro, imágenes cargadas y eventos generales.</p>
+<p>Las tablas de correo vienen de Defender for Office 365. EmailEvents tiene una fila por cada entrega de mensaje, que incluye SenderFromAddress, RecipientEmailAddress, Subject, DeliveryAction, DeliveryLocation y ThreatTypes. EmailUrlInfo lista las URL encontradas en los mensajes, y EmailAttachmentInfo lista los adjuntos. Todas comparten NetworkMessageId, la clave con la que haces join para conectar un mensaje con sus URL o archivos. UrlClickEvents registra los clics de Safe Links, y EmailPostDeliveryEvents registra acciones posteriores a la entrega, como ZAP.</p>
+<p>IdentityLogonEvents registra la actividad de autenticación vista por Defender for Identity en Active Directory y por Microsoft Entra ID, con el protocolo (por ejemplo, Kerberos o NTLM), la cuenta, el dispositivo y el motivo del fallo. Es ideal para buscar password spraying contra cuentas locales o el uso de protocolos heredados. Las tablas de identidad también incluyen IdentityQueryEvents e IdentityDirectoryEvents. CloudAppEvents viene de Defender for Cloud Apps y registra la actividad en aplicaciones en la nube como Exchange Online, SharePoint y Teams: ActionType, Application, la cuenta, la dirección IP y una columna RawEventData en JSON, que analizas para obtener detalles como los parámetros de reglas de bandeja de entrada.</p>
+<p>AlertInfo tiene una fila por cada alerta de cualquier producto de Defender (y de Sentinel cuando está incorporado): AlertId, Title, Severity, Category, ServiceSource y DetectionSource. AlertEvidence tiene una fila por cada entidad adjunta a una alerta: EntityType, EvidenceRole y columnas de entidad como DeviceId, AccountName, FileName o RemoteIP. Únelas por AlertId para hacer preguntas como 'qué dispositivos aparecieron en alertas de severidad alta esta semana'.</p>
+<pre class="code" tabindex="0"><code>EmailEvents
+| where Timestamp &gt; ago(7d) and ThreatTypes has &quot;Phish&quot;
+| join kind=inner EmailUrlInfo on NetworkMessageId
+| project Timestamp, RecipientEmailAddress, Subject, Url</code></pre>
+<p>Recuerda que la columna de tiempo en estas tablas es Timestamp, y que advanced hunting conserva aproximadamente 30 días de datos de Defender. Para un historial más largo, los datos deben estar en Sentinel.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>DeviceProcessEvents</dt><dd>La tabla de eventos de creación de procesos, que incluye líneas de comandos y detalles del proceso padre.</dd><dt>NetworkMessageId</dt><dd>El identificador de correo que vincula EmailEvents con EmailUrlInfo, EmailAttachmentInfo y tablas relacionadas.</dd><dt>IdentityLogonEvents</dt><dd>Eventos de autenticación de Defender for Identity (AD local) y de Microsoft Entra ID.</dd><dt>AlertEvidence</dt><dd>Una fila por cada entidad adjunta a una alerta, unida a AlertInfo por AlertId.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Después de un incidente de phishing, un analista une EmailEvents con EmailUrlInfo por NetworkMessageId para listar a cada destinatario de la URL maliciosa, luego une UrlClickEvents para ver quién hizo clic y después consulta DeviceProcessEvents en los dispositivos de esos usuarios para buscar procesos iniciados por el navegador en la hora siguiente. Un dispositivo muestra la ejecución de un script descargado.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Relaciona la redacción de la pregunta con las tablas: proceso y línea de comandos significa DeviceProcessEvents; conexión o IP remota significa DeviceNetworkEvents; inicios de sesión Kerberos o NTLM locales significa IdentityLogonEvents; reglas de buzón en Exchange Online normalmente significa CloudAppEvents.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué columna une EmailEvents con EmailUrlInfo?</summary><p>NetworkMessageId.</p></details>
+<details class="sq"><summary>¿Dónde buscarías el proceso padre de un inicio sospechoso de PowerShell?</summary><p>En DeviceProcessEvents, usando las columnas InitiatingProcess, como InitiatingProcessFileName.</p></details>
+<details class="sq"><summary>¿Cómo listas las entidades de las alertas de severidad alta?</summary><p>Une AlertInfo (filtrada por Severity) con AlertEvidence por AlertId.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia SC-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../sc-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../kql-for-hunting-has-vs-contains-in-and-has-any-let-statements-and-dyna/">← KQL para hunting: has vs. contains, in y has_any, instruccio</a><a href="../turning-a-hunting-query-into-a-custom-detection-rule-security-copilot/">Convertir una consulta de hunting en una regla de detección  →</a></nav>
+</main>
+</body>
+</html>

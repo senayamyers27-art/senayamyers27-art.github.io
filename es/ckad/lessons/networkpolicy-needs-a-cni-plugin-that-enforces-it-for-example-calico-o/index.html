@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NetworkPolicy necesita un plugin CNI que la aplique (por e… · Lección de CKAD</title>
+<meta name="description" content="Kubernetes define la API de NetworkPolicy, pero no la aplica por sí mismo. El API server almacena sin problema cualquier política que crees. La aplicación ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="NetworkPolicy necesita un plugin CNI que la aplique (por e… · Lección de CKAD">
+<meta property="og:description" content="Kubernetes define la API de NetworkPolicy, pero no la aplica por sí mismo. El API server almacena sin problema cualquier política que crees. La aplicación ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/networkpolicy-needs-a-cni-plugin-that-enforces-it-for-example-calico-o/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/networkpolicy-needs-a-cni-plugin-that-enforces-it-for-example-calico-o/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/networkpolicy-needs-a-cni-plugin-that-enforces-it-for-example-calico-o/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>NetworkPolicy necesita un plugin CNI que la aplique (por ejemplo Calico o Cilium)</h1>
+<article class="lbody">
+<p>Kubernetes define la API de NetworkPolicy, pero no la aplica por sí mismo. El API server almacena sin problema cualquier política que crees. La aplicación es tarea del plugin de red del clúster, que implementa la Container Network Interface (CNI), la forma estándar en que Kubernetes le pide a un plugin que configure la red de los Pods. Si el plugin no admite NetworkPolicy, tus políticas existen pero no tienen efecto, y todo el tráfico sigue fluyendo.</p>
+<p>Plugins como Calico y Cilium aplican NetworkPolicy. Calico normalmente programa reglas en el filtrado de paquetes del kernel de Linux (iptables o nftables) o usa eBPF; Cilium usa programas eBPF enganchados en el kernel. Ambos observan los objetos NetworkPolicy y las etiquetas de los Pods a través del API server y actualizan las reglas de filtrado en cada nodo a medida que cambian los Pods y las políticas. Algunos plugins, en particular los simples centrados solo en la conectividad, como una configuración básica de Flannel, no aplican políticas por sí solos. Algunas herramientas locales arrancan con un plugin así por defecto, así que verifícalo antes de confiar en el resultado de una prueba.</p>
+<p>No hay ningún mensaje de error cuando las políticas no se aplican, y eso es lo que hace importante este tema. <code>kubectl apply</code> tiene éxito, <code>kubectl describe networkpolicy</code> muestra las reglas y, aun así, una conexión que querías bloquear sigue funcionando. La única prueba real es un test.</p>
+<pre class="code" tabindex="0"><code># ¿qué plugin de red se está ejecutando?
+kubectl get pods -n kube-system -o wide | grep -Ei 'calico|cilium|flannel|weave'
+kubectl get daemonset -n kube-system
+# prueba: aplica un default deny y luego intenta conectarte
+kubectl run t --image=busybox --rm -it --restart=Never -n shop -- wget -qO- -T 2 api:8080</code></pre>
+<p>Para clústeres de práctica, elige una configuración con un plugin que aplique las políticas. minikube puede arrancar con Calico usando <code>minikube start --cni=calico</code>, o con Cilium usando <code>--cni=cilium</code>. kind se puede crear con su plugin de red por defecto desactivado en la configuración del clúster e instalar Calico o Cilium después. El entorno del examen CKAD se proporciona con una configuración que funciona, así que ahí te concentras en escribir políticas correctas, pero en tu propio laboratorio un plugin que no aplica políticas puede hacerte creer que una política incorrecta es correcta, o que una correcta está mal.</p>
+<p>También ayuda entender las capas. NetworkPolicy forma parte de la API central de Kubernetes (<code>networking.k8s.io/v1</code>) y es portable entre plugins que la aplican. Calico y Cilium también ofrecen sus propios recursos personalizados con funciones adicionales, como reglas de denegación explícitas, políticas a nivel de clúster, orden de evaluación o reglas basadas en nombres DNS o protocolos de capa de aplicación. Esas son CRDs específicas de un plugin y no forman parte de los objetivos del CKAD; si una tarea dice NetworkPolicy, escribe el objeto estándar.</p>
+<p>Desde el punto de vista de la seguridad, NetworkPolicy es defensa en profundidad: limita hasta dónde puede moverse lateralmente un atacante tras comprometer un Pod, pero complementa, y no reemplaza, la autenticación y el cifrado entre servicios.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>CNI (Container Network Interface)</dt><dd>La interfaz estándar que usa Kubernetes para que un plugin configure la red de los Pods.</dd><dt>Network plugin (plugin de red)</dt><dd>La implementación CNI que proporciona la red de los Pods y, si lo admite, aplica NetworkPolicy.</dd><dt>Calico / Cilium</dt><dd>Plugins de red muy usados que aplican NetworkPolicy.</dd><dt>eBPF</dt><dd>Tecnología del kernel de Linux para ejecutar pequeños programas verificados, que algunos plugins usan para filtrar tráfico.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un desarrollador aplica una política default-deny en un clúster de práctica con una red Flannel básica y se queda perplejo cuando las solicitudes siguen teniendo éxito. Recrear el clúster con Calico como plugin de red hace que la misma política bloquee el tráfico como se esperaba.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si una pregunta al estilo del examen pregunta por qué una NetworkPolicy correcta no tiene efecto, la respuesta es que el plugin CNI del clúster no aplica NetworkPolicy.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿El API server rechaza las NetworkPolicies cuando el plugin de red no puede aplicarlas?</summary><p>No; se almacenan normalmente pero no tienen efecto.</p></details>
+<details class="sq"><summary>Menciona dos plugins que aplican NetworkPolicy.</summary><p>Calico y Cilium.</p></details>
+<details class="sq"><summary>¿Cómo verificas que una política se aplica?</summary><p>Probando tráfico real, por ejemplo con wget desde un Pod temporal, antes y después de aplicar la política.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../networkpolicy-peers-podselector-namespaceselector-ipblock-and-vs-or-ru/">← Peers de NetworkPolicy: podSelector, namespaceSelector, ipBl</a><a href="../ingress-resources-ingressclassname-host-and-path-rules-pathtype-prefix/">Recursos Ingress: ingressClassName, reglas de host y path, p →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Conectar la CLI: `terraform login` y el bloque `cloud` (or… · Lección de Terraform Associate</title>
+<meta name="description" content="Para usar HCP Terraform desde tu terminal, deben cumplirse dos cosas: la CLI debe poder autenticarse en HCP Terraform, y la configuración debe indicar a qu">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Conectar la CLI: `terraform login` y el bloque `cloud` (or… · Lección de Terraform Associate">
+<meta property="og:description" content="Para usar HCP Terraform desde tu terminal, deben cumplirse dos cosas: la CLI debe poder autenticarse en HCP Terraform, y la configuración debe indicar a qu">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/terraform/lessons/connecting-the-cli-terraform-login-and-the-cloud-block-organization-wo/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/terraform/lessons/connecting-the-cli-terraform-login-and-the-cloud-block-organization-wo/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../terraform/">Terraform Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../terraform/lessons/connecting-the-cli-terraform-login-and-the-cloud-block-organization-wo/" hreflang="en" lang="en">English</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004)</p>
+<h1>Conectar la CLI: `terraform login` y el bloque `cloud` (organización, workspaces por nombre o por etiquetas)</h1>
+<article class="lbody">
+<p>Para usar HCP Terraform desde tu terminal, deben cumplirse dos cosas: la CLI debe poder autenticarse en HCP Terraform, y la configuración debe indicar a qué organización y workspaces pertenece. <code>terraform login</code> se encarga de lo primero; el bloque <code>cloud</code> se encarga de lo segundo.</p>
+<p><code>terraform login</code> abre una página en el navegador donde generas un token de API para tu cuenta de usuario, y luego te pide que lo pegues en la terminal. La CLI guarda el token en un archivo de credenciales en tu perfil de usuario, llamado <code>credentials.tfrc.json</code>, en el directorio <code>.terraform.d</code> en Linux y macOS (en el directorio de datos de aplicaciones en Windows). El token se guarda en texto plano, así que protege ese archivo. De forma predeterminada, el comando apunta al hostname estándar de HCP Terraform; para Terraform Enterprise, pasa el hostname: <code>terraform login tfe.example.com</code>. <code>terraform logout</code> elimina el token guardado.</p>
+<p>En la automatización no hay navegador, así que los pipelines proporcionan el token de otra forma: mediante una variable de entorno llamada <code>TF_TOKEN_</code> seguida del hostname con los puntos reemplazados por guiones bajos (por ejemplo <code>TF_TOKEN_app_terraform_io</code>), o mediante un archivo de configuración de la CLI. Para CI, un token de equipo o de organización o una cuenta de servicio dedicada suele ser mejor que un token personal.</p>
+<pre class="code" tabindex="0"><code>terraform {
+  cloud {
+    organization = &quot;example-org&quot;
+    workspaces {
+      tags = [&quot;app&quot;, &quot;aws&quot;]
+    }
+  }
+}</code></pre>
+<p>El argumento <code>organization</code> del bloque <code>cloud</code> nombra la organización. Dentro de <code>workspaces</code>, elige una de dos estrategias. Con <code>name = &quot;app-prod&quot;</code>, la configuración se asocia a exactamente un workspace de HCP Terraform, que se crea en init si no existe. Con <code>tags</code>, la configuración se asocia a cada workspace que tenga todas las etiquetas listadas. El modo de etiquetas permite que una configuración sirva a varios workspaces, como app-dev y app-prod; cambias entre ellos con <code>terraform workspace list</code> y <code>terraform workspace select</code>, y <code>terraform workspace new</code> crea un workspace nuevo con esas etiquetas. No puedes establecer <code>name</code> y <code>tags</code> a la vez.</p>
+<p>Después de escribir el bloque, ejecuta <code>terraform init</code>. Terraform se autentica con tu token, se conecta a la organización y configura el workspace. Si antes usabas estado local o el de otro backend, init ofrece migrarlo. A partir de entonces, <code>terraform plan</code> y <code>apply</code> se ejecutan de forma remota o local según el modo de ejecución del workspace, y el estado se guarda en el workspace.</p>
+<p>Las variables de entorno pueden completar o anular los ajustes del bloque, lo que es útil para los pipelines: <code>TF_CLOUD_ORGANIZATION</code>, <code>TF_CLOUD_HOSTNAME</code>, <code>TF_CLOUD_PROJECT</code> y <code>TF_WORKSPACE</code>. Eso permite incluso un bloque <code>cloud {}</code> vacío con todos los detalles proporcionados por el entorno.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>terraform login</dt><dd>Un comando que obtiene un token de API de HCP Terraform mediante el navegador y lo guarda localmente para la CLI.</dd><dt>credentials.tfrc.json</dt><dd>El archivo local donde terraform login guarda los tokens de API en texto plano.</dd><dt>TF_TOKEN_hostname</dt><dd>Una variable de entorno que proporciona un token de API para un host dado, como TF_TOKEN_app_terraform_io.</dd><dt>Workspace tags mapping (asociación de workspaces por etiquetas)</dt><dd>Usar tags en el bloque cloud para que una configuración se asocie a varios workspaces de HCP Terraform.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una desarrolladora clona un repositorio con un bloque cloud que usa tags = [&quot;billing&quot;]. Ejecuta terraform login, pega un token, ejecuta terraform init y luego terraform workspace select billing-dev para trabajar en el workspace de dev antes de que un colega aplique en billing-prod desde un pull request revisado.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> terraform login guarda un token en credentials.tfrc.json; en CI usa TF_TOKEN_&lt;host&gt; en su lugar. En el bloque cloud, workspaces usa name (uno) o tags (varios), nunca ambos.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo se autentica un job de CI en HCP Terraform sin terraform login?</summary><p>Estableciendo una variable de entorno como TF_TOKEN_app_terraform_io con un token de API.</p></details>
+<details class="sq"><summary>¿Qué hace tags en el bloque workspaces del bloque cloud?</summary><p>Asocia la configuración a todos los workspaces que tienen esas etiquetas, para que puedas cambiar entre ellos con terraform workspace select.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Terraform Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../terraform/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../hcp-terraform-formerly-terraform-cloud-remote-state-remote-runs-a-free/">← HCP Terraform (antes Terraform Cloud): estado remoto, ejecuc</a><a href="../workflows-vcs-driven-cli-driven-and-api-driven-runs/">Flujos de trabajo: ejecuciones basadas en VCS, en la CLI y e →</a></nav>
+</main>
+</body>
+</html>

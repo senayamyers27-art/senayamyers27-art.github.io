@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Crear y borrar volúmenes lógicos por tamaño (-L) o por núm… · Lección de RHCSA</title>
+<meta name="description" content="Los volúmenes lógicos (LV) son la capa superior de LVM y la parte que realmente usas: pones un sistema de archivos o swap en un LV y lo montas, igual que h">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Crear y borrar volúmenes lógicos por tamaño (-L) o por núm… · Lección de RHCSA">
+<meta property="og:description" content="Los volúmenes lógicos (LV) son la capa superior de LVM y la parte que realmente usas: pones un sistema de archivos o swap en un LV y lo montas, igual que h">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/creating-and-deleting-logical-volumes-by-size-l-or-extent-count-l-lvcr/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/creating-and-deleting-logical-volumes-by-size-l-or-extent-count-l-lvcr/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/creating-and-deleting-logical-volumes-by-size-l-or-extent-count-l-lvcr/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Crear y borrar volúmenes lógicos por tamaño (-L) o por número de extensiones (-l) (lvcreate, lvremove, lvs)</h1>
+<article class="lbody">
+<p>Los volúmenes lógicos (LV) son la capa superior de LVM y la parte que realmente usas: pones un sistema de archivos o swap en un LV y lo montas, igual que harías con una partición. La diferencia es la flexibilidad. Un LV se asigna del pool de un grupo de volúmenes, puede abarcar varios discos y se puede ampliar más tarde sin volver a particionar.</p>
+<p><code>lvcreate</code> crea un volumen lógico. <code>-n</code> le da un nombre y el último argumento es el grupo de volúmenes. Especificas el tamaño de una de dos formas, y las tareas del examen evalúan ambas. <code>-L</code> (mayúscula) recibe un tamaño con unidades: <code>-L 500M</code>, <code>-L 2G</code>. <code>-l</code> (minúscula) recibe un número de extensiones: <code>-l 50</code> asigna 50 extensiones físicas, así que su tamaño real depende del tamaño de extensión del VG. <code>-l</code> también acepta porcentajes, como <code>-l 100%FREE</code> para todo el espacio restante o <code>-l 50%VG</code> para la mitad del grupo.</p>
+<pre class="code" tabindex="0"><code>lvcreate -n weblv -L 1G datavg
+lvcreate -n dblv -l 60 datavg        # 60 extensiones
+lvcreate -n archive -l 100%FREE datavg
+lvs
+lvdisplay /dev/datavg/weblv
+mkfs.xfs /dev/datavg/weblv
+mkdir -p /web &amp;&amp; mount /dev/datavg/weblv /web</code></pre>
+<p>La aritmética de extensiones es una simple multiplicación. En un VG con extensiones de 16 MiB, <code>-l 60</code> da 960 MiB; con las predeterminadas de 4 MiB, el mismo comando da 240 MiB. Con <code>-L</code>, si el tamaño no es un múltiplo exacto del tamaño de extensión, LVM redondea hacia arriba a la siguiente extensión completa y te lo indica. Revisa <code>vgdisplay</code> para ver el tamaño de extensión y las extensiones libres antes de calcular. Una tarea que dice 'un volumen lógico de 20 extensiones' quiere <code>-l 20</code>, y una que dice '800 MiB' quiere <code>-L 800M</code>; el evaluador normalmente acepta una pequeña tolerancia en los tamaños, pero no una unidad equivocada.</p>
+<p>Tras crearlo, el LV aparece como <code>/dev/VG/LV</code> (un enlace simbólico) y <code>/dev/mapper/VG-LV</code>; ambos hacen referencia al mismo dispositivo. Crea en él un sistema de archivos con <code>mkfs.xfs</code> o <code>mkfs.ext4</code>, o conviértelo en swap con <code>mkswap</code>; luego móntalo y, para que sea persistente, añádelo a <code>/etc/fstab</code>.</p>
+<p><code>lvs</code> lista los volúmenes lógicos con su VG, sus atributos y su tamaño. <code>lvdisplay</code> da detalles, incluido el número de extensiones actuales (Current LE), la ruta y el estado. <code>lvs -o +devices</code> muestra qué PV usa un LV.</p>
+<p><code>lvremove /dev/VG/LV</code> borra un volumen lógico y todo lo que contiene. Antes de ejecutarlo, desmonta el sistema de archivos (o haz <code>swapoff</code> si es swap) y elimina su entrada de <code>/etc/fstab</code>; de lo contrario, lvremove se niega porque el volumen está en uso, o el siguiente arranque falla al intentar montar un dispositivo que ya no existe. lvremove pide confirmación; lee el nombre que muestra antes de responder y.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Logical volume (LV, volumen lógico)</dt><dd>Un volumen asignado de un grupo de volúmenes que contiene un sistema de archivos o swap, como una partición flexible.</dd><dt>lvcreate -L</dt><dd>Crea un LV con un tamaño dado en unidades como M o G.</dd><dt>lvcreate -l</dt><dd>Crea un LV con un tamaño dado en extensiones, o en porcentajes como 100%FREE.</dd><dt>lvs / lvdisplay</dt><dd>Listan los LV de forma breve o muestran detalles como Current LE y la ruta.</dd><dt>lvremove</dt><dd>Borra un volumen lógico; desmóntalo y quítalo de fstab primero.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una tarea pide un LV llamado database con exactamente 50 extensiones en el VG datavg, cuyo tamaño de extensión es de 16 MiB. Ejecutas <code>lvcreate -n database -l 50 datavg</code>; luego <code>lvdisplay /dev/datavg/database</code> muestra Current LE 50 y LV Size 800.00 MiB, lo formateas con mkfs.ext4 y lo montas.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> -L mayúscula es un tamaño con unidades; -l minúscula es un número de extensiones (o un porcentaje). Multiplica las extensiones por el tamaño de PE del VG para conocer el tamaño real.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué tamaño tiene un LV creado con -l 25 en un VG con extensiones de 8 MiB?</summary><p>200 MiB (25 x 8 MiB).</p></details>
+<details class="sq"><summary>¿Cómo creas un LV que use todo el espacio restante de vg01?</summary><p>lvcreate -n name -l 100%FREE vg01.</p></details>
+<details class="sq"><summary>¿Qué debes hacer antes de lvremove en un LV montado?</summary><p>Desmontarlo (o swapoff si es swap) y eliminar su entrada de /etc/fstab.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../creating-volume-groups-and-assigning-physical-volumes-vgcreate-s-vgext/">← Crear grupos de volúmenes y asignarles volúmenes físicos (vg</a><a href="../mounting-file-systems-at-boot-by-uuid-or-label-in-etc-fstab/">Montar sistemas de archivos al arrancar por UUID o etiqueta  →</a></nav>
+</main>
+</body>
+</html>

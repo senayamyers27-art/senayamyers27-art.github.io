@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Logs de contenedores: kubectl logs con -c, -f, --previous,… · Lección de CKAD</title>
+<meta name="description" content="Se espera que los contenedores escriban sus logs en la salida estándar y la salida de error estándar. El runtime de contenedores captura esos flujos en arc">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Logs de contenedores: kubectl logs con -c, -f, --previous,… · Lección de CKAD">
+<meta property="og:description" content="Se espera que los contenedores escriban sus logs en la salida estándar y la salida de error estándar. El runtime de contenedores captura esos flujos en arc">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/container-logs-kubectl-logs-with-c-f-previous-tail-since-l-and-deploy/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/container-logs-kubectl-logs-with-c-f-previous-tail-since-l-and-deploy/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/container-logs-kubectl-logs-with-c-f-previous-tail-since-l-and-deploy/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>Logs de contenedores: kubectl logs con -c, -f, --previous, --tail, --since, -l y deploy/&lt;name&gt;</h1>
+<article class="lbody">
+<p>Se espera que los contenedores escriban sus logs en la salida estándar y la salida de error estándar. El runtime de contenedores captura esos flujos en archivos del nodo, y <code>kubectl logs</code> los lee a través del kubelet. Si una aplicación escribe solo en un archivo dentro del contenedor, <code>kubectl logs</code> no muestra nada; esa es una de las razones del patrón sidecar que lee esos archivos y los envía a stdout.</p>
+<p>La forma básica es <code>kubectl logs &lt;pod&gt;</code>. Si el Pod tiene más de un contenedor, debes indicar cuál con <code>-c &lt;container&gt;</code>; de lo contrario, kubectl elige el contenedor por defecto (definido por la anotación <code>kubectl.kubernetes.io/default-container</code>) o te pide que elijas. <code>--all-containers</code> imprime los logs de todos los contenedores, incluidos los init containers. Los logs de un init container se consultan igual: <code>kubectl logs mypod -c init-db</code>.</p>
+<p><code>-f</code> (follow) muestra las líneas nuevas a medida que llegan hasta que presionas Ctrl-C, como <code>tail -f</code>. <code>--tail=50</code> muestra solo las últimas 50 líneas, útil para apps muy verbosas. <code>--since=10m</code> o <code>--since=1h</code> limita la salida a una ventana de tiempo reciente, y <code>--timestamps</code> antepone la hora a cada línea. Se pueden combinar: <code>kubectl logs web-5d8f7 --since=5m -f</code>.</p>
+<p><code>--previous</code> (o <code>-p</code>) muestra los logs de la instancia anterior de un contenedor, la que falló o se reinició. Esto es esencial para CrashLoopBackOff: el contenedor actual puede haber acabado de arrancar y no tener salida útil, mientras que el motivo del fallo, como un stack trace o 'config file not found', está en la instancia anterior. Solo se conserva la instancia terminada más reciente.</p>
+<pre class="code" tabindex="0"><code>kubectl logs web-5d8f7 -c app --tail=100
+kubectl logs web-5d8f7 -c app --previous
+kubectl logs -f deploy/web
+kubectl logs -l app=web --all-containers --prefix --since=15m
+kubectl logs job/migrate</code></pre>
+<p>Puedes nombrar un controlador en lugar de un Pod: <code>kubectl logs deploy/web</code> o <code>kubectl logs job/migrate</code> elige un Pod que le pertenezca, lo que te ahorra buscar nombres generados. Sin embargo, solo muestra un Pod. Para leer logs de muchos Pods a la vez, usa un selector de etiquetas: <code>kubectl logs -l app=web</code>. Con <code>-l</code>, kubectl muestra por defecto un número limitado de líneas recientes por Pod y sigue un número limitado de Pods a la vez (<code>--max-log-requests</code>); <code>--prefix</code> etiqueta cada línea con el nombre de su Pod y contenedor.</p>
+<p>Los logs viven en el nodo y desaparecen cuando el Pod se elimina o el nodo los rota, así que <code>kubectl logs</code> sirve para diagnósticos recientes, no para almacenamiento a largo plazo; los clústeres usan un recolector de logs (a menudo un DaemonSet) para eso. En el examen te pueden pedir que guardes logs en un archivo: <code>kubectl logs mypod -c app &gt; /opt/logs/app.log</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>-c</dt><dd>Selecciona de qué contenedor mostrar los logs en un Pod multicontenedor.</dd><dt>--previous</dt><dd>Muestra los logs de la última instancia terminada del contenedor.</dd><dt>-f</dt><dd>Sigue el flujo de logs a medida que se escriben líneas nuevas.</dd><dt>-l</dt><dd>Selecciona Pods por etiqueta para mostrar logs de varios Pods a la vez.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un Pod está en CrashLoopBackOff y <code>kubectl logs api-7c9</code> solo imprime un banner de arranque. Ejecutar <code>kubectl logs api-7c9 --previous</code> muestra el error real de la instancia que falló: 'DATABASE_URL is not set', lo que apunta a una variable de entorno faltante.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Para contenedores que fallan, recurre primero a <code>--previous</code>. En Pods multicontenedor, <code>-c</code> es necesario para obtener el contenedor correcto.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo ves por qué falló la última instancia de un contenedor?</summary><p><code>kubectl logs &lt;pod&gt; -c &lt;container&gt; --previous</code>.</p></details>
+<details class="sq"><summary>¿Qué muestra <code>kubectl logs deploy/web</code>?</summary><p>Los logs de un Pod perteneciente al Deployment, no de todos.</p></details>
+<details class="sq"><summary>¿Cómo muestras solo las líneas de log de los últimos 30 minutos?</summary><p>Agrega <code>--since=30m</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../kubectl-get-describe-get-events-top-pod-node-metrics-server-for-monito/">← kubectl get, describe, get events y top pod/node (metrics-se</a><a href="../reading-pod-status-pending-imagepullbackoff-crashloopbackoff-oomkilled/">Leer el estado de un Pod: Pending, ImagePullBackOff, CrashLo →</a></nav>
+</main>
+</body>
+</html>

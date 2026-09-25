@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Optimización de DynamoDB: particiones calientes, diseño de… · Lección de Developer Associate</title>
+<meta name="description" content="El rendimiento de DynamoDB depende mucho de cómo se distribuyen tus datos entre las particiones. Los datos y el rendimiento de una tabla se dividen entre p">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Optimización de DynamoDB: particiones calientes, diseño de… · Lección de Developer Associate">
+<meta property="og:description" content="El rendimiento de DynamoDB depende mucho de cómo se distribuyen tus datos entre las particiones. Los datos y el rendimiento de una tabla se dividen entre p">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/dynamodb-optimization-hot-partitions-key-design-on-demand-vs-provision/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/dynamodb-optimization-hot-partitions-key-design-on-demand-vs-provision/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/dynamodb-optimization-hot-partitions-key-design-on-demand-vs-provision/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Optimización de DynamoDB: particiones calientes, diseño de claves, capacidad bajo demanda vs aprovisionada, capacidad adaptativa</h1>
+<article class="lbody">
+<p>El rendimiento de DynamoDB depende mucho de cómo se distribuyen tus datos entre las particiones. Los datos y el rendimiento de una tabla se dividen entre particiones según el hash de la clave de partición, y cada partición tiene su propio límite de rendimiento: hasta 3,000 unidades de capacidad de lectura y 1,000 unidades de capacidad de escritura por segundo. Así que una tabla puede tener mucha capacidad total y aun así sufrir limitación si las solicitudes se concentran en unas pocas claves.</p>
+<p>Una partición caliente (o clave caliente) es una partición que recibe una parte desproporcionada del tráfico. Síntomas: <code>ProvisionedThroughputExceededException</code> o <code>ThrottlingException</code>, aumento de <code>ThrottledRequests</code> y de los eventos de limitación de lectura o escritura en CloudWatch, aunque la capacidad consumida de toda la tabla parezca muy por debajo de la aprovisionada. CloudWatch Contributor Insights para DynamoDB puede mostrar las claves más consultadas y más limitadas, lo que facilita identificar las claves calientes.</p>
+<p>El diseño de claves es la verdadera solución. Elige una clave de partición con alta cardinalidad (muchos valores distintos) a la que se acceda de forma bastante uniforme, como el ID de usuario, el ID de pedido o el ID de dispositivo. Las malas elecciones incluyen valores de estado (<code>active</code> o <code>inactive</code>), fechas para escrituras de series temporales (todas las escrituras de hoy caen en una sola clave) o un solo inquilino mucho más grande que los demás. Para patrones de escritura inevitablemente calientes, usa la fragmentación de escrituras (write sharding): agrega un sufijo a la clave, ya sea aleatorio (por ejemplo <code>2026-09-25#7</code> con un sufijo de 0 a 9) o calculado a partir de otro atributo para poder volver a encontrar el elemento, y luego consulta todos los sufijos y combina los resultados al leer. Para elementos calientes con mucha lectura, coloca una caché como DAX o ElastiCache delante de la tabla. Evita también los elementos grandes (guarda los blobs grandes en S3 y conserva un puntero), porque las unidades de lectura y escritura escalan con el tamaño del elemento, y usa <code>Query</code> en lugar de <code>Scan</code>.</p>
+<p>Modos de capacidad: el modo bajo demanda (on-demand) cobra por solicitud y escala automáticamente según tu tráfico sin planificación de capacidad, lo que se ajusta a aplicaciones nuevas, tráfico impredecible o con picos, y cargas de trabajo con períodos de inactividad. El modo aprovisionado te hace definir las RCU y WCU, normalmente con auto scaling que ajusta la capacidad entre valores mínimos y máximos para seguir una utilización objetivo. Es más barato para tráfico estable y predecible, pero auto scaling reacciona en minutos, así que los picos repentinos pueden provocar limitación antes de que se ajuste. La capacidad reservada puede reducir aún más los costos del modo aprovisionado para cargas de trabajo estables a largo plazo. Los índices secundarios globales también necesitan suficiente capacidad: un GSI con muy poca capacidad de escritura limita las escrituras en la tabla base.</p>
+<p>DynamoDB también tiene protecciones integradas. La capacidad de ráfaga (burst capacity) permite a una partición usar temporalmente la capacidad no utilizada guardada del pasado reciente para absorber picos cortos. La capacidad adaptativa (adaptive capacity) asigna de forma automática e instantánea más rendimiento de la tabla a las particiones que reciben más tráfico, así que el acceso desigual funciona mientras el total se mantenga dentro de la capacidad de la tabla y cada partición no supere sus límites por partición. La capacidad adaptativa también puede dividir una partición para aislar los elementos a los que se accede con frecuencia. Estas funciones reducen la limitación por desequilibrios moderados, pero no pueden corregir una sola clave que supera el rendimiento máximo de una partición; eso sigue requiriendo un mejor diseño de claves o caché.</p>
+<p>Del lado del cliente, los SDK reintentan automáticamente las solicitudes limitadas con retroceso exponencial, lo que suaviza la limitación breve pero no sustituye a un buen diseño.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Hot partition (partición caliente)</dt><dd>Una partición que recibe una parte desproporcionada de las solicitudes y provoca limitación a pesar de que haya capacidad de la tabla sin usar.</dd><dt>Write sharding (fragmentación de escrituras)</dt><dd>Agregar un sufijo aleatorio o calculado a las claves de partición para repartir las escrituras entre más particiones.</dd><dt>On-demand capacity (capacidad bajo demanda)</dt><dd>Un modo de DynamoDB que se factura por solicitud y escala automáticamente sin planificación de capacidad.</dd><dt>Adaptive capacity (capacidad adaptativa)</dt><dd>La reasignación automática de rendimiento de DynamoDB a las particiones más ocupadas y el aislamiento de los elementos consultados con frecuencia.</dd><dt>Burst capacity (capacidad de ráfaga)</dt><dd>Capacidad no utilizada que DynamoDB conserva brevemente para absorber picos cortos de tráfico.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una tabla de IoT usa la fecha como clave de partición, así que todas las escrituras del día caen en una sola clave y se limitan en las horas pico. El equipo cambia la clave a deviceId#date para las consultas por dispositivo y, para un resumen diario, agrega un GSI cuya clave de partición es la fecha más un sufijo de 0 a 9, consultando los diez fragmentos para construir el informe.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Limitación mientras la capacidad total consumida es baja significa una partición caliente: corrige la clave de partición (mayor cardinalidad, fragmentación de escrituras) o guarda en caché las lecturas calientes. El tráfico impredecible o con picos sin planificación de capacidad apunta al modo bajo demanda.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué una tabla puede sufrir limitación aunque apenas use su capacidad aprovisionada?</summary><p>Los límites de rendimiento se aplican por partición, así que el tráfico concentrado en una clave de partición puede superar el límite de esa partición.</p></details>
+<details class="sq"><summary>¿Cuándo es la capacidad aprovisionada con auto scaling una mejor opción que la bajo demanda?</summary><p>Para tráfico estable y predecible, donde normalmente es más barata.</p></details>
+<details class="sq"><summary>¿Qué hace la fragmentación de escrituras?</summary><p>Agrega un sufijo a la clave de partición para que las escrituras que caerían en una sola clave se repartan entre varias particiones.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../stream-and-queue-troubleshooting-kinesis-iteratorage-parallelization-f/">← Solución de problemas de streams y colas: IteratorAge de Kin</a><a href="../caching-for-performance-api-gateway-stage-caching-cloudfront-elasticac/">Caché para el rendimiento: caché de etapa de API Gateway, Cl →</a></nav>
+</main>
+</body>
+</html>

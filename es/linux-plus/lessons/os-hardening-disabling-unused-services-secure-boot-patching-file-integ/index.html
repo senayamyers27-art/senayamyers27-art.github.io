@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Endurecimiento del sistema operativo: deshabilitar servici… · Lección de Linux+</title>
+<meta name="description" content="Endurecer (hardening) significa reducir la superficie de ataque de un sistema: quitar lo que no se necesita, restringir lo que queda, mantener el software ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Endurecimiento del sistema operativo: deshabilitar servici… · Lección de Linux+">
+<meta property="og:description" content="Endurecer (hardening) significa reducir la superficie de ataque de un sistema: quitar lo que no se necesita, restringir lo que queda, mantener el software ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/linux-plus/lessons/os-hardening-disabling-unused-services-secure-boot-patching-file-integ/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/linux-plus/lessons/os-hardening-disabling-unused-services-secure-boot-patching-file-integ/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../linux-plus/">Linux+</a> / <a href="../">Lecciones</a> · <a href="../../../../linux-plus/lessons/os-hardening-disabling-unused-services-secure-boot-patching-file-integ/" hreflang="en" lang="en">English</a></p>
+<p class="note">CompTIA Linux+ XK0-006</p>
+<h1>Endurecimiento del sistema operativo: deshabilitar servicios sin uso, Secure Boot, parches, integridad de archivos (AIDE)</h1>
+<article class="lbody">
+<p>Endurecer (hardening) significa reducir la superficie de ataque de un sistema: quitar lo que no se necesita, restringir lo que queda, mantener el software actualizado y vigilar los cambios no autorizados. Ningún control por sí solo detiene todos los ataques, así que el endurecimiento combina varias defensas en capas, un enfoque llamado defensa en profundidad.</p>
+<p>Empieza por los servicios. Cada servicio de red que escucha es un posible punto de entrada, así que ejecuta solo lo que requiere el rol del servidor. <code>ss -tulpn</code> lista los puertos TCP y UDP en escucha con el proceso propietario, y <code>systemctl list-unit-files --state=enabled</code> muestra lo que arranca en el boot. Para todo lo innecesario, <code>systemctl disable --now nombre</code> lo detiene e impide que arranque, y <code>systemctl mask</code> lo bloquea por completo. Mejor aún, elimina los paquetes innecesarios con dnf o apt para que no haya nada que parchear. Los protocolos heredados en texto claro como Telnet, rsh y FTP simple deberían reemplazarse por SSH y SFTP. Las imágenes de instalación mínima facilitan esto desde el principio.</p>
+<p>Secure Boot es una función de UEFI que verifica las firmas digitales de los componentes de arranque para que solo se ejecute código de confianza antes del sistema operativo. La mayoría de las distribuciones usan un pequeño cargador shim firmado que luego verifica GRUB y el kernel, y el kernel puede exigir módulos firmados. Esto defiende contra bootkits y rootkits que manipulan el arranque temprano. <code>mokutil --sb-state</code> muestra si Secure Boot está habilitado. Los módulos del kernel de terceros, como algunos controladores, deben estar firmados con una clave registrada como MOK (Machine Owner Key) o no se cargarán. Protege también el firmware y GRUB con contraseñas para que un atacante con acceso a la consola no pueda cambiar fácilmente los parámetros de arranque.</p>
+<p>Aplicar parches corrige vulnerabilidades conocidas, y el software sin parchear es una de las formas más comunes en que se comprometen los sistemas. Aplica actualizaciones con regularidad con <code>dnf upgrade</code> o <code>apt update &amp;&amp; apt upgrade</code>, dando prioridad a las actualizaciones de seguridad (<code>dnf updateinfo list --security</code> o <code>dnf upgrade --security</code>). Automatiza donde corresponda con dnf-automatic o unattended-upgrades. Las actualizaciones del kernel necesitan un reinicio para surtir efecto, a menos que uses un servicio de parcheo en vivo (live patching). Prueba primero las actualizaciones en sistemas que no sean de producción, programa ventanas de mantenimiento y ten un plan de reversión, como instantáneas o <code>dnf history undo</code>.</p>
+<p>El monitoreo de integridad de archivos detecta cambios no autorizados en archivos importantes, una señal común de intrusión. AIDE (Advanced Intrusion Detection Environment) construye una base de datos de atributos y hashes de archivos, y luego compara los escaneos posteriores contra ella. La configuración está en <code>/etc/aide.conf</code> (o <code>/etc/aide/aide.conf</code>). Uso típico: <code>aide --init</code> crea la base de datos, mueves el archivo nuevo a su lugar como base de datos de referencia (por ejemplo renombrando <code>aide.db.new.gz</code> a <code>aide.db.gz</code>), y luego <code>aide --check</code> informa los archivos agregados, eliminados y modificados, normalmente desde una tarea diaria de cron o un timer. Después de cambios legítimos, como aplicar parches, ejecuta <code>aide --update</code> y reemplaza la base de datos. Guarda una copia de la base de datos fuera de línea o en solo lectura, ya que de lo contrario un atacante con root podría alterarla.</p>
+<p>Otros pasos comunes de endurecimiento incluyen configuraciones estrictas de SSH, un firewall de host, SELinux o AppArmor en modo de aplicación, opciones de montaje restrictivas (<code>noexec</code>, <code>nosuid</code>, <code>nodev</code> en /tmp), configuraciones de red sensatas en sysctl, deshabilitar módulos del kernel sin uso, políticas de contraseñas sólidas y registro centralizado. Los benchmarks de endurecimiento reúnen todo esto en listas de verificación.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Attack surface (superficie de ataque)</dt><dd>El conjunto total de servicios, software e interfaces que un atacante podría intentar explotar.</dd><dt>Secure Boot</dt><dd>Una función de UEFI que solo ejecuta cargadores de arranque y kernels firmados, bloqueando el código de arranque manipulado.</dd><dt>MOK</dt><dd>Machine Owner Key: una clave registrada por el usuario que se usa con shim para confiar en módulos o kernels firmados adicionales.</dd><dt>AIDE</dt><dd>Advanced Intrusion Detection Environment: un verificador de integridad de archivos que compara los archivos con una base de datos de referencia.</dd><dt>Patch management (gestión de parches)</dt><dd>El proceso de probar y aplicar regularmente actualizaciones de software para corregir vulnerabilidades.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Al endurecer un nuevo relay de correo, ejecutas ss -tulpn y encuentras cups y un antiguo listener de rpcbind. Deshabilitas y eliminas ambos paquetes, aplicas todas las actualizaciones de seguridad con dnf upgrade --security y reinicias con el nuevo kernel, confirmas que mokutil --sb-state informa Secure Boot habilitado e inicializas AIDE para que una verificación nocturna señale cambios inesperados en /etc y /usr/bin.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Después de actualizaciones legítimas hay que actualizar la línea base de AIDE, o cada binario parcheado aparecerá como un cambio y las intrusiones reales se esconderán entre el ruido.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué comando lista los puertos en escucha y los procesos propietarios?</summary><p>ss -tulpn.</p></details>
+<details class="sq"><summary>¿Contra qué amenaza defiende principalmente Secure Boot?</summary><p>Contra cargadores de arranque, kernels y código de arranque temprano manipulados o maliciosos, como bootkits y rootkits.</p></details>
+<details class="sq"><summary>¿Qué compara aide --check?</summary><p>El estado actual de los archivos monitoreados (hashes, permisos, propiedad, tamaños) contra la base de datos de referencia guardada.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Linux+ gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../linux-plus/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../cryptography-hashing-sha256sum-gpg-signatures-tls-certificates-luks-di/">← Criptografía: hashing (sha256sum), firmas GPG, certificados </a><a href="../compliance-and-auditing-auditd-log-review-vulnerability-scanning-cis-b/">Cumplimiento y auditoría: auditd, revisión de logs, escaneo  →</a></nav>
+</main>
+</body>
+</html>

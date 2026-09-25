@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Autoescalado de cargas de trabajo: HorizontalPodAutoscaler… · Lección de CKA</title>
+<meta name="description" content="El autoescalado en Kubernetes ocurre en tres niveles. El HorizontalPodAutoscaler (HPA) cambia el número de réplicas. El Vertical Pod Autoscaler (VPA) cambi">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Autoescalado de cargas de trabajo: HorizontalPodAutoscaler… · Lección de CKA">
+<meta property="og:description" content="El autoescalado en Kubernetes ocurre en tres niveles. El HorizontalPodAutoscaler (HPA) cambia el número de réplicas. El Vertical Pod Autoscaler (VPA) cambi">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/workload-autoscaling-horizontalpodautoscaler-kubectl-autoscale-autosca/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/workload-autoscaling-horizontalpodautoscaler-kubectl-autoscale-autosca/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/workload-autoscaling-horizontalpodautoscaler-kubectl-autoscale-autosca/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Autoescalado de cargas de trabajo: HorizontalPodAutoscaler (kubectl autoscale, autoscaling/v2), metrics-server y requests de CPU; nociones de VPA y Cluster Autoscaler</h1>
+<article class="lbody">
+<p>El autoescalado en Kubernetes ocurre en tres niveles. El HorizontalPodAutoscaler (HPA) cambia el número de réplicas. El Vertical Pod Autoscaler (VPA) cambia los requests de cada Pod. El Cluster Autoscaler cambia el número de nodos. El CKA se centra en el HPA y espera que conozcas los otros dos.</p>
+<p>El HPA es un bucle de control en el kube-controller-manager. Periódicamente lee las métricas actuales de los Pods de un objetivo (un Deployment, StatefulSet o ReplicaSet), las compara con un valor objetivo y calcula un número deseado de réplicas, aproximadamente las réplicas actuales multiplicadas por la métrica actual dividida entre la métrica objetivo, limitado entre <code>minReplicas</code> y <code>maxReplicas</code>.</p>
+<p>Las métricas de CPU y memoria vienen de la Resource Metrics API, que sirve metrics-server. kubeadm no instala metrics-server; lo instalas tú (a menudo desde su manifiesto o su chart de Helm). En clústeres de laboratorio cuyos kubelets usan certificados de servidor autofirmados, suele necesitar el argumento <code>--kubelet-insecure-tls</code> para poder recolectarlos, lo cual es aceptable en un laboratorio pero no en producción. Confirma que funciona con <code>kubectl top pods</code>.</p>
+<p>Los objetivos de utilización son porcentajes de los requests del Pod. Si los contenedores no tienen request de CPU, el HPA no puede calcular la utilización y <code>kubectl get hpa</code> muestra <code>&lt;unknown&gt;</code> en la columna TARGETS. Esta es una de las trampas más comunes, tanto en el examen como en el mundo real.</p>
+<pre class="code" tabindex="0"><code>kubectl autoscale deployment web --cpu-percent=50 --min=2 --max=10
+kubectl get hpa web
+kubectl describe hpa web   # condiciones y eventos de escalado</code></pre>
+<pre class="code" tabindex="0"><code>apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: {name: web}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: web}
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target: {type: Utilization, averageUtilization: 50}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 120</code></pre>
+<p>La API <code>autoscaling/v2</code> admite múltiples métricas (el HPA elige el mayor número de réplicas resultante), métricas custom y externas mediante adaptadores, y una sección <code>behavior</code> que ajusta las velocidades de aumento y reducción de escala y las ventanas de estabilización. Por defecto, la reducción de escala es deliberadamente lenta y usa una ventana de estabilización de unos minutos para evitar oscilaciones.</p>
+<p>El VPA es un complemento aparte que recomienda o aplica nuevos requests a los Pods; no debería controlar la misma métrica de CPU o memoria que un HPA sobre la misma carga de trabajo. El Cluster Autoscaler, normalmente ligado a los grupos de nodos de un proveedor de nube, agrega nodos cuando hay Pods en Pending porque nada cabe y elimina nodos poco utilizados. Ambos quedan fuera de la instalación por defecto de kubeadm.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>HorizontalPodAutoscaler</dt><dd>Un controlador que ajusta el número de réplicas de una carga de trabajo para cumplir un objetivo de métrica.</dd><dt>metrics-server</dt><dd>Un complemento que recolecta el uso de CPU y memoria de los kubelets y sirve la Resource Metrics API.</dd><dt>averageUtilization</dt><dd>Un objetivo expresado como porcentaje de los requests de recursos de los Pods.</dd><dt>Vertical Pod Autoscaler</dt><dd>Un complemento que recomienda o define los requests de los contenedores según el uso observado.</dd><dt>Cluster Autoscaler</dt><dd>Un complemento que agrega o elimina nodos según los Pods en Pending y la utilización de los nodos.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un HPA creado con <code>kubectl autoscale</code> muestra TARGETS <code>&lt;unknown&gt;/50%</code>. <code>kubectl top pods</code> funciona, así que metrics-server está bien; <code>kubectl get deploy web -o yaml</code> revela que no hay request de CPU. Agregar <code>requests: {cpu: 100m}</code> y dejar que los Pods se renueven hace que el HPA reporte la utilización real y escale.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Los objetivos <code>&lt;unknown&gt;</code> significan que metrics-server falta o no funciona, o que los Pods no tienen request para ese recurso. Revisa primero <code>kubectl top</code> y luego los requests.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué un HPA de utilización de CPU necesita requests de CPU en los Pods?</summary><p>La utilización se calcula como porcentaje de la CPU solicitada; sin request no hay nada entre qué dividir.</p></details>
+<details class="sq"><summary>¿Qué componente sirve las métricas de CPU y memoria que usa el HPA?</summary><p>metrics-server, mediante la Resource Metrics API.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../priorityclasses-and-preemption/">← PriorityClasses y preemption (desplazamiento)</a><a href="../static-pods-vs-scheduler-placed-pods-what-happens-when-the-scheduler-i/">Static Pods frente a Pods ubicados por el scheduler; qué pas →</a></nav>
+</main>
+</body>
+</html>

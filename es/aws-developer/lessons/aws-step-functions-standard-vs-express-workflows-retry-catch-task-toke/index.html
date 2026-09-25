@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AWS Step Functions: flujos de trabajo Standard vs Express,… · Lección de Developer Associate</title>
+<meta name="description" content="AWS Step Functions es un servicio de orquestación sin servidor. Describes un flujo de trabajo como una máquina de estados en Amazon States Language (ASL), ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="AWS Step Functions: flujos de trabajo Standard vs Express,… · Lección de Developer Associate">
+<meta property="og:description" content="AWS Step Functions es un servicio de orquestación sin servidor. Describes un flujo de trabajo como una máquina de estados en Amazon States Language (ASL), ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/aws-step-functions-standard-vs-express-workflows-retry-catch-task-toke/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/aws-step-functions-standard-vs-express-workflows-retry-catch-task-toke/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/aws-step-functions-standard-vs-express-workflows-retry-catch-task-toke/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>AWS Step Functions: flujos de trabajo Standard vs Express, retry/catch, task tokens para callbacks</h1>
+<article class="lbody">
+<p>AWS Step Functions es un servicio de orquestación sin servidor. Describes un flujo de trabajo como una máquina de estados en Amazon States Language (ASL), un formato basado en JSON, y Step Functions lo ejecuta: llama a funciones Lambda y a otros servicios de AWS, pasa datos entre pasos, espera, se ramifica y maneja errores. Como la lógica del flujo vive en la máquina de estados y no en tu código, cada función Lambda se mantiene pequeña y la consola muestra cada ejecución de forma visual, paso a paso.</p>
+<p>Los principales tipos de estado son <code>Task</code> (realizar trabajo, como invocar una función Lambda o llamar directamente a una API de AWS mediante una integración con el SDK), <code>Choice</code> (ramificar según los datos), <code>Parallel</code> (ejecutar ramas al mismo tiempo), <code>Map</code> (ejecutar los mismos pasos para cada elemento de un arreglo), <code>Wait</code> (pausar durante un tiempo o hasta una marca de tiempo), <code>Pass</code>, <code>Succeed</code> y <code>Fail</code>.</p>
+<p>Hay dos tipos de flujo de trabajo, que se eligen al crear la máquina de estados. Los flujos Standard pueden ejecutarse hasta un año, ejecutan cada paso exactamente una vez y conservan un historial de ejecución completo que puedes inspeccionar en la consola; se cobran por transición de estado. Son adecuados para procesos de negocio de larga duración y auditables, incluidos los que esperan a personas. Los flujos Express se ejecutan hasta cinco minutos, están diseñados para el procesamiento de eventos de alto volumen (como manejar datos de streaming o solicitudes de API), se cobran por número de ejecuciones, duración y memoria, y envían el historial a CloudWatch Logs en lugar de guardarlo en el servicio. Los flujos Express asíncronos tienen semántica al menos una vez y los síncronos como máximo una vez, así que los pasos deben ser idempotentes.</p>
+<p>El manejo de errores se declara en los estados. Un bloque <code>Retry</code> enumera nombres de errores (como <code>States.Timeout</code>, <code>States.TaskFailed</code>, <code>Lambda.ServiceException</code> o tus propios nombres de error personalizados) con <code>IntervalSeconds</code>, <code>MaxAttempts</code> y <code>BackoffRate</code> para el retroceso exponencial. Un bloque <code>Catch</code> se ejecuta cuando se agotan los reintentos y envía la ejecución a un estado alternativo, con <code>ResultPath</code> controlando dónde se colocan los detalles del error en los datos del estado. Así es como construyes la compensación, por ejemplo reembolsar un pago cuando falla el envío.</p>
+<pre class="code" tabindex="0"><code>&quot;ChargeCard&quot;: {
+  &quot;Type&quot;: &quot;Task&quot;,
+  &quot;Resource&quot;: &quot;arn:aws:states:::lambda:invoke&quot;,
+  &quot;Retry&quot;: [{ &quot;ErrorEquals&quot;: [&quot;States.TaskFailed&quot;], &quot;IntervalSeconds&quot;: 2, &quot;MaxAttempts&quot;: 3, &quot;BackoffRate&quot;: 2 }],
+  &quot;Catch&quot;: [{ &quot;ErrorEquals&quot;: [&quot;States.ALL&quot;], &quot;ResultPath&quot;: &quot;$.error&quot;, &quot;Next&quot;: &quot;NotifyFailure&quot; }],
+  &quot;Next&quot;: &quot;ShipOrder&quot;
+}</code></pre>
+<p>Las integraciones de servicios vienen en tres patrones. Request Response llama a un servicio y continúa en cuanto este responde. Run a Job (<code>.sync</code>) espera a que termine un trabajo, como un job de AWS Batch u otra máquina de estados. Wait for Callback (<code>.waitForTaskToken</code>) pausa el flujo y pasa un task token a algo externo, por ejemplo un mensaje en SQS para un sistema de aprobación humana o una integración de terceros. El flujo permanece en pausa hasta que ese proceso externo llama a <code>SendTaskSuccess</code> o <code>SendTaskFailure</code> con el token (o hasta que la tarea agota su tiempo; <code>HeartbeatSeconds</code> puede detectar un trabajador que dejó de responder). Los task tokens son la forma en que los flujos Standard esperan días a que un gerente apruebe algo sin pagar por cómputo inactivo.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Amazon States Language (ASL)</dt><dd>El lenguaje basado en JSON que se usa para definir las máquinas de estados de Step Functions.</dd><dt>Standard workflow (flujo de trabajo Standard)</dt><dd>Un tipo de flujo de Step Functions para ejecuciones de larga duración (hasta un año), exactamente una vez y completamente auditadas.</dd><dt>Express workflow (flujo de trabajo Express)</dt><dd>Un tipo de flujo de Step Functions para ejecuciones cortas (hasta cinco minutos) y de alto volumen, registradas en CloudWatch Logs.</dd><dt>Task token (token de tarea)</dt><dd>Un token que Step Functions pasa a un proceso externo en el patrón Wait for Callback; el flujo se reanuda cuando se llama a SendTaskSuccess o SendTaskFailure con él.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un flujo de gastos guarda una solicitud y luego usa una tarea de SQS con .waitForTaskToken para poner el token en un mensaje para la aplicación de aprobaciones. Dos días después, un gerente hace clic en Aprobar y la aplicación llama a SendTaskSuccess con el token, así que el flujo Standard se reanuda y paga la solicitud.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Larga duración, auditable o en espera de personas apunta a Standard. Altas tasas de eventos con duración corta apuntan a Express. Cualquier cosa que deba pausarse hasta que responda un sistema externo apunta a un task token con .waitForTaskToken.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué hace un bloque Catch que Retry no hace?</summary><p>Catch redirige la ejecución a un estado alternativo cuando el error (y los reintentos) no se resuelve, mientras que Retry solo vuelve a intentar el mismo estado.</p></details>
+<details class="sq"><summary>¿Por qué un flujo que se ejecuta durante varios días necesitaría un flujo Standard?</summary><p>Los flujos Express están limitados a cinco minutos, mientras que los flujos Standard pueden ejecutarse hasta un año.</p></details>
+<details class="sq"><summary>¿Cómo reanuda un sistema externo un flujo pausado en un task token?</summary><p>Llama a SendTaskSuccess (o SendTaskFailure) con el task token que recibió.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../messaging-and-streaming-sqs-standard-vs-fifo-message-groups-deduplicat/">← Mensajería y streaming: SQS estándar vs FIFO (grupos de mens</a><a href="../calling-aws-services-with-the-sdks-and-cli-credential-provider-chain-p/">Llamar a servicios de AWS con los SDK y la CLI: cadena de pr →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>eBGP entre vecinos directamente conectados: estados de vec… · Lección de ENCOR</title>
+<meta name="description" content="BGP (Border Gateway Protocol) es el protocolo de enrutamiento de internet y la forma habitual en que las empresas se conectan con los proveedores de servic">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="eBGP entre vecinos directamente conectados: estados de vec… · Lección de ENCOR">
+<meta property="og:description" content="BGP (Border Gateway Protocol) es el protocolo de enrutamiento de internet y la forma habitual en que las empresas se conectan con los proveedores de servic">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/ebgp-between-directly-connected-neighbors-neighbor-states-and-best-pat/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/ebgp-between-directly-connected-neighbors-neighbor-states-and-best-pat/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ccnp-encor/">ENCOR</a> / <a href="../">Lecciones</a> · <a href="../../../../ccnp-encor/lessons/ebgp-between-directly-connected-neighbors-neighbor-states-and-best-pat/" hreflang="en" lang="en">English</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2</p>
+<h1>eBGP entre vecinos directamente conectados: estados de vecino y selección de la mejor ruta</h1>
+<article class="lbody">
+<p>BGP (Border Gateway Protocol) es el protocolo de enrutamiento de internet y la forma habitual en que las empresas se conectan con los proveedores de servicios. Es un protocolo de vector de ruta (path-vector): cada ruta lleva atributos, incluida la lista de sistemas autónomos (AS) que ha cruzado. BGP externo (eBGP) se ejecuta entre routers de distintos sistemas autónomos; BGP interno (iBGP) se ejecuta dentro de un AS. ENCOR se enfoca en eBGP entre vecinos directamente conectados y en cómo BGP elige una mejor ruta.</p>
+<p>BGP no descubre vecinos automáticamente; configuras cada uno. BGP usa el puerto TCP 179 como transporte confiable. Una configuración básica:</p>
+<pre class="code" tabindex="0"><code>router bgp 65001
+ bgp router-id 1.1.1.1
+ neighbor 203.0.113.1 remote-as 65100
+ network 198.51.100.0 mask 255.255.255.0</code></pre>
+<p>El comando <code>network</code> anuncia un prefijo solo si existe una coincidencia exacta (mismo prefijo y máscara) en la tabla de enrutamiento, por eso a veces agregas una ruta estática a Null0 para un agregado. Para eBGP, la dirección del vecino debe estar directamente conectada por defecto porque los paquetes eBGP se envían con un TTL de 1. Establecer peering entre loopbacks requeriría <code>ebgp-multihop</code> (o <code>disable-connected-check</code>) más <code>update-source</code>. Al anunciar a un par eBGP, el router se pone a sí mismo como siguiente salto y antepone su AS al AS_PATH. Un router rechaza cualquier ruta que contenga su propio AS en el AS_PATH, que es la prevención de bucles de BGP.</p>
+<p>Los estados de vecino avanzan así: Idle (sin intentar, o esperando después de un error), Connect (intentando la conexión TCP), Active (TCP falló; reintentando y escuchando), OpenSent (TCP arriba, mensaje OPEN enviado), OpenConfirm (OPEN recibido y parámetros aceptables, esperando KEEPALIVE) y Established (intercambiando mensajes UPDATE). Un vecino que alterna entre Idle y Active normalmente significa que la sesión no puede levantarse: TCP no puede completarse por una dirección de vecino incorrecta, una ACL que bloquea TCP 179 o falta de alcanzabilidad, o TCP se completa pero el par rechaza el OPEN por un número de AS incorrecto, lo que devuelve la sesión a Idle. En <code>show ip bgp summary</code>, un vecino Established muestra un número de prefijos recibidos en la columna State/PfxRcd en lugar del nombre de un estado.</p>
+<p>Cuando BGP tiene varias rutas hacia el mismo prefijo, elige una mejor ruta recorriendo una lista ordenada de atributos. Primero, el siguiente salto debe ser alcanzable. Luego, en el orden de Cisco: el weight más alto (específico de Cisco, local al router, 0 por defecto para rutas aprendidas); la local preference más alta (compartida dentro del AS, 100 por defecto); preferir las rutas originadas localmente; el AS_PATH más corto; el tipo de origen más bajo (IGP antes que EGP antes que incomplete); el MED más bajo (multi-exit discriminator, una sugerencia de un AS vecino sobre qué entrada usar, comparado por defecto solo entre rutas del mismo AS); eBGP sobre iBGP; la métrica IGP más baja hacia el siguiente salto; y luego desempates como la ruta eBGP más antigua y el router ID más bajo. Una mnemotecnia común en inglés para el inicio es 'We Love Oranges AS Oranges Mean Pure Refreshment' (Weight, Local preference, Originated, AS path, Origin, MED, Paths eBGP over iBGP, Router ID), aunque omite algunos pasos.</p>
+<p>Weight y local preference influyen en el tráfico saliente (qué salida usas). El AS_PATH prepending y el MED influyen en el tráfico entrante (cómo te alcanzan los demás). Revisa el resultado con <code>show ip bgp</code>, donde '&gt;' marca la mejor ruta.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>eBGP</dt><dd>BGP entre routers de distintos sistemas autónomos; usa TTL 1 por defecto.</dd><dt>Established</dt><dd>El estado de BGP en el que la sesión está arriba y se intercambian mensajes UPDATE.</dd><dt>Weight</dt><dd>Atributo específico de Cisco y local al router; el valor más alto se prefiere primero.</dd><dt>Local preference</dt><dd>Atributo de todo el AS usado para elegir el punto de salida; gana el valor más alto, 100 por defecto.</dd><dt>AS_PATH</dt><dd>La lista de sistemas autónomos que ha cruzado una ruta, usada para la prevención de bucles y la longitud de la ruta.</dd><dt>MED</dt><dd>Multi-exit discriminator: un valor más bajo sugiere un punto de entrada preferido hacia un AS vecino.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una empresa con dos ISP quiere que el tráfico saliente use el ISP A. Configura local preference 200 en las rutas recibidas del ISP A. Para dirigir también el tráfico entrante hacia el ISP A, antepone su propio AS dos veces en los anuncios hacia el ISP B, lo que hace que esa ruta se vea más larga para el resto de internet.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Idle o Active significa que la sesión no está arriba; Active no significa saludable. Recuerda el orden Weight, Local preference, Originated, AS_PATH, Origin, MED, eBGP sobre iBGP. En weight y local preference gana el más alto; en la longitud del AS_PATH y el MED gana el más bajo.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Un vecino BGP alterna entre Active e Idle. Menciona dos causas probables.</summary><p>La sesión TCP en el puerto 179 no puede completarse por una dirección de vecino incorrecta o falta de ruta, o por una ACL que bloquea TCP 179; o TCP se completa pero el OPEN se rechaza por una discrepancia en remote-as.</p></details>
+<details class="sq"><summary>¿Qué atributo cambiarías para influir en la elección de ruta saliente de todo el AS?</summary><p>Local preference, porque se comparte entre los pares iBGP y se prefiere el valor más alto.</p></details>
+<details class="sq"><summary>¿Por qué a veces una sentencia network no logra anunciar un prefijo?</summary><p>El prefijo y la máscara exactos deben existir en la tabla de enrutamiento; sin una ruta que coincida, no se anuncia.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia ENCOR gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ccnp-encor/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../ospfv2-and-ospfv3-multi-area-adjacencies-network-types-area-types-stub/">← OSPFv2 y OSPFv3: multiárea, adyacencias, tipos de red, tipos</a><a href="../policy-based-routing-with-route-maps/">Enrutamiento basado en políticas con route maps →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Orden de búsqueda de rutas: policy routes y luego la tabla… · Lección de FortiGate Admin</title>
+<meta name="description" content="Antes de que un FortiGate pueda aplicar una política de firewall, debe decidir a dónde debe ir un paquete. Esa decisión de enrutamiento sigue un orden estr">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Orden de búsqueda de rutas: policy routes y luego la tabla… · Lección de FortiGate Admin">
+<meta property="og:description" content="Antes de que un FortiGate pueda aplicar una política de firewall, debe decidir a dónde debe ir un paquete. Esa decisión de enrutamiento sigue un orden estr">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/fortinet-fortigate/lessons/route-lookup-order-policy-routes-then-the-routing-table-longest-match/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/fortinet-fortigate/lessons/route-lookup-order-policy-routes-then-the-routing-table-longest-match/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../fortinet-fortigate/">FortiGate Admin</a> / <a href="../">Lecciones</a> · <a href="../../../../fortinet-fortigate/lessons/route-lookup-order-policy-routes-then-the-routing-table-longest-match/" hreflang="en" lang="en">English</a></p>
+<p class="note">Fortinet NSE 4 - FortiOS 7.6 Administrator NSE4_FGT_AD-7.6</p>
+<h1>Orden de búsqueda de rutas: policy routes y luego la tabla de enrutamiento (coincidencia más larga, distancia, prioridad)</h1>
+<article class="lbody">
+<p>Antes de que un FortiGate pueda aplicar una política de firewall, debe decidir a dónde debe ir un paquete. Esa decisión de enrutamiento sigue un orden estricto, y conocerlo explica muchas preguntas del examen del tipo '¿por qué el tráfico tomó ese camino?'.</p>
+<p>Lo primero que se revisa son las policy routes (también llamadas rutas basadas en políticas o PBR). Una policy route coincide según criterios como la interfaz de entrada, la dirección de origen y de destino, el protocolo y el puerto, y si coincide, obliga al paquete a salir por una interfaz o gateway especificado, sin importar la tabla de enrutamiento normal. Las policy routes se evalúan de arriba hacia abajo y gana la primera coincidencia. Como van primero, una policy route anula la tabla de enrutamiento para el tráfico con el que coincide; así es como diriges tráfico específico (por ejemplo, el tráfico web de una subred por un enlace particular) de forma independiente del enrutamiento basado en el destino.</p>
+<p>Si ninguna policy route coincide, el FortiGate consulta la tabla de enrutamiento (las rutas activas). Aquí la selección sigue tres criterios de desempate en orden. Primero, la coincidencia de prefijo más largo: gana la ruta más específica hacia el destino, así que una /24 le gana a una /16 que también cubre la dirección, y una ruta de host /32 les gana a ambas. Esto es fundamental: la especificidad siempre se impone a los demás factores.</p>
+<p>Segundo, entre rutas con la misma longitud de prefijo, gana la distancia administrativa más baja. La distancia administrativa expresa la confianza en el origen de una ruta (por ejemplo, una ruta directamente conectada es más confiable que una ruta estática, que a su vez es más confiable que una ruta dinámica aprendida). Solo la ruta de menor distancia para un prefijo determinado se instala como activa; las rutas de mayor distancia esperan en la base de datos de enrutamiento como respaldo.</p>
+<p>Tercero, cuando las rutas tienen el mismo prefijo y la misma distancia, la prioridad desempata en las rutas estáticas: se prefiere la ruta con el valor de prioridad más bajo, aunque ambas permanecen en la tabla. Si el prefijo, la distancia y la prioridad son todos iguales, el resultado es equal-cost multipath (ECMP, multitrayecto de igual costo), y el tráfico se reparte entre las rutas.</p>
+<p>Así que el orden completo es: primero las policy routes; luego la tabla de enrutamiento por coincidencia más larga, después la distancia más baja, después la prioridad más baja y después ECMP. Tener clara esta secuencia te permite predecir el camino elegido y diagnosticar sorpresas. En un laboratorio, un debug flow muestra el paso de búsqueda de ruta, lo que te permite ver exactamente qué ruta eligió el FortiGate y por qué.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Policy route, PBR (ruta basada en políticas)</dt><dd>Una regla que se evalúa antes de la tabla de enrutamiento y obliga al tráfico coincidente a salir por una interfaz/gateway especificado, anulando el enrutamiento basado en el destino.</dd><dt>Longest prefix match (coincidencia de prefijo más largo)</dt><dd>La regla de enrutamiento según la cual la ruta más específica (máscara más larga) hacia un destino se prefiere sobre las menos específicas.</dd><dt>Administrative distance (distancia administrativa)</dt><dd>Una medida de confianza en el origen de una ruta; entre rutas con el mismo prefijo, la de menor distancia se instala como activa.</dd><dt>Priority, static (prioridad en rutas estáticas)</dt><dd>Un criterio de desempate entre rutas con el mismo prefijo y la misma distancia; se prefiere el valor más bajo, mientras ambas permanecen en la tabla.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una sucursal dirige todo el tráfico web de la subred de invitados por el enlace de banda ancha con una policy route, así que, aunque la ruta predeterminada de la tabla de enrutamiento apunta a MPLS, el tráfico de invitados coincidente sigue la policy route porque las policy routes se revisan primero.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Las policy routes se evalúan antes que la tabla de enrutamiento. Dentro de la tabla, el orden es coincidencia más larga, luego distancia y luego prioridad. La especificidad (longitud del prefijo) siempre gana antes que la distancia.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿En qué orden toma un FortiGate su decisión de enrutamiento?</summary><p>Primero las policy routes; si ninguna coincide, la tabla de enrutamiento por coincidencia de prefijo más largo, luego la distancia administrativa más baja, luego la prioridad más baja y luego ECMP.</p></details>
+<details class="sq"><summary>¿Cuál gana: una ruta más específica con mayor distancia o una ruta menos específica con menor distancia?</summary><p>La ruta más específica; la coincidencia de prefijo más largo se aplica antes que la distancia administrativa.</p></details>
+<details class="sq"><summary>¿Qué ocurre cuando las rutas tienen el mismo prefijo, la misma distancia y la misma prioridad?</summary><p>Forman equal-cost multipath (ECMP) y el tráfico se reparte entre ellas.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia FortiGate Admin gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../fortinet-fortigate/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../security-profile-logs-and-troubleshooting-fortiguard-connectivity-diag/">← Registros de perfiles de seguridad y resolución de problemas</a><a href="../static-routes-administrative-distance-priority-ecmp-and-load-balancing/">Rutas estáticas: distancia administrativa, prioridad, ECMP y →</a></nav>
+</main>
+</body>
+</html>

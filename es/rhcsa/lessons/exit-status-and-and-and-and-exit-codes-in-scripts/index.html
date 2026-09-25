@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Código de salida ($?), &amp;&amp; y ||, y códigos de salida en scr… · Lección de RHCSA</title>
+<meta name="description" content="Todo comando que termina devuelve un código de salida (exit status), un número de 0 a 255. Por convención, 0 significa éxito y cualquier valor distinto de ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Código de salida ($?), &amp;&amp; y ||, y códigos de salida en scr… · Lección de RHCSA">
+<meta property="og:description" content="Todo comando que termina devuelve un código de salida (exit status), un número de 0 a 255. Por convención, 0 significa éxito y cualquier valor distinto de ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/exit-status-and-and-and-and-exit-codes-in-scripts/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/exit-status-and-and-and-and-exit-codes-in-scripts/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/exit-status-and-and-and-and-exit-codes-in-scripts/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Código de salida ($?), &amp;&amp; y ||, y códigos de salida en scripts</h1>
+<article class="lbody">
+<p>Todo comando que termina devuelve un código de salida (exit status), un número de 0 a 255. Por convención, 0 significa éxito y cualquier valor distinto de cero significa algún tipo de fallo; el valor concreto puede identificar el error, y la página man de un comando suele documentar sus códigos. El shell usa los códigos de salida para dirigir <code>if</code>, <code>while</code>, <code>&amp;&amp;</code> y <code>||</code>, así que entenderlos es la clave para escribir scripts que reaccionen correctamente ante los fallos.</p>
+<p>La variable especial <code>$?</code> contiene el código de salida del último comando que terminó. Revísala de inmediato, porque el siguiente comando, incluso <code>echo</code>, la reemplaza. Por ejemplo, <code>grep -q harry /etc/passwd; echo $?</code> imprime 0 si harry existe y 1 si no; grep usa 2 para errores como un archivo inexistente.</p>
+<pre class="code" tabindex="0"><code>ls /nonexistent
+echo $?                    # 2 para ls: problema serio
+mkdir -p /backup &amp;&amp; cp -a /etc /backup/   # copiar solo si mkdir funcionó
+ping -c1 -W1 serverb || echo &quot;serverb unreachable&quot;
+systemctl is-active sshd &amp;&amp; echo up || echo down</code></pre>
+<p><code>&amp;&amp;</code> y <code>||</code> encadenan comandos según el código de salida. <code>cmd1 &amp;&amp; cmd2</code> ejecuta cmd2 solo si cmd1 tuvo éxito; <code>cmd1 || cmd2</code> ejecuta cmd2 solo si cmd1 falló. Te permiten escribir líneas de protección cortas como <code>cd /data || exit 1</code>, que detiene un script en lugar de continuar en el directorio equivocado. La combinación <code>a &amp;&amp; b || c</code> se usa a menudo como un if/else compacto, pero cuidado: c también se ejecuta si a tuvo éxito y b falló, así que usa un <code>if</code> de verdad cuando eso importe.</p>
+<p>Los scripts también devuelven códigos de salida. El comando interno <code>exit</code> termina el script inmediatamente con el número que le des, <code>exit 0</code> para éxito o <code>exit 1</code> (u otro valor distinto de cero) para fallo. Sin un exit explícito, un script devuelve el código del último comando que ejecutó. Establecer un código claro importa porque otras herramientas dependen de él: una tarea programada, un servicio de systemd u otro script solo pueden saber que tu script falló si devuelve un valor distinto de cero. Una tarea podría decir 'si no se da ningún argumento, imprime un mensaje de uso y sal con el código 2'.</p>
+<pre class="code" tabindex="0"><code>#!/bin/bash
+if [ $# -ne 1 ]; then
+    echo &quot;Usage: $0 username&quot; &gt;&amp;2
+    exit 2
+fi
+id &quot;$1&quot; &amp;&gt; /dev/null || { echo &quot;no such user&quot; &gt;&amp;2; exit 1; }
+echo &quot;$1 exists&quot;
+exit 0</code></pre>
+<p>En ese script, <code>&gt;&amp;2</code> envía los mensajes de error a stderr, lo cual es una buena práctica, y las llaves agrupan varios comandos para ejecutarlos después de <code>||</code>. Puedes verificar el código de un script igual que el de cualquier comando: ejecútalo y luego <code>echo $?</code>. Algunos administradores también añaden <code>set -e</code> para detenerse ante cualquier comando que falle, pero tiene excepciones sorprendentes, así que las comprobaciones explícitas son más claras para los scripts del examen.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Exit status (código de salida)</dt><dd>Un número de 0 a 255 que devuelve todo comando; 0 significa éxito y un valor distinto de cero, fallo.</dd><dt>$?</dt><dd>Variable especial que contiene el código de salida del último comando que terminó.</dd><dt>&amp;&amp;</dt><dd>Ejecuta el siguiente comando solo si el anterior tuvo éxito (código de salida 0).</dd><dt>||</dt><dd>Ejecuta el siguiente comando solo si el anterior falló (código de salida distinto de cero).</dd><dt>exit</dt><dd>Comando interno que termina un script inmediatamente con un código de salida dado.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un script de respaldo empieza con <code>mountpoint -q /backup || { echo 'backup disk not mounted' &gt;&amp;2; exit 1; }</code>. Cuando falta el disco, el script se detiene con el código 1 en lugar de llenar el sistema de archivos raíz, y el fallo de la tarea cron queda visible en los logs.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> $? se sobrescribe con cada comando, incluidos echo y [ ]; guárdalo de inmediato en una variable (rc=$?) si lo necesitas después.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué código de salida indica éxito?</summary><p>0; cualquier valor distinto de cero indica fallo.</p></details>
+<details class="sq"><summary>En <code>mkdir /data &amp;&amp; touch /data/ok</code>, ¿cuándo se ejecuta touch?</summary><p>Solo si mkdir tuvo éxito.</p></details>
+<details class="sq"><summary>¿Qué código devuelve un script que no tiene comando exit?</summary><p>El código de salida del último comando que ejecutó.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../conditionally-running-code-with-if-elif-else-and-test-f-d-z-eq-gt-stri/">← Ejecutar código de forma condicional con if, elif, else y te</a><a href="../looping-with-for-over-lists-globs-seq-and-while-read/">Bucles con for (sobre listas, globs, $(seq)) y while read →</a></nav>
+</main>
+</body>
+</html>

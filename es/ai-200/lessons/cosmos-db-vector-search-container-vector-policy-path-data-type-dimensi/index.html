@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Búsqueda vectorial en Cosmos DB: directiva vectorial del c… · Lección de AI-200</title>
+<meta name="description" content="Los modelos de embeddings convierten texto o imágenes en vectores: arreglos largos de números en los que los significados similares quedan cerca unos de ot">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Búsqueda vectorial en Cosmos DB: directiva vectorial del c… · Lección de AI-200">
+<meta property="og:description" content="Los modelos de embeddings convierten texto o imágenes en vectores: arreglos largos de números en los que los significados similares quedan cerca unos de ot">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/cosmos-db-vector-search-container-vector-policy-path-data-type-dimensi/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/cosmos-db-vector-search-container-vector-policy-path-data-type-dimensi/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/cosmos-db-vector-search-container-vector-policy-path-data-type-dimensi/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Búsqueda vectorial en Cosmos DB: directiva vectorial del contenedor (ruta, tipo de datos, dimensiones, función de distancia), índices vectoriales (flat, quantizedFlat, diskANN) y VectorDistance()</h1>
+<article class="lbody">
+<p>Los modelos de embeddings convierten texto o imágenes en vectores: arreglos largos de números en los que los significados similares quedan cerca unos de otros. La búsqueda vectorial encuentra los elementos cuyos vectores están más cerca de un vector de consulta. Cosmos DB for NoSQL puede almacenar embeddings dentro de los mismos elementos JSON que tus datos operativos y buscar en ellos, así que una app de RAG (retrieval-augmented generation, generación aumentada por recuperación) no necesita una base de datos vectorial aparte. Primero hay que habilitar la función en la cuenta (la capacidad de búsqueda vectorial para NoSQL).</p>
+<p>La búsqueda vectorial necesita dos piezas de configuración en el contenedor. La primera es la directiva vectorial del contenedor (vector embedding policy), que describe cada propiedad de embedding: su <code>path</code> (por ejemplo <code>/embedding</code>), su <code>dataType</code> (como <code>float32</code>, o tipos más pequeños como <code>int8</code> y <code>uint8</code>), su número de <code>dimensions</code> (que debe coincidir con la longitud de salida de tu modelo de embeddings) y su <code>distanceFunction</code>: <code>cosine</code>, <code>dotproduct</code> o <code>euclidean</code>. Usa la función de distancia para la que se diseñó tu modelo de embeddings; cosine es la opción predeterminada habitual para embeddings de texto. La directiva vectorial se define al crear el contenedor, así que planifícala desde el principio.</p>
+<p>La segunda pieza es un índice vectorial en la directiva de indexación del contenedor, listado bajo <code>vectorIndexes</code> con la misma ruta y un tipo. Hay tres tipos. <code>flat</code> hace una búsqueda exacta por fuerza bruta sobre vectores con precisión completa; da un recall perfecto, pero solo admite un número limitado de dimensiones y se encarece a medida que crecen los datos, así que encaja con conjuntos de datos pequeños. <code>quantizedFlat</code> comprime los vectores (cuantización) y los sigue recorriendo, sacrificando un poco de precisión a cambio de menor costo y admitiendo más dimensiones. <code>diskANN</code> construye un índice de vecinos más cercanos aproximados basado en grafos, desarrollado por Microsoft Research, que ofrece baja latencia y bajo costo a gran escala con un recall alto pero no perfecto. Como regla general: necesidades pequeñas o exactas, flat; tamaño moderado, quantizedFlat; gran escala, diskANN.</p>
+<pre class="code" tabindex="0"><code>&quot;vectorEmbeddingPolicy&quot;: { &quot;vectorEmbeddings&quot;: [
+  { &quot;path&quot;: &quot;/embedding&quot;, &quot;dataType&quot;: &quot;float32&quot;, &quot;dimensions&quot;: 1536, &quot;distanceFunction&quot;: &quot;cosine&quot; } ] },
+&quot;indexingPolicy&quot;: {
+  &quot;includedPaths&quot;: [ { &quot;path&quot;: &quot;/*&quot; } ],
+  &quot;excludedPaths&quot;: [ { &quot;path&quot;: &quot;/embedding/*&quot; } ],
+  &quot;vectorIndexes&quot;: [ { &quot;path&quot;: &quot;/embedding&quot;, &quot;type&quot;: &quot;diskANN&quot; } ] }</code></pre>
+<p>Observa que la ruta del embedding se excluye del índice de rango normal. Indexar cientos de números por elemento como propiedades normales encarecería cada escritura y no aporta nada; de eso se encarga el índice vectorial.</p>
+<p>Consultas con la función del sistema <code>VectorDistance()</code>, que devuelve una puntuación de similitud entre el vector de un elemento y el vector de consulta. Combínala con <code>TOP</code> y <code>ORDER BY</code> para obtener los k elementos más cercanos, y agrega filtros WHERE normales para los metadatos.</p>
+<pre class="code" tabindex="0"><code>results = container.query_items(
+    query=&quot;SELECT TOP 5 c.id, c.text, VectorDistance(c.embedding, @q) AS score &quot;
+          &quot;FROM c WHERE c.category = @cat ORDER BY VectorDistance(c.embedding, @q)&quot;,
+    parameters=[{&quot;name&quot;: &quot;@q&quot;, &quot;value&quot;: query_vector}, {&quot;name&quot;: &quot;@cat&quot;, &quot;value&quot;: &quot;manuals&quot;}],
+    enable_cross_partition_query=True)</code></pre>
+<p>Usa siempre <code>TOP</code> en las consultas vectoriales para que el motor no devuelva todos los elementos. Con cosine y dot product, una puntuación más alta significa más similitud; el ORDER BY sobre VectorDistance devuelve primero los elementos más similares.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Vector embedding policy (directiva de embeddings vectoriales)</dt><dd>Configuración del contenedor que define la ruta, el tipo de datos, el número de dimensiones y la función de distancia de cada vector.</dd><dt>flat index (índice flat)</dt><dd>Un índice vectorial exacto por fuerza bruta con recall perfecto, adecuado para conjuntos de datos pequeños y dimensiones limitadas.</dd><dt>quantizedFlat index (índice quantizedFlat)</dt><dd>Un índice vectorial que comprime los vectores y los recorre, reduciendo el costo con una pequeña pérdida de precisión.</dd><dt>diskANN index (índice diskANN)</dt><dd>Un índice de vecinos más cercanos aproximados basado en grafos, diseñado para baja latencia a gran escala.</dd><dt>VectorDistance()</dt><dd>La función de consulta de Cosmos DB que devuelve la puntuación de similitud entre dos vectores.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un chatbot de soporte guarda fragmentos de manuales de productos en Cosmos DB con un embedding float32 de 1536 dimensiones, distancia cosine y un índice diskANN, y excluye /embedding/* de la indexación de rango. Para cada pregunta genera el embedding del texto y ejecuta SELECT TOP 5 con VectorDistance y un filtro WHERE por línea de producto, y luego le pasa los cinco fragmentos al modelo.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Las dimensiones de la directiva vectorial deben coincidir con la salida del modelo de embeddings; elige flat para búsquedas exactas pequeñas, quantizedFlat para tamaño medio y diskANN para gran escala, y excluye la ruta del vector del índice normal.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué cuatro propiedades describen un vector en la directiva vectorial del contenedor?</summary><p>La ruta, el tipo de datos, el número de dimensiones y la función de distancia (cosine, dotproduct o euclidean).</p></details>
+<details class="sq"><summary>¿Por qué incluir TOP en una consulta con VectorDistance?</summary><p>Para limitar el resultado a los k elementos más cercanos; sin él, la consulta puntuaría y devolvería muchos más elementos y costaría más RU.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../request-units-point-reads-vs-queries-indexing-policy-include-exclude-p/">← Request Units: lecturas puntuales vs consultas, rutas includ</a><a href="../change-feed-change-feed-processor-with-a-lease-container-azure-functio/">Change feed: change feed processor con un contenedor de leas →</a></nav>
+</main>
+</body>
+</html>

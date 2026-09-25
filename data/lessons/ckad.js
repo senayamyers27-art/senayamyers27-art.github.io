@@ -2267,4 +2267,4 @@ CertHub.addLessons("ckad", [
    ]
   ]
  }
-]);
+], { reviewed: "2026-09-25" });

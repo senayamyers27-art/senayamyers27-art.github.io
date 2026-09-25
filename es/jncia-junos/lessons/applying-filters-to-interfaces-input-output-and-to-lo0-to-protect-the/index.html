@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Aplicar filtros a interfaces (input/output) y a lo0 para p… · Lección de JNCIA-Junos</title>
+<meta name="description" content="Un firewall filter no hace nada hasta que lo aplicas. Aplicas los filtros a una interfaz lógica (unit) bajo la familia de protocolos, eligiendo una direcci">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Aplicar filtros a interfaces (input/output) y a lo0 para p… · Lección de JNCIA-Junos">
+<meta property="og:description" content="Un firewall filter no hace nada hasta que lo aplicas. Aplicas los filtros a una interfaz lógica (unit) bajo la familia de protocolos, eligiendo una direcci">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/jncia-junos/lessons/applying-filters-to-interfaces-input-output-and-to-lo0-to-protect-the/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/jncia-junos/lessons/applying-filters-to-interfaces-input-output-and-to-lo0-to-protect-the/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../jncia-junos/">JNCIA-Junos</a> / <a href="../">Lecciones</a> · <a href="../../../../jncia-junos/lessons/applying-filters-to-interfaces-input-output-and-to-lo0-to-protect-the/" hreflang="en" lang="en">English</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106</p>
+<h1>Aplicar filtros a interfaces (input/output) y a lo0 para proteger el RE</h1>
+<article class="lbody">
+<p>Un firewall filter no hace nada hasta que lo aplicas. Aplicas los filtros a una interfaz lógica (unit) bajo la familia de protocolos, eligiendo una dirección. Los filtros <code>input</code> filtran los paquetes que llegan a la interfaz; los filtros <code>output</code> filtran los paquetes que salen de ella. Puedes aplicar un filtro de entrada y uno de salida por familia en una interfaz, o usar <code>input-list</code> y <code>output-list</code> para aplicar varios filtros en secuencia.</p>
+<pre class="code" tabindex="0"><code>set interfaces ge-0/0/0 unit 0 family inet filter input FROM-INTERNET
+set interfaces ge-0/0/1 unit 0 family inet filter output TO-SERVERS
+set interfaces lo0 unit 0 family inet filter input PROTECT-RE</code></pre>
+<p>Elige la dirección pensando en de dónde viene el tráfico. Para detener el tráfico no deseado que entra a tu red desde internet, aplica un filtro de entrada en la interfaz hacia internet, que lo descarta lo antes posible. Para controlar lo que llega a un segmento de servidores en particular sin importar por qué interfaz entró, un filtro de salida en la interfaz hacia ese segmento suele ser más simple. Recuerda que un filtro es stateless, así que un filtro en una dirección puede necesitar términos para las respuestas del tráfico que tú iniciaste.</p>
+<p>La interfaz loopback, lo0, tiene un rol especial. El tráfico destinado al propio dispositivo, el Routing Engine (RE), como SSH, SNMP, NTP, BGP, OSPF, ping y las respuestas DNS, lo maneja el RE sin importar por qué interfaz física llegó. Un filtro de entrada en lo0 se aplica a todo ese tráfico dirigido al host desde todas las interfaces, así que un solo filtro protege el plano de control. No afecta al tráfico de tránsito que el dispositivo simplemente reenvía. Esto convierte a un filtro de entrada en lo0 en la forma estándar de proteger al RE del acceso no autorizado y de las inundaciones.</p>
+<p>Un buen filtro de lo0 permite solo lo que el dispositivo necesita, y solo desde los orígenes que lo necesitan. Los términos típicos permiten SSH desde las redes de gestión, SNMP desde los servidores de monitoreo, NTP desde los servidores de hora, BGP desde los vecinos configurados (una prefix list construida con <code>apply-path</code> puede listarlos automáticamente), OSPF y BFD desde la red interna, ICMP con limitación de tasa, DNS y otras respuestas de las que dependes, y luego cuentan y descartan todo lo demás. Por el descarte implícito, olvidar un término rompe esa función: olvida OSPF y tus adyacencias caen; olvida las respuestas NTP y el reloj deja de sincronizarse.</p>
+<p>Aplicar un filtro en lo0 es una forma clásica de quedarte sin acceso, así que usa <code>commit confirmed 5</code>. Si tu sesión SSH muere, el dispositivo hace rollback automáticamente después de cinco minutos. Si todo sigue funcionando, ejecuta <code>commit</code> de nuevo para hacerlo permanente. Después, verifica con <code>show firewall filter PROTECT-RE</code> para ver los contadores de cada término y con <code>show interfaces lo0 detail</code> o <code>show configuration interfaces lo0</code> para confirmar que el filtro está aplicado.</p>
+<p>Los filtros también pueden aplicarse a IPv6 con <code>family inet6</code>, y un filtro IPv4 nunca inspecciona paquetes IPv6. Si el dispositivo es alcanzable por IPv6, protege lo0 para ambas familias.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Input filter (filtro de entrada)</dt><dd>Un filtro aplicado a los paquetes que llegan a una interfaz.</dd><dt>Output filter (filtro de salida)</dt><dd>Un filtro aplicado a los paquetes que salen de una interfaz.</dd><dt>lo0 filter (filtro de lo0)</dt><dd>Un filtro de entrada en la interfaz loopback que inspecciona todo el tráfico destinado al Routing Engine desde cualquier interfaz.</dd><dt>Host-bound traffic (tráfico dirigido al host)</dt><dd>Paquetes dirigidos al propio dispositivo, como el tráfico de gestión y de protocolos de enrutamiento, que procesa el RE.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un equipo de seguridad quiere detener los intentos de fuerza bruta por SSH que llegan a un router desde internet. La ingeniera crea PROTECT-RE, que permite SSH solo desde la prefix list de gestión, BGP desde los peers, OSPF, NTP e ICMP limitado, con un término final de contar y descartar. Lo aplica como entrada en lo0 con <code>commit confirmed 5</code>, verifica que su sesión y las sesiones BGP siguen activas y luego hace commit de nuevo.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Un filtro de entrada en lo0 protege al Routing Engine del tráfico que llega por cualquier interfaz, pero no filtra el tráfico de tránsito. Incluye siempre los protocolos de enrutamiento y los servicios de gestión, y usa <code>commit confirmed</code>.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Un filtro de entrada en lo0 bloquea el tráfico de tránsito que pasa a través del router?</summary><p>No. Solo se aplica al tráfico destinado al Routing Engine.</p></details>
+<details class="sq"><summary>Aplicas un nuevo filtro en lo0 y todos los vecinos OSPF se caen. ¿Cuál es la causa probable?</summary><p>Al filtro le falta un término que permita OSPF, así que los paquetes OSPF llegan al descarte implícito.</p></details>
+<details class="sq"><summary>¿Por qué usar <code>commit confirmed</code> al aplicar un filtro en lo0?</summary><p>Si el filtro bloquea tu acceso de gestión, la configuración hace rollback automáticamente después del temporizador.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia JNCIA-Junos gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../jncia-junos/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../filter-actions-terminating-accept-discard-reject-and-non-terminating-c/">← Acciones de filtro: terminantes (accept, discard, reject) y </a><a href="../unicast-reverse-path-forwarding-urpf-checks-strict-and-loose/">Verificaciones de unicast reverse path forwarding (uRPF): st →</a></nav>
+</main>
+</body>
+</html>

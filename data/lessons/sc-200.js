@@ -1355,4 +1355,4 @@ CertHub.addLessons("sc-200", [
    ]
   ]
  }
-]);
+], { reviewed: "2026-09-25" });

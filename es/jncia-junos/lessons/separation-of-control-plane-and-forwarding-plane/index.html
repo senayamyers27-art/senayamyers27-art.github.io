@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Separación del plano de control y el plano de reenvío · Lección de JNCIA-Junos</title>
+<meta name="description" content="Todo router hace dos trabajos muy distintos. Tiene que determinar hacia dónde debe ir el tráfico, ejecutando protocolos de enrutamiento, manejando sesiones">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Separación del plano de control y el plano de reenvío · Lección de JNCIA-Junos">
+<meta property="og:description" content="Todo router hace dos trabajos muy distintos. Tiene que determinar hacia dónde debe ir el tráfico, ejecutando protocolos de enrutamiento, manejando sesiones">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/jncia-junos/lessons/separation-of-control-plane-and-forwarding-plane/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/jncia-junos/lessons/separation-of-control-plane-and-forwarding-plane/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../jncia-junos/">JNCIA-Junos</a> / <a href="../">Lecciones</a> · <a href="../../../../jncia-junos/lessons/separation-of-control-plane-and-forwarding-plane/" hreflang="en" lang="en">English</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106</p>
+<h1>Separación del plano de control y el plano de reenvío</h1>
+<article class="lbody">
+<p>Todo router hace dos trabajos muy distintos. Tiene que determinar hacia dónde debe ir el tráfico, ejecutando protocolos de enrutamiento, manejando sesiones de gestión y construyendo tablas. Y tiene que mover realmente millones de paquetes por segundo por las interfaces correctas. Junos separa esto en el plano de control (control plane) y el plano de reenvío (forwarding plane, también llamado plano de datos o data plane), y los ejecuta en hardware diferente.</p>
+<p>El plano de control lo maneja el Routing Engine (RE). Es esencialmente una computadora de propósito general: CPU, memoria y almacenamiento que ejecutan el kernel de Junos y los daemons. Habla OSPF, BGP y otros protocolos con los vecinos, ejecuta el CLI y J-Web, maneja SSH, SNMP y syslog, y calcula el mejor camino hacia cada destino. A partir de eso construye una tabla de enrutamiento y luego una tabla de reenvío.</p>
+<p>El plano de reenvío lo maneja el Packet Forwarding Engine (PFE). En la mayoría de las plataformas se construye con ASIC (application-specific integrated circuits, circuitos integrados de aplicación específica) especializados, diseñados para buscar destinos, aplicar filtros, policers y CoS, y reenviar el tráfico a velocidad de línea. El RE envía una copia de la tabla de reenvío al PFE, y el PFE reenvía el tráfico de tránsito usando esa copia sin involucrar al RE en cada paquete.</p>
+<p>Los dos están conectados por un enlace interno. Por él, el RE envía las actualizaciones de la tabla de reenvío al PFE, y el PFE sube la pequeña cantidad de tráfico que el propio RE debe manejar, como los paquetes de protocolos de enrutamiento o una sesión SSH al router. Este tráfico dirigido al host se llama tráfico de excepción (exception traffic), y tiene limitación de tasa para que no pueda saturar al RE.</p>
+<p>Los beneficios son la razón por la que este diseño está en el examen. Rendimiento: la velocidad de reenvío no depende de la carga de CPU del RE, así que una sesión de CLI ocupada o una actualización BGP grande no ralentiza el tráfico de tránsito. Estabilidad: si el RE está muy cargado, o un daemon de enrutamiento se reinicia, el PFE puede seguir reenviando con la última tabla de reenvío que recibió. Seguridad: como el tráfico de tránsito nunca llega al RE, los ataques contra el propio router se limitan a la ruta de excepción, que puedes proteger con un filtro en la loopback. Escala: los fabricantes pueden mejorar el hardware del RE y del PFE de forma independiente.</p>
+<p>Puedes ver ambos lados desde el CLI. <code>show route</code> muestra la tabla de enrutamiento que se guarda en el RE. <code>show route forwarding-table</code> muestra la tabla de reenvío que se construyó para el PFE. <code>show chassis routing-engine</code> muestra la CPU y la memoria del RE; <code>show chassis fpc</code> muestra las tarjetas de línea que alojan los PFE en plataformas modulares.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Control plane (plano de control)</dt><dd>Las funciones que deciden hacia dónde va el tráfico: protocolos de enrutamiento, gestión y construcción de tablas, manejadas por el Routing Engine.</dd><dt>Forwarding plane (plano de reenvío)</dt><dd>Las funciones que mueven los paquetes de tránsito usando la tabla de reenvío, manejadas por el Packet Forwarding Engine.</dd><dt>Routing Engine (RE)</dt><dd>El componente basado en CPU que ejecuta Junos, el CLI y los protocolos de enrutamiento.</dd><dt>Packet Forwarding Engine (PFE)</dt><dd>El componente, normalmente basado en ASIC, que reenvía el tráfico a velocidad de línea.</dd><dt>Exception traffic (tráfico de excepción)</dt><dd>Paquetes que el PFE debe subir al RE, como el tráfico dirigido al propio router.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Durante una ventana de mantenimiento, un ingeniero ejecuta un comando <code>show route</code> grande y la CPU del RE sube al 90 por ciento durante un minuto. Los clientes no notan ningún efecto, porque su tráfico de tránsito lo reenvía el PFE usando su tabla de reenvío, que la salida pesada del CLI no toca.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si una pregunta pregunta qué componente reenvía el tráfico de tránsito, la respuesta es el PFE. Si pregunta cuál ejecuta protocolos, construye tablas o aloja el CLI, la respuesta es el RE.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué envía el RE al PFE?</summary><p>Una copia de la tabla de reenvío (más configuración como filtros y CoS), que el PFE usa para reenviar el tráfico de tránsito.</p></details>
+<details class="sq"><summary>¿Por qué un router puede seguir reenviando si su daemon de enrutamiento se reinicia?</summary><p>Porque el PFE sigue usando la última tabla de reenvío que recibió del RE, independientemente de los procesos del RE.</p></details>
+<details class="sq"><summary>Menciona un beneficio de seguridad de separar los planos.</summary><p>El tráfico de tránsito nunca llega al RE, así que solo el tráfico de excepción dirigido al host puede atacar el plano de control, y ese tráfico puede limitarse en tasa y filtrarse.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia JNCIA-Junos gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../jncia-junos/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../junos-os-as-one-modular-os-across-routing-switching-and-security-platf/">← Junos OS como un único sistema operativo modular para plataf</a><a href="../routing-engine-re-runs-the-cli-routing-protocols-builds-the-routing-an/">Routing Engine (RE): ejecuta el CLI y los protocolos de enru →</a></nav>
+</main>
+</body>
+</html>

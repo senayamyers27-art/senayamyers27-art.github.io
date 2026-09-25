@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bloqueos de recursos: CanNotDelete vs. ReadOnly, herencia … · Lección de Azure Administrator</title>
+<meta name="description" content="Los bloqueos de recursos (resource locks) protegen recursos importantes contra cambios accidentales, incluso por parte de personas con permisos completos. ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Bloqueos de recursos: CanNotDelete vs. ReadOnly, herencia … · Lección de Azure Administrator">
+<meta property="og:description" content="Los bloqueos de recursos (resource locks) protegen recursos importantes contra cambios accidentales, incluso por parte de personas con permisos completos. ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-104/lessons/resource-locks-cannotdelete-vs-readonly-inheritance-and-who-can-remove/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-104/lessons/resource-locks-cannotdelete-vs-readonly-inheritance-and-who-can-remove/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-104/">Azure Administrator</a> / <a href="../">Lecciones</a> · <a href="../../../../az-104/lessons/resource-locks-cannotdelete-vs-readonly-inheritance-and-who-can-remove/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure Administrator Associate AZ-104</p>
+<h1>Bloqueos de recursos: CanNotDelete vs. ReadOnly, herencia y quién puede quitarlos</h1>
+<article class="lbody">
+<p>Los bloqueos de recursos (resource locks) protegen recursos importantes contra cambios accidentales, incluso por parte de personas con permisos completos. RBAC podría permitir que un Owner elimine una base de datos de producción, pero un bloqueo detiene la eliminación hasta que alguien quite deliberadamente el bloqueo primero. Los bloqueos son un seguro, no un sistema de control de acceso.</p>
+<p>Hay dos niveles de bloqueo. CanNotDelete (que aparece como Delete en el portal) permite a los usuarios autorizados leer y modificar un recurso, pero no eliminarlo. ReadOnly permite a los usuarios autorizados leer un recurso, pero no eliminarlo ni actualizarlo, lo que equivale más o menos a darle a todos el rol Reader sobre ese recurso. Puedes aplicar un bloqueo a una suscripción, a un grupo de recursos o a un recurso individual desde su hoja Locks, o con <code>az lock create</code> o <code>New-AzResourceLock</code>.</p>
+<p>Los bloqueos se heredan. Un bloqueo en un grupo de recursos se aplica a todos los recursos que contiene, incluidos los que se agreguen después, y un bloqueo en una suscripción se aplica a todo lo que hay en ella. Si se aplican varios bloqueos, gana el más restrictivo. Un bloqueo CanNotDelete en un grupo de recursos también significa que el propio grupo de recursos no se puede eliminar, aunque aún puedes agregarle recursos nuevos.</p>
+<p>Los bloqueos actúan sobre el plano de control, es decir, las operaciones enviadas a Azure Resource Manager en <code>management.azure.com</code>. No detienen las operaciones del plano de datos. Un bloqueo CanNotDelete en una cuenta de almacenamiento impide que alguien elimine la cuenta, pero no que elimine los blobs dentro de ella. Un bloqueo ReadOnly en un servidor SQL impide que el servidor se elimine o se reconfigure, pero no que se cambien filas en la base de datos.</p>
+<p>Los bloqueos ReadOnly tienen efectos secundarios que a las preguntas del examen les gusta evaluar, porque algunas acciones de 'lectura' en el portal en realidad son solicitudes POST. Un bloqueo ReadOnly en una cuenta de almacenamiento bloquea la operación de enumerar claves (list keys), así que los usuarios que dependen de las claves de la cuenta no pueden abrir los datos en el portal. Un bloqueo ReadOnly en un grupo de recursos que contiene una VM impide iniciarla, detenerla o cambiarle el tamaño. Un bloqueo ReadOnly en un App Service bloquea cosas como ver la secuencia de registros (log stream) o Visual Studio Server Explorer. Por eso muchos equipos prefieren CanNotDelete para producción y reservan ReadOnly para recursos que realmente nunca cambian.</p>
+<p>Para crear o eliminar un bloqueo necesitas permisos <code>Microsoft.Authorization/locks/*</code>. Entre los roles integrados, solo Owner y User Access Administrator los tienen; Contributor no, así que un Contributor no puede quitar un bloqueo y, por lo tanto, no puede eliminar un recurso bloqueado. Quitar un bloqueo es una operación normal para un Owner: elimina el bloqueo, hace el cambio y luego vuelve a agregar el bloqueo.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>CanNotDelete lock (bloqueo CanNotDelete)</dt><dd>Un bloqueo que permite leer y modificar un recurso, pero impide eliminarlo.</dd><dt>ReadOnly lock (bloqueo ReadOnly)</dt><dd>Un bloqueo que permite leer un recurso, pero impide tanto las actualizaciones como la eliminación.</dd><dt>Lock inheritance (herencia de bloqueos)</dt><dd>La regla por la cual un bloqueo en una suscripción o grupo de recursos se aplica a todos los recursos que están debajo, incluidos los creados después.</dd><dt>Control plane (plano de control)</dt><dd>Operaciones de administración mediante Azure Resource Manager, que es la única capa que protegen los bloqueos.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un administrador coloca un bloqueo CanNotDelete en el grupo de recursos que contiene la red virtual y el firewall de producción de la empresa. Meses después, un Contributor ejecuta un script de limpieza que intenta eliminar todo lo que tenga una etiqueta antigua; los recursos de red sobreviven, el script registra errores y el equipo puede revisar el cambio con calma en lugar de reconstruir la red.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Solo Owner y User Access Administrator (entre los roles integrados) pueden quitar bloqueos. ReadOnly puede romper operaciones normales como enumerar claves de almacenamiento o iniciar VM, y los bloqueos nunca protegen los datos dentro de un recurso.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Un grupo de recursos tiene un bloqueo CanNotDelete. ¿Puede un Contributor crear una VM nueva en él? ¿Y eliminarla después?</summary><p>Sí, puede crearla; no, no puede eliminarla, porque el bloqueo heredado impide la eliminación y un Contributor no puede quitar bloqueos.</p></details>
+<details class="sq"><summary>¿Un bloqueo CanNotDelete en una cuenta de almacenamiento impide que un usuario elimine blobs?</summary><p>No. Los bloqueos se aplican a operaciones del plano de control; eliminar blobs es una operación del plano de datos. Usa soft delete o inmutabilidad para proteger los datos.</p></details>
+<details class="sq"><summary>¿Por qué los usuarios podrían no poder explorar los contenedores de una cuenta de almacenamiento después de aplicar un bloqueo ReadOnly?</summary><p>Enumerar las claves de la cuenta es una operación POST que el bloqueo ReadOnly impide, así que falla el acceso con Shared Key a través del portal.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Azure Administrator gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-104/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../azure-policy-definitions-initiatives-assignments-scopes-and-exclusions/">← Azure Policy: definiciones, iniciativas, asignaciones, ámbit</a><a href="../tags-applying-tags-why-tags-are-not-inherited-and-enforcing-or-inherit/">Etiquetas: cómo aplicarlas, por qué no se heredan y cómo exi →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Entrega de Event Grid: directiva de reintentos, tiempo de … · Lección de AI-200</title>
+<meta name="description" content="Event Grid entrega cada evento a cada suscripción que coincide al menos una vez. Si el controlador no confirma el éxito, Event Grid reintenta. Entender cóm">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Entrega de Event Grid: directiva de reintentos, tiempo de … · Lección de AI-200">
+<meta property="og:description" content="Event Grid entrega cada evento a cada suscripción que coincide al menos una vez. Si el controlador no confirma el éxito, Event Grid reintenta. Entender cóm">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/event-grid-delivery-retry-policy-event-time-to-live-dead-lettering-to/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/event-grid-delivery-retry-policy-event-time-to-live-dead-lettering-to/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/event-grid-delivery-retry-policy-event-time-to-live-dead-lettering-to/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Entrega de Event Grid: directiva de reintentos, tiempo de vida del evento, envío a mensajes fallidos en Blob Storage, validación de webhooks y esquema CloudEvents</h1>
+<article class="lbody">
+<p>Event Grid entrega cada evento a cada suscripción que coincide al menos una vez. Si el controlador no confirma el éxito, Event Grid reintenta. Entender cómo funciona la entrega te ayuda a crear controladores que no pierdan eventos ni fallen ante los reintentos.</p>
+<p>Un controlador confirma el éxito devolviendo un código de estado HTTP de éxito (como 200 OK o 202 Accepted). Los errores y los tiempos de espera agotados activan la directiva de reintentos: Event Grid espera y reintenta según un calendario de retroceso exponencial con algo de aleatoriedad, en intervalos cada vez más largos. Algunos errores que reintentar no puede solucionar, como ciertas respuestas 400 Bad Request o 413 Request Entity Too Large, no se reintentan. Como un evento puede llegar más de una vez, los controladores deben ser idempotentes, por ejemplo haciendo seguimiento del <code>id</code> del evento.</p>
+<p>La directiva de reintentos de cada suscripción tiene dos límites: el máximo de intentos de entrega y el tiempo de vida del evento en minutos. De forma predeterminada, Event Grid intenta hasta 30 veces y sigue intentando durante un máximo de 1,440 minutos (24 horas), lo que ocurra primero. Puedes reducir cualquiera de los dos, por ejemplo cuando los eventos pierden su valor después de unos minutos.</p>
+<p>Cuando se alcanzan los límites, el evento se descarta a menos que hayas configurado el envío a mensajes fallidos (dead-lettering). Este envía los eventos no entregados a un contenedor de Blob Storage que especifiques, como archivos JSON, para que puedas inspeccionarlos y volver a reproducirlos. Event Grid necesita permiso para escribir en ese contenedor, normalmente mediante una identidad administrada en el tema.</p>
+<pre class="code" tabindex="0"><code>az eventgrid event-subscription create --name orders-hook \
+  --source-resource-id $TOPIC_ID --endpoint $WEBHOOK_URL \
+  --max-delivery-attempts 10 --event-ttl 120 \
+  --deadletter-endpoint $STORAGE_ID/blobServices/default/containers/eg-deadletter</code></pre>
+<p>Antes de entregar a un webhook, Event Grid valida que eres el propietario del punto de conexión, para que nadie pueda dirigir eventos al servicio de otra persona. Con el esquema de Event Grid, envía un <code>Microsoft.EventGrid.SubscriptionValidationEvent</code> cuyos datos contienen un <code>validationCode</code>. Tu punto de conexión demuestra la propiedad de forma sincrónica, devolviendo el código en el cuerpo de la respuesta como <code>validationResponse</code>, o de forma manual, enviando una solicitud GET a la <code>validationUrl</code> incluida en el evento dentro de un tiempo limitado. Con el esquema CloudEvents, la validación usa en su lugar el protocolo de enlace de protección contra abusos de webhooks de CloudEvents: una solicitud HTTP OPTIONS con un encabezado <code>WebHook-Request-Origin</code>, que se responde con un encabezado <code>WebHook-Allowed-Origin</code>. Azure Functions, Logic Apps y otros controladores de Azure completan la validación por ti.</p>
+<p>Event Grid admite dos esquemas de eventos. El esquema de Event Grid usa campos como <code>id</code>, <code>topic</code>, <code>subject</code>, <code>eventType</code>, <code>eventTime</code>, <code>data</code> y <code>dataVersion</code>. CloudEvents v1.0 es una especificación abierta y neutral respecto al proveedor de la CNCF (Cloud Native Computing Foundation), con campos como <code>id</code>, <code>source</code>, <code>type</code>, <code>subject</code>, <code>time</code>, <code>specversion</code> y <code>data</code>. Elige CloudEvents para la interoperabilidad entre nubes y herramientas. Defines el esquema de entrada en un tema personalizado y el esquema de entrega en una suscripción.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Retry policy (directiva de reintentos)</dt><dd>Límites por suscripción de intentos de entrega y de tiempo de vida del evento que rigen los reintentos de Event Grid.</dd><dt>Event time-to-live (tiempo de vida del evento)</dt><dd>El número de minutos que Event Grid sigue reintentando un evento antes de rendirse; 1,440 de forma predeterminada.</dd><dt>Dead-letter destination (destino de mensajes fallidos)</dt><dd>Un contenedor de Blob Storage donde Event Grid escribe los eventos que no pudo entregar.</dd><dt>Validation handshake (protocolo de validación)</dt><dd>El proceso mediante el cual un webhook demuestra que es propietario del punto de conexión antes de que Event Grid le entregue eventos.</dd><dt>CloudEvents</dt><dd>Una especificación abierta para describir los datos de eventos en un formato común entre servicios y nubes.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>El webhook de un socio estuvo caído durante dos días. Los eventos de más de 24 horas se perdieron porque la suscripción no tenía un destino de mensajes fallidos. El equipo configuró el envío a mensajes fallidos a un contenedor de almacenamiento, redujo el máximo de intentos de entrega para detectar fallas más rápido y escribió una pequeña herramienta de reproducción que lee los blobs JSON fallidos y los vuelve a publicar cuando el socio se recupera.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Valores predeterminados que debes recordar: 30 intentos de entrega y 1,440 minutos de TTL; los eventos no entregados se descartan a menos que se configure el envío a mensajes fallidos en Blob Storage. Un webhook personalizado debe devolver el validationCode como validationResponse (o llamar a validationUrl).</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué le pasa a un evento que agota sus reintentos cuando no hay un destino de mensajes fallidos?</summary><p>Se descarta; configura el envío a mensajes fallidos en un contenedor de Blob Storage para conservar los eventos no entregados.</p></details>
+<details class="sq"><summary>¿Cómo completa un webhook personalizado la validación del esquema de Event Grid de forma sincrónica?</summary><p>Responde al SubscriptionValidationEvent devolviendo el validationCode como validationResponse en el cuerpo.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../event-grid-system-and-custom-topics-event-subscriptions-filters-event/">← Event Grid: temas del sistema y personalizados, suscripcione</a><a href="../picking-service-bus-event-grid-or-event-hubs-for-a-scenario/">Elegir Service Bus, Event Grid o Event Hubs según el escenar →</a></nav>
+</main>
+</body>
+</html>

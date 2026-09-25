@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Modos de recepción: peek-lock (complete, abandon, dead-let… · Lección de AI-200</title>
+<meta name="description" content="Cuando un receptor toma un mensaje de una cola o suscripción de Service Bus, el agente tiene que decidir cuándo el mensaje realmente desaparece. Service Bu">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Modos de recepción: peek-lock (complete, abandon, dead-let… · Lección de AI-200">
+<meta property="og:description" content="Cuando un receptor toma un mensaje de una cola o suscripción de Service Bus, el agente tiene que decidir cuándo el mensaje realmente desaparece. Service Bu">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/receive-modes-peek-lock-complete-abandon-dead-letter-defer-vs-receive/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/receive-modes-peek-lock-complete-abandon-dead-letter-defer-vs-receive/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/receive-modes-peek-lock-complete-abandon-dead-letter-defer-vs-receive/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Modos de recepción: peek-lock (complete, abandon, dead-letter, defer) vs receive-and-delete; duración del bloqueo y renovación del bloqueo</h1>
+<article class="lbody">
+<p>Cuando un receptor toma un mensaje de una cola o suscripción de Service Bus, el agente tiene que decidir cuándo el mensaje realmente desaparece. Service Bus te ofrece dos modos de recepción, y elegir entre ellos decide si los mensajes pueden perderse cuando tu código falla.</p>
+<p>En el modo receive-and-delete (recibir y eliminar), el agente marca el mensaje como consumido en el momento en que lo entrega. Es simple y rápido, y solo necesita un viaje de ida y vuelta. Pero si el receptor falla después de recibirlo y antes de terminar el trabajo, el mensaje se pierde. Ofrece procesamiento como máximo una vez (at-most-once), lo que solo sirve para datos en los que perder un mensaje de vez en cuando es aceptable, como muestras frecuentes de telemetría.</p>
+<p>El modo peek-lock (el predeterminado) tiene dos etapas. Recibir bloquea el mensaje para que otros receptores no lo vean, pero este permanece en la cola. Tu código lo procesa y luego lo liquida con una de cuatro acciones. Complete elimina el mensaje: el trabajo tuvo éxito. Abandon libera el bloqueo para que el mensaje vuelva a estar disponible de inmediato, y su contador de entregas aumenta. Dead-letter mueve el mensaje a la subcola de mensajes fallidos con un motivo, para mensajes que nunca podrán tener éxito, como datos mal formados. Defer aparta el mensaje dentro de la cola; solo se puede recuperar más tarde por su número de secuencia, lo cual es útil cuando un mensaje llega antes que otro del que depende.</p>
+<pre class="code" tabindex="0"><code>from azure.servicebus import ServiceBusClient, AutoLockRenewer
+
+renewer = AutoLockRenewer(max_lock_renewal_duration=600)
+with client.get_queue_receiver(&quot;orders&quot;, auto_lock_renewer=renewer) as receiver:
+    for msg in receiver.receive_messages(max_message_count=5, max_wait_time=5):
+        try:
+            order = parse(msg)
+        except ValueError as e:
+            receiver.dead_letter_message(msg, reason=&quot;BadFormat&quot;, error_description=str(e))
+            continue
+        try:
+            process(order)
+            receiver.complete_message(msg)
+        except TransientError:
+            receiver.abandon_message(msg)</code></pre>
+<p>Si tu código no liquida un mensaje antes de que expire el bloqueo, el bloqueo caduca, el mensaje vuelve a ser visible y otro receptor puede procesarlo, y liquidarlo después falla con un error de bloqueo perdido (lock lost). Por eso peek-lock ofrece entrega al menos una vez (at-least-once) y por eso los controladores deben ser idempotentes. La duración del bloqueo es una propiedad de la cola o de la suscripción; el valor predeterminado es un minuto y el máximo es cinco minutos.</p>
+<p>Para trabajos que tardan más que la duración del bloqueo, renueva el bloqueo. <code>receiver.renew_message_lock(msg)</code> lo extiende una vez; <code>AutoLockRenewer</code>, como en el ejemplo anterior, lo sigue renovando en segundo plano hasta la duración máxima que elijas. El trigger de Service Bus de Azure Functions renueva los bloqueos automáticamente y completa los mensajes cuando la función tiene éxito o los abandona cuando lanza una excepción (un comportamiento que puedes cambiar en host.json).</p>
+<p>Cada vez que se entrega un mensaje en modo peek-lock, su contador de entregas aumenta. Cuando supera el max delivery count (número máximo de entregas) de la cola, Service Bus lo envía automáticamente a la cola de mensajes fallidos, algo que se ve en la siguiente lección.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Peek-lock (inspeccionar y bloquear)</dt><dd>El modo de recepción predeterminado que bloquea un mensaje hasta que el receptor lo completa, abandona, difiere o envía a mensajes fallidos.</dd><dt>Receive-and-delete (recibir y eliminar)</dt><dd>Un modo de recepción que elimina el mensaje al entregarlo, lo que da procesamiento como máximo una vez.</dd><dt>Lock duration (duración del bloqueo)</dt><dd>Cuánto tiempo permanece un mensaje recibido bloqueado para un receptor antes de volver a ser visible; un minuto de forma predeterminada, cinco como máximo.</dd><dt>Defer (diferir)</dt><dd>Liquidar un mensaje de modo que permanezca en la cola, pero solo pueda recibirse de nuevo por su número de secuencia.</dd><dt>AutoLockRenewer</dt><dd>Una utilidad del SDK de Python que renueva los bloqueos de mensajes en segundo plano durante un procesamiento largo.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un worker que generaba embeddings de PDF con peek-lock tardaba unos tres minutos por documento, y algunos documentos se procesaban dos veces con errores de bloqueo perdido al completarlos. La duración del bloqueo era de un minuto. El equipo agregó AutoLockRenewer con un máximo de diez minutos e hizo idempotente el upsert; los duplicados desaparecieron y las operaciones de completar funcionaron.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si los mensajes no deben perderse, usa peek-lock; los errores de bloqueo perdido en trabajos largos significan renovar el bloqueo (AutoLockRenewer) o subir la duración del bloqueo hasta cinco minutos; abandon incrementa el contador de entregas.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué modo de recepción corre el riesgo de perder mensajes si el consumidor falla, y por qué?</summary><p>Receive-and-delete, porque el mensaje se elimina en cuanto se entrega, antes de que termine el procesamiento.</p></details>
+<details class="sq"><summary>¿Cuál es la diferencia entre abandon y defer?</summary><p>Abandon hace que el mensaje vuelva a estar disponible para la recepción normal; defer lo aparta para que solo se pueda obtener por número de secuencia.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../service-bus-queues-vs-topics-and-subscriptions-basic-tier-has-no-topic/">← Colas de Service Bus vs temas y suscripciones; el nivel Basi</a><a href="../dead-letter-queues-max-delivery-count-ttl-expiry-reading-the-deadlette/">Colas de mensajes fallidos: número máximo de entregas, expir →</a></nav>
+</main>
+</body>
+</html>

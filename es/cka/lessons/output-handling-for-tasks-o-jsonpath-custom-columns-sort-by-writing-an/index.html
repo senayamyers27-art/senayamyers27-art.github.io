@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Manejo de la salida en las tareas: -o jsonpath, custom-col… · Lección de CKA</title>
+<meta name="description" content="Muchas tareas del CKA terminan con 'escribe el resultado en /opt/answers/...'. El evaluador lee ese archivo, así que su contenido debe ser exactamente lo q">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Manejo de la salida en las tareas: -o jsonpath, custom-col… · Lección de CKA">
+<meta property="og:description" content="Muchas tareas del CKA terminan con 'escribe el resultado en /opt/answers/...'. El evaluador lee ese archivo, así que su contenido debe ser exactamente lo q">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/output-handling-for-tasks-o-jsonpath-custom-columns-sort-by-writing-an/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/output-handling-for-tasks-o-jsonpath-custom-columns-sort-by-writing-an/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/output-handling-for-tasks-o-jsonpath-custom-columns-sort-by-writing-an/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Manejo de la salida en las tareas: -o jsonpath, custom-columns, --sort-by y escritura de respuestas en archivos</h1>
+<article class="lbody">
+<p>Muchas tareas del CKA terminan con 'escribe el resultado en /opt/answers/...'. El evaluador lee ese archivo, así que su contenido debe ser exactamente lo que se pidió, a menudo un nombre, una lista o un número. Las opciones de salida de kubectl te permiten extraer exactamente los datos correctos sin editar a mano.</p>
+<p>JSONPath te permite extraer campos de la representación JSON de los objetos. Primero mira la estructura con <code>kubectl get pod web -o json</code> o <code>-o yaml</code>, y luego escribe una ruta que empiece en la raíz. En las listas, <code>.items[*]</code> recorre todos los objetos. <code>range</code> y <code>end</code> te permiten imprimir un elemento por línea, y los filtros con <code>?()</code> seleccionan elementos de un arreglo según una condición.</p>
+<pre class="code" tabindex="0"><code>kubectl get pods -o jsonpath='{.items[*].metadata.name}'
+kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{&quot;\t&quot;}{.status.nodeInfo.kubeletVersion}{&quot;\n&quot;}{end}'
+kubectl get nodes -o jsonpath='{.items[*].status.addresses[?(@.type==&quot;InternalIP&quot;)].address}'
+kubectl get secret db -o jsonpath='{.data.password}' | base64 -d</code></pre>
+<p>Las columnas personalizadas producen una tabla legible con los encabezados que elijas; cada columna se define como <code>NAME:&lt;jsonpath sin llaves&gt;</code>. Agrega <code>--no-headers</code> si la tarea quiere solo los valores. Las custom columns suelen ser más fáciles que jsonpath para listar varios campos por objeto.</p>
+<pre class="code" tabindex="0"><code>kubectl get pods -A -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name,NODE:.spec.nodeName
+kubectl get pv --sort-by=.spec.capacity.storage
+kubectl get pods --sort-by=.metadata.creationTimestamp -o name
+kubectl get pods -A --sort-by='.status.containerStatuses[0].restartCount'</code></pre>
+<p><code>--sort-by</code> recibe una expresión JSONPath (las llaves son opcionales) y ordena de forma ascendente. Combínalo con <code>tail -1</code> o <code>head -1</code> para elegir el más nuevo, el más grande o el que más se reinició. <code>-o name</code> imprime identificadores del estilo <code>pod/web-6c9</code>, y <code>-o wide</code> agrega las IP y los nodos. Recuerda que <code>kubectl top</code> tiene su propio <code>--sort-by</code>, que solo acepta cpu o memory.</p>
+<p>Al escribir en archivos, usa una redirección simple, <code>&gt; /opt/answers/file.txt</code>, y luego haz <code>cat</code> del archivo para confirmarlo. Fíjate en los detalles: ¿la tarea quiere solo nombres o una tabla completa, uno por línea o separados por espacios, con o sin encabezados, y con o sin el prefijo <code>pod/</code>? Crea el directorio si hace falta. Las comillas también importan: envuelve las expresiones jsonpath en comillas simples para que la shell no interprete las llaves, los corchetes ni las comillas dobles de adentro.</p>
+<p>Por último, <code>kubectl explain pod.spec.containers --recursive</code> es una forma rápida de descubrir las rutas de los campos de las que no estás seguro, sin salir de la terminal.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>-o jsonpath</dt><dd>Modo de salida que imprime los valores seleccionados por una plantilla JSONPath.</dd><dt>range ... end</dt><dd>Construcción de JSONPath para recorrer una lista, usada comúnmente para imprimir un elemento por línea.</dd><dt>-o custom-columns</dt><dd>Modo de salida que imprime una tabla con nombres de columna definidos por el usuario y valores JSONPath.</dd><dt>--sort-by</dt><dd>Ordena la salida de una lista por un campo JSONPath, en orden ascendente.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una tarea pide los nombres de todos los nodos y sus IP internas, un par por línea, en /opt/answers/nodes.txt. Escribes un range de jsonpath sobre .items que imprime el nombre, un tabulador y el filtro de la dirección InternalIP, lo rediriges al archivo y haces cat para confirmar las tres líneas.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Pon las expresiones jsonpath entre comillas simples, revisa la estructura del objeto con -o yaml antes de escribir la ruta y haz siempre cat del archivo de respuesta al final.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo imprimes cada nombre de Pod en su propia línea con jsonpath?</summary><p><code>kubectl get pods -o jsonpath='{range .items[*]}{.metadata.name}{&quot;\n&quot;}{end}'</code>.</p></details>
+<details class="sq"><summary>¿Cómo ordenas los PersistentVolumes por capacidad?</summary><p><code>kubectl get pv --sort-by=.spec.capacity.storage</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../cluster-access-problems-kubeconfig-contexts-expired-certificates-conne/">← Problemas de acceso al clúster: contexts de kubeconfig, cert</a><a href="../stuck-terminating-pods-on-lost-nodes-and-force-deletion/">Pods atascados en Terminating en nodos perdidos y borrado fo →</a></nav>
+</main>
+</body>
+</html>

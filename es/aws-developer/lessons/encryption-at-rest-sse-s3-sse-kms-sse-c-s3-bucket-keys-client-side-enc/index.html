@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cifrado en reposo: SSE-S3, SSE-KMS, SSE-C, S3 Bucket Keys,… · Lección de Developer Associate</title>
+<meta name="description" content="El cifrado en reposo protege los datos almacenados si los medios de almacenamiento o las copias de seguridad quedan expuestos. En Amazon S3 eliges quién ad">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Cifrado en reposo: SSE-S3, SSE-KMS, SSE-C, S3 Bucket Keys,… · Lección de Developer Associate">
+<meta property="og:description" content="El cifrado en reposo protege los datos almacenados si los medios de almacenamiento o las copias de seguridad quedan expuestos. En Amazon S3 eliges quién ad">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/encryption-at-rest-sse-s3-sse-kms-sse-c-s3-bucket-keys-client-side-enc/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/encryption-at-rest-sse-s3-sse-kms-sse-c-s3-bucket-keys-client-side-enc/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/encryption-at-rest-sse-s3-sse-kms-sse-c-s3-bucket-keys-client-side-enc/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Cifrado en reposo: SSE-S3, SSE-KMS, SSE-C, S3 Bucket Keys, cifrado del lado del cliente con AWS Encryption SDK</h1>
+<article class="lbody">
+<p>El cifrado en reposo protege los datos almacenados si los medios de almacenamiento o las copias de seguridad quedan expuestos. En Amazon S3 eliges quién administra las claves y dónde ocurre el cifrado, y las preguntas del examen te dan requisitos como auditoría, control de claves o confianza cero en AWS que apuntan a una opción.</p>
+<p>El cifrado del lado del servidor significa que S3 cifra el objeto cuando lo escribe y lo descifra cuando un usuario autorizado lo lee, de forma transparente. SSE-S3 usa claves que S3 administra por completo, con AES-256; no haces nada más que solicitarlo con el encabezado <code>x-amz-server-side-encryption: AES256</code>. S3 ahora aplica SSE-S3 como cifrado predeterminado para todos los objetos nuevos, así que todo objeto está cifrado en reposo a menos que elijas otra cosa.</p>
+<p>SSE-KMS cifra con una clave de AWS Key Management Service (KMS), y se solicita con <code>x-amz-server-side-encryption: aws:kms</code> y opcionalmente <code>x-amz-server-side-encryption-aws-kms-key-id</code>. Puedes usar la clave administrada por AWS para S3 (<code>aws/s3</code>) o tu propia clave administrada por el cliente. Beneficios: cada uso de la clave se registra en CloudTrail, controlas la política de la clave y su rotación, y leer un objeto requiere tanto el permiso de S3 como <code>kms:Decrypt</code> sobre la clave, lo que da separación de funciones. Las cargas necesitan <code>kms:GenerateDataKey</code>. Como cada operación sobre un objeto llama a KMS, tasas de solicitudes muy altas pueden alcanzar las cuotas de solicitudes de KMS y costar más; esta es la principal desventaja de SSE-KMS. SSE-KMS de doble capa (DSSE-KMS) aplica dos capas de cifrado para cargas de trabajo con ese requisito de cumplimiento.</p>
+<p>Las S3 Bucket Keys reducen ese tráfico hacia KMS. Con una Bucket Key habilitada, S3 usa KMS para crear una clave de corta duración a nivel de bucket y deriva de ella claves de datos por objeto, así que llama a KMS con mucha menos frecuencia. Esto reduce los costos de solicitudes a KMS y el riesgo de limitación, sin dejar de usar SSE-KMS. CloudTrail muestra entonces el bucket, y no cada objeto, como contexto de cifrado.</p>
+<p>SSE-C (cifrado del lado del servidor con claves proporcionadas por el cliente) significa que envías tu propia clave de 256 bits con cada solicitud en encabezados; S3 la usa para cifrar o descifrar y luego la descarta, guardando solo un hash con sal para validar las solicitudes posteriores. Debes administrar la clave y nunca perderla, y las solicitudes deben usar HTTPS (S3 rechaza SSE-C sobre HTTP). Además, no está disponible desde la consola para las cargas.</p>
+<p>El cifrado del lado del cliente significa que tu aplicación cifra los datos antes de enviarlos, así que S3 solo almacena texto cifrado y AWS nunca ve el texto plano. AWS Encryption SDK es una biblioteca del lado del cliente que implementa el cifrado de sobre (envelope encryption) por ti: obtiene una clave de datos de un keyring o proveedor de clave maestra (a menudo respaldado por KMS), cifra tus datos con ella y guarda la clave de datos cifrada junto al texto cifrado en un formato de mensaje portable. Amazon S3 Encryption Client es una opción relacionada especializada en objetos de S3.</p>
+<p>Para imponer el cifrado, configura el cifrado predeterminado del bucket (por ejemplo, SSE-KMS con tu clave) y usa una política de bucket que deniegue las solicitudes <code>s3:PutObject</code> que especifiquen un tipo de cifrado distinto del requerido.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>SSE-S3</dt><dd>Cifrado del lado del servidor con claves administradas por completo por S3, usando AES-256; el valor predeterminado para los objetos nuevos.</dd><dt>SSE-KMS</dt><dd>Cifrado del lado del servidor con una clave de KMS, que ofrece auditoría en CloudTrail y control mediante la política de la clave.</dd><dt>SSE-C</dt><dd>Cifrado del lado del servidor con una clave proporcionada por el cliente, enviada en cada solicitud HTTPS y que S3 no almacena.</dd><dt>S3 Bucket Key</dt><dd>Una clave a nivel de bucket derivada de KMS que reduce el número de llamadas a KMS, el costo y la limitación en SSE-KMS.</dd><dt>AWS Encryption SDK</dt><dd>Una biblioteca del lado del cliente que realiza cifrado de sobre para que los datos se cifren antes de salir de la aplicación.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una startup del sector salud necesita un registro de auditoría de quién descifró los archivos de pacientes y debe poder revocar el acceso al instante. Usa SSE-KMS con una clave administrada por el cliente; revocar kms:Decrypt de un rol en la política de la clave bloquea las lecturas incluso para usuarios con acceso a S3. A medida que crece el volumen de cargas y aparece la limitación de KMS, habilita las S3 Bucket Keys.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> ¿Registro de auditoría y control del uso de la clave? SSE-KMS. ¿Limitación o costo de KMS con SSE-KMS? Habilita las Bucket Keys. ¿Tú administras las claves y S3 nunca debe almacenarlas? SSE-C (solo HTTPS). ¿AWS nunca debe ver el texto plano? Cifrado del lado del cliente.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué permiso adicional requiere leer un objeto cifrado con SSE-KMS?</summary><p>kms:Decrypt sobre la clave de KMS, además de s3:GetObject.</p></details>
+<details class="sq"><summary>¿Por qué las solicitudes con SSE-C deben usar HTTPS?</summary><p>Porque la clave de cifrado se envía en los encabezados de la solicitud, y S3 rechaza las solicitudes SSE-C hechas sobre HTTP.</p></details>
+<details class="sq"><summary>¿Qué problema resuelven las S3 Bucket Keys?</summary><p>Reducen el número de solicitudes de S3 a KMS, lo que baja el costo y el riesgo de limitación de KMS en SSE-KMS.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../api-gateway-authorization-iam-sigv4-cognito-user-pool-authorizers-lamb/">← Autorización en API Gateway: IAM (SigV4), autorizadores de g</a><a href="../aws-kms-customer-managed-vs-aws-managed-keys-envelope-encryption-with/">AWS KMS: claves administradas por el cliente vs administrada →</a></nav>
+</main>
+</body>
+</html>

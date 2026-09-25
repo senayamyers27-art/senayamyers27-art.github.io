@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>pgvector: columnas vector(n), operadores de distancia (&lt;-&gt;… · Lección de AI-200</title>
+<meta name="description" content="Con la extensión creada, almacenas los embeddings en una columna de tipo vector(n), donde n es el número de dimensiones que devuelve tu modelo de embedding">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="pgvector: columnas vector(n), operadores de distancia (&lt;-&gt;… · Lección de AI-200">
+<meta property="og:description" content="Con la extensión creada, almacenas los embeddings en una columna de tipo vector(n), donde n es el número de dimensiones que devuelve tu modelo de embedding">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/pgvector-vector-n-columns-distance-operators-l2-cosine-inner-product-h/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/pgvector-vector-n-columns-distance-operators-l2-cosine-inner-product-h/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/pgvector-vector-n-columns-distance-operators-l2-cosine-inner-product-h/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>pgvector: columnas vector(n), operadores de distancia (&lt;-&gt; L2, &lt;=&gt; coseno, &lt;#&gt; producto interno), índices HNSW vs IVFFlat y su ajuste (m, ef_search, lists, probes)</h1>
+<article class="lbody">
+<p>Con la extensión creada, almacenas los embeddings en una columna de tipo <code>vector(n)</code>, donde n es el número de dimensiones que devuelve tu modelo de embeddings. Insertar un vector con otra longitud falla, lo que te protege de mezclar modelos. Una tabla típica guarda juntos el texto del fragmento, sus metadatos y su embedding, para que una sola consulta SQL pueda filtrar y ordenar por relevancia.</p>
+<pre class="code" tabindex="0"><code>CREATE TABLE chunks (
+  id bigserial PRIMARY KEY,
+  doc_id int, lang text, body text,
+  embedding vector(1536));
+
+SELECT id, body, embedding &lt;=&gt; $1 AS distance
+FROM chunks WHERE lang = 'en'
+ORDER BY embedding &lt;=&gt; $1
+LIMIT 5;</code></pre>
+<p>pgvector define tres operadores de distancia principales. <code>&lt;-&gt;</code> es la distancia L2 (euclidiana). <code>&lt;=&gt;</code> es la distancia coseno, que es 1 menos la similitud coseno, así que un valor menor significa más similitud. <code>&lt;#&gt;</code> es el producto interno negativo; se niega porque los recorridos de índice de PostgreSQL solo funcionan en orden ascendente, así que ordenar de forma ascendente por <code>&lt;#&gt;</code> devuelve primero los productos internos más grandes. En todos los casos usas ORDER BY con el operador en orden ascendente y LIMIT para obtener el top-k. Para embeddings normalizados (longitud 1), el coseno y el producto interno dan el mismo orden, y el producto interno es un poco más barato.</p>
+<p>Sin un índice, la consulta hace un recorrido exacto de cada fila, lo cual es perfectamente preciso pero se vuelve lento a medida que crece la tabla. pgvector ofrece dos tipos de índices de vecinos más cercanos aproximados (ANN), y cada índice se crea para una clase de operador que debe coincidir con el operador de tu consulta: <code>vector_l2_ops</code> para <code>&lt;-&gt;</code>, <code>vector_cosine_ops</code> para <code>&lt;=&gt;</code> y <code>vector_ip_ops</code> para <code>&lt;#&gt;</code>. Si el operador no coincide, el planificador ignora el índice.</p>
+<p>HNSW (Hierarchical Navigable Small World) construye un grafo de varias capas. Tiene un mejor equilibrio entre velocidad y recall (exhaustividad), se puede crear en una tabla vacía y sigue siendo preciso a medida que se agregan filas, pero se construye más lento y usa más memoria. Sus parámetros de construcción son <code>m</code>, el máximo de conexiones por nodo, y <code>ef_construction</code>, el tamaño de la lista de candidatos durante la construcción; los valores más grandes mejoran el recall y cuestan tiempo de construcción y memoria. En el momento de la consulta, <code>hnsw.ef_search</code> define el tamaño de la lista de candidatos: súbelo para mejorar el recall y bájalo para ganar velocidad.</p>
+<p>IVFFlat (archivo invertido con listas planas) agrupa los vectores en <code>lists</code> y busca solo en las listas más cercanas. Se construye más rápido y usa menos memoria, pero debe crearse después de que la tabla tenga datos representativos, porque los clústeres se calculan al construirlo. La recomendación de pgvector es aproximadamente filas divididas entre 1000 listas hasta un millón de filas, y la raíz cuadrada del número de filas a partir de ahí. En el momento de la consulta, <code>ivfflat.probes</code> define cuántas listas se buscan; más probes significan mejor recall y consultas más lentas.</p>
+<pre class="code" tabindex="0"><code>CREATE INDEX ON chunks USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64);
+SET hnsw.ef_search = 100;
+-- o
+CREATE INDEX ON chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+SET ivfflat.probes = 10;</code></pre>
+<p>Usa <code>EXPLAIN ANALYZE</code> para confirmar que se usa el índice. Recuerda que un filtro WHERE restrictivo aplicado después de un recorrido de índice aproximado puede devolver menos de k filas; subir ef_search o probes ayuda.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>vector(n)</dt><dd>El tipo de columna de pgvector que guarda un embedding de exactamente n dimensiones.</dd><dt>&lt;=&gt; operator (operador &lt;=&gt;)</dt><dd>El operador de distancia coseno de pgvector; los valores más pequeños indican vectores más similares.</dd><dt>HNSW</dt><dd>Un índice ANN basado en grafos con buen recall y velocidad, que se ajusta con m, ef_construction y hnsw.ef_search.</dd><dt>IVFFlat</dt><dd>Un índice ANN basado en clústeres que se construye después de cargar los datos; se ajusta con lists al construirlo y con ivfflat.probes al consultar.</dd><dt>Operator class (clase de operador)</dt><dd>La configuración del índice, como vector_cosine_ops, que debe coincidir con el operador de distancia usado en las consultas.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una consulta de búsqueda era lenta incluso después de crear un índice. EXPLAIN mostró un recorrido secuencial: el índice usaba vector_l2_ops, pero la consulta ordenaba por &lt;=&gt;. Al volver a crear el índice HNSW con vector_cosine_ops, el planificador empezó a usarlo. El recall en las consultas filtradas era algo bajo, así que subieron hnsw.ef_search para esa sesión.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Haz coincidir el operador con la clase de operador (&lt;-&gt; con vector_l2_ops, &lt;=&gt; con vector_cosine_ops, &lt;#&gt; con vector_ip_ops). Construye IVFFlat después de cargar los datos; HNSW funciona en tablas vacías. ef_search y probes intercambian velocidad por recall.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué el operador de producto interno &lt;#&gt; es negativo?</summary><p>Los recorridos de índice de PostgreSQL ordenan de forma ascendente, así que negar el producto interno hace que los vectores más similares queden primero.</p></details>
+<details class="sq"><summary>¿Qué parámetro subes para mejorar el recall de un índice IVFFlat al consultar?</summary><p>ivfflat.probes, que busca en más listas a costa de velocidad.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../azure-database-for-postgresql-flexible-server-allow-listing-and-enabli/">← Azure Database for PostgreSQL flexible server: incluir en la</a><a href="../retrieval-augmented-generation-chunking-embedding-storing-top-k-retrie/">Generación aumentada por recuperación: fragmentación, embedd →</a></nav>
+</main>
+</body>
+</html>

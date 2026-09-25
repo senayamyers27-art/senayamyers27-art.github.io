@@ -3256,4 +3256,4 @@ CertHub.addLessons("terraform", [
    ]
   ]
  }
-]);
+], { reviewed: "2026-09-25" });

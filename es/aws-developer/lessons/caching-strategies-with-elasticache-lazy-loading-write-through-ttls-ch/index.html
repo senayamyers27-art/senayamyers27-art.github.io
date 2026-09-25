@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Estrategias de caché con ElastiCache: lazy loading, write-… · Lección de Developer Associate</title>
+<meta name="description" content="Una caché guarda datos leídos con frecuencia en memoria rápida para que tu aplicación no consulte la base de datos en cada solicitud. Amazon ElastiCache es">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Estrategias de caché con ElastiCache: lazy loading, write-… · Lección de Developer Associate">
+<meta property="og:description" content="Una caché guarda datos leídos con frecuencia en memoria rápida para que tu aplicación no consulte la base de datos en cada solicitud. Amazon ElastiCache es">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/caching-strategies-with-elasticache-lazy-loading-write-through-ttls-ch/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/caching-strategies-with-elasticache-lazy-loading-write-through-ttls-ch/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/caching-strategies-with-elasticache-lazy-loading-write-through-ttls-ch/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Estrategias de caché con ElastiCache: lazy loading, write-through, TTL; cómo elegir entre almacenes SQL, NoSQL y en memoria</h1>
+<article class="lbody">
+<p>Una caché guarda datos leídos con frecuencia en memoria rápida para que tu aplicación no consulte la base de datos en cada solicitud. Amazon ElastiCache es un servicio administrado en memoria que ejecuta los motores Redis OSS, Valkey o Memcached. El examen pregunta cómo poblar y hacer expirar la caché, y cuándo otro tipo de almacén de datos es la opción correcta.</p>
+<p>La carga diferida (lazy loading, también llamada cache-aside) carga datos en la caché solo cuando se solicitan. La aplicación consulta la caché; si hay un acierto (hit), devuelve el valor; si hay un fallo (miss), lee de la base de datos, escribe el resultado en la caché y lo devuelve. Ventajas: solo se guardan en caché los datos solicitados, y la falla de un nodo de caché no es fatal, porque la aplicación simplemente recurre a la base de datos. Desventajas: cada fallo cuesta tres viajes (caché, base de datos, escritura en caché), y los datos en caché pueden quedar desactualizados porque nada los actualiza cuando cambia la base de datos.</p>
+<pre class="code" tabindex="0"><code>def get_product(pid):
+    cached = cache.get(f'product:{pid}')
+    if cached:
+        return json.loads(cached)
+    item = db_get_product(pid)
+    cache.set(f'product:{pid}', json.dumps(item), ex=300)  # TTL de 5 minutos
+    return item</code></pre>
+<p>Write-through actualiza la caché cada vez que la aplicación escribe en la base de datos. Los datos de la caché nunca están desactualizados y las lecturas son rápidas. Los costos son una penalización en escritura (dos escrituras por actualización) y la rotación de caché (cache churn): gran parte de lo que escribes quizá nunca se lea, lo que desperdicia memoria. Además, los datos faltan en la caché hasta que se escriben, así que un nodo nuevo empieza vacío; por eso write-through suele combinarse con lazy loading.</p>
+<p>Un tiempo de vida (TTL) en cada clave limita la desactualización y el uso de memoria: cuando expira, la siguiente lectura es un fallo y vuelve a cargar datos frescos. TTL cortos significan datos más frescos pero más carga en la base de datos; TTL largos significan lo contrario. Agregar una pequeña variación aleatoria a los TTL evita que muchas claves expiren a la vez. Cuando la memoria se llena, el motor desaloja claves según su política de desalojo, como la de menos usada recientemente (LRU).</p>
+<p>Elección de motor: Redis OSS y Valkey admiten estructuras de datos avanzadas (conjuntos ordenados para tablas de clasificación, hashes, listas), replicación con conmutación por error automática entre zonas de disponibilidad, persistencia, copias de seguridad y pub/sub. Memcached es más simple, multihilo y particionado horizontalmente, pero no tiene replicación ni persistencia. Si una pregunta menciona alta disponibilidad, tablas de clasificación ordenadas o almacenes de sesiones que deben sobrevivir a la falla de un nodo, elige Redis OSS o Valkey.</p>
+<p>Cómo elegir el almacén: usa una base de datos relacional (SQL) como Amazon RDS o Amazon Aurora cuando necesites joins, consultas ad hoc complejas y transacciones de varias filas sobre datos estructurados. Usa un almacén NoSQL como DynamoDB para patrones de acceso conocidos a escala masiva, con latencia de milisegundos de un solo dígito y esquemas flexibles. Usa un almacén en memoria (ElastiCache, o DAX delante de DynamoDB) para lecturas de microsegundos a menos de un milisegundo de datos muy consultados, estado de sesión, contadores de límite de tasa y tablas de clasificación, normalmente delante de una base de datos duradera y no en su lugar.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Lazy loading / cache-aside (carga diferida)</dt><dd>Una estrategia que pobla la caché solo cuando hay un fallo de caché, después de leer de la base de datos.</dd><dt>Write-through (escritura directa)</dt><dd>Una estrategia que escribe en la caché cada vez que se actualiza la base de datos, manteniendo actualizados los datos en caché.</dd><dt>TTL (time to live, tiempo de vida)</dt><dd>Un tiempo de expiración en una clave de caché, después del cual se elimina y se vuelve a cargar en la siguiente lectura.</dd><dt>Cache hit ratio (tasa de aciertos de caché)</dt><dd>La proporción de lecturas atendidas desde la caché; una tasa baja sugiere claves mal elegidas, TTL cortos o una caché demasiado pequeña.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un sitio de noticias lee las páginas de artículos desde Aurora. Agrega ElastiCache para Valkey con lazy loading y un TTL de 10 minutos, así que los artículos populares se sirven desde la memoria. Cuando un editor actualiza un artículo, el CMS también escribe la nueva versión en la caché (write-through), para que los lectores nunca vean un titular desactualizado.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> ¿Quejas por datos desactualizados? Agrega write-through o acorta el TTL. ¿La caché se llena de datos que nadie lee? Eso es la rotación de write-through, así que combínalo con TTL. ¿Necesitas replicación, conmutación por error o conjuntos ordenados? Redis OSS o Valkey, no Memcached.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cuál es la principal desventaja de lazy loading?</summary><p>Los datos pueden quedar desactualizados porque la caché solo se actualiza cuando hay un fallo, y cada fallo agrega latencia por los viajes adicionales.</p></details>
+<details class="sq"><summary>¿Por qué combinar write-through con un TTL?</summary><p>Write-through guarda en caché cada escritura, incluidos los datos que rara vez se leen; un TTL hace expirar las claves no usadas para no desperdiciar memoria.</p></details>
+<details class="sq"><summary>¿Cuándo elegirías ElastiCache para Redis OSS en lugar de Memcached?</summary><p>Cuando necesitas replicación y conmutación por error automática, persistencia, copias de seguridad o estructuras de datos avanzadas como conjuntos ordenados.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../amazon-s3-from-code-multipart-upload-storage-classes-and-lifecycle-eve/">← Amazon S3 desde el código: carga multiparte, clases de almac</a><a href="../iam-for-applications-execution-roles-instance-profiles-ecs-task-roles/">IAM para aplicaciones: roles de ejecución, perfiles de insta →</a></nav>
+</main>
+</body>
+</html>

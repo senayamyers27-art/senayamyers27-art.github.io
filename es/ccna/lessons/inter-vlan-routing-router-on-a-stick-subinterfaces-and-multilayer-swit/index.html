@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Enrutamiento entre VLAN: subinterfaces router-on-a-stick y… · Lección de CCNA</title>
+<meta name="description" content="Cada VLAN es un dominio de broadcast y una subred IP separados, así que los hosts de VLAN distintas no pueden comunicarse directamente. Algo debe enrutar e">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Enrutamiento entre VLAN: subinterfaces router-on-a-stick y… · Lección de CCNA">
+<meta property="og:description" content="Cada VLAN es un dominio de broadcast y una subred IP separados, así que los hosts de VLAN distintas no pueden comunicarse directamente. Algo debe enrutar e">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ccna/lessons/inter-vlan-routing-router-on-a-stick-subinterfaces-and-multilayer-swit/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ccna/lessons/inter-vlan-routing-router-on-a-stick-subinterfaces-and-multilayer-swit/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ccna/">CCNA</a> / <a href="../">Lecciones</a> · <a href="../../../../ccna/lessons/inter-vlan-routing-router-on-a-stick-subinterfaces-and-multilayer-swit/" hreflang="en" lang="en">English</a></p>
+<p class="note">Cisco CCNA 200-301 v2.0</p>
+<h1>Enrutamiento entre VLAN: subinterfaces router-on-a-stick y SVI en switches multicapa</h1>
+<article class="lbody">
+<p>Cada VLAN es un dominio de broadcast y una subred IP separados, así que los hosts de VLAN distintas no pueden comunicarse directamente. Algo debe enrutar entre ellas, y ese router se convierte en el gateway predeterminado de cada VLAN. El CCNA cubre dos métodos: router-on-a-stick con subinterfaces, y las interfaces virtuales de switch (SVI) en un switch multicapa. Un tercer método, heredado, usa una interfaz física del router por VLAN, lo cual no escala.</p>
+<p>Router-on-a-stick usa una sola interfaz física del router conectada a una troncal del switch. En el router creas una subinterfaz por VLAN, le indicas qué etiqueta 802.1Q maneja con <code>encapsulation dot1Q</code> y le asignas la dirección de gateway de esa VLAN. La interfaz física en sí no tiene dirección IP, pero debe estar activa (<code>no shutdown</code>).</p>
+<pre class="code" tabindex="0"><code>interface g0/0
+ no shutdown
+interface g0/0.10
+ encapsulation dot1Q 10
+ ip address 192.168.10.1 255.255.255.0
+interface g0/0.20
+ encapsulation dot1Q 20
+ ip address 192.168.20.1 255.255.255.0
+interface g0/0.99
+ encapsulation dot1Q 99 native
+ ip address 192.168.99.1 255.255.255.0</code></pre>
+<p>El puerto del switch que da hacia el router debe ser una troncal que permita esas VLAN. El tráfico de la VLAN 10 hacia la VLAN 20 sube por la troncal etiquetado con 10, el router lo enruta y vuelve a bajar por la misma troncal etiquetado con 20. Su debilidad es que un solo enlace transporta todo el tráfico entre VLAN dos veces, así que puede convertirse en un cuello de botella, y el router es un punto único de falla. Es adecuado para sucursales pequeñas.</p>
+<p>Un switch multicapa (de Capa 3) enruta en hardware usando SVI. Una SVI es una interfaz virtual para una VLAN: <code>interface vlan 10</code> con <code>ip address 192.168.10.1 255.255.255.0</code>. Debes habilitar el enrutamiento con <code>ip routing</code>, que está desactivado de forma predeterminada en muchos switches. Una SVI está up/up solo si la VLAN existe y al menos un puerto de esa VLAN (un puerto de acceso o una troncal que la permita) está activo y reenviando, y la SVI no está apagada. Los switches multicapa también admiten puertos enrutados, con <code>no switchport</code> y una dirección IP, que se usan normalmente para enlaces ascendentes hacia routers u otros switches de Capa 3.</p>
+<p>Las SVI son más rápidas y escalan mejor que router-on-a-stick porque el enrutamiento ocurre dentro del switch a velocidad de línea, sin cuello de botella en una troncal, y por eso las capas de distribución de los campus las usan. Al resolver problemas, verifica que el número de VLAN de la subinterfaz coincida con la VLAN del switch, que la troncal permita la VLAN, que la interfaz física del router no esté apagada, que <code>ip routing</code> esté habilitado en el switch y que los hosts usen el gateway correcto. <code>show ip interface brief</code> debería mostrar cada SVI o subinterfaz up/up, y <code>show ip route</code> debería listar la subred de cada VLAN como conectada (C) con una ruta local (L) para la dirección del gateway.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Router-on-a-stick</dt><dd>Enrutamiento entre VLAN a través de una sola interfaz del router usando subinterfaces 802.1Q sobre un enlace troncal.</dd><dt>Subinterface (subinterfaz)</dt><dd>Una división lógica de una interfaz física del router, como g0/0.10, cada una con su propia etiqueta de VLAN y dirección IP.</dd><dt>encapsulation dot1Q</dt><dd>Comando de subinterfaz que especifica qué etiqueta de VLAN 802.1Q maneja la subinterfaz.</dd><dt>SVI</dt><dd>Switch virtual interface: una interfaz de Capa 3 para una VLAN en un switch, usada como gateway de esa VLAN.</dd><dt>ip routing</dt><dd>Comando global que habilita el enrutamiento IPv4 en un switch multicapa.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una sucursal tiene un router y un switch de acceso con las VLAN 10 y 20. El puerto g0/24 del switch es una troncal y el router usa g0/0.10 y g0/0.20 como gateways. Cuando la oficina central instala más adelante un switch Catalyst de Capa 3 en el núcleo, crea <code>interface vlan 10</code> e <code>interface vlan 20</code>, habilita <code>ip routing</code> y dirige un enlace ascendente enrutado hacia el router WAN.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si una SVI aparece down/down, verifica que la VLAN exista y tenga al menos un puerto activo. Si el enrutamiento entre SVI falla con las SVI activas, busca un comando ip routing faltante.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué comando le indica a una subinterfaz del router el tráfico de qué VLAN debe aceptar?</summary><p>encapsulation dot1Q &lt;vlan-id&gt;, opcionalmente con la palabra clave native para la VLAN nativa.</p></details>
+<details class="sq"><summary>Menciona dos condiciones necesarias para que una SVI esté up/up.</summary><p>La VLAN debe existir en la base de datos de VLAN, y al menos un puerto de esa VLAN (de acceso o una troncal que la permita) debe estar activo y reenviando; además, la SVI no debe estar apagada.</p></details>
+<details class="sq"><summary>¿Por qué los campus más grandes prefieren las SVI a router-on-a-stick?</summary><p>Las SVI enrutan en el hardware del switch sin enviar todo el tráfico entre VLAN por una sola troncal hacia un router externo, así que son más rápidas y evitan un cuello de botella.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CCNA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ccna/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../rapid-pvst-root-bridge-election-root-designated-alternate-ports-port-s/">← Rapid PVST+: elección del root bridge, puertos root/designat</a><a href="../wireless-architectures-and-ap-modes-autonomous-lightweight-capwap-clou/">Arquitecturas inalámbricas y modos de AP: autónomo, lightwei →</a></nav>
+</main>
+</body>
+</html>

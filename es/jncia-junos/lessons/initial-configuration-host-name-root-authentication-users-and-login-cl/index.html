@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Configuración inicial: nombre de host, autenticación de ro… · Lección de JNCIA-Junos</title>
+<meta name="description" content="Una vez que un dispositivo arranca con su configuración de fábrica, un puñado de ajustes lo vuelven identificable, seguro y alcanzable. Casi todos los disp">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Configuración inicial: nombre de host, autenticación de ro… · Lección de JNCIA-Junos">
+<meta property="og:description" content="Una vez que un dispositivo arranca con su configuración de fábrica, un puñado de ajustes lo vuelven identificable, seguro y alcanzable. Casi todos los disp">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/jncia-junos/lessons/initial-configuration-host-name-root-authentication-users-and-login-cl/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/jncia-junos/lessons/initial-configuration-host-name-root-authentication-users-and-login-cl/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../jncia-junos/">JNCIA-Junos</a> / <a href="../">Lecciones</a> · <a href="../../../../jncia-junos/lessons/initial-configuration-host-name-root-authentication-users-and-login-cl/" hreflang="en" lang="en">English</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106</p>
+<h1>Configuración inicial: nombre de host, autenticación de root, usuarios y clases de login, interfaz de gestión, ruta estática por defecto</h1>
+<article class="lbody">
+<p>Una vez que un dispositivo arranca con su configuración de fábrica, un puñado de ajustes lo vuelven identificable, seguro y alcanzable. Casi todos los dispositivos Junos que despliegues recibirán el mismo conjunto inicial: un nombre de host, una contraseña de root, cuentas de usuario con nombre y clases de login apropiadas, una dirección en la interfaz de gestión y una ruta para que el tráfico de gestión pueda volver. Estas también son las primeras tareas de la mayoría de los laboratorios JNCIA.</p>
+<p>El nombre de host identifica al dispositivo en el prompt, los logs y SNMP. <code>set system host-name r1</code> cambia el prompt a <code>user@r1</code>. La autenticación de root, <code>set system root-authentication plain-text-password</code>, es obligatoria antes del primer commit, como explicó la lección anterior.</p>
+<p>Las cuentas de usuario con nombre son mejores que compartir root, porque cada persona rinde cuentas y recibe solo los derechos que necesita. Cada cuenta tiene una clase de login (login class) que define los permisos. Junos incluye cuatro clases predefinidas: <code>super-user</code> (todos los permisos), <code>operator</code> (puede ver y realizar acciones como borrar contadores y reiniciar, pero no cambiar la configuración), <code>read-only</code> (solo puede ver) y <code>unauthorized</code> (sin permisos). También puedes crear clases personalizadas bajo <code>[edit system login class]</code> con flags de permisos específicos, comandos permitidos o denegados, y ajustes como <code>idle-timeout</code>.</p>
+<pre class="code" tabindex="0"><code>set system host-name r1
+set system root-authentication plain-text-password
+set system login user alice class super-user authentication plain-text-password
+set system login user noc class read-only authentication plain-text-password
+set interfaces fxp0 unit 0 family inet address 192.168.100.11/24
+set routing-options static route 0.0.0.0/0 next-hop 192.168.100.1
+set system services ssh root-login deny</code></pre>
+<p>La dirección de la interfaz de gestión hace que el dispositivo sea alcanzable por SSH. Usa fxp0, me0 o em0 según la plataforma, o una interfaz normal si no hay un puerto fuera de banda. Una ruta estática proporciona el camino de regreso a las estaciones de trabajo de gestión. Una ruta estática por defecto, <code>0.0.0.0/0</code>, es la ruta comodín que se usa cuando ninguna ruta más específica coincide. Aparece en <code>show route</code> con el protocolo Static y una preferencia de 5.</p>
+<p>Una advertencia: una ruta por defecto que apunta por la interfaz de gestión está bien en un laboratorio pequeño, pero en un router de producción atraería el tráfico de tránsito hacia un puerto que no puede reenviarlo. En producción, prefiere una ruta estática específica para las subredes de gestión, la sentencia <code>backup-router</code> o una instancia de enrutamiento de gestión dedicada donde la plataforma la soporte. Considera también agregar <code>set system name-server</code>, <code>set system ntp server</code> y <code>set system time-zone</code>, ya que la hora correcta y el DNS facilitan mucho los logs y el diagnóstico.</p>
+<p>Después de hacer commit, verifica: <code>show system users</code> muestra quién está conectado, <code>show interfaces terse fxp0</code> confirma la dirección y <code>show route 0.0.0.0/0 exact</code> confirma que la ruta por defecto está activa.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>host-name</dt><dd>La sentencia de <code>[edit system]</code> que da nombre al dispositivo, mostrado en el prompt y en los logs.</dd><dt>Login class (clase de login)</dt><dd>Un conjunto de permisos asignado a cuentas de usuario; las clases predefinidas son super-user, operator, read-only y unauthorized.</dd><dt>super-user</dt><dd>Clase de login predefinida con todos los permisos.</dd><dt>Static default route (ruta estática por defecto)</dt><dd>Una ruta 0.0.0.0/0 configurada manualmente que se usa cuando ninguna ruta más específica coincide.</dd><dt>next-hop</dt><dd>La dirección del router vecino al que una ruta estática envía el tráfico que coincide.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Para un router de laboratorio nuevo estableces el nombre de host r1, una contraseña de root, una cuenta super-user para ti y una cuenta read-only para un colega, asignas a fxp0 la dirección 192.168.100.11/24 y agregas una ruta estática a la red del jump host vía 192.168.100.1. Tu colega inicia sesión como noc, puede ejecutar comandos <code>show</code>, pero recibe un error de permisos al intentar <code>configure</code>.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Conoce las cuatro clases de login predefinidas y lo que permite cada una: super-user todo, operator ver más acciones operacionales, read-only solo ver, unauthorized nada.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué clase de login predefinida permite a un usuario ver el estado pero no cambiar la configuración ni borrar contadores?</summary><p>read-only.</p></details>
+<details class="sq"><summary>Escribe el comando para una ruta estática por defecto vía 10.0.0.1.</summary><p><code>set routing-options static route 0.0.0.0/0 next-hop 10.0.0.1</code>.</p></details>
+<details class="sq"><summary>¿Por qué crear cuentas de usuario con nombre en lugar de compartir root?</summary><p>Para que cada persona se autentique y quede registrada individualmente, y reciba solo los permisos que permite su clase de login.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia JNCIA-Junos gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../jncia-junos/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../factory-default-configuration-and-the-root-password-requirement-before/">← Configuración de fábrica y el requisito de contraseña de roo</a><a href="../interface-naming-type-fpc-pic-port-unit-physical-vs-logical-properties/">Nomenclatura de interfaces (type-fpc/pic/port.unit), propied →</a></nav>
+</main>
+</body>
+</html>

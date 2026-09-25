@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>El antiguo comando de la CLI `terraform import` · Lección de Terraform Associate</title>
+<meta name="description" content="Antes de que existieran los bloques import, la única forma de poner infraestructura existente bajo Terraform era el comando terraform import. Todavía está ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="El antiguo comando de la CLI `terraform import` · Lección de Terraform Associate">
+<meta property="og:description" content="Antes de que existieran los bloques import, la única forma de poner infraestructura existente bajo Terraform era el comando terraform import. Todavía está ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/terraform/lessons/the-older-terraform-import-cli-command/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/terraform/lessons/the-older-terraform-import-cli-command/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../terraform/">Terraform Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../terraform/lessons/the-older-terraform-import-cli-command/" hreflang="en" lang="en">English</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004)</p>
+<h1>El antiguo comando de la CLI `terraform import`</h1>
+<article class="lbody">
+<p>Antes de que existieran los bloques import, la única forma de poner infraestructura existente bajo Terraform era el comando <code>terraform import</code>. Todavía está disponible y todavía aparece en el examen, así que necesitas saber cómo funciona y por qué normalmente se prefiere el enfoque más nuevo.</p>
+<p>La sintaxis es <code>terraform import ADDRESS ID</code>. <code>ADDRESS</code> es la dirección del recurso en tu configuración, como <code>aws_instance.web</code> o <code>module.app.aws_instance.web[0]</code>, e <code>ID</code> es el identificador del provider para el objeto real. El comando lee el objeto desde el provider y lo escribe de inmediato en el estado bajo esa dirección.</p>
+<pre class="code" tabindex="0"><code>$ terraform import aws_instance.web i-0abc123def4567890
+aws_instance.web: Importing from ID &quot;i-0abc123def4567890&quot;...
+Import successful!</code></pre>
+<p>Hay un requisito previo importante: el bloque resource ya debe existir en tu configuración antes de ejecutar el comando. <code>terraform import</code> no escribe la configuración por ti. Si <code>aws_instance.web</code> no está declarado, el comando falla. Así que el flujo de trabajo antiguo era: escribir un bloque resource vacío o aproximado, ejecutar <code>terraform import</code>, luego ejecutar <code>terraform plan</code> y seguir ajustando el bloque hasta que el plan no mostrara cambios. Solo entonces la configuración es una descripción fiel del objeto real.</p>
+<p>En comparación con los bloques import, el comando tiene limitaciones claras. Importa un recurso por invocación, así que traer docenas de objetos significa docenas de comandos o un script. Cambia el estado de inmediato, sin un plan que revisar primero y sin registro en el control de versiones de lo que se importó. No puede generar configuración. Y ocurre fuera del flujo de trabajo normal de pull requests, lo que dificulta auditarlo en entornos de equipo, especialmente con HCP Terraform, donde normalmente querrías que cada cambio de estado provenga de una ejecución revisada.</p>
+<p>El comando también acepta indicadores útiles como <code>-var</code> y <code>-var-file</code>, porque Terraform debe evaluar la configuración (incluidos los ajustes del provider) para saber cómo llegar al objeto. Con un backend remoto, el objeto importado se escribe en el estado remoto y se aplica el bloqueo habitual.</p>
+<p>¿Cuándo deberías seguir usándolo? Está bien para una importación rápida y puntual en un proyecto pequeño, o con herramientas que no han pasado a los bloques import. Para cualquier cosa más grande o compartida, prefiere los bloques import. En cualquier caso, importar no es lo mismo que crear: Terraform asume la gestión de un objeto existente, y un <code>terraform destroy</code> posterior eliminará ese objeto real, así que asegúrate de que quieres que Terraform sea su dueño.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>terraform import</dt><dd>Un comando de la CLI que escribe de inmediato un objeto existente en el estado en una dirección de recurso dada.</dd><dt>ADDRESS</dt><dd>La dirección del recurso en la configuración a la que se vinculará el objeto importado.</dd><dt>Prerequisite resource block (bloque resource previo)</dt><dd>El bloque resource que ya debe existir en la configuración para que terraform import tenga éxito.</dd><dt>Post-import plan (plan posterior a la importación)</dt><dd>Ejecutar terraform plan después de importar y ajustar la configuración hasta que no se muestren cambios.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un ingeniero necesita gestionar una zona DNS construida a mano. Escribe resource &quot;aws_route53_zone&quot; &quot;main&quot; {} con el nombre de la zona, ejecuta terraform import aws_route53_zone.main seguido del ID de la zona y luego ajusta el bloque hasta que terraform plan no informa cambios.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> terraform import necesita que el bloque resource exista primero, importa un objeto a la vez y no genera configuración; los bloques import eliminan esos límites.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué debe existir antes de ejecutar terraform import aws_instance.web i-123?</summary><p>Un bloque resource para aws_instance.web en la configuración.</p></details>
+<details class="sq"><summary>¿terraform import muestra un plan antes de cambiar el estado?</summary><p>No. Escribe en el estado de inmediato; solo los bloques import pasan por plan y apply.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Terraform Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../terraform/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../importing-existing-infrastructure-with-import-blocks-and-generating-co/">← Importar infraestructura existente con bloques `import` y ge</a><a href="../inspecting-state-terraform-state-list-terraform-state-show-terraform-s/">Inspeccionar el estado: `terraform state list`, `terraform s →</a></nav>
+</main>
+</body>
+</html>

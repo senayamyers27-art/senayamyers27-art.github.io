@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ciclo de vida de los hilos y start() vs run() · Lección de OCP Java</title>
+<meta name="description" content="Todo objeto Thread pasa por los estados definidos en el enum Thread.State, y getState() informa el actual. NEW significa que el objeto hilo existe pero no ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Ciclo de vida de los hilos y start() vs run() · Lección de OCP Java">
+<meta property="og:description" content="Todo objeto Thread pasa por los estados definidos en el enum Thread.State, y getState() informa el actual. NEW significa que el objeto hilo existe pero no ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/java-se/lessons/thread-lifecycle-and-start-vs-run/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/java-se/lessons/thread-lifecycle-and-start-vs-run/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../java-se/">OCP Java</a> / <a href="../">Lecciones</a> · <a href="../../../../java-se/lessons/thread-lifecycle-and-start-vs-run/" hreflang="en" lang="en">English</a></p>
+<p class="note">Oracle Certified Professional: Java SE Developer 1Z0-831 (Java SE 25)</p>
+<h1>Ciclo de vida de los hilos y start() vs run()</h1>
+<article class="lbody">
+<p>Todo objeto Thread pasa por los estados definidos en el enum <code>Thread.State</code>, y <code>getState()</code> informa el actual. <code>NEW</code> significa que el objeto hilo existe pero no se ha llamado a <code>start()</code>. <code>RUNNABLE</code> significa que se está ejecutando o está listo para ejecutarse; Java no separa la ejecución de la espera por una CPU. <code>BLOCKED</code> significa que espera adquirir un lock de monitor para entrar en un bloque o método <code>synchronized</code>. <code>WAITING</code> significa que espera indefinidamente a otro hilo, por ejemplo en <code>join()</code> sin timeout o en <code>Object.wait()</code>. <code>TIMED_WAITING</code> es lo mismo con un límite de tiempo, como <code>Thread.sleep(100)</code> o <code>join(500)</code>. <code>TERMINATED</code> significa que <code>run()</code> ha terminado, normalmente o con una excepción.</p>
+<p>Las transiciones típicas son de NEW a RUNNABLE con <code>start()</code>, de RUNNABLE a BLOCKED, WAITING o TIMED_WAITING y de vuelta a medida que el hilo espera locks, otros hilos o tiempo, y finalmente de RUNNABLE a TERMINATED. Un hilo no puede reiniciarse: una vez terminado sigue terminado, y llamar a <code>start()</code> una segunda vez sobre el mismo objeto Thread, en cualquier estado distinto de NEW, lanza <code>IllegalThreadStateException</code>.</p>
+<p>La distinción más evaluada es <code>start()</code> frente a <code>run()</code>. <code>start()</code> le pide a la JVM crear un nuevo hilo de ejecución, que luego llama a <code>run()</code>. Llamar a <code>run()</code> directamente es solo una llamada ordinaria a un método: el código se ejecuta de forma síncrona en el hilo actual, no se crea ningún hilo nuevo y el objeto Thread se queda en el estado NEW.</p>
+<pre class="code" tabindex="0"><code>Runnable job = () -&gt; System.out.println(Thread.currentThread().getName());
+Thread t = new Thread(job, &quot;worker&quot;);
+
+t.run();    // imprime main    (se ejecuta en el hilo que llama)
+t.start();  // imprime worker  (se ejecuta en un hilo nuevo)
+// t.start();  // IllegalThreadStateException: ya se inició</code></pre>
+<p>El orden de la salida de varios hilos no está garantizado. Si main inicia un hilo y luego imprime, cualquiera de las dos líneas puede aparecer primero. La única forma de forzar el orden es coordinar, por ejemplo con <code>join()</code>, que espera a que el otro hilo termine. <code>Thread.sleep</code> pone el hilo actual en TIMED_WAITING; no libera los locks que tiene, y lanza la <code>InterruptedException</code> checked.</p>
+<p>La interrupción es la forma cooperativa de pedirle a un hilo que se detenga. <code>t.interrupt()</code> activa la bandera de interrupción del hilo; si el hilo está durmiendo, esperando o en un join, esa llamada lanza <code>InterruptedException</code> y limpia la bandera. El código bien hecho comprueba <code>Thread.currentThread().isInterrupted()</code> en bucles largos y sale limpiamente. El viejo método <code>stop()</code> es inseguro y ya no funciona; nunca deberías depender de él.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Thread.State</dt><dd>El enum de los estados de un hilo: NEW, RUNNABLE, BLOCKED, WAITING, TIMED_WAITING y TERMINATED.</dd><dt>BLOCKED</dt><dd>El estado de un hilo que espera adquirir un lock de monitor para un bloque o método synchronized.</dd><dt>TIMED_WAITING</dt><dd>El estado de un hilo que espera con un límite de tiempo, como en sleep o join con timeout.</dd><dt>IllegalThreadStateException</dt><dd>Se lanza cuando se llama a start() sobre un hilo que ya fue iniciado.</dd><dt>Interrupt (interrupción)</dt><dd>Una señal cooperativa que activa la bandera de interrupción de un hilo y lo despierta de sleep, wait o join con InterruptedException.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un desarrollador nota que su exportación lenta sigue congelando la interfaz aunque está envuelta en un Thread. El código llama a exportThread.run() en lugar de start(), así que la exportación se ejecuta en el hilo de la interfaz. Cambiarlo a start() mueve el trabajo a un hilo nuevo.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Llamar a run() no crea un hilo, así que Thread.currentThread() dentro de él es quien llama. Llamar a start() dos veces lanza IllegalThreadStateException. A menos que el código use join u otra herramienta de coordinación, el orden de salida entre hilos es impredecible.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿En qué estado está un hilo después de crearse pero antes de llamar a start()?</summary><p>NEW.</p></details>
+<details class="sq"><summary>¿En qué estado está un hilo mientras está dentro de Thread.sleep(1000)?</summary><p>TIMED_WAITING.</p></details>
+<details class="sq"><summary>¿Llamar a t.run() cambia el estado de t a RUNNABLE?</summary><p>No. run() se ejecuta en el hilo que llama; t se queda en NEW.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia OCP Java gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../java-se/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../executorservice-callable-and-future-shutdown-awaittermination-close/">← ExecutorService, Callable y Future; shutdown, awaitTerminati</a><a href="../race-conditions-synchronized-blocks-and-methods-and-visibility/">Condiciones de carrera, bloques y métodos synchronized, y vi →</a></nav>
+</main>
+</body>
+</html>

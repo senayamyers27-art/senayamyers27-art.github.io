@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Autenticación: módulos PAM (pam_faillock, pam_pwquality), … · Lección de Linux+</title>
+<meta name="description" content="La autenticación demuestra quién es un usuario. En Linux, programas como login, sshd y sudo no implementan por sí mismos la verificación de contraseñas; la">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Autenticación: módulos PAM (pam_faillock, pam_pwquality), … · Lección de Linux+">
+<meta property="og:description" content="La autenticación demuestra quién es un usuario. En Linux, programas como login, sshd y sudo no implementan por sí mismos la verificación de contraseñas; la">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/linux-plus/lessons/authentication-pam-modules-pam-faillock-pam-pwquality-ldap-sssd-kerber/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/linux-plus/lessons/authentication-pam-modules-pam-faillock-pam-pwquality-ldap-sssd-kerber/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../linux-plus/">Linux+</a> / <a href="../">Lecciones</a> · <a href="../../../../linux-plus/lessons/authentication-pam-modules-pam-faillock-pam-pwquality-ldap-sssd-kerber/" hreflang="en" lang="en">English</a></p>
+<p class="note">CompTIA Linux+ XK0-006</p>
+<h1>Autenticación: módulos PAM (pam_faillock, pam_pwquality), LDAP/SSSD, Kerberos, MFA</h1>
+<article class="lbody">
+<p>La autenticación demuestra quién es un usuario. En Linux, programas como login, sshd y sudo no implementan por sí mismos la verificación de contraseñas; la delegan en PAM (Pluggable Authentication Modules), que permite a los administradores cambiar cómo funciona la autenticación, agregar reglas de contraseñas o conectar un servicio de directorio sin modificar cada programa.</p>
+<p>Cada servicio compatible con PAM tiene un archivo en <code>/etc/pam.d/</code>, como <code>sshd</code> o <code>sudo</code>, que a menudo incluye archivos compartidos como <code>system-auth</code> y <code>password-auth</code> (familia RHEL) o <code>common-auth</code> y <code>common-password</code> (familia Debian). Cada línea tiene un tipo, un indicador de control y un módulo. Tipos: <code>auth</code> verifica la identidad, <code>account</code> comprueba si la cuenta puede iniciar sesión ahora (expirada, restricciones de horario), <code>password</code> maneja los cambios de contraseña y <code>session</code> prepara o cierra la sesión. Los indicadores de control deciden cómo se combinan los resultados: <code>required</code> debe tener éxito, pero la pila sigue ejecutándose; <code>requisite</code> debe tener éxito y falla de inmediato si no; <code>sufficient</code> termina la pila con éxito si pasa y nada requerido falló antes; y <code>optional</code> rara vez importa. En sistemas de la familia RHEL, usa <code>authselect</code> en lugar de editar a mano los archivos compartidos, porque los regenera.</p>
+<p><code>pam_pwquality</code> exige la solidez de las contraseñas cuando se cambian. Las configuraciones en <code>/etc/security/pwquality.conf</code> incluyen <code>minlen</code>, <code>minclass</code> (número de clases de caracteres), configuraciones de créditos como <code>dcredit</code> y <code>ucredit</code>, y <code>dictcheck</code>. <code>pam_faillock</code> bloquea una cuenta después de inicios de sesión fallidos repetidos, una defensa contra la fuerza bruta. Se configura en <code>/etc/security/faillock.conf</code> con <code>deny</code> (fallos permitidos), <code>unlock_time</code> (segundos hasta el desbloqueo automático) y <code>fail_interval</code>. <code>faillock --user alice</code> muestra sus fallos y <code>faillock --user alice --reset</code> la desbloquea. Los sistemas más antiguos usaban <code>pam_tally2</code> con el mismo propósito. Otros módulos incluyen <code>pam_limits</code> (límites de recursos de <code>/etc/security/limits.conf</code>) y <code>pam_access</code>.</p>
+<p>En las organizaciones, las cuentas suelen vivir de forma centralizada. LDAP (Lightweight Directory Access Protocol) es un protocolo para servicios de directorio que guardan usuarios y grupos, como OpenLDAP, 389 Directory Server, FreeIPA y Microsoft Active Directory. Usa LDAPS o StartTLS para que las credenciales viajen cifradas. SSSD (System Security Services Daemon) conecta Linux con estos directorios: obtiene identidades y autentica usuarios, guarda credenciales en caché para que los inicios de sesión funcionen sin conexión, y se integra con PAM y nsswitch (<code>passwd: files sss</code>). La configuración vive en <code>/etc/sssd/sssd.conf</code>, que debe tener el modo 600. <code>realm join</code> puede unir el equipo a un dominio y configurar SSSD, y <code>getent passwd user</code> o <code>id user</code> confirman que los usuarios del directorio se resuelven.</p>
+<p>Kerberos proporciona inicio de sesión único (single sign-on) con tickets en lugar de enviar contraseñas a cada servicio. Un usuario se autentica ante el KDC (Key Distribution Center) y recibe un TGT (ticket-granting ticket), y luego lo usa para obtener tickets de servicio. <code>kinit</code> obtiene un ticket, <code>klist</code> lista los tickets, <code>kdestroy</code> los elimina y <code>/etc/krb5.conf</code> define los realms. Kerberos es muy sensible a las diferencias de reloj, así que la sincronización de hora es esencial.</p>
+<p>La MFA (autenticación multifactor) requiere dos o más tipos de factor: algo que sabes, algo que tienes y algo que eres. En Linux, la MFA normalmente se agrega mediante un módulo PAM que verifica códigos TOTP (contraseña de un solo uso basada en tiempo) o llaves de seguridad de hardware, o mediante configuraciones de SSH que exigen tanto una clave como un código.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>PAM</dt><dd>Pluggable Authentication Modules: el framework que apila módulos para realizar la autenticación de los servicios de Linux.</dd><dt>pam_faillock</dt><dd>Módulo PAM que bloquea las cuentas después de intentos de autenticación fallidos repetidos.</dd><dt>pam_pwquality</dt><dd>Módulo PAM que exige reglas de complejidad y longitud de contraseñas.</dd><dt>SSSD</dt><dd>Demonio que proporciona identidades y autenticación desde LDAP, Kerberos o Active Directory, con caché.</dd><dt>Kerberos TGT</dt><dd>Ticket-granting ticket emitido por el KDC después del inicio de sesión y usado para solicitar tickets de servicio.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una usuaria informa que no puede iniciar sesión después de un fin de semana. faillock --user jlee muestra diez fallos desde una dirección IP desconocida durante la noche, que pam_faillock bloqueó correctamente. Confirmas su identidad, la restableces con faillock --user jlee --reset, le pides que cambie su contraseña y pasas la IP de origen al equipo de seguridad.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Recuerda los indicadores de control de PAM: requisite falla de inmediato, required falla al final de la pila y sufficient puede terminar la pila antes con éxito.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué tipo de módulo PAM comprueba si una cuenta está expirada o si puede iniciar sesión en este momento?</summary><p>account.</p></details>
+<details class="sq"><summary>¿Cómo desbloqueas a un usuario bloqueado por pam_faillock?</summary><p>faillock --user &lt;name&gt; --reset.</p></details>
+<details class="sq"><summary>¿Qué agrega SSSD más allá de las búsquedas básicas en LDAP?</summary><p>Integra la identidad y la autenticación con PAM y nsswitch, admite Kerberos y Active Directory, y guarda credenciales en caché para inicios de sesión sin conexión.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Linux+ gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../linux-plus/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../privilege-escalation-sudo-visudo-etc-sudoers-d-su-polkit/">← Escalada de privilegios: sudo, visudo, /etc/sudoers.d, su, p</a><a href="../cryptography-hashing-sha256sum-gpg-signatures-tls-certificates-luks-di/">Criptografía: hashing (sha256sum), firmas GPG, certificados  →</a></nav>
+</main>
+</body>
+</html>

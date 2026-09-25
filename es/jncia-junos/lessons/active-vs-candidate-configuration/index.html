@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Configuración activa vs configuración candidata · Lección de JNCIA-Junos</title>
+<meta name="description" content="Junos nunca cambia el dispositivo en funcionamiento en el momento en que escribes un comando de configuración. En cambio, mantiene dos configuraciones: la ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Configuración activa vs configuración candidata · Lección de JNCIA-Junos">
+<meta property="og:description" content="Junos nunca cambia el dispositivo en funcionamiento en el momento en que escribes un comando de configuración. En cambio, mantiene dos configuraciones: la ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/jncia-junos/lessons/active-vs-candidate-configuration/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/jncia-junos/lessons/active-vs-candidate-configuration/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../jncia-junos/">JNCIA-Junos</a> / <a href="../">Lecciones</a> · <a href="../../../../jncia-junos/lessons/active-vs-candidate-configuration/" hreflang="en" lang="en">English</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106</p>
+<h1>Configuración activa vs configuración candidata</h1>
+<article class="lbody">
+<p>Junos nunca cambia el dispositivo en funcionamiento en el momento en que escribes un comando de configuración. En cambio, mantiene dos configuraciones: la configuración activa, que es la que el dispositivo está ejecutando realmente, y la configuración candidata, una copia de trabajo que editas. Solo cuando haces commit la candidata se convierte en la nueva configuración activa. Este modelo es una de las ideas más importantes de Junos y hace que los cambios sean más seguros y más fáciles de deshacer.</p>
+<p>Cuando entras al modo de configuración, Junos te da una candidata que empieza como una copia de la configuración activa (en modo private obtienes tu propia copia). Cada <code>set</code>, <code>delete</code>, <code>rename</code> o <code>copy</code> cambia solo la candidata. Nada en el dispositivo cambia todavía: las interfaces no se mueven, las rutas no cambian, no se agregan usuarios. Puedes hacer muchos cambios relacionados y revisarlos juntos con <code>show | compare</code> antes de que cualquiera surta efecto.</p>
+<p>Cuando escribes <code>commit</code>, Junos revisa toda la candidata en busca de errores de sintaxis y consistencia. Por ejemplo, se negará a hacer commit de una referencia a un firewall filter que apunta a un filtro que no existe. Si la revisión pasa, la candidata se convierte en la configuración activa y los daemons aplican los cambios. Si falla, no se activa nada y recibes mensajes de error para corregir.</p>
+<p>Cada commit se guarda. La configuración recién activada es rollback 0, la anterior pasa a ser rollback 1, y así sucesivamente. Junos guarda la configuración actual más hasta 49 anteriores, 50 en total. La configuración activa se guarda como <code>/config/juniper.conf.gz</code>, los rollbacks más recientes están junto a ella en <code>/config</code>, y los más antiguos en <code>/var/db/config</code>. Puedes ver el historial con <code>show system commit</code>, que lista la hora, el usuario, el método y el comentario de cada commit.</p>
+<p>El comando rollback trabaja sobre la candidata. <code>rollback 0</code> en modo de configuración descarta todos los cambios sin confirmar, restableciendo la candidata para que coincida con la configuración activa. <code>rollback 1</code> carga el commit anterior en la candidata; el dispositivo no cambia hasta que vuelves a hacer <code>commit</code>. Este diseño en dos pasos te permite revisar con <code>show | compare</code> exactamente lo que haría un rollback antes de aplicarlo. En modo operacional puedes ver versiones antiguas con <code>show system rollback 3</code> o <code>show configuration | compare rollback 3</code>.</p>
+<p>Las dos vistas se muestran con comandos diferentes. En modo operacional, <code>show configuration</code> muestra la configuración activa. En modo de configuración, <code>show</code> muestra la candidata, incluidos los cambios sin confirmar. Cuando difieren, <code>show | compare</code> es el puente entre ellas.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Active configuration (configuración activa)</dt><dd>La configuración confirmada que el dispositivo está ejecutando actualmente.</dd><dt>Candidate configuration (configuración candidata)</dt><dd>La copia editable de la configuración; los cambios surten efecto solo después del commit.</dd><dt>Rollback</dt><dd>Cargar una configuración confirmada anteriormente (0 a 49) en la candidata; luego hay que hacer commit.</dd><dt>rollback 0</dt><dd>Descarta los cambios sin confirmar restableciendo la candidata a la configuración activa.</dd><dt>show system commit</dt><dd>Lista el historial de commits con la hora, el usuario y los comentarios.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una ingeniera cambia los costos de OSPF, hace commit, y el tráfico se desplaza mal. Entra al modo de configuración, ejecuta <code>rollback 1</code>, revisa <code>show | compare</code> para confirmar que revierte solo el cambio de costos, y luego hace commit. El comportamiento anterior vuelve en segundos, y <code>show system commit</code> muestra ambos commits para el registro del cambio.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Rollback solo cambia la candidata. Nada en el dispositivo cambia hasta que haces commit de la candidata restaurada.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué comando descarta todos los cambios de configuración sin confirmar?</summary><p><code>rollback 0</code> en modo de configuración, que restablece la candidata a la configuración activa.</p></details>
+<details class="sq"><summary>¿Cuántas configuraciones confirmadas puede guardar Junos para rollback?</summary><p>50 en total: la actual (rollback 0) más 49 anteriores (rollback 1 a 49).</p></details>
+<details class="sq"><summary>En modo operacional, ¿qué comando muestra la configuración activa?</summary><p><code>show configuration</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia JNCIA-Junos gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../jncia-junos/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../running-operational-commands-from-configuration-mode-with-run/">← Ejecutar comandos operacionales desde el modo de configuraci</a><a href="../j-web-gui-and-enabling-it-with-system-services-web-management/">La GUI J-Web y cómo habilitarla con `system services web-man →</a></nav>
+</main>
+</body>
+</html>

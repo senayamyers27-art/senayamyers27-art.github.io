@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Transferir archivos de forma segura entre sistemas con scp… · Lección de RHCSA</title>
+<meta name="description" content="Los administradores mueven archivos entre sistemas constantemente: archivos de configuración, respaldos, logs para analizar. Hacerlo sobre SSH significa qu">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Transferir archivos de forma segura entre sistemas con scp… · Lección de RHCSA">
+<meta property="og:description" content="Los administradores mueven archivos entre sistemas constantemente: archivos de configuración, respaldos, logs para analizar. Hacerlo sobre SSH significa qu">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/securely-transferring-files-between-systems-with-scp-sftp-and-rsync-ov/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/securely-transferring-files-between-systems-with-scp-sftp-and-rsync-ov/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/securely-transferring-files-between-systems-with-scp-sftp-and-rsync-ov/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Transferir archivos de forma segura entre sistemas con scp, sftp y rsync sobre ssh</h1>
+<article class="lbody">
+<p>Los administradores mueven archivos entre sistemas constantemente: archivos de configuración, respaldos, logs para analizar. Hacerlo sobre SSH significa que la transferencia va cifrada y autenticada con las mismas cuentas y claves que ya usas para iniciar sesión, así que no se necesita un servicio de transferencia de archivos aparte. RHEL ofrece tres herramientas que lo hacen: scp, sftp y rsync.</p>
+<p><code>scp</code> (secure copy) funciona como <code>cp</code>, con las ubicaciones remotas escritas como <code>user@host:path</code>. <code>scp file.txt root@serverb:/tmp/</code> copia un archivo local a serverb, y <code>scp root@serverb:/etc/hosts .</code> copia un archivo remoto al directorio actual. <code>-r</code> copia directorios recursivamente, <code>-p</code> conserva las horas de modificación y los modos, y <code>-P</code> (mayúscula) establece un puerto SSH no predeterminado. Una ruta después de los dos puntos sin barra inicial es relativa al directorio personal del usuario remoto. Ten en cuenta que las versiones actuales de OpenSSH implementan scp usando por debajo el protocolo SFTP, pero la línea de comandos no cambia.</p>
+<p><code>sftp</code> es interactivo, como un cliente FTP, pero funciona sobre SSH. <code>sftp user@host</code> abre una sesión con un prompt <code>sftp&gt;</code> donde <code>ls</code> y <code>cd</code> actúan en el lado remoto, <code>lls</code> y <code>lcd</code> en el lado local, <code>get</code> descarga, <code>put</code> sube, <code>mkdir</code> crea un directorio remoto y <code>exit</code> sale. Es práctico cuando necesitas explorar antes de decidir qué transferir.</p>
+<pre class="code" tabindex="0"><code>scp -p /etc/chrony.conf root@serverb:/etc/
+scp -r root@serverb:/var/log/httpd ./serverb-logs
+sftp student@serverb
+  sftp&gt; cd /tmp
+  sftp&gt; put report.txt
+  sftp&gt; get data.csv
+rsync -av /srv/web/ root@serverb:/srv/web/
+rsync -avn --delete /srv/web/ root@serverb:/srv/web/   # simulación (dry run)</code></pre>
+<p><code>rsync</code> sincroniza archivos de forma eficiente. Compara el origen y el destino y envía solo lo que cambió, incluso solo las partes cambiadas de archivos grandes, así que las transferencias repetidas son rápidas. Por la red usa SSH por defecto. <code>-a</code> (archive) recorre recursivamente y conserva permisos, marcas de tiempo, enlaces simbólicos, propietario y grupo (el propietario solo cuando se ejecuta como root en el lado que recibe), y <code>-v</code> lista lo que se transfiere. Añade <code>-X</code> para los atributos extendidos, como los contextos de SELinux, y <code>-A</code> para las listas de control de acceso. <code>--delete</code> elimina del destino los archivos que ya no existen en el origen, así que ejecútalo primero con <code>-n</code> (simulación) para ver qué pasaría. rsync debe estar instalado en ambas máquinas.</p>
+<p>La barra final en el origen de rsync cambia el resultado. <code>rsync -a /srv/web/ host:/backup/web/</code> copia el contenido de web en el destino, mientras que <code>rsync -a /srv/web host:/backup/</code> crea <code>/backup/web</code> y copia dentro de él. Cuando los resultados acaban un directorio más abajo de lo esperado, esta suele ser la razón.</p>
+<p>Las tres herramientas se autentican como ssh, así que el inicio de sesión con claves te permite automatizar transferencias sin contraseñas, y una advertencia de clave de host significa lo mismo que en ssh. Elige scp para copias rápidas y puntuales, sftp para explorar de forma interactiva y rsync para transferencias grandes o repetidas y para respaldos.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>scp</dt><dd>Secure copy: copia archivos hacia o desde hosts remotos sobre SSH usando la sintaxis user@host:path.</dd><dt>sftp</dt><dd>Cliente interactivo de transferencia de archivos sobre SSH, con comandos como get, put, ls y lcd.</dd><dt>rsync</dt><dd>Sincroniza archivos transfiriendo solo las diferencias, sobre SSH por defecto.</dd><dt>rsync -a</dt><dd>Modo archivo: recursivo, conservando permisos, horas, enlaces y el propietario cuando es posible.</dd><dt>--delete</dt><dd>Opción de rsync que elimina los archivos del destino que no están en el origen; pruébala primero con -n.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Necesitas una copia nocturna de /srv/web en serverb. El primer <code>rsync -av /srv/web/ root@serverb:/srv/web/</code> tarda varios minutos, pero la siguiente ejecución envía solo los tres archivos que cambiaron y termina en segundos. Añadir --delete después de una simulación con -n mantiene la copia como un espejo exacto.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> En rsync, una barra final en el origen significa 'el contenido de este directorio'; sin ella, se copia el propio directorio dentro del destino. scp usa -P para el puerto, mientras que ssh usa -p.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo copias /etc/hosts de serverb al directorio local actual?</summary><p>scp user@serverb:/etc/hosts .</p></details>
+<details class="sq"><summary>¿Por qué rsync es más rápido que scp para respaldos repetidos?</summary><p>Transfiere solo los archivos y partes de archivos que cambiaron desde la última ejecución.</p></details>
+<details class="sq"><summary>En sftp, ¿cuál es la diferencia entre cd y lcd?</summary><p>cd cambia el directorio remoto; lcd cambia el directorio local.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../starting-stopping-and-checking-network-services-systemctl-status-ss-tl/">← Iniciar, detener y comprobar servicios de red (systemctl sta</a><a href="../listing-disks-and-partitions-with-lsblk-blkid-and-fdisk-l/">Listar discos y particiones con lsblk, blkid y fdisk -l →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cifrado en tránsito: TLS, certificados de ACM (us-east-1 p… · Lección de Developer Associate</title>
+<meta name="description" content="El cifrado en tránsito protege los datos que se mueven por las redes contra la escucha y la manipulación. En AWS esto casi siempre significa Transport Laye">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Cifrado en tránsito: TLS, certificados de ACM (us-east-1 p… · Lección de Developer Associate">
+<meta property="og:description" content="El cifrado en tránsito protege los datos que se mueven por las redes contra la escucha y la manipulación. En AWS esto casi siempre significa Transport Laye">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/encryption-in-transit-tls-acm-certificates-us-east-1-for-cloudfront-en/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/encryption-in-transit-tls-acm-certificates-us-east-1-for-cloudfront-en/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/encryption-in-transit-tls-acm-certificates-us-east-1-for-cloudfront-en/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Cifrado en tránsito: TLS, certificados de ACM (us-east-1 para CloudFront), imponer aws:SecureTransport</h1>
+<article class="lbody">
+<p>El cifrado en tránsito protege los datos que se mueven por las redes contra la escucha y la manipulación. En AWS esto casi siempre significa Transport Layer Security (TLS), el protocolo detrás de HTTPS. Todos los endpoints de API de los servicios de AWS admiten TLS, y los SDK y la CLI usan HTTPS por defecto.</p>
+<p>TLS funciona haciendo que el servidor presente un certificado emitido por una autoridad de certificación de confianza, que demuestra que es dueño del nombre de dominio; luego el cliente y el servidor acuerdan claves de sesión y cifran todo lo que sigue. Para tus propios endpoints necesitas un certificado para tu dominio. AWS Certificate Manager (ACM) aprovisiona certificados TLS públicos sin costo adicional para usarlos con servicios integrados, valida la propiedad del dominio por DNS (la opción preferida, ya que así la renovación es automática) o por correo electrónico, y renueva los certificados automáticamente. También puedes importar certificados de terceros en ACM, pero ACM no puede renovarlos. Los certificados de ACM se despliegan en servicios integrados, como Elastic Load Balancing, Amazon CloudFront, API Gateway y Elastic Beanstalk; con los certificados públicos estándar de ACM, en general no puedes exportar la clave privada para instalarla en tu propio servidor web en EC2.</p>
+<p>Los certificados de ACM son recursos regionales, y esto importa para uno de los favoritos del examen: CloudFront es un servicio global que solo usa certificados de la región US East (N. Virginia), <code>us-east-1</code>. Si tu distribución de CloudFront, o un dominio personalizado de API Gateway optimizado para el borde (edge-optimized, que usa CloudFront internamente), no encuentra tu certificado, probablemente lo solicitaste en otra región. Un dominio personalizado regional de API Gateway o un Application Load Balancer usa un certificado de su propia región.</p>
+<p>También importa dónde termina TLS. Un Application Load Balancer puede terminar TLS y reenviar HTTP simple a los destinos en una red privada, o volver a cifrar hacia los destinos si se requiere cifrado de extremo a extremo. Un Network Load Balancer puede terminar TLS o dejarlo pasar hasta los destinos.</p>
+<p>Imponer TLS en S3 usa la clave de condición global <code>aws:SecureTransport</code>, que es true cuando la solicitud llegó por HTTPS. Una política de bucket que deniega todas las acciones cuando es false bloquea cualquier acceso por HTTP simple, sin importar los permisos de IAM de quien llama, porque la denegación explícita gana.</p>
+<pre class="code" tabindex="0"><code>{
+  &quot;Effect&quot;: &quot;Deny&quot;,
+  &quot;Principal&quot;: &quot;*&quot;,
+  &quot;Action&quot;: &quot;s3:*&quot;,
+  &quot;Resource&quot;: [&quot;arn:aws:s3:::my-bucket&quot;, &quot;arn:aws:s3:::my-bucket/*&quot;],
+  &quot;Condition&quot;: { &quot;Bool&quot;: { &quot;aws:SecureTransport&quot;: &quot;false&quot; } }
+}</code></pre>
+<p>La misma clave de condición funciona en las políticas de temas de SNS y de colas de SQS. En otros servicios, impón TLS exponiendo solo listeners HTTPS, redirigiendo HTTP a HTTPS (política de protocolo del espectador de CloudFront o una regla de listener del ALB), exigiendo TLS en la configuración de conexión a la base de datos y usando políticas de seguridad con versión mínima de TLS en los balanceadores de carga, CloudFront y los dominios personalizados de API Gateway.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>TLS</dt><dd>Transport Layer Security, el protocolo que cifra y autentica conexiones de red como HTTPS.</dd><dt>AWS Certificate Manager (ACM)</dt><dd>Un servicio que aprovisiona, despliega y renueva automáticamente certificados TLS para servicios de AWS integrados.</dd><dt>aws:SecureTransport</dt><dd>Una clave de condición global de IAM que es true cuando una solicitud se hizo sobre TLS.</dd><dt>TLS termination (terminación de TLS)</dt><dd>El punto donde se descifra el tráfico cifrado, como un balanceador de carga o CloudFront.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un equipo solicita un certificado de ACM para shop.example.com en eu-west-1 e intenta asociarlo a su distribución de CloudFront, pero no aparece en la lista. Solicitan el certificado de nuevo en us-east-1, lo validan con el mismo registro DNS, y CloudFront ya puede usarlo.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> CloudFront (y los dominios de API Gateway optimizados para el borde) necesitan certificados de ACM en us-east-1. Para forzar HTTPS en un bucket de S3, deniega en la política del bucket las solicitudes en las que aws:SecureTransport sea false.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué un certificado creado en ap-southeast-2 no aparece para CloudFront?</summary><p>CloudFront solo usa certificados de ACM de la región us-east-1.</p></details>
+<details class="sq"><summary>¿Qué condición de política de bucket bloquea el acceso HTTP a S3?</summary><p>Una declaración Deny con la condición Bool aws:SecureTransport igual a false.</p></details>
+<details class="sq"><summary>¿Por qué se prefiere la validación por DNS para los certificados de ACM?</summary><p>Mientras el registro CNAME permanezca en su lugar, ACM puede renovar el certificado automáticamente.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../aws-kms-customer-managed-vs-aws-managed-keys-envelope-encryption-with/">← AWS KMS: claves administradas por el cliente vs administrada</a><a href="../secrets-and-configuration-secrets-manager-rotation-vs-systems-manager/">Secretos y configuración: Secrets Manager (rotación) vs Syst →</a></nav>
+</main>
+</body>
+</html>

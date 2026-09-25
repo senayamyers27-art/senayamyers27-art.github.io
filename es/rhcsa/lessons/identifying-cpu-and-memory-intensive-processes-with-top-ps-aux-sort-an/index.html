@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Identificar procesos que consumen mucha CPU y memoria con … · Lección de RHCSA</title>
+<meta name="description" content="Un proceso es una instancia en ejecución de un programa, identificada por un ID de proceso (PID). Cuando un sistema va lento, tu trabajo es encontrar qué p">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Identificar procesos que consumen mucha CPU y memoria con … · Lección de RHCSA">
+<meta property="og:description" content="Un proceso es una instancia en ejecución de un programa, identificada por un ID de proceso (PID). Cuando un sistema va lento, tu trabajo es encontrar qué p">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/identifying-cpu-and-memory-intensive-processes-with-top-ps-aux-sort-an/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/identifying-cpu-and-memory-intensive-processes-with-top-ps-aux-sort-an/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/identifying-cpu-and-memory-intensive-processes-with-top-ps-aux-sort-an/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Identificar procesos que consumen mucha CPU y memoria con top y ps aux --sort, y terminarlos (kill, pkill, señales 15 y 9)</h1>
+<article class="lbody">
+<p>Un proceso es una instancia en ejecución de un programa, identificada por un ID de proceso (PID). Cuando un sistema va lento, tu trabajo es encontrar qué procesos usan la CPU o la memoria y decidir si detenerlos. El RHCSA espera que identifiques esos procesos y los termines correctamente.</p>
+<p><code>top</code> ofrece una vista en vivo que se actualiza. La cabecera muestra el tiempo encendido, la carga promedio (load average: número promedio de procesos esperando para ejecutarse en 1, 5 y 15 minutos), el conteo de tareas, el uso de CPU y la memoria. Debajo se listan los procesos con PID, USER, prioridad (PR), valor nice (NI), columnas de memoria (VIRT, RES para la memoria residente en RAM), estado (S), %CPU, %MEM y COMMAND. Por defecto top ordena por CPU; presiona <code>M</code> para ordenar por memoria, <code>P</code> para volver a CPU, <code>k</code> para terminar un proceso por PID, <code>r</code> para cambiar su valor nice y <code>q</code> para salir.</p>
+<p><code>ps</code> toma una instantánea. <code>ps aux</code> lista cada proceso con usuario, PID, %CPU, %MEM, VSZ, RSS, estado, hora de inicio y comando completo. Añade <code>--sort</code> para ordenarlo: <code>ps aux --sort=-%cpu | head</code> muestra primero los que más CPU usan (el signo menos significa orden descendente), y <code>--sort=-%mem</code> hace lo mismo con la memoria. <code>ps -ef</code> es otro estilo común, y <code>ps -o pid,ni,%cpu,cmd -p PID</code> muestra las columnas elegidas. <code>pgrep name</code> imprime los PIDs cuyo nombre coincide.</p>
+<pre class="code" tabindex="0"><code>ps aux --sort=-%cpu | head -5
+ps aux --sort=-%mem | head -5
+pgrep -l dd
+kill 4312          # SIGTERM (15), petición educada
+kill -9 4312       # SIGKILL, no se puede ignorar
+pkill -u harry     # enviar la señal a todos los procesos de harry
+killall stress-ng</code></pre>
+<p>Los procesos se detienen enviándoles señales. <code>kill PID</code> envía SIGTERM, la señal 15, por defecto. SIGTERM le pide al proceso que termine; un programa bien escrito la captura, guarda su trabajo, cierra los archivos y sale limpiamente. SIGKILL, la señal 9 (<code>kill -9 PID</code> o <code>kill -KILL PID</code>), la gestiona el kernel: el proceso se elimina de inmediato y no puede capturarla, retrasarla ni ignorarla, así que no tiene oportunidad de limpiar. Lo correcto es SIGTERM primero y SIGKILL solo si el proceso no termina. Otras señales son SIGHUP (1), que muchos demonios interpretan como 'recargar la configuración', y SIGINT (2), la que envía Ctrl+C. <code>kill -l</code> las lista todas.</p>
+<p><code>pkill</code> y <code>killall</code> envían señales a procesos por nombre u otros atributos en lugar de por PID. <code>pkill -u harry</code> apunta a los procesos de un usuario, <code>pkill -t pts/1</code> a los de una terminal y <code>killall name</code> coincide con nombres de comando exactos. Como pueden coincidir con más de lo que pretendes, revisa primero con <code>pgrep -l</code>.</p>
+<p>Los usuarios normales solo pueden enviar señales a sus propios procesos; root puede enviarlas a cualquiera. Terminar un proceso que pertenece a un servicio de systemd puede hacer simplemente que systemd lo reinicie, así que para los servicios usa <code>systemctl stop</code> en su lugar.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>PID</dt><dd>Process ID: el número único que identifica a un proceso en ejecución.</dd><dt>top</dt><dd>Vista interactiva y en vivo de los procesos ordenados por uso de recursos; M ordena por memoria, P por CPU, k termina procesos.</dd><dt>ps aux --sort=-%cpu</dt><dd>Instantánea de todos los procesos ordenados por uso de CPU descendente.</dd><dt>SIGTERM (15)</dt><dd>Señal predeterminada de kill que solicita un cierre limpio; el proceso puede capturarla.</dd><dt>SIGKILL (9)</dt><dd>Señal que termina un proceso inmediatamente; no se puede capturar ni ignorar.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>La carga promedio sigue subiendo. <code>ps aux --sort=-%cpu | head -3</code> muestra un <code>dd</code> descontrolado de harry al 99% de CPU. <code>kill 5821</code> no tiene efecto tras unos segundos, así que usas <code>kill -9 5821</code>, y top muestra que la CPU vuelve a estar inactiva.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Prueba SIGTERM (15, la predeterminada) antes que SIGKILL (9). SIGKILL no se puede capturar, así que el proceso no tiene oportunidad de limpiar. Usa un menos en --sort=-%cpu para ver primero los valores más altos.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué señal envía <code>kill PID</code> por defecto?</summary><p>SIGTERM, la señal 15.</p></details>
+<details class="sq"><summary>¿Cómo listas los cinco procesos que más memoria consumen?</summary><p>ps aux --sort=-%mem | head -6 (la cabecera más cinco), o presiona M en top.</p></details>
+<details class="sq"><summary>¿Por qué un proceso no puede ignorar SIGKILL?</summary><p>El kernel actúa directamente sobre SIGKILL, y el proceso no puede capturarla ni bloquearla.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../interrupting-the-boot-process-to-gain-access-rd-break-chroot-sysroot-p/">← Interrumpir el proceso de arranque para obtener acceso (rd.b</a><a href="../adjusting-process-scheduling-with-nice-and-renice-range-20-to-19/">Ajustar la planificación de procesos con nice y renice (rang →</a></nav>
+</main>
+</body>
+</html>

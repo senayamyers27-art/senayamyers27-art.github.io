@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gestión de secretos con HashiCorp Vault y el provider de V… · Lección de Terraform Associate</title>
+<meta name="description" content="HashiCorp Vault es un sistema de gestión de secretos. Guarda los secretos de forma centralizada, controla quién puede leerlos mediante políticas, registra ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Gestión de secretos con HashiCorp Vault y el provider de V… · Lección de Terraform Associate">
+<meta property="og:description" content="HashiCorp Vault es un sistema de gestión de secretos. Guarda los secretos de forma centralizada, controla quién puede leerlos mediante políticas, registra ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/terraform/lessons/secrets-management-with-hashicorp-vault-and-the-vault-provider/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/terraform/lessons/secrets-management-with-hashicorp-vault-and-the-vault-provider/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../terraform/">Terraform Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../terraform/lessons/secrets-management-with-hashicorp-vault-and-the-vault-provider/" hreflang="en" lang="en">English</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004)</p>
+<h1>Gestión de secretos con HashiCorp Vault y el provider de Vault</h1>
+<article class="lbody">
+<p>HashiCorp Vault es un sistema de gestión de secretos. Guarda los secretos de forma centralizada, controla quién puede leerlos mediante políticas, registra cada acceso en logs de auditoría y, lo más importante, puede generar secretos dinámicos: credenciales creadas bajo demanda para un solo uso o un lease (arrendamiento) corto, que se revocan automáticamente después. Combinar Terraform con Vault significa que tu configuración nunca necesita una clave de nube de larga duración ni una contraseña de base de datos escrita en un archivo.</p>
+<p>Terraform se comunica con Vault mediante el provider de Vault, que se configura como cualquier otro provider con la dirección del servidor de Vault y una forma de autenticarse. La dirección y el token normalmente se proporcionan mediante variables de entorno como <code>VAULT_ADDR</code> y <code>VAULT_TOKEN</code> en lugar de escribirse en el código, o mediante un método de autenticación como AppRole o una identidad de la nube. El provider puede hacer dos tareas: gestionar el propio Vault (mounts, políticas, métodos de autenticación, roles) como infraestructura, y leer secretos de Vault para usarlos en otras partes de tu configuración.</p>
+<p>La lectura de un secreto estático de un motor clave/valor se hace con un data source, por ejemplo <code>vault_kv_secret_v2</code> para la versión 2 del motor KV o el data source de secreto genérico más antiguo. Luego referencias un atributo de ese data source en otro bloque resource o provider. Para los secretos dinámicos, data sources como el de credenciales de acceso de AWS le piden al motor de secretos de AWS de Vault que genere claves de AWS de corta duración, que puedes pasar al bloque provider de AWS. Cuando el lease vence, Vault revoca las claves, así que una credencial filtrada tiene una vida útil corta.</p>
+<pre class="code" tabindex="0"><code>data &quot;vault_kv_secret_v2&quot; &quot;db&quot; {
+  mount = &quot;secret&quot;
+  name  = &quot;app/db&quot;
+}
+
+# después: data.vault_kv_secret_v2.db.data[&quot;password&quot;]</code></pre>
+<p>Hay una advertencia importante que le gusta al examen: los valores leídos mediante un data source se guardan en el archivo de estado de Terraform, igual que cualquier otro atributo. Vault protege el secreto en reposo dentro de Vault, pero una vez que Terraform lo lee en un data source normal, tu estado se convierte en otro lugar donde vive el secreto. Las mitigaciones incluyen proteger el estado con un backend cifrado y con control de acceso, preferir secretos dinámicos de corta duración para que una copia en el estado se vuelva inútil rápidamente y, cuando el provider lo admita, usar recursos efímeros para que el secreto se use durante la ejecución pero nunca se persista.</p>
+<p>En HCP Terraform puedes ir más allá con las credenciales dinámicas de providers, en las que cada ejecución se autentica en Vault usando un token firmado de identidad de carga de trabajo en lugar de un token de Vault almacenado. Sea cual sea el patrón, el principio es el mismo: Vault es la única fuente de verdad para los secretos, Terraform los obtiene justo a tiempo, y nada secreto se escribe de forma fija en tu configuración ni se incluye en commits del control de versiones.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>HashiCorp Vault</dt><dd>Una herramienta de gestión de secretos que guarda, controla el acceso, audita y genera dinámicamente secretos.</dd><dt>Dynamic secret (secreto dinámico)</dt><dd>Una credencial que Vault genera bajo demanda con un lease y revoca automáticamente cuando el lease vence.</dd><dt>Vault provider (provider de Vault)</dt><dd>El provider de Terraform que se usa para configurar Vault y leer secretos de él mediante data sources o recursos efímeros.</dd><dt>Lease (arrendamiento)</dt><dd>El período durante el cual un secreto de Vault es válido antes de que deba renovarse o se revoque.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>En lugar de guardar una clave de acceso de AWS en las variables de HCP Terraform, un equipo configura el motor de secretos de AWS de Vault. Su configuración lee credenciales de AWS de corta duración de Vault al inicio de cada ejecución y las pasa al bloque provider de AWS; las claves vencen poco después de la ejecución, así que incluso la copia en el estado pierde su valor rápidamente.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Los secretos leídos de Vault mediante un data source normal terminan en el estado de Terraform. Vault no cambia eso; protege el estado y prefiere secretos de corta duración o efímeros.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué los secretos dinámicos son más seguros que los estáticos para las ejecuciones de Terraform?</summary><p>Se crean bajo demanda con un lease corto y se revocan automáticamente, así que una copia filtrada (incluida la del estado) deja de funcionar poco después de la ejecución.</p></details>
+<details class="sq"><summary>¿Cómo debería proporcionarse normalmente el token de Vault para el provider de Vault?</summary><p>Mediante una variable de entorno como VAULT_TOKEN o un método de autenticación, no escrito de forma fija en la configuración.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Terraform Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../terraform/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../sensitive-data-sensitive-values-ephemeral-variables-and-resources-writ/">← Datos sensibles: valores `sensitive`, variables y recursos e</a><a href="../root-module-vs-child-modules-a-module-is-any-directory-of-tf-files/">Módulo raíz frente a módulos hijos; un módulo es cualquier d →</a></nav>
+</main>
+</body>
+</html>

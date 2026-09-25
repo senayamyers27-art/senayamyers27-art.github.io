@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Flujo de una solicitud: autenticación, autorización (RBAC)… · Lección de CKAD</title>
+<meta name="description" content="Todo cambio en Kubernetes pasa por el API server: kubectl, los controladores, el kubelet y tus propias aplicaciones le envían solicitudes HTTPS. Antes de q">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Flujo de una solicitud: autenticación, autorización (RBAC)… · Lección de CKAD">
+<meta property="og:description" content="Todo cambio en Kubernetes pasa por el API server: kubectl, los controladores, el kubelet y tus propias aplicaciones le envían solicitudes HTTPS. Antes de q">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/request-flow-authentication-authorization-rbac-and-admission-control-m/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/request-flow-authentication-authorization-rbac-and-admission-control-m/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/request-flow-authentication-authorization-rbac-and-admission-control-m/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>Flujo de una solicitud: autenticación, autorización (RBAC) y control de admisión (mutating y validating)</h1>
+<article class="lbody">
+<p>Todo cambio en Kubernetes pasa por el API server: kubectl, los controladores, el kubelet y tus propias aplicaciones le envían solicitudes HTTPS. Antes de que una solicitud pueda crear o modificar un objeto, pasa por tres filtros en un orden fijo: autenticación, autorización y control de admisión. Conocer el orden te ayuda a interpretar los errores.</p>
+<p>La autenticación responde '¿Quién eres?'. El API server prueba sus autenticadores configurados: certificados de cliente (comunes en los archivos kubeconfig de administradores), bearer tokens (incluidos los tokens de ServiceAccount que usan los Pods) y proveedores de identidad externos mediante OpenID Connect (OIDC). Kubernetes no tiene un objeto User; un usuario humano es solo un nombre y unos grupos afirmados por una credencial de confianza. Las ServiceAccounts, en cambio, son objetos reales y aparecen como <code>system:serviceaccount:&lt;namespace&gt;:&lt;name&gt;</code>. Si ningún autenticador acepta la solicitud, falla con 401 Unauthorized. <code>kubectl auth whoami</code> muestra quién cree el API server que eres.</p>
+<p>La autorización responde '¿Tienes permiso para hacer esto?'. La solicitud se describe como un verbo (get, list, watch, create, update, patch, delete), un recurso (y un subrecurso opcional como <code>pods/log</code>), un grupo de API, un namespace y un nombre. Los autorizadores configurados, normalmente Node y RBAC (Role-Based Access Control, control de acceso basado en roles), deciden. RBAC es puramente aditivo: no hay reglas de denegación, y todo lo que no está permitido explícitamente se deniega. Un rechazo devuelve 403 Forbidden con un mensaje como <code>User &quot;jane&quot; cannot list resource &quot;pods&quot; in API group &quot;&quot; in the namespace &quot;prod&quot;</code>.</p>
+<p>El control de admisión responde '¿Este objeto en particular es aceptable y debería ajustarse?'. Se aplica a las solicitudes que crean, actualizan o eliminan objetos, no a las lecturas. La admisión mutating se ejecuta primero y puede cambiar el objeto: el admission controller de ServiceAccount completa la ServiceAccount por defecto, LimitRanger agrega solicitudes y límites por defecto, y los webhooks mutating pueden inyectar sidecars. Luego el objeto se valida contra su esquema. La admisión validating se ejecuta después y solo puede aceptar o rechazar: ResourceQuota rechaza objetos que superarían una cuota del namespace, Pod Security Admission rechaza Pods que incumplen el nivel de seguridad del namespace, y las ValidatingAdmissionPolicies o los webhooks validating aplican reglas personalizadas. Si todo pasa, el objeto se guarda en etcd.</p>
+<pre class="code" tabindex="0"><code>kubectl -&gt; API server
+  1. Autenticación      (¿quién?)          falla -&gt; 401 Unauthorized
+  2. Autorización       (¿permitido?)      falla -&gt; 403 Forbidden
+  3. Admisión mutating  (ajustar)
+  4. Validación de esquema
+  5. Admisión validating (¿aceptar?)       falla -&gt; error que nombra la política o cuota
+  6. Persistir en etcd</code></pre>
+<p>Leer los errores con esto en mente es una habilidad práctica para el examen. 'forbidden: User ... cannot create resource' es autorización y se arregla con RBAC. 'forbidden: exceeded quota' viene del admission controller ResourceQuota y se arregla bajando las solicitudes o subiendo la cuota. 'violates PodSecurity &quot;restricted:latest&quot;' viene de Pod Security Admission y se arregla en el securityContext del Pod. Y un Pod que ganó recursos o un sidecar que tú no escribiste fue modificado por la admisión mutating. En los Deployments, los rechazos de admisión de Pods aparecen en los eventos del ReplicaSet, no del Deployment, así que revisa <code>kubectl describe rs</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Authentication (autenticación)</dt><dd>Establecer quién hace la solicitud; un fallo devuelve 401.</dd><dt>Authorization (autorización)</dt><dd>Decidir si la identidad puede realizar el verbo sobre el recurso; un fallo devuelve 403.</dd><dt>Mutating admission (admisión mutating)</dt><dd>Paso de admisión que puede modificar un objeto antes de guardarlo.</dd><dt>Validating admission (admisión validating)</dt><dd>Paso de admisión que acepta o rechaza un objeto sin cambiarlo.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un Deployment muestra 0/3 listos y no existe ningún Pod. <code>kubectl describe rs</code> muestra 'pods &quot;web-...&quot; is forbidden: exceeded quota: compute, requested: limits.memory=512Mi'. La solicitud pasó la autenticación y RBAC, pero el admission controller validating de ResourceQuota rechazó los Pods.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Orden: autenticación, autorización, admisión mutating, validación, admisión validating. 401 significa identidad, 403 con 'cannot' significa RBAC, y los mensajes de cuota o PodSecurity significan admisión.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué etapa devuelve 401 Unauthorized?</summary><p>La autenticación, cuando ningún autenticador acepta las credenciales.</p></details>
+<details class="sq"><summary>¿El control de admisión se ejecuta en <code>kubectl get</code>?</summary><p>No; la admisión se aplica a solicitudes de creación, actualización y eliminación, no a lecturas.</p></details>
+<details class="sq"><summary>¿Qué se ejecuta primero, la admisión mutating o la validating, y por qué?</summary><p>La mutating, para que los controladores validating revisen el objeto final ya modificado.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../extending-kubernetes-customresourcedefinitions-custom-resources-and-op/">← Extender Kubernetes: CustomResourceDefinitions, recursos per</a><a href="../rbac-objects-role-clusterrole-rolebinding-clusterrolebinding-kubectl-a/">Objetos RBAC: Role, ClusterRole, RoleBinding, ClusterRoleBin →</a></nav>
+</main>
+</body>
+</html>

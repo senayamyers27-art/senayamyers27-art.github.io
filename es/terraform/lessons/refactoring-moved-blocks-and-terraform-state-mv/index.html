@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Refactorización: bloques `moved` y `terraform state mv` · Lección de Terraform Associate</title>
+<meta name="description" content="A medida que las configuraciones crecen, renombras recursos, los mueves a módulos y cambias de count a for_each. Cada uno de estos cambios modifica la dire">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Refactorización: bloques `moved` y `terraform state mv` · Lección de Terraform Associate">
+<meta property="og:description" content="A medida que las configuraciones crecen, renombras recursos, los mueves a módulos y cambias de count a for_each. Cada uno de estos cambios modifica la dire">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/terraform/lessons/refactoring-moved-blocks-and-terraform-state-mv/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/terraform/lessons/refactoring-moved-blocks-and-terraform-state-mv/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../terraform/">Terraform Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../terraform/lessons/refactoring-moved-blocks-and-terraform-state-mv/" hreflang="en" lang="en">English</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004)</p>
+<h1>Refactorización: bloques `moved` y `terraform state mv`</h1>
+<article class="lbody">
+<p>A medida que las configuraciones crecen, renombras recursos, los mueves a módulos y cambias de <code>count</code> a <code>for_each</code>. Cada uno de estos cambios modifica la dirección del recurso. Terraform rastrea los objetos por dirección, así que si simplemente renombras <code>aws_instance.web</code> a <code>aws_instance.frontend</code>, el plan muestra que la dirección anterior se destruye y se crea una nueva. Para una base de datos o un servidor de producción, eso es exactamente lo que no quieres. Las herramientas de refactorización le dicen a Terraform que el objeto solo se movió.</p>
+<p>El enfoque moderno, agregado en Terraform 1.1, es el bloque <code>moved</code>. Lo escribes en la configuración con <code>from</code> (la dirección anterior) y <code>to</code> (la dirección nueva). Durante el siguiente plan, Terraform ve que el estado tiene un objeto en la dirección anterior, lo actualiza a la dirección nueva e informa el movimiento en lugar de una destrucción y una creación.</p>
+<pre class="code" tabindex="0"><code>moved {
+  from = aws_instance.web
+  to   = aws_instance.frontend
+}
+
+moved {
+  from = aws_s3_bucket.logs
+  to   = module.logging.aws_s3_bucket.this
+}</code></pre>
+<p>Los bloques <code>moved</code> funcionan para renombrar, para mover recursos hacia dentro o fuera de módulos, para renombrar llamadas a módulos (<code>from = module.a</code>, <code>to = module.b</code>) y para agregar <code>count</code> o <code>for_each</code> a un recurso existente (<code>from = aws_instance.web</code>, <code>to = aws_instance.web[0]</code>). Como el movimiento está en el código, se revisa en un pull request, se muestra en el plan y se aplica automáticamente en cada entorno y workspace que usa la configuración. Los autores de módulos pueden incluir bloques <code>moved</code> en una nueva versión del módulo para que quienes lo llaman actualicen sin perder recursos. Puedes conservar los bloques <code>moved</code> antiguos como historial de cambios; eliminarlos pronto puede romper a los usuarios que todavía tienen un estado antiguo.</p>
+<p>El enfoque más antiguo es <code>terraform state mv SOURCE DESTINATION</code>. Edita el estado de inmediato: <code>terraform state mv aws_instance.web aws_instance.frontend</code>. También funciona para módulos (<code>terraform state mv module.a module.b</code>) y puede mover elementos entre archivos de estado separados. El comando cambia el estado directamente sin un plan, así que debe ejecutarse por separado en cada entorno, y no queda registro en el control de versiones. Actualiza siempre la configuración para que coincida, y considera usar <code>-dry-run</code> primero para ver qué se movería.</p>
+<p>El examen espera que prefieras los bloques <code>moved</code> para refactorizar en entornos compartidos o con varios entornos, y que reconozcas <code>terraform state mv</code> como la alternativa imperativa. Ninguno cambia la infraestructura real; solo cambian qué dirección asocia Terraform con un objeto existente. Si un movimiento requiriera un cambio real en el objeto, como un tipo de recurso distinto, <code>state mv</code> no puede ayudar, y un bloque <code>moved</code> solo puede hacerlo cuando el provider admite explícitamente ese movimiento entre tipos (como de <code>null_resource</code> a <code>terraform_data</code>); de lo contrario, importas en el nuevo tipo de recurso y eliminas el anterior del estado.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>moved block (bloque moved)</dt><dd>Un bloque de configuración con from y to que registra un cambio de dirección para que Terraform actualice el estado en lugar de reemplazar el objeto.</dd><dt>terraform state mv</dt><dd>Un comando de la CLI que cambia de inmediato la dirección de un objeto en el estado.</dd><dt>Refactoring (refactorización)</dt><dd>Reestructurar la configuración (renombrar, mover a módulos) sin cambiar la infraestructura real.</dd><dt>Resource address (dirección de recurso)</dt><dd>El identificador que usa Terraform para rastrear un objeto, como module.app.aws_instance.web[0].</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un equipo mueve diez recursos del módulo raíz a un nuevo módulo llamado network. Agrega diez bloques moved que asocian cada dirección anterior con module.network.&lt;address&gt;. El plan muestra diez movimientos y cero destrucciones, y el mismo pull request actualiza de forma segura dev, staging y prod.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Renombrar un recurso sin moved ni state mv hace que Terraform planee una destrucción y una creación; moved es la opción declarativa y revisable.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Renombras el recurso aws_db_instance.main a aws_db_instance.primary. ¿Cómo evitas reemplazar la base de datos?</summary><p>Agrega un bloque moved con from = aws_db_instance.main y to = aws_db_instance.primary (o ejecuta terraform state mv).</p></details>
+<details class="sq"><summary>Nombra una ventaja de los bloques moved frente a terraform state mv.</summary><p>Están en el control de versiones, son visibles en el plan y se aplican automáticamente en cada entorno que usa el código.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Terraform Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../terraform/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../inspecting-state-terraform-state-list-terraform-state-show-terraform-s/">← Inspeccionar el estado: `terraform state list`, `terraform s</a><a href="../removing-resources-from-state-without-destroying-them-removed-blocks-a/">Eliminar recursos del estado sin destruirlos: bloques `remov →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Alcance de las variables: los módulos hijos solo ven los v… · Lección de Terraform Associate</title>
+<meta name="description" content="Los módulos son cajas selladas. Un módulo hijo no puede ver las variables, los locals, los recursos ni los data sources del módulo que lo llama, y quien ll">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Alcance de las variables: los módulos hijos solo ven los v… · Lección de Terraform Associate">
+<meta property="og:description" content="Los módulos son cajas selladas. Un módulo hijo no puede ver las variables, los locals, los recursos ni los data sources del módulo que lo llama, y quien ll">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/terraform/lessons/variable-scope-child-modules-only-see-values-passed-in-outputs-are-rea/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/terraform/lessons/variable-scope-child-modules-only-see-values-passed-in-outputs-are-rea/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../terraform/">Terraform Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../terraform/lessons/variable-scope-child-modules-only-see-values-passed-in-outputs-are-rea/" hreflang="en" lang="en">English</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004)</p>
+<h1>Alcance de las variables: los módulos hijos solo ven los valores que se les pasan; los outputs se leen como `module.NAME.OUTPUT`</h1>
+<article class="lbody">
+<p>Los módulos son cajas selladas. Un módulo hijo no puede ver las variables, los locals, los recursos ni los data sources del módulo que lo llama, y quien llama no puede entrar en el hijo para leer sus recursos directamente. La única forma de entrar es mediante las variables de entrada, y la única forma de salir es mediante los outputs. Este alcance estricto es lo que hace que un módulo sea predecible y reutilizable, porque su comportamiento depende solo de los valores que recibe.</p>
+<p>Considera un módulo raíz con <code>variable &quot;region&quot;</code>. Un módulo hijo que escribe <code>var.region</code> se refiere a su propia variable <code>region</code>, no a la del raíz. Si el hijo no declara una, la referencia es un error. Para que el valor del raíz esté disponible, el hijo debe declarar <code>variable &quot;region&quot;</code> y quien llama debe pasarla en el bloque module: <code>region = var.region</code>. La misma regla se aplica a las variables de entorno establecidas con <code>TF_VAR_region</code>: solo establecen variables del módulo raíz, nunca variables de módulos hijos directamente.</p>
+<p>En el otro sentido, un hijo expone datos con bloques <code>output</code>. Quien llama lee esos outputs usando la sintaxis <code>module.MODULE_NAME.OUTPUT_NAME</code>. Si el módulo usa <code>count</code>, lo indexas (<code>module.web[0].ip</code>), y con <code>for_each</code> usas la clave (<code>module.web[&quot;blue&quot;].ip</code>). Todo lo que el hijo no exporta se mantiene privado; no puedes escribir <code>module.network.aws_vpc.this.id</code> en una expresión.</p>
+<pre class="code" tabindex="0"><code># modules/network/outputs.tf
+output &quot;vpc_id&quot; {
+  value = aws_vpc.this.id
+}
+
+# main.tf del módulo raíz
+resource &quot;aws_security_group&quot; &quot;app&quot; {
+  vpc_id = module.network.vpc_id
+}</code></pre>
+<p>Solo los outputs del módulo raíz se muestran después de <code>terraform apply</code> y con <code>terraform output</code>. Si quieres que el valor de un módulo hijo aparezca ahí, el módulo raíz debe volver a exportarlo con su propio output, como <code>output &quot;vpc_id&quot; { value = module.network.vpc_id }</code>. Este es un escenario muy común del examen: un valor existe en el output de un módulo hijo, pero no aparece en la línea de comandos porque el raíz nunca lo pasó hacia arriba.</p>
+<p>Como los valores fluyen solo a través de interfaces explícitas, leer <code>variables.tf</code> y <code>outputs.tf</code> de un módulo te dice todo lo que necesitas para usarlo. Diseñar buenos módulos significa elegir esa interfaz con cuidado: exponer las entradas que quienes llaman realmente necesitan cambiar y los outputs que consumirán otras partes del sistema, como IDs, ARNs y endpoints, y mantener todo lo demás como interno.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Module scope (alcance del módulo)</dt><dd>La regla de que cada módulo tiene su propio espacio de nombres y ve solo sus propias variables, locals y recursos.</dd><dt>Output value (valor de output)</dt><dd>Un valor que un módulo exporta con un bloque output, que quien lo llama puede leer como module.NAME.OUTPUT.</dd><dt>Re-exporting (volver a exportar)</dt><dd>Declarar un output del módulo raíz cuyo valor es un output de un módulo hijo, para que aparezca en terraform output.</dd><dt>TF_VAR_ environment variable (variable de entorno TF_VAR_)</dt><dd>Una variable de entorno que establece una variable de entrada del módulo raíz; no llega directamente a los módulos hijos.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un ingeniero ejecuta terraform output esperando ver el endpoint de la base de datos, pero no aparece nada. El endpoint es un output de module.db, y el módulo raíz nunca lo volvió a exportar. Agregar output &quot;db_endpoint&quot; { value = module.db.endpoint } en el raíz lo hace visible.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Los valores bajan solo mediante los argumentos del bloque module y suben solo mediante los outputs; un hijo nunca puede leer directamente los valores var. del padre.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo lee el módulo raíz el output subnet_ids de un módulo llamado network?</summary><p>Con module.network.subnet_ids.</p></details>
+<details class="sq"><summary>¿Por qué el output de un módulo hijo no aparece en terraform output?</summary><p>terraform output muestra solo los outputs del módulo raíz; el raíz debe declarar su propio output que referencie el output del hijo.</p></details>
+<details class="sq"><summary>Un módulo hijo referencia var.env, pero el raíz establece TF_VAR_env. ¿El hijo recibe el valor?</summary><p>No automáticamente. El hijo debe declarar la variable env y el raíz debe pasarla en el bloque module.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Terraform Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../terraform/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../calling-a-module-with-a-module-block-and-passing-input-variables/">← Llamar a un módulo con un bloque `module` y pasar variables </a><a href="../passing-provider-configurations-to-modules-with-the-providers-argument/">Pasar configuraciones de providers a los módulos con el argu →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Seguridad del registro de contenedores: deshabilitar el us… · Lección de SC-500</title>
+<meta name="description" content="Azure Container Registry (ACR) almacena las imágenes de contenedor que ejecutan AKS, App Service, Container Apps y otros servicios. Si un atacante puede ha">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Seguridad del registro de contenedores: deshabilitar el us… · Lección de SC-500">
+<meta property="og:description" content="Azure Container Registry (ACR) almacena las imágenes de contenedor que ejecutan AKS, App Service, Container Apps y otros servicios. Si un atacante puede ha">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/sc-500/lessons/container-registry-security-disable-the-admin-user-rbac-pull-push-role/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/sc-500/lessons/container-registry-security-disable-the-admin-user-rbac-pull-push-role/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../sc-500/">SC-500</a> / <a href="../">Lecciones</a> · <a href="../../../../sc-500/lessons/container-registry-security-disable-the-admin-user-rbac-pull-push-role/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Cloud and AI Security Engineer Associate (replaces Azure Security Engineer Associate / AZ-500) SC-500</p>
+<h1>Seguridad del registro de contenedores: deshabilitar el usuario administrador, roles RBAC de pull/push, private endpoints, análisis de vulnerabilidades de imágenes</h1>
+<article class="lbody">
+<p>Azure Container Registry (ACR) almacena las imágenes de contenedor que ejecutan AKS, App Service, Container Apps y otros servicios. Si un atacante puede hacer push a tu registro, puede plantar una imagen maliciosa que tus clústeres desplegarán sin problema; si puede hacer pull, puede encontrar secretos o código propietario dentro de las imágenes. Por eso la seguridad del registro forma parte de la cadena de suministro de software.</p>
+<p>Todo registro tiene un usuario administrador (admin user) opcional: un único nombre de usuario (el nombre del registro) con dos contraseñas que conceden derechos completos de push y pull. Es compartido, no está ligado a ninguna persona y no puede limitarse, así que los registros no pueden mostrar quién actuó. Está deshabilitado de forma predeterminada y debe seguir así; Azure Policy puede auditar o denegar los registros que lo tengan habilitado. Usa identidades de Entra en su lugar: las personas inician sesión con <code>az acr login</code>, y los servicios usan identidades administradas o service principals.</p>
+<p>La autorización usa Azure RBAC. Los roles integrados clave son AcrPull (extraer imágenes), AcrPush (extraer y enviar) y AcrDelete (eliminar imágenes), además de AcrImageSigner en las configuraciones antiguas de content trust. Los registros pueden usar el modo de permisos más nuevo con ABAC, en el que roles como Container Registry Repository Reader, Writer y Contributor pueden limitarse a repositorios específicos con condiciones; de cualquier forma, el principio es el mismo. Por ejemplo, concede a la identidad administrada del kubelet de AKS solo AcrPull (<code>az aks update --attach-acr</code> lo hace), y da AcrPush a la identidad de la canalización de CI/CD. Existen tokens con ámbito de repositorio y scope maps para un acceso detallado sin Entra a repositorios específicos, como para dispositivos IoT.</p>
+<p>Las restricciones de red vienen con la SKU Premium. Puedes crear private endpoints para que al registro se llegue mediante IP privadas en tus redes virtuales, con una zona DNS privada <code>privatelink.azurecr.io</code>, y luego deshabilitar el acceso de red público. Premium también admite reglas de firewall de IP y, cuando se necesita, la excepción de servicios de confianza para servicios como Microsoft Defender for Cloud y ACR Tasks. Ten en cuenta que los registros tienen un endpoint de inicio de sesión y endpoints de datos, y el private endpoint cubre ambos.</p>
+<p>El análisis de vulnerabilidades de imágenes lo proporciona Microsoft Defender for Containers (y el plan Defender CSPM para la postura de contenedores sin agente). Las imágenes se analizan cuando se envían, cuando se han extraído recientemente y según un calendario, usando Microsoft Defender Vulnerability Management. Los hallazgos aparecen como recomendaciones, como 'Azure registry container images should have vulnerabilities resolved', con CVE y versiones corregidas, y pueden correlacionarse con los contenedores en ejecución para que priorices las imágenes que realmente están desplegadas.</p>
+<p>Medidas adicionales para la cadena de suministro: firmar las imágenes (por ejemplo con Notation y claves en Key Vault) y verificar las firmas al desplegar, restringir AKS para que solo extraiga de registros aprobados con Azure Policy, usar ACR Tasks para reconstruir las imágenes cuando se aplican parches a las imágenes base, y habilitar soft delete o directivas de retención para administrar los manifiestos sin etiqueta.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Admin user (usuario administrador)</dt><dd>Una credencial compartida del registro con derechos completos de push y pull que debe permanecer deshabilitada.</dd><dt>AcrPull</dt><dd>Un rol de Azure que permite extraer imágenes de un registro.</dd><dt>AcrPush</dt><dd>Un rol de Azure que permite enviar y extraer imágenes.</dd><dt>Scope map and token (scope map y token)</dt><dd>Funciones del registro que conceden permisos específicos por repositorio a clientes que no usan Entra.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una auditoría descubre que el clúster de AKS extrae imágenes usando la contraseña del usuario administrador del registro guardada en un secreto de Kubernetes. Asocias el registro al clúster para que la identidad del kubelet obtenga AcrPull, das AcrPush al service principal de la canalización, deshabilitas el usuario administrador, agregas un private endpoint con el acceso público deshabilitado en el registro Premium y habilitas el análisis de Defender for Containers.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El acceso en tiempo de ejecución con mínimo privilegio es AcrPull; las canalizaciones necesitan AcrPush. Los private endpoints y las reglas de firewall requieren la SKU Premium. El análisis de CVE de imágenes viene de Defender for Containers, no de ACR por sí solo.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué deshabilitar el usuario administrador de ACR?</summary><p>Es una credencial compartida con derechos completos que no puede limitarse ni atribuirse a una persona.</p></details>
+<details class="sq"><summary>¿Qué rol debe tener la identidad del kubelet de un clúster de AKS en el registro?</summary><p>AcrPull.</p></details>
+<details class="sq"><summary>¿Qué SKU de ACR admite private endpoints?</summary><p>Premium.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia SC-500 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../sc-500/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../aks-security-entra-id-integration-azure-rbac-for-kubernetes-private-cl/">← Seguridad de AKS: integración con Entra ID, Azure RBAC para </a><a href="../app-service-functions-and-logic-apps-managed-identities-key-vault-refe/">App Service, Functions y Logic Apps: identidades administrad →</a></nav>
+</main>
+</body>
+</html>

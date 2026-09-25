@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fundamentos de AKS para desarrolladores: manifiestos Deplo… · Lección de AI-200</title>
+<meta name="description" content="Azure Kubernetes Service (AKS) es un clúster de Kubernetes administrado: Azure ejecuta el plano de control y tus cargas de trabajo se ejecutan en grupos de">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Fundamentos de AKS para desarrolladores: manifiestos Deplo… · Lección de AI-200">
+<meta property="og:description" content="Azure Kubernetes Service (AKS) es un clúster de Kubernetes administrado: Azure ejecuta el plano de control y tus cargas de trabajo se ejecutan en grupos de">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/aks-basics-for-developers-deployment-and-service-manifests-kubectl-app/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/aks-basics-for-developers-deployment-and-service-manifests-kubectl-app/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/aks-basics-for-developers-deployment-and-service-manifests-kubectl-app/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Fundamentos de AKS para desarrolladores: manifiestos Deployment y Service, `kubectl apply`, requests y limits, ConfigMaps y Secrets, y asociar ACR</h1>
+<article class="lbody">
+<p>Azure Kubernetes Service (AKS) es un clúster de Kubernetes administrado: Azure ejecuta el plano de control y tus cargas de trabajo se ejecutan en grupos de nodos (node pools) de máquinas virtuales. En comparación con Container Apps, obtienes la API completa de Kubernetes y más control, y también asumes más responsabilidad. Como desarrollador, sobre todo escribes manifiestos YAML que describen el estado deseado y dejas que Kubernetes lo haga realidad.</p>
+<p>Un Deployment describe un conjunto de pods idénticos (un pod es uno o más contenedores que se programan juntos). Declara la imagen, el número de réplicas y un selector de etiquetas; Kubernetes mantiene esa cantidad de pods en ejecución y realiza actualizaciones graduales (rolling updates) cuando cambias la imagen. Un Service les da a esos pods una IP virtual y un nombre DNS estables, y equilibra la carga entre ellos haciendo coincidir etiquetas. El tipo <code>ClusterIP</code> (el predeterminado) solo es accesible dentro del clúster; el tipo <code>LoadBalancer</code> obtiene un balanceador de carga de Azure con una IP externa.</p>
+<pre class="code" tabindex="0"><code>apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders
+spec:
+  replicas: 3
+  selector:
+    matchLabels: { app: orders }
+  template:
+    metadata:
+      labels: { app: orders }
+    spec:
+      containers:
+      - name: orders
+        image: myregistry.azurecr.io/orders-api:20260920.1
+        ports: [{ containerPort: 8000 }]
+        envFrom: [{ configMapRef: { name: orders-config } }]
+        resources:
+          requests: { cpu: 250m, memory: 256Mi }
+          limits: { cpu: 500m, memory: 512Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orders
+spec:
+  type: ClusterIP
+  selector: { app: orders }
+  ports: [{ port: 80, targetPort: 8000 }]</code></pre>
+<p><code>kubectl apply -f orders.yaml</code> envía el manifiesto al servidor de API, creando o actualizando objetos de forma declarativa. Continúa con <code>kubectl rollout status deployment/orders</code>, <code>kubectl get pods</code> y <code>kubectl describe pod &lt;name&gt;</code> para ver eventos como errores de descarga de imagen. Primero obtén las credenciales con <code>az aks get-credentials</code>.</p>
+<p>Los requests (solicitudes de recursos) son lo que el programador (scheduler) reserva para un contenedor al elegir un nodo; los limits (límites) son el máximo que puede usar. Un contenedor que supera su límite de memoria se termina (OOMKilled); uno que supera su límite de CPU se limita (throttling). Configurar requests demasiado altos desperdicia nodos; no configurar ninguno hace que la programación sea impredecible y el escalado automático impreciso.</p>
+<p>Los ConfigMaps guardan configuración no sensible como pares clave-valor; los Secrets guardan valores sensibles. Ambos pueden inyectarse como variables de entorno o montarse como archivos. Los Secrets de Kubernetes solo están codificados en base64, y esa codificación no los cifra, así que restringe el acceso con Kubernetes RBAC y considera el proveedor de Azure Key Vault para el Secrets Store CSI Driver para obtener los secretos de Key Vault en su lugar.</p>
+<p>Para que los nodos descarguen de tu registro privado sin contraseñas, ejecuta <code>az aks update -n mycluster -g rg --attach-acr myregistry</code> (o <code>--attach-acr</code> al crearlo). Esto otorga el rol AcrPull a la identidad administrada kubelet del clúster, así que no se necesitan imagePullSecrets.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Deployment</dt><dd>Un objeto de Kubernetes que mantiene en ejecución un número especificado de pods idénticos y administra las actualizaciones graduales.</dd><dt>Service</dt><dd>Un objeto de Kubernetes que le da a un conjunto de pods, seleccionados por etiquetas, una IP estable, un nombre DNS y equilibrio de carga.</dd><dt>Requests and limits (solicitudes y límites)</dt><dd>Configuración de CPU y memoria por contenedor: los requests se reservan para la programación y los limits ponen un tope al uso.</dd><dt>ConfigMap</dt><dd>Un objeto de Kubernetes que almacena datos de configuración no secretos para los pods.</dd><dt>Kubernetes Secret (secreto de Kubernetes)</dt><dd>Un objeto para datos sensibles que está codificado en base64, sin que esa codificación lo cifre, y cuyo acceso debe controlarse.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Los pods de un servicio nuevo se quedan en ImagePullBackOff. kubectl describe pod muestra un error de no autorizado del registro. El desarrollador ejecuta az aks update --attach-acr, que otorga AcrPull a la identidad kubelet; después del siguiente reintento, los pods se inician. Más tarde, los pods se reinician con OOMKilled, así que el equipo aumenta el límite de memoria después de revisar el uso real.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Los requests determinan la programación y los limits imponen topes (la memoria por encima del límite provoca OOMKilled, la CPU se limita); el acceso a ACR para AKS es az aks update --attach-acr, no una contraseña de administrador en un imagePullSecret.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cuál es la diferencia entre un Deployment y un Service?</summary><p>Un Deployment ejecuta y actualiza los pods; un Service les da a esos pods un punto de conexión de red estable y les distribuye la carga por etiqueta.</p></details>
+<details class="sq"><summary>¿Un Secret de Kubernetes está cifrado por estar codificado en base64?</summary><p>No. Base64 es solo una codificación; la protección viene de RBAC, del cifrado en reposo o de usar Key Vault mediante el CSI driver.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../container-apps-jobs-manual-scheduled-and-event-driven/">← Container Apps jobs: manuales, programados y controlados por</a><a href="../cosmos-db-for-nosql-with-the-python-sdk-azure-cosmos-cosmosclient-crea/">Cosmos DB for NoSQL con el SDK de Python (azure-cosmos): Cos →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Protecciones de Capa 2: DHCP snooping, dynamic ARP inspect… · Lección de ENCOR</title>
+<meta name="description" content="Los protocolos de Capa 2 como DHCP y ARP se diseñaron para redes confiables y no tienen autenticación. Un atacante en un puerto de acceso puede aprovecharl">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Protecciones de Capa 2: DHCP snooping, dynamic ARP inspect… · Lección de ENCOR">
+<meta property="og:description" content="Los protocolos de Capa 2 como DHCP y ARP se diseñaron para redes confiables y no tienen autenticación. Un atacante en un puerto de acceso puede aprovecharl">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/layer-2-protections-dhcp-snooping-dynamic-arp-inspection-ip-source-gua/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/layer-2-protections-dhcp-snooping-dynamic-arp-inspection-ip-source-gua/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ccnp-encor/">ENCOR</a> / <a href="../">Lecciones</a> · <a href="../../../../ccnp-encor/lessons/layer-2-protections-dhcp-snooping-dynamic-arp-inspection-ip-source-gua/" hreflang="en" lang="en">English</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2</p>
+<h1>Protecciones de Capa 2: DHCP snooping, dynamic ARP inspection, IP source guard</h1>
+<article class="lbody">
+<p>Los protocolos de Capa 2 como DHCP y ARP se diseñaron para redes confiables y no tienen autenticación. Un atacante en un puerto de acceso puede aprovecharlo: un servidor DHCP falso (rogue) puede anunciarse a sí mismo como gateway predeterminado para interceptar el tráfico, el ARP spoofing puede redirigir el tráfico a través del atacante (un ataque de intermediario) y el IP spoofing puede hacer que el tráfico de un atacante parezca venir de otro host. Los switches Cisco proporcionan tres funciones que se apoyan unas en otras para detener estos ataques.</p>
+<p>DHCP snooping actúa como un firewall para DHCP. Marcas los puertos como confiables (trusted) o no confiables (untrusted). Los puertos confiables son los uplinks hacia los servidores DHCP legítimos; todos los demás son no confiables por defecto. En los puertos no confiables, el switch descarta los mensajes de servidor DHCP (offers y acknowledgments), así que un servidor falso en un puerto de usuario no puede responder a los clientes. También puede limitar la tasa de mensajes DHCP en los puertos no confiables para evitar ataques de agotamiento (starvation) que consumen el pool de direcciones. A medida que los clientes obtienen direcciones con éxito, el switch construye la tabla de enlaces (binding table) de DHCP snooping, registrando la dirección MAC, la dirección IP, la VLAN, el puerto y el tiempo de concesión de cada cliente. Esta tabla es en la que se apoyan las otras dos funciones.</p>
+<pre class="code" tabindex="0"><code>ip dhcp snooping
+ip dhcp snooping vlan 10,20
+interface GigabitEthernet1/0/48
+ ip dhcp snooping trust
+interface range GigabitEthernet1/0/1 - 24
+ ip dhcp snooping limit rate 15</code></pre>
+<p>Dynamic ARP inspection (DAI) valida los paquetes ARP en los puertos no confiables. Para cada solicitud o respuesta ARP, el switch verifica el par IP-MAC del emisor contra la binding table de DHCP snooping y descarta los paquetes que no coinciden, bloqueando el ARP spoofing y el envenenamiento ARP. Los dispositivos con direcciones estáticas, que no están en la binding table, necesitan ARP ACL para ser permitidos. Los uplinks entre switches normalmente se marcan como confiables con <code>ip arp inspection trust</code>. Habilita DAI por VLAN con <code>ip arp inspection vlan 10,20</code>. La validación opcional (<code>ip arp inspection validate src-mac dst-mac ip</code>) agrega verificaciones de que las direcciones en el cuerpo ARP coincidan con el encabezado Ethernet.</p>
+<p>IP source guard (IPSG) filtra el tráfico IP ordinario en los puertos de acceso no confiables. Con <code>ip verify source</code> en una interfaz, el switch permite solo el tráfico cuya IP de origen (o tanto la IP como la MAC de origen, con <code>ip verify source port-security</code>) coincide con un enlace (binding) para ese puerto, tomado de la tabla de DHCP snooping o de enlaces estáticos. Todo lo demás se descarta, lo que impide que un host suplante otra dirección.</p>
+<p>La cadena de dependencias es importante: DAI e IP source guard necesitan ambos la binding table de DHCP snooping, así que DHCP snooping debe habilitarse primero en las VLAN correspondientes. Un problema común en los laboratorios es que DHCP deja de funcionar después de habilitar snooping porque el uplink hacia el servidor no se marcó como confiable, o porque el switch inserta la opción 82 de DHCP y el servidor o el relay la rechaza (se corrige con <code>no ip dhcp snooping information option</code> donde corresponda). Verifica con <code>show ip dhcp snooping</code>, <code>show ip dhcp snooping binding</code>, <code>show ip arp inspection</code> y <code>show ip verify source</code>. Las violaciones se registran y, en las violaciones del límite de tasa, el puerto puede pasar a err-disabled.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>DHCP snooping</dt><dd>Bloquea los mensajes de servidor DHCP en los puertos no confiables y construye una binding table de las concesiones legítimas.</dd><dt>Binding table (tabla de enlaces)</dt><dd>El registro de DHCP snooping de la MAC, la IP, la VLAN y el puerto de la concesión de cada cliente.</dd><dt>Dynamic ARP inspection</dt><dd>Descarta los paquetes ARP en los puertos no confiables cuyo mapeo de IP a MAC no coincide con la binding table.</dd><dt>IP source guard</dt><dd>Filtra el tráfico en los puertos de acceso para que solo se permitan los orígenes que coinciden con el enlace del puerto.</dd><dt>Trusted port (puerto confiable)</dt><dd>Un puerto, normalmente un uplink o un puerto de servidor, exento de las verificaciones de DHCP snooping y DAI.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un usuario conecta un router doméstico en un puerto de la oficina y su servidor DHCP empieza a repartir direcciones 192.168.1.x. Con DHCP snooping habilitado, el switch descarta sus offers en el puerto no confiable. Más tarde, una herramienta en otra máquina envía respuestas ARP falsificadas reclamando la IP del gateway; DAI las descarta porque la MAC no coincide con la binding table, y un mensaje del log identifica el puerto.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> DHCP snooping va primero porque DAI e IP source guard usan su binding table. Marca como confiables los uplinks hacia los servidores DHCP y hacia otros switches, o DHCP y ARP dejarán de funcionar.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué le pasa a un DHCP offer recibido en un puerto no confiable con DHCP snooping habilitado?</summary><p>El switch lo descarta, porque los mensajes de servidor solo se permiten en los puertos confiables.</p></details>
+<details class="sq"><summary>¿Qué función detiene el envenenamiento ARP y contra qué verifica?</summary><p>Dynamic ARP inspection, que valida los pares IP-MAC de ARP contra la binding table de DHCP snooping (o contra ARP ACL para los hosts estáticos).</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia ENCOR gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ccnp-encor/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../network-access-control-802-1x-mab-and-webauth/">← Control de acceso a la red: 802.1X, MAB y WebAuth</a><a href="../python-basics-variables-loops-functions-dictionaries-the-requests-libr/">Fundamentos de Python: variables, bucles, funciones, diccion →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Análisis de causa raíz con CloudWatch Logs, consultas de L… · Lección de Developer Associate</title>
+<meta name="description" content="Cuando algo se rompe en producción, necesitas ir de un síntoma ('el pago está lento') a una causa ('la función de pagos agota el tiempo al llamar a una API">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Análisis de causa raíz con CloudWatch Logs, consultas de L… · Lección de Developer Associate">
+<meta property="og:description" content="Cuando algo se rompe en producción, necesitas ir de un síntoma ('el pago está lento') a una causa ('la función de pagos agota el tiempo al llamar a una API">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/root-cause-analysis-with-cloudwatch-logs-logs-insights-queries-metrics/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/root-cause-analysis-with-cloudwatch-logs-logs-insights-queries-metrics/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/root-cause-analysis-with-cloudwatch-logs-logs-insights-queries-metrics/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Análisis de causa raíz con CloudWatch Logs, consultas de Logs Insights, métricas y paneles</h1>
+<article class="lbody">
+<p>Cuando algo se rompe en producción, necesitas ir de un síntoma ('el pago está lento') a una causa ('la función de pagos agota el tiempo al llamar a una API de terceros'). Amazon CloudWatch proporciona la materia prima: logs, métricas y paneles (dashboards). El dominio 4 del examen presenta síntomas y pregunta dónde buscar.</p>
+<p>CloudWatch Logs organiza los datos de logs en grupos de logs (normalmente uno por aplicación o función, como <code>/aws/lambda/checkout</code>) que contienen flujos de logs (log streams, uno por fuente, como uno por entorno de ejecución de Lambda o por contenedor). Lambda escribe todo lo que imprime tu código más sus propias líneas <code>START</code>, <code>END</code> y <code>REPORT</code>; la línea <code>REPORT</code> muestra la duración, la duración facturada, el tamaño de memoria, la memoria máxima usada y la duración de inicialización en los arranques en frío. Configura un período de retención en cada grupo de logs, porque por defecto los logs se conservan para siempre. Puedes buscar en los logs con patrones de filtro, verlos en vivo (Live Tail) y reenviarlos en tiempo real con filtros de suscripción a Lambda, Kinesis o Amazon Data Firehose.</p>
+<p>CloudWatch Logs Insights es un lenguaje de consulta interactivo para grupos de logs. Las consultas encadenan comandos con barras verticales (pipes): <code>fields</code>, <code>filter</code>, <code>stats</code>, <code>sort</code>, <code>limit</code> y <code>parse</code>. Logs Insights descubre automáticamente los campos en los logs JSON, que es otra razón para registrar en JSON. Eliges uno o más grupos de logs y un rango de tiempo, ejecutas la consulta y puedes agregar los resultados a un panel.</p>
+<pre class="code" tabindex="0"><code>fields @timestamp, @requestId, @message
+| filter @message like /ERROR/
+| sort @timestamp desc
+| limit 50
+
+filter @type = &quot;REPORT&quot;
+| stats avg(@duration), max(@duration), max(@maxMemoryUsed) by bin(5m)</code></pre>
+<p>Las métricas son series temporales numéricas. Los servicios de AWS publican métricas automáticamente, por ejemplo en Lambda <code>Invocations</code>, <code>Errors</code>, <code>Throttles</code>, <code>Duration</code>, <code>ConcurrentExecutions</code> e <code>IteratorAge</code>; en API Gateway <code>Count</code>, <code>4XXError</code>, <code>5XXError</code>, <code>Latency</code> e <code>IntegrationLatency</code>; en SQS <code>ApproximateNumberOfMessagesVisible</code> y <code>ApproximateAgeOfOldestMessage</code>; en DynamoDB la capacidad consumida y <code>ThrottledRequests</code>. Cada métrica pertenece a un espacio de nombres (namespace) y tiene dimensiones (como <code>FunctionName</code>), y la ves con una estadística (Average, Sum, Maximum, percentiles como p99) sobre un período. Los filtros de métricas convierten patrones de logs en métricas, como contar las líneas que contienen <code>PaymentDeclined</code>, para que puedas graficarlas y crear alarmas sobre ellas.</p>
+<p>Un proceso útil de causa raíz: empieza con las métricas para encontrar cuándo comenzó el problema y qué componente está afectado (por ejemplo, <code>Latency</code> de API Gateway menos <code>IntegrationLatency</code> te dice si el tiempo se gastó en API Gateway o en el backend); acota la ventana de tiempo; usa Logs Insights para encontrar errores y solicitudes lentas en esa ventana; sigue un ID de solicitud o un ID de correlación a través de los servicios; y usa las trazas de X-Ray para ver la ruta de llamadas. Los paneles de CloudWatch colocan lado a lado los gráficos clave de una aplicación, pueden abarcar regiones y cuentas, y pueden compartirse, lo que los convierte en la primera parada durante un incidente. Contributor Insights puede mostrar los principales contribuyentes, como las claves de DynamoDB más limitadas o las IP de clientes más ruidosas.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Log group (grupo de logs)</dt><dd>Un contenedor de CloudWatch Logs para flujos de logs que comparten la configuración de retención, cifrado y acceso.</dd><dt>CloudWatch Logs Insights</dt><dd>Un servicio de consultas interactivo para buscar y agregar datos de logs con un lenguaje de consulta basado en pipes.</dd><dt>Metric filter (filtro de métricas)</dt><dd>Una regla que extrae valores de métricas de los eventos de log que coinciden para poder graficarlos y crear alarmas.</dd><dt>Dimension (dimensión)</dt><dd>Un par nombre-valor que identifica una serie de métricas específica, como FunctionName=checkout.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Los usuarios reportan que el pago está lento desde las 14:00. El panel muestra que Latency de API Gateway sube mientras IntegrationLatency sube en la misma cantidad, así que el backend está lento. Una consulta de Logs Insights sobre las líneas REPORT de la función de pago muestra una duración máxima cercana al tiempo de espera, y filtrar por ERROR revela tiempos de espera agotados al llamar al proveedor de pagos.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Conoce qué herramienta responde cada pregunta: las métricas te dicen qué y cuándo, los logs (mediante Logs Insights) te dicen por qué, y las trazas te dicen dónde en la cadena de llamadas. Convertir un patrón de log en algo sobre lo que puedas crear una alarma significa un filtro de métricas.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo puedes contar las apariciones de un mensaje de error específico en los logs y crear una alarma?</summary><p>Crea un filtro de métricas en el grupo de logs que coincida con el mensaje y luego crea una alarma de CloudWatch sobre la métrica resultante.</p></details>
+<details class="sq"><summary>¿Qué línea de log de Lambda muestra la memoria usada y la duración?</summary><p>La línea REPORT que se escribe al final de cada invocación.</p></details>
+<details class="sq"><summary>¿Por qué configurar un período de retención en un grupo de logs?</summary><p>Por defecto los logs se conservan indefinidamente, lo que aumenta el costo; la retención elimina los logs después del período elegido.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../testing-in-development-environments-unit-tests-in-ci-integration-tests/">← Pruebas en entornos de desarrollo: pruebas unitarias en CI, </a><a href="../common-lambda-errors-throttling-429-timeouts-accessdenied-from-the-exe/">Errores comunes de Lambda: limitación (429), tiempos de espe →</a></nav>
+</main>
+</body>
+</html>

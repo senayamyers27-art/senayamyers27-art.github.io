@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Registro del sistema (`/var/log/messages`, `show log`) y t… · Lección de JNCIA-Junos</title>
+<meta name="description" content="Los logs te dicen qué ha estado haciendo el dispositivo: interfaces que se levantan y se caen, commits, inicios de sesión, vecinos de protocolos de enrutam">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Registro del sistema (`/var/log/messages`, `show log`) y t… · Lección de JNCIA-Junos">
+<meta property="og:description" content="Los logs te dicen qué ha estado haciendo el dispositivo: interfaces que se levantan y se caen, commits, inicios de sesión, vecinos de protocolos de enrutam">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/jncia-junos/lessons/system-logging-var-log-messages-show-log-and-protocol-traceoptions/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/jncia-junos/lessons/system-logging-var-log-messages-show-log-and-protocol-traceoptions/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../jncia-junos/">JNCIA-Junos</a> / <a href="../">Lecciones</a> · <a href="../../../../jncia-junos/lessons/system-logging-var-log-messages-show-log-and-protocol-traceoptions/" hreflang="en" lang="en">English</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106</p>
+<h1>Registro del sistema (`/var/log/messages`, `show log`) y traceoptions de protocolos</h1>
+<article class="lbody">
+<p>Los logs te dicen qué ha estado haciendo el dispositivo: interfaces que se levantan y se caen, commits, inicios de sesión, vecinos de protocolos de enrutamiento que cambian de estado y eventos de hardware. Junos los escribe en archivos bajo <code>/var/log</code>, y el más importante es <code>messages</code>, que está configurado por defecto en la mayoría de las plataformas para recoger eventos de nivel notice y superiores de todas las facilities.</p>
+<p>Lees los logs desde el modo operacional con <code>show log messages</code>. La salida puede ser larga, así que usa pipes: <code>show log messages | match ge-0/0/1</code> encuentra las líneas que mencionan una interfaz, <code>show log messages | last 20</code> muestra las entradas más recientes y <code>| except</code> oculta las líneas ruidosas. Otro archivo útil es <code>interactive-commands</code>, si está configurado, que registra los comandos que escribieron los usuarios. <code>show log</code> solo lista los archivos de <code>/var/log</code>.</p>
+<pre class="code" tabindex="0"><code>user@R1&gt; show log messages | match SNMP_TRAP_LINK | last 3
+Mar  2 10:01:12 R1 mib2d[1780]: SNMP_TRAP_LINK_DOWN: ifIndex 526, ifAdminStatus up(1), ifOperStatus down(2), ifName ge-0/0/1</code></pre>
+<p>Para ver un log en vivo, usa <code>monitor start messages</code>. Las líneas nuevas se imprimen en tu terminal a medida que se escriben, lo cual es ideal mientras reproduces un problema. Detenlo con <code>monitor stop</code>. También puedes presionar Esc-Q para pausar la salida temporalmente. Los archivos de log rotan cuando llegan a su límite de tamaño, conservando un conjunto de archivos antiguos comprimidos como <code>messages.0.gz</code>.</p>
+<p>Syslog te dice qué pasó; traceoptions te dice por qué. Traceoptions es una función de depuración detallada que habilitas por protocolo o por proceso. Eliges un nombre de archivo y uno o más flags que seleccionan qué registrar. Para OSPF, por ejemplo, el flag <code>hello</code> registra los paquetes hello, <code>error</code> registra los errores y <code>state</code> registra los cambios de estado de los vecinos.</p>
+<pre class="code" tabindex="0"><code>set protocols ospf traceoptions file ospf-trace size 1m files 3
+set protocols ospf traceoptions flag hello detail
+set protocols ospf traceoptions flag error</code></pre>
+<p>Después de hacer commit, lee la traza con <code>show log ospf-trace</code> u obsérvala con <code>monitor start ospf-trace</code>. Los archivos de traza también se guardan en <code>/var/log</code>. Traceoptions puede generar mucha salida y usar CPU del Routing Engine, así que habilita solo los flags que necesites, limita el tamaño y la cantidad de archivos, y elimina o desactiva las traceoptions cuando termines. El flag <code>all</code> es tentador pero normalmente es demasiado verboso en un dispositivo de producción.</p>
+<p>Un flujo de trabajo típico es: revisar <code>show log messages</code> para encontrar el evento (por ejemplo, que un vecino OSPF se cayó), luego habilitar traceoptions para ese protocolo para ver los detalles (por ejemplo, que los intervalos de hello no coinciden), corregir el problema y luego apagar el trazado.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>/var/log/messages</dt><dd>El archivo principal de log del sistema en Junos, que contiene eventos de todas las facilities con la severidad configurada.</dd><dt>show log</dt><dd>Muestra un archivo de log de /var/log, o lista los archivos cuando se usa solo.</dd><dt>monitor start</dt><dd>Imprime en tiempo real en la terminal las líneas nuevas de un archivo de log o de traza hasta <code>monitor stop</code>.</dd><dt>traceoptions</dt><dd>Configuración de depuración por protocolo o por proceso que escribe eventos detallados en un archivo de traza según los flags seleccionados.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una adyacencia OSPF con un router nuevo no se forma. <code>show log messages | match OSPF</code> no muestra nada útil, así que la ingeniera habilita <code>traceoptions</code> con los flags <code>hello</code> y <code>error</code>. La traza muestra hellos que llegan con un dead interval de 120 segundos mientras que el ajuste local es 40. Igualar los temporizadores levanta al vecino, y ella borra las traceoptions.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Syslog registra eventos con una severidad elegida; traceoptions da detalle de depuración a nivel de protocolo. Ambos terminan en /var/log y ambos se leen con <code>show log &lt;file&gt;</code>. Siempre elimina las traceoptions después de diagnosticar.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo muestras solo las últimas 10 líneas del log messages?</summary><p><code>show log messages | last 10</code>.</p></details>
+<details class="sq"><summary>¿Cómo ves las nuevas entradas del log en tiempo real y luego te detienes?</summary><p><code>monitor start messages</code> para empezar y <code>monitor stop</code> para terminar.</p></details>
+<details class="sq"><summary>¿Por qué deben eliminarse las traceoptions después de usarlas?</summary><p>Pueden generar archivos grandes y consumir CPU y almacenamiento del Routing Engine.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia JNCIA-Junos gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../jncia-junos/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../network-tools-ping-traceroute-ssh-telnet-from-the-cli/">← Herramientas de red: ping, traceroute, SSH y telnet desde el</a><a href="../managing-files-file-list-file-show-request-system-storage-cleanup/">Gestión de archivos: `file list`, `file show`, `request syst →</a></nav>
+</main>
+</body>
+</html>

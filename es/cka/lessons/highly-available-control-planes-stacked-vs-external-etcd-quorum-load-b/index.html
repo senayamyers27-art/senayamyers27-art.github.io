@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Control planes de alta disponibilidad: etcd stacked vs ext… · Lección de CKA</title>
+<meta name="description" content="Un único nodo de control plane es un punto único de falla: si muere, los Pods en ejecución siguen funcionando, pero no se puede cambiar, programar ni repar">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Control planes de alta disponibilidad: etcd stacked vs ext… · Lección de CKA">
+<meta property="og:description" content="Un único nodo de control plane es un punto único de falla: si muere, los Pods en ejecución siguen funcionando, pero no se puede cambiar, programar ni repar">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/highly-available-control-planes-stacked-vs-external-etcd-quorum-load-b/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/highly-available-control-planes-stacked-vs-external-etcd-quorum-load-b/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/highly-available-control-planes-stacked-vs-external-etcd-quorum-load-b/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Control planes de alta disponibilidad: etcd stacked vs externo, quorum, balanceador de carga frente a los API servers, --upload-certs y --certificate-key</h1>
+<article class="lbody">
+<p>Un único nodo de control plane es un punto único de falla: si muere, los Pods en ejecución siguen funcionando, pero no se puede cambiar, programar ni reparar nada. Un control plane de alta disponibilidad (HA) ejecuta varios nodos de control plane para que el clúster sobreviva a la pérdida de uno.</p>
+<p>kubeadm admite dos topologías. En una topología stacked (apilada), cada nodo del control plane ejecuta su propio miembro de etcd junto al API server, el scheduler y el controller-manager. Necesita menos máquinas y es lo que kubeadm configura por defecto, pero perder un nodo elimina a la vez una instancia del control plane y un miembro de etcd. En una topología de etcd externo, etcd se ejecuta en sus propios hosts dedicados y los nodos del control plane se conectan a él. Separa los dos dominios de falla y te permite dimensionar etcd por separado, a costa de más máquinas y más configuración (le das a kubeadm los endpoints y certificados de etcd en un archivo de configuración).</p>
+<p>etcd usa el algoritmo de consenso Raft, que necesita un quorum, es decir, una mayoría de miembros, para aceptar escrituras. El quorum para n miembros es floor(n/2) + 1. Tres miembros toleran una falla; cinco toleran dos. Cuatro miembros siguen tolerando solo una, por eso los clústeres de etcd usan tamaños impares. Si se pierde el quorum, etcd deja de aceptar escrituras y el API server no puede cambiar nada, aunque algunos miembros estén sanos.</p>
+<p>Los API servers no tienen estado y están todos activos a la vez, así que los clientes llegan a ellos a través de un balanceador de carga (por ejemplo HAProxy con keepalived, o un balanceador de carga en la nube) que escucha en el puerto 6443 y reenvía a todos los nodos del control plane. La dirección de ese balanceador es lo que pasas como <code>--control-plane-endpoint</code>. El scheduler y el controller-manager son distintos: se ejecutan en todos los nodos del control plane, pero usan leader election (elección de líder), así que solo una instancia de cada uno está activa a la vez y las demás esperan para tomar el relevo.</p>
+<p>Unir nodos adicionales al control plane requiere compartir la CA del clúster y las claves de service-account. kubeadm puede hacerlo por ti. <code>kubeadm init --control-plane-endpoint=LB:6443 --upload-certs</code> cifra esos certificados, los guarda en el Secret <code>kubeadm-certs</code> en kube-system e imprime una certificate key. Los demás nodos del control plane se unen con <code>kubeadm join LB:6443 --token ... --discovery-token-ca-cert-hash ... --control-plane --certificate-key &lt;key&gt;</code>.</p>
+<p>Los certificados subidos se borran automáticamente después de poco tiempo (dos horas por defecto), así que si agregas un nodo al control plane más adelante, vuelve a subirlos con <code>kubeadm init phase upload-certs --upload-certs</code>, que imprime una nueva certificate key. Sin la clave, la alternativa es copiar manualmente los archivos de certificados al nuevo nodo.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Stacked etcd (etcd apilado)</dt><dd>Topología en la que cada nodo del control plane también ejecuta un miembro de etcd.</dd><dt>External etcd (etcd externo)</dt><dd>Topología en la que etcd se ejecuta en hosts separados del control plane.</dd><dt>Quorum</dt><dd>Una mayoría de miembros de etcd, floor(n/2)+1, necesaria para confirmar escrituras.</dd><dt>--certificate-key</dt><dd>La clave usada para descifrar los certificados del control plane subidos con --upload-certs al unirse como nodo del control plane.</dd><dt>Leader election (elección de líder)</dt><dd>Mecanismo que mantiene activos un solo scheduler y un solo controller-manager entre los nodos del control plane.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un control plane stacked de tres nodos pierde cp2 por una falla de disco. etcd todavía tiene dos de tres miembros, así que el quorum se mantiene, el balanceador deja de enviar tráfico al API server caído de cp2 y el scheduler líder en cp1 sigue ubicando Pods. El equipo reconstruye cp2 generando una nueva certificate key y ejecutando join con --control-plane.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Domina las cuentas del quorum: 3 miembros sobreviven a 1 falla, 5 sobreviven a 2, y agregar un cuarto miembro a tres no mejora la tolerancia a fallas. Recuerda también que el scheduler y el controller-manager son activo/pasivo, mientras que los API servers son activo/activo.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cuántas fallas de miembros puede tolerar un clúster de etcd de cinco miembros?</summary><p>Dos, porque el quorum es tres.</p></details>
+<details class="sq"><summary>¿Qué flag de kubeadm init comparte los certificados para que otros nodos del control plane se unan sin copiar archivos?</summary><p>--upload-certs, que imprime la certificate key que se usa con join --certificate-key.</p></details>
+<details class="sq"><summary>¿Cuál es el principal trade-off del etcd externo frente al stacked?</summary><p>Mejor aislamiento de fallas a cambio de más hosts y más complejidad de configuración.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../etcd-backup-and-restore-with-etcdctl-etcdutl-and-the-etcd-pki-pointing/">← Backup y restauración de etcd con etcdctl/etcdutl y la PKI d</a><a href="../rbac-roles-clusterroles-rolebindings-clusterrolebindings-aggregated-an/">RBAC: Roles, ClusterRoles, RoleBindings, ClusterRoleBindings →</a></nav>
+</main>
+</body>
+</html>

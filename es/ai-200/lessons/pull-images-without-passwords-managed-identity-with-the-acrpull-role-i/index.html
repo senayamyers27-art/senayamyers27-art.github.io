@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Descargar imágenes sin contraseñas: identidad administrada… · Lección de AI-200</title>
+<meta name="description" content="Todo servicio que ejecuta tu contenedor tiene que autenticarse en tu registro privado antes de poder descargar la imagen. Hay varias formas de hacerlo, y e">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Descargar imágenes sin contraseñas: identidad administrada… · Lección de AI-200">
+<meta property="og:description" content="Todo servicio que ejecuta tu contenedor tiene que autenticarse en tu registro privado antes de poder descargar la imagen. Hay varias formas de hacerlo, y e">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/pull-images-without-passwords-managed-identity-with-the-acrpull-role-i/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/pull-images-without-passwords-managed-identity-with-the-acrpull-role-i/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/pull-images-without-passwords-managed-identity-with-the-acrpull-role-i/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Descargar imágenes sin contraseñas: identidad administrada con el rol AcrPull en lugar del usuario administrador</h1>
+<article class="lbody">
+<p>Todo servicio que ejecuta tu contenedor tiene que autenticarse en tu registro privado antes de poder descargar la imagen. Hay varias formas de hacerlo, y el examen espera que elijas la que no usa secretos almacenados.</p>
+<p>El usuario administrador (admin user) es una única cuenta por registro con un nombre de usuario (el nombre del registro) y dos contraseñas. Está deshabilitado de forma predeterminada. Cuando se habilita, tiene derechos completos de push y pull, lo comparten todos los que conocen la contraseña, y no se puede limitar a un solo repositorio ni rastrear hasta una app concreta. Microsoft lo plantea solo para pruebas rápidas. Si ves una solución que habilita el usuario administrador y guarda su contraseña en una configuración de la app, es la respuesta incorrecta cuando existe una opción más segura.</p>
+<p>El enfoque recomendado usa una identidad administrada (managed identity), una identidad en Microsoft Entra ID que Azure crea y administra para un recurso, con credenciales que nunca ves. Habilitas una identidad asignada por el sistema o asignada por el usuario en el recurso que descarga, y luego le asignas a esa identidad el rol AcrPull en el registro. AcrPull es un rol de Azure RBAC (control de acceso basado en roles) que permite leer imágenes y nada más. AcrPush agrega la capacidad de subir imágenes, para los agentes de compilación.</p>
+<pre class="code" tabindex="0"><code># 1. identidad y rol
+az identity create -g rg -n app-pull-id
+ACR_ID=$(az acr show -n myregistry --query id -o tsv)
+PRINCIPAL=$(az identity show -g rg -n app-pull-id --query principalId -o tsv)
+az role assignment create --assignee $PRINCIPAL --role AcrPull --scope $ACR_ID
+
+# 2. indicarle a Container Apps que la use para este registro
+az containerapp registry set -n orders -g rg \
+  --server myregistry.azurecr.io --identity &lt;identity-resource-id&gt;</code></pre>
+<p>Cada servicio de cómputo lo configura de forma un poco distinta. En Container Apps configuras el registro con <code>--identity</code> (el ID de recurso de una identidad asignada por el usuario, o <code>system</code>). En App Service estableces la propiedad del sitio <code>acrUseManagedIdentityCreds</code> en true (y <code>acrUserManagedIdentityID</code> para una identidad asignada por el usuario). En AKS, <code>az aks update --attach-acr myregistry</code> otorga AcrPull a la identidad kubelet del clúster por ti.</p>
+<p>Por qué a menudo se prefiere la identidad asignada por el usuario para descargar imágenes: una identidad asignada por el sistema no existe hasta que se crea la app, así que en una app completamente nueva hay un problema del huevo y la gallina en el que la primera revisión intenta descargar antes de que exista la asignación de rol. Una identidad asignada por el usuario se puede crear y recibir AcrPull primero, y luego adjuntarse a la app al crearla. Ten en cuenta también que las asignaciones de roles pueden tardar unos minutos en propagarse, así que un fallo de descarga inmediatamente después de la asignación puede resolverse solo.</p>
+<p>Existen otras opciones, como entidades de servicio (service principals) con un secreto de cliente o tokens con alcance de repositorio, pero implican secretos que debes guardar y rotar. Con una identidad administrada más AcrPull, no hay nada que se pueda filtrar y el acceso es de mínimo privilegio.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Admin user (usuario administrador)</dt><dd>Una cuenta para todo el registro con contraseñas compartidas y derechos completos de push/pull; está deshabilitada de forma predeterminada y solo está pensada para pruebas.</dd><dt>AcrPull</dt><dd>Un rol integrado de Azure RBAC que concede permiso para descargar imágenes de un registro y nada más.</dd><dt>AcrPush</dt><dd>Un rol integrado que permite tanto subir como descargar imágenes, adecuado para pipelines de compilación.</dd><dt>Managed identity (identidad administrada)</dt><dd>Una identidad de Microsoft Entra para un recurso de Azure cuyas credenciales Azure administra y rota automáticamente.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una Container App no pudo iniciarse por un error de descarga de imagen después de que un ingeniero deshabilitó el usuario administrador del registro. La solución fue crear una identidad administrada asignada por el usuario, otorgarle AcrPull en el registro, adjuntarla a la app y ejecutar az containerapp registry set con esa identidad. La app descargó la imagen correctamente y no quedó ninguna contraseña del registro en ninguna parte de su configuración.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Cuando te pregunten por la forma más segura o de mínimo privilegio para que una app descargue imágenes, responde identidad administrada más AcrPull; descarta las opciones que habilitan el usuario administrador o guardan una contraseña.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué rol debe recibir la identidad de una Container App para descargar imágenes, y en qué alcance?</summary><p>AcrPull en el registro de contenedores (o en un alcance más limitado), porque concede acceso de solo lectura a las imágenes.</p></details>
+<details class="sq"><summary>¿Por qué una identidad asignada por el usuario puede ser más sencilla que una asignada por el sistema para la primera descarga de imagen de una app nueva?</summary><p>Existe antes que la app, así que se le puede otorgar AcrPull por adelantado; una identidad asignada por el sistema solo existe después de crear la app.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../tags-vs-digests-stable-vs-unique-tags-and-cleaning-up-old-images-with/">← Etiquetas vs digests, etiquetas estables vs únicas, y limpie</a><a href="../app-service-custom-containers-on-linux-websites-port-continuous-deploy/">Contenedores personalizados de App Service en Linux: WEBSITE →</a></nav>
+</main>
+</body>
+</html>

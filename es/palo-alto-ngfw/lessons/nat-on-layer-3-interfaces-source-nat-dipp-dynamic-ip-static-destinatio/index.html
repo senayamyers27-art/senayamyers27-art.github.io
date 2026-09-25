@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NAT en interfaces Layer 3: source NAT (DIPP, dynamic IP, s… · Lección de NGFW Engineer</title>
+<meta name="description" content="Network Address Translation (NAT) reescribe direcciones a medida que el tráfico atraviesa el firewall. PAN-OS maneja NAT en su propia rulebase (Policies &gt; ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="NAT en interfaces Layer 3: source NAT (DIPP, dynamic IP, s… · Lección de NGFW Engineer">
+<meta property="og:description" content="Network Address Translation (NAT) reescribe direcciones a medida que el tráfico atraviesa el firewall. PAN-OS maneja NAT en su propia rulebase (Policies &gt; ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/palo-alto-ngfw/lessons/nat-on-layer-3-interfaces-source-nat-dipp-dynamic-ip-static-destinatio/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/palo-alto-ngfw/lessons/nat-on-layer-3-interfaces-source-nat-dipp-dynamic-ip-static-destinatio/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../palo-alto-ngfw/">NGFW Engineer</a> / <a href="../">Lecciones</a> · <a href="../../../../palo-alto-ngfw/lessons/nat-on-layer-3-interfaces-source-nat-dipp-dynamic-ip-static-destinatio/" hreflang="en" lang="en">English</a></p>
+<p class="note">Palo Alto Networks Certified Next-Generation Firewall Engineer NGFW-Engineer</p>
+<h1>NAT en interfaces Layer 3: source NAT (DIPP, dynamic IP, static), destination NAT, U-turn NAT, IP pre-NAT vs zona post-NAT en las reglas de seguridad</h1>
+<article class="lbody">
+<p>Network Address Translation (NAT) reescribe direcciones a medida que el tráfico atraviesa el firewall. PAN-OS maneja NAT en su propia rulebase (Policies &gt; NAT), separada de las reglas de seguridad, y la evalúa de arriba hacia abajo, ganando la primera coincidencia. Para usar NAT necesitas interfaces Layer 3 (virtual wire también admite algo de NAT, pero el examen se enfoca en Layer 3).</p>
+<p>Source NAT cambia la dirección de origen, normalmente para que los hosts privados puedan llegar a Internet. Dynamic IP and Port (DIPP) es la opción de todos los días: muchos hosts internos comparten una dirección pública (a menudo la dirección de la interfaz de salida), y el firewall los distingue traduciendo los puertos de origen. Dynamic IP traduce cada host uno a uno a la siguiente dirección libre de un pool sin cambiar los puertos; cuando el pool se agota, las sesiones nuevas fallan a menos que configures un respaldo (fallback) a DIPP. Static IP traduce una dirección fija a otra dirección fija, y la opción Bi-directional también crea la traducción entrante correspondiente.</p>
+<p>Destination NAT cambia la dirección de destino, normalmente para publicar un servidor interno. Una regla que coincide con la IP pública del servidor la traduce a la dirección privada, opcionalmente con traducción de puertos (443 público a 8443 privado). La traducción de destino también puede apuntar a un FQDN o distribuirse entre varias direcciones.</p>
+<p>El concepto más evaluado es cómo se alinean las zonas y las direcciones. Cuando llega un paquete, el firewall determina la zona de origen a partir de la interfaz de ingreso, luego hace una búsqueda de ruta sobre el destino original (pre-NAT) para encontrar la zona de destino, y compara la política NAT con esos valores. Después se verifica la política de seguridad usando las direcciones IP pre-NAT y la zona post-NAT. Para un servidor web entrante: la regla NAT va de Untrust a Untrust (la IP pública se enruta hacia la interfaz Untrust), con destino la IP pública, traducida a 10.1.1.10. La regla de seguridad va de Untrust a DMZ (zona post-NAT), con destino la IP pública (dirección pre-NAT).</p>
+<p>U-turn NAT resuelve el caso de usuarios internos que llegan a un servidor interno por su IP pública. Con solo una traducción de destino, y con el servidor en la misma subred que los usuarios, la solicitud va al firewall, se traduce hacia el servidor, y el servidor responde directamente al usuario, saltándose el firewall y rompiendo la sesión. La solución es una regla NAT de Trust a Untrust (la búsqueda de ruta de la IP pública apunta a Untrust), con destino la IP pública, traducida al servidor, más una traducción de origen a la interfaz del firewall para que las respuestas regresen a través del firewall. Un split DNS que entregue la dirección privada a los clientes internos suele ser una alternativa más limpia.</p>
+<p>Verifica con las columnas de NAT del Traffic log, o desde la CLI con <code>test nat-policy-match</code> y <code>test security-policy-match</code>, y con <code>show running nat-policy</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>DIPP</dt><dd>Dynamic IP and Port source NAT: muchos hosts comparten una o pocas direcciones con traducción de puertos de origen.</dd><dt>Dynamic IP NAT</dt><dd>Source NAT que asigna cada host uno a uno a una dirección libre del pool sin traducción de puertos; el pool puede agotarse.</dd><dt>U-turn NAT (NAT en U)</dt><dd>NAT que permite a los clientes internos llegar a un servidor interno por su IP pública, traduciendo destino y origen para que el tráfico regrese a través del firewall.</dd><dt>Post-NAT zone (zona post-NAT)</dt><dd>La zona donde realmente reside el destino traducido, usada como zona de destino en las reglas de seguridad.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un servidor web en 10.10.10.5 en la DMZ se publica como 203.0.113.10. La regla NAT coincide de Untrust a Untrust, destino 203.0.113.10, traducido a 10.10.10.5. La regla de seguridad permite de Untrust a DMZ, destino 203.0.113.10, aplicaciones web-browsing y ssl. Si se escribiera con 10.10.10.5 como destino, la regla de seguridad nunca coincidiría.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Las reglas de seguridad usan direcciones pre-NAT y zona post-NAT. Las reglas NAT usan direcciones pre-NAT y la zona que se obtiene al enrutar el destino pre-NAT. Casi todas las preguntas de NAT del examen giran en torno a esto.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué tipo de source NAT puede quedarse sin direcciones?</summary><p>Dynamic IP, porque asigna los hosts uno a uno a direcciones del pool sin traducción de puertos.</p></details>
+<details class="sq"><summary>En la regla de seguridad para un destination NAT entrante, ¿qué dirección y zona de destino usas?</summary><p>La dirección pública (pre-NAT) y la zona DMZ (post-NAT).</p></details>
+<details class="sq"><summary>¿Por qué U-turn NAT también traduce el origen?</summary><p>Para que el servidor responda al firewall en lugar de directamente al cliente interno, manteniendo la sesión simétrica.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia NGFW Engineer gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../palo-alto-ngfw/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../policy-based-forwarding-with-path-monitoring-service-routes-dhcp-serve/">← Policy-based forwarding con path monitoring; service routes;</a><a href="../high-availability-active-passive-vs-active-active-ha1-ha2-ha3-and-back/">Alta disponibilidad: active/passive vs active/active, enlace →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Estructura de una política: términos, condiciones de coinc… · Lección de JNCIA-Junos</title>
+<meta name="description" content="Una política de enrutamiento de Junos es un policy-statement definido bajo policy-options. Cada política está formada por uno o más términos, y cada términ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Estructura de una política: términos, condiciones de coinc… · Lección de JNCIA-Junos">
+<meta property="og:description" content="Una política de enrutamiento de Junos es un policy-statement definido bajo policy-options. Cada política está formada por uno o más términos, y cada términ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/jncia-junos/lessons/policy-structure-terms-from-match-conditions-then-actions-terminating/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/jncia-junos/lessons/policy-structure-terms-from-match-conditions-then-actions-terminating/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../jncia-junos/">JNCIA-Junos</a> / <a href="../">Lecciones</a> · <a href="../../../../jncia-junos/lessons/policy-structure-terms-from-match-conditions-then-actions-terminating/" hreflang="en" lang="en">English</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106</p>
+<h1>Estructura de una política: términos, condiciones de coincidencia `from`, acciones `then`; acciones terminantes vs de control de flujo (next term, next policy)</h1>
+<article class="lbody">
+<p>Una política de enrutamiento de Junos es un <code>policy-statement</code> definido bajo <code>policy-options</code>. Cada política está formada por uno o más términos, y cada término es una regla si-entonces: una sección <code>from</code> con condiciones de coincidencia y una sección <code>then</code> con acciones. Los términos se evalúan en el orden en que aparecen, de arriba hacia abajo.</p>
+<pre class="code" tabindex="0"><code>set policy-options policy-statement EXPORT-BGP term STATICS from protocol static
+set policy-options policy-statement EXPORT-BGP term STATICS from route-filter 192.0.2.0/24 exact
+set policy-options policy-statement EXPORT-BGP term STATICS then community add CUST
+set policy-options policy-statement EXPORT-BGP term STATICS then accept
+set policy-options policy-statement EXPORT-BGP term REJECT-REST then reject</code></pre>
+<p>La sección <code>from</code> lista condiciones de coincidencia como <code>protocol</code>, <code>route-filter</code>, <code>prefix-list</code>, <code>neighbor</code>, <code>interface</code>, <code>area</code>, <code>as-path</code>, <code>community</code> y <code>tag</code>. Cuando un término tiene varias condiciones diferentes, todas deben coincidir (un AND lógico). Cuando una condición lista varios valores, como <code>protocol [ static direct ]</code>, cualquiera de los valores puede coincidir (un OR lógico). Un término sin sección <code>from</code> coincide con todas las rutas, que es como se escribe un término final comodín como el REJECT-REST de arriba. También hay una sección <code>to</code> para algunas condiciones sobre hacia dónde va una ruta, como un vecino específico.</p>
+<p>La sección <code>then</code> contiene las acciones, que se dividen en tres grupos. Las acciones terminantes son <code>accept</code> y <code>reject</code>. Cuando una ruta coincide con un término que tiene una de ellas, la evaluación se detiene ahí mismo para esa ruta: no se revisan más términos ni más políticas. Las acciones de control de flujo cambian dónde continúa la evaluación: <code>next term</code> salta al siguiente término de la política, y <code>next policy</code> salta el resto de esta política y pasa a la siguiente política de la cadena. Las acciones modificadoras cambian atributos de la ruta, como <code>metric</code>, <code>preference</code>, <code>local-preference</code>, <code>community add</code>, <code>as-path-prepend</code> y <code>next-hop self</code>. Las acciones modificadoras no detienen la evaluación por sí mismas.</p>
+<p>¿Qué pasa si un término coincide pero no tiene ninguna acción terminante ni de control de flujo, solo modificadoras? Se aplican las modificaciones, y la evaluación continúa con el siguiente término, como si hubiera un <code>next term</code>. ¿Y si una ruta no coincide con ningún término de la política? La evaluación pasa a la siguiente política de la cadena y, si no hay más, a la política por defecto del protocolo. Por eso muchos ingenieros terminan sus políticas con un término final explícito, para que el resultado sea claro en lugar de depender del valor por defecto.</p>
+<p>El orden importa porque gana la primera acción terminante. Si el primer término de una política de exportación acepta todas las rutas estáticas, un término posterior que intente rechazar un prefijo estático nunca tiene la oportunidad. Usa <code>insert</code> para mover términos, y usa <code>show policy-options policy-statement NAME</code> para leer la política de arriba hacia abajo. Ten en cuenta también que una política es solo una definición: no hace nada hasta que la aplicas como política de importación o exportación en algún lugar.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Term (término)</dt><dd>Una regla si-entonces con nombre dentro de una política, que contiene condiciones de coincidencia <code>from</code> y acciones <code>then</code>.</dd><dt>Terminating action (acción terminante)</dt><dd><code>accept</code> o <code>reject</code>; termina de inmediato la evaluación de la política para esa ruta.</dd><dt>Flow-control action (acción de control de flujo)</dt><dd><code>next term</code> o <code>next policy</code>; mueve la evaluación a otro término o política sin decidir el destino de la ruta.</dd><dt>Modifying action (acción modificadora)</dt><dd>Una acción que cambia atributos de la ruta, como la métrica o la community, sin terminar la evaluación.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un cliente de un ISP quiere anteponer (prepend) su AS dos veces en los anuncios hacia un proveedor de respaldo. Su política de exportación tiene un primer término que coincide con su aggregate, aplica <code>as-path-prepend</code> y luego <code>accept</code>, y un término final sin <code>from</code> que rechaza todo lo demás, así nunca se envía nada más que la aggregate.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Varias condiciones en un mismo <code>from</code> se combinan con AND; varios valores en una misma condición se combinan con OR. Un término sin <code>from</code> coincide con todo, y un término con solo acciones modificadoras continúa con el siguiente término.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Un término coincide con una ruta y su sección <code>then</code> solo establece <code>metric 50</code>. ¿Qué pasa después?</summary><p>Se establece la métrica y la evaluación continúa con el siguiente término, porque no se indicó ninguna acción terminante.</p></details>
+<details class="sq"><summary>¿Qué hace <code>next policy</code>?</summary><p>Deja de evaluar la política actual y pasa a la siguiente política de la cadena.</p></details>
+<details class="sq"><summary>¿Cómo se comporta un término sin sección <code>from</code>?</summary><p>Coincide con todas las rutas.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia JNCIA-Junos gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../jncia-junos/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../default-policies-bgp-accepts-and-advertises-active-bgp-routes-ospf-imp/">← Políticas por defecto: BGP acepta y anuncia las rutas BGP ac</a><a href="../policy-chains-and-evaluation-order-falling-through-to-the-default-poli/">Cadenas de políticas y orden de evaluación, y la caída a la  →</a></nav>
+</main>
+</body>
+</html>

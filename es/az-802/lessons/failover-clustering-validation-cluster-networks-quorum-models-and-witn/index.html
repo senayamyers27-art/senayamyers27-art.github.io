@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Clústeres de conmutación por error: validación, redes de c… · Lección de AZ-802</title>
+<meta name="description" content="Un clúster de conmutación por error es un grupo de servidores Windows (nodos) que juntos mantienen en ejecución los roles en clúster, como un servidor de a">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Clústeres de conmutación por error: validación, redes de c… · Lección de AZ-802">
+<meta property="og:description" content="Un clúster de conmutación por error es un grupo de servidores Windows (nodos) que juntos mantienen en ejecución los roles en clúster, como un servidor de a">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-802/lessons/failover-clustering-validation-cluster-networks-quorum-models-and-witn/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-802/lessons/failover-clustering-validation-cluster-networks-quorum-models-and-witn/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-802/">AZ-802</a> / <a href="../">Lecciones</a> · <a href="../../../../az-802/lessons/failover-clustering-validation-cluster-networks-quorum-models-and-witn/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802</p>
+<h1>Clústeres de conmutación por error: validación, redes de clúster, modelos de cuórum y testigos (disco, recurso compartido de archivos, nube), Cluster-Aware Updating</h1>
+<article class="lbody">
+<p>Un clúster de conmutación por error es un grupo de servidores Windows (nodos) que juntos mantienen en ejecución los roles en clúster, como un servidor de archivos, VM de Hyper-V o SQL Server. Si un nodo falla, el clúster reinicia sus roles en un nodo superviviente. La agrupación en clústeres se ocupa de las fallas de hardware y del sistema operativo y del mantenimiento planificado; no es una copia de seguridad y no protege contra la corrupción de datos.</p>
+<p>Antes de crear un clúster ejecutas la validación con el asistente Validate a Configuration o con <code>Test-Cluster -Node N1,N2</code>. Prueba el inventario, la red, el almacenamiento y la configuración del sistema, y genera un informe. Microsoft admite un clúster solo si su configuración pasa la validación, y debes volver a ejecutarla después de cambios significativos. Las advertencias, como una única ruta de red, merecen atención; los errores deben corregirse. Luego creas el clúster con <code>New-Cluster -Name CLU1 -Node N1,N2 -StaticAddress 10.0.0.50</code>, lo que crea en AD una cuenta de equipo de objeto de nombre de clúster (CNO).</p>
+<p>Las redes de clúster son las redes que el clúster detecta en los adaptadores de los nodos. Cada una recibe un rol: solo comunicación del clúster (para latidos y tráfico interno), clúster y cliente (también transporta tráfico de clientes) o ninguno (el clúster la ignora, lo típico en redes de almacenamiento iSCSI). Tener al menos dos redes entre los nodos evita un punto único de falla para los latidos, y a la migración en vivo se le puede asignar una red preferida.</p>
+<p>El cuórum es la forma en que un clúster evita el cerebro dividido (split brain), cuando dos mitades creen que están al mando. Cada nodo obtiene un voto y un testigo puede agregar uno más; el clúster sigue funcionando solo mientras esté presente más de la mitad de los votos. Modelos que debes conocer: mayoría de nodos (sin testigo, mejor con un número impar de nodos), mayoría de nodos y disco, mayoría de nodos y recurso compartido de archivos, y mayoría de nodos con un testigo en la nube. Windows Server también usa el cuórum dinámico, que ajusta los votos a medida que los nodos salen para que el clúster pueda sobrevivir hasta el último nodo en fallas secuenciales, y el testigo dinámico, que da un voto al testigo solo cuando ayuda a que el total sea impar. La guía de Microsoft es configurar siempre un testigo.</p>
+<p>Los tipos de testigo difieren. Un testigo de disco es un pequeño disco compartido en clúster que también almacena una copia de la base de datos del clúster, así que necesita almacenamiento compartido. Un testigo de recurso compartido de archivos es un recurso compartido SMB en otro servidor; no almacena la base de datos del clúster, solo un pequeño registro, y es adecuado para clústeres de varios sitios o clústeres sin discos compartidos. Un testigo en la nube usa un blob de una cuenta de Azure Storage como desempate, solo necesita HTTPS saliente desde los nodos y es ideal cuando no tienes un tercer sitio. Configúralo con <code>Set-ClusterQuorum -CloudWitness -AccountName &lt;name&gt; -AccessKey &lt;key&gt;</code>.</p>
+<p>Cluster-Aware Updating (CAU) aplica revisiones a los nodos de uno en uno: vacía los roles de un nodo, instala las actualizaciones, lo reinicia, devuelve los roles y pasa al siguiente, manteniendo los servicios en línea. En el modo de actualización automática, un rol de clúster de CAU se ejecuta en el propio clúster según una programación. En el modo de actualización remota, inicias una ejecución de actualización desde un equipo separado con las herramientas de CAU. Antes de habilitar CAU, asegúrate de que el clúster pueda tolerar que un nodo esté caído.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Validation (validación)</dt><dd>Las comprobaciones de hardware y configuración de Test-Cluster; se requiere un informe aprobado para que un clúster sea compatible.</dd><dt>Quorum (cuórum)</dt><dd>La mayoría de votos (nodos más testigo) que un clúster necesita para seguir funcionando, lo que evita el cerebro dividido.</dd><dt>Disk witness (testigo de disco)</dt><dd>Un pequeño disco compartido en clúster que tiene un voto y una copia de la base de datos del clúster.</dd><dt>Cloud witness (testigo en la nube)</dt><dd>Un blob de Azure Storage usado como desempate del cuórum, que solo necesita una cuenta de almacenamiento y HTTPS saliente.</dd><dt>Cluster-Aware Updating</dt><dd>Una característica que actualiza los nodos del clúster de uno en uno mientras se mueven los roles, en modo de actualización automática o remota.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un clúster de Hyper-V de dos nodos abarca dos salas de servidores sin un tercer sitio. Usar un testigo de disco pondría el desempate en una sala, así que el administrador configura un testigo en la nube. Cuando falla el enlace de red entre las salas, el nodo que aún puede llegar a la cuenta de Azure Storage conserva el cuórum y ejecuta las VM, mientras el otro detiene sus roles.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Los clústeres de dos nodos o con un número par de nodos necesitan un testigo. Sin almacenamiento compartido o con varios sitios significa testigo de recurso compartido de archivos o en la nube; solo el testigo de disco almacena la base de datos del clúster. La actualización automática de CAU se ejecuta en el clúster; la remota, desde otra máquina.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué es importante un testigo en un clúster de dos nodos?</summary><p>Con dos votos, perder un nodo o el enlace deja exactamente la mitad, que no es mayoría; el testigo aporta el tercer voto de desempate.</p></details>
+<details class="sq"><summary>¿Qué tipo de testigo almacena una copia de la base de datos del clúster?</summary><p>El testigo de disco. Los testigos de recurso compartido de archivos y en la nube no almacenan ninguna copia de la base de datos del clúster.</p></details>
+<details class="sq"><summary>¿Cuál es la diferencia entre el modo de actualización automática y el de actualización remota de CAU?</summary><p>La actualización automática agrega un rol de clúster de CAU que actualiza el clúster por sí mismo según una programación; la actualización remota se inicia a petición desde un equipo de administración separado.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AZ-802 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-802/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../storage-spaces-resiliency-and-provisioning-refs-vs-ntfs-data-deduplica/">← Resiliencia y aprovisionamiento de Storage Spaces; ReFS fren</a><a href="../storage-spaces-direct-minimum-nodes-cache-resiliency-scale-out-file-se/">Storage Spaces Direct: nodos mínimos, caché, resiliencia; Sc →</a></nav>
+</main>
+</body>
+</html>

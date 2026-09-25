@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Direccionamiento de VNet de Azure e IP privadas estáticas … · Lección de AZ-802</title>
+<meta name="description" content="Una red virtual de Azure (VNet) es tu red privada en Azure. Cuando la creas, le asignas uno o más espacios de direcciones escritos en notación CIDR (enruta">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Direccionamiento de VNet de Azure e IP privadas estáticas … · Lección de AZ-802">
+<meta property="og:description" content="Una red virtual de Azure (VNet) es tu red privada en Azure. Cuando la creas, le asignas uno o más espacios de direcciones escritos en notación CIDR (enruta">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-802/lessons/azure-vnet-addressing-and-static-private-ips-set-on-the-nic/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-802/lessons/azure-vnet-addressing-and-static-private-ips-set-on-the-nic/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-802/">AZ-802</a> / <a href="../">Lecciones</a> · <a href="../../../../az-802/lessons/azure-vnet-addressing-and-static-private-ips-set-on-the-nic/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802</p>
+<h1>Direccionamiento de VNet de Azure e IP privadas estáticas configuradas en la NIC</h1>
+<article class="lbody">
+<p>Una red virtual de Azure (VNet) es tu red privada en Azure. Cuando la creas, le asignas uno o más espacios de direcciones escritos en notación CIDR (enrutamiento entre dominios sin clases), como <code>10.20.0.0/16</code>, normalmente de los rangos privados definidos en RFC 1918 (10.0.0.0/8, 172.16.0.0/12 y 192.168.0.0/16). Luego divides ese espacio en subredes, como <code>10.20.1.0/24</code> para servidores y <code>10.20.2.0/24</code> para administración. Cada tarjeta de interfaz de red (NIC) de una VM reside en una subred.</p>
+<p>Planifica el espacio de direcciones antes de construir. Las VNet que conectarás mediante emparejamiento (peering), o que conectarás al entorno local por VPN o ExpressRoute, no deben superponerse entre sí ni con tus rangos locales, porque el enrutamiento no puede distinguir dos prefijos idénticos. Deja espacio para crecer, y recuerda que algunos servicios necesitan subredes dedicadas con nombres o delegaciones específicos, como <code>GatewaySubnet</code> para una puerta de enlace de VPN o ExpressRoute, o subredes delegadas para los puntos de conexión de DNS Private Resolver.</p>
+<p>Azure reserva cinco direcciones en cada subred: la dirección de red, las tres primeras direcciones de host (usadas para la puerta de enlace predeterminada y la asignación de Azure DNS) y la dirección de difusión. Así que una /24 te da 251 direcciones utilizables, no 254, y la primera dirección que puedes asignar en <code>10.20.1.0/24</code> es <code>10.20.1.4</code>. La subred más pequeña que puedes crear es una /29, que deja solo tres direcciones utilizables. Las preguntas del examen suelen evaluar esta aritmética.</p>
+<p>Cada configuración IP de una NIC tiene una IP privada que es dinámica o estática. Con la dinámica, Azure elige la siguiente dirección libre de la subred. Con la estática, eliges una dirección de la subred (o conviertes la actual) y Azure garantiza que permanezca con esa NIC hasta que la cambies o elimines la NIC. Los servidores a los que otras máquinas apuntan por IP, sobre todo los controladores de dominio y los servidores DNS, deben usar la asignación estática. La configuras en el portal, en la hoja IP configurations de la NIC, o con PowerShell estableciendo <code>PrivateIpAllocationMethod</code> en Static en la configuración IP y ejecutando <code>Set-AzNetworkInterface</code>.</p>
+<p>La regla clave: en Azure configuras la IP estática en la NIC, no dentro de Windows. El sistema operativo invitado debe permanecer en DHCP, y el DHCP de Azure siempre le entregará la dirección que configuraste en la NIC. Si escribes una dirección estática en la configuración del adaptador de Windows y no coincide, o más tarde la NIC cambia, la VM puede perder la conectividad de red y necesitarás herramientas como Run Command o Serial Console para recuperarla. La misma idea se aplica a los servidores DNS: configura servidores DNS personalizados en la VNet (o en una NIC para anularla) en lugar de en el invitado, para que cada VM los reciba mediante DHCP.</p>
+<p>Un patrón híbrido típico es implementar dos VM de DC con IP privadas estáticas en sus NIC, luego configurar los servidores DNS de la VNet con esas dos direcciones y reiniciar las demás VM para que reciban la nueva configuración de DNS.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Address space (espacio de direcciones)</dt><dd>El rango o los rangos CIDR asignados a una VNet, de los que se asignan sus subredes.</dd><dt>Reserved addresses (direcciones reservadas)</dt><dd>Las cinco direcciones que Azure conserva en cada subred: la dirección de red, las tres primeras direcciones de host y la dirección de difusión.</dd><dt>Static private IP (IP privada estática)</dt><dd>Una configuración de la configuración IP de la NIC que fija una dirección privada elegida a la NIC para que nunca cambie hasta que tú la cambies.</dd><dt>Custom DNS servers (servidores DNS personalizados)</dt><dd>Direcciones de servidores DNS configuradas en una VNet o una NIC que el DHCP de Azure entrega a las VM en lugar del DNS proporcionado por Azure.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un administrador construye DC1 en la subred 10.50.1.0/24 y configura su NIC como estática con 10.50.1.4. Dentro de Windows, el adaptador sigue en DHCP. Los servidores DNS de la VNet se cambian a 10.50.1.4 y 10.50.1.5, y después de reiniciar los servidores de aplicaciones, estos resuelven contoso.com a través de los DC y pueden unirse al dominio.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si una opción de respuesta dice que configures una IP estática en el adaptador de red del sistema operativo invitado de una VM de Azure, es la trampa. Configura la estática en la NIC en Azure; mantén el invitado en DHCP. Recuerda también las 5 direcciones reservadas por subred.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cuántas direcciones utilizables proporciona una subred /27 en Azure?</summary><p>27 utilizables. Una /27 tiene 32 direcciones y Azure reserva 5.</p></details>
+<details class="sq"><summary>Necesitas que una VM de DC en Azure conserve 10.0.1.10 de forma permanente. ¿Dónde lo configuras?</summary><p>En la configuración IP de la NIC de la VM en Azure, como IP privada estática; deja el adaptador de Windows configurado para obtener una dirección automáticamente.</p></details>
+<details class="sq"><summary>¿Por qué el espacio de direcciones de una VNet no debe superponerse con tu red local si planeas una VPN de sitio a sitio?</summary><p>El enrutamiento no puede distinguir dos prefijos idénticos, así que el tráfico hacia direcciones superpuestas no llegaría al lado correcto.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AZ-802 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-802/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../dhcp-high-availability-failover-in-load-balance-and-hot-standby-modes/">← Alta disponibilidad de DHCP: conmutación por error en modos </a><a href="../hybrid-connectivity-site-to-site-and-point-to-site-vpn-expressroute-az/">Conectividad híbrida: VPN de sitio a sitio y de punto a siti →</a></nav>
+</main>
+</body>
+</html>

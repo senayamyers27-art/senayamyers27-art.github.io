@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Etiquetas vs digests, etiquetas estables vs únicas, y limp… · Lección de AI-200</title>
+<meta name="description" content="Cada imagen en un registro tiene dos tipos de nombre. Una etiqueta (tag) es un rótulo mutable y fácil de leer, como orders-api:1.4 u orders-api:latest. Un ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Etiquetas vs digests, etiquetas estables vs únicas, y limp… · Lección de AI-200">
+<meta property="og:description" content="Cada imagen en un registro tiene dos tipos de nombre. Una etiqueta (tag) es un rótulo mutable y fácil de leer, como orders-api:1.4 u orders-api:latest. Un ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/tags-vs-digests-stable-vs-unique-tags-and-cleaning-up-old-images-with/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/tags-vs-digests-stable-vs-unique-tags-and-cleaning-up-old-images-with/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/tags-vs-digests-stable-vs-unique-tags-and-cleaning-up-old-images-with/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Etiquetas vs digests, etiquetas estables vs únicas, y limpieza de imágenes antiguas con `az acr repository` y tareas de purge</h1>
+<article class="lbody">
+<p>Cada imagen en un registro tiene dos tipos de nombre. Una etiqueta (tag) es un rótulo mutable y fácil de leer, como <code>orders-api:1.4</code> u <code>orders-api:latest</code>. Un digest es un hash SHA-256 del manifiesto de la imagen, escrito como <code>orders-api@sha256:...</code>, y es inmutable: el mismo digest siempre se refiere exactamente a los mismos bytes. Una etiqueta es un puntero que se puede mover a una imagen nueva; un digest nunca puede cambiar.</p>
+<p>La guía de Microsoft distingue entre etiquetas estables y etiquetas únicas. Una etiqueta estable, como <code>1.4</code> o <code>latest</code>, está pensada para moverse: cuando publicas un parche, la etiqueta <code>1.4</code> se vuelve a apuntar a la imagen nueva. Las etiquetas estables sirven para imágenes base cuyos consumidores quieren seguir las actualizaciones. Una etiqueta única se asigna una vez y nunca se reutiliza, por ejemplo un ID de compilación, un hash de commit de Git o una marca de fecha y hora. Las etiquetas únicas sirven para los despliegues, porque un despliegue que hace referencia a <code>orders-api:20260914.3</code> descargará la misma imagen en cada nodo y en cada escalado horizontal, incluso semanas después.</p>
+<p>¿Por qué importa esto? Si despliegas con una etiqueta estable, un nodo nuevo o una réplica nueva pueden descargar una imagen más reciente que las que ya se están ejecutando, y terminas con versiones mezcladas y sin un registro claro de lo que se publicó. Desplegar con una etiqueta única o con un digest te da despliegues repetibles y reversiones (rollbacks) sencillas: vuelve a apuntar a la etiqueta única anterior. También puedes bloquear una imagen o una etiqueta contra cambios con <code>az acr repository update --write-enabled false</code>.</p>
+<p>Las etiquetas únicas se acumulan y el almacenamiento cuesta dinero, así que necesitas limpiar. Los comandos <code>az acr repository</code> inspeccionan y eliminan contenido: <code>show-tags</code> enumera las etiquetas (agrega <code>--orderby time_desc</code> para ordenar), <code>show-manifests</code> enumera los digests incluidos los que no tienen etiqueta, <code>untag</code> quita una etiqueta pero conserva el manifiesto, y <code>delete --image repo:tag</code> o <code>delete --image repo@digest</code> elimina el manifiesto y todas las etiquetas que apuntan a él. Cuando una etiqueta estable se mueve, el manifiesto anterior queda sin etiqueta (colgante o dangling) pero sigue usando almacenamiento.</p>
+<pre class="code" tabindex="0"><code>az acr repository show-tags --name myregistry --repository orders-api --orderby time_desc --output table
+az acr repository delete --name myregistry --image orders-api:20260101.1 --yes
+
+# Limpieza programada: elimina etiquetas de más de 30 días y manifiestos sin etiqueta, conserva las 10 más recientes
+az acr task create --registry myregistry --name nightly-purge \
+  --cmd &quot;acr purge --filter 'orders-api:.*' --ago 30d --keep 10 --untagged&quot; \
+  --schedule &quot;0 2 * * *&quot; --context /dev/null</code></pre>
+<p>El comando <code>acr purge</code> se ejecuta dentro de ACR Tasks. <code>--filter</code> recibe un repositorio y una expresión regular para las etiquetas, <code>--ago</code> define el umbral de antigüedad, <code>--untagged</code> también elimina los manifiestos colgantes y <code>--keep</code> conserva las etiquetas más recientes. Pruébalo primero con <code>--dry-run</code>, que enumera lo que se eliminaría. Programar purge con una tarea activada por temporizador te da una retención sin intervención manual; los registros Premium también pueden usar una directiva de retención para manifiestos sin etiqueta.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Tag (etiqueta)</dt><dd>Un rótulo mutable y legible que apunta a un manifiesto de imagen y se puede mover a una imagen más reciente.</dd><dt>Digest</dt><dd>Un identificador SHA-256 inmutable de un manifiesto de imagen que siempre se refiere exactamente al mismo contenido.</dd><dt>Unique tag (etiqueta única)</dt><dd>Una etiqueta que se usa una sola vez y nunca se reasigna, como un ID de compilación o un hash de commit; se recomienda para despliegues.</dd><dt>Untagged manifest (manifiesto sin etiqueta)</dt><dd>Una imagen cuyas etiquetas se movieron o se quitaron todas; sigue consumiendo almacenamiento hasta que se elimina.</dd><dt>acr purge</dt><dd>Un comando de ACR Tasks que elimina etiquetas y manifiestos sin etiqueta según un filtro y una antigüedad; suele ejecutarse de forma programada.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Después de un trimestre intenso, el registro de un equipo tenía miles de etiquetas con ID de compilación y su factura de almacenamiento había crecido sin parar. Crearon una tarea de ACR activada por temporizador que ejecuta acr purge cada noche con --ago 30d --keep 10 --untagged, después de revisar primero la salida de un --dry-run. Los despliegues siguieron usando etiquetas únicas, así que producción nunca se vio afectada, y las imágenes antiguas desaparecieron automáticamente.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Para una pregunta sobre asegurar que cada réplica ejecute exactamente la misma imagen, elige una etiqueta única o un digest, nunca latest; para la limpieza automática de imágenes antiguas, elige acr purge en una tarea de ACR programada.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué latest es una mala opción en un manifiesto de despliegue de producción?</summary><p>Es una etiqueta estable que se mueve, así que las réplicas nuevas pueden descargar una imagen distinta de las que están en ejecución y las reversiones no quedan claras; las etiquetas únicas o los digests son repetibles.</p></details>
+<details class="sq"><summary>¿Qué le pasa a una imagen cuando su única etiqueta se mueve a una compilación más reciente?</summary><p>Se convierte en un manifiesto sin etiqueta que sigue usando almacenamiento hasta que se elimina, por ejemplo con acr purge --untagged.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../build-and-push-images-with-az-acr-build-quick-tasks-and-acr-tasks-trig/">← Compilar y subir imágenes con `az acr build` (quick tasks) y</a><a href="../pull-images-without-passwords-managed-identity-with-the-acrpull-role-i/">Descargar imágenes sin contraseñas: identidad administrada c →</a></nav>
+</main>
+</body>
+</html>

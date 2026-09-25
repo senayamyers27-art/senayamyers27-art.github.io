@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Azure Managed Redis: patrón cache-aside, TTL e invalidació… · Lección de AI-200</title>
+<meta name="description" content="Redis es un almacén de datos en memoria que responde en mucho menos de un milisegundo, lo que lo convierte en la caché estándar frente a bases de datos más">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Azure Managed Redis: patrón cache-aside, TTL e invalidació… · Lección de AI-200">
+<meta property="og:description" content="Redis es un almacén de datos en memoria que responde en mucho menos de un milisegundo, lo que lo convierte en la caché estándar frente a bases de datos más">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/azure-managed-redis-cache-aside-pattern-ttl-and-invalidation-eviction/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/azure-managed-redis-cache-aside-pattern-ttl-and-invalidation-eviction/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/azure-managed-redis-cache-aside-pattern-ttl-and-invalidation-eviction/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Azure Managed Redis: patrón cache-aside, TTL e invalidación, directivas de expulsión</h1>
+<article class="lbody">
+<p>Redis es un almacén de datos en memoria que responde en mucho menos de un milisegundo, lo que lo convierte en la caché estándar frente a bases de datos más lentas y llamadas costosas a modelos de IA. Azure Managed Redis es la oferta actual de Redis administrado de Microsoft, basada en el software Redis Enterprise, con niveles optimizados para memoria, equilibrio o proceso, clustering, alta disponibilidad y módulos opcionales como search y JSON. Desde Python te conectas con el paquete <code>redis</code> (redis-py) mediante TLS, autenticándote con una clave de acceso o, preferiblemente, con Microsoft Entra ID.</p>
+<p>El patrón de caché más común es cache-aside (carga diferida). La aplicación, no la caché, es la que manda. En una lectura, la app revisa primero la caché. Si hay acierto, devuelve el valor almacenado. Si hay un fallo, lee de la base de datos, escribe el resultado en la caché con una expiración y lo devuelve. La caché solo contiene datos que alguien pidió.</p>
+<pre class="code" tabindex="0"><code>import json, redis
+r = redis.Redis(host=HOST, port=10000, ssl=True, password=KEY)
+
+def get_product(pid):
+    key = f&quot;product:{pid}&quot;
+    cached = r.get(key)
+    if cached:
+        return json.loads(cached)
+    product = db_read_product(pid)
+    r.set(key, json.dumps(product), ex=300)   # TTL de 300 segundos
+    return product
+
+def update_product(pid, data):
+    db_write_product(pid, data)
+    r.delete(f&quot;product:{pid}&quot;)                 # invalidar</code></pre>
+<p>El TTL (time to live, tiempo de vida) es cuánto vive una clave antes de que Redis la elimine. Se define con <code>ex=</code> en SET o con EXPIRE; se consulta con TTL. Un TTL limita qué tan desactualizados pueden estar los datos en caché y libera memoria automáticamente. Los TTL cortos significan datos más frescos y más carga en la base de datos; los TTL largos, lo contrario. Agregar una pequeña variación aleatoria (jitter) a los TTL evita que muchas claves expiren a la vez y saturen la base de datos.</p>
+<p>El TTL por sí solo permite lecturas desactualizadas hasta la expiración. La invalidación elimina o actualiza la entrada de caché cuando cambia el origen. Con cache-aside, el enfoque habitual es: escribir en la base de datos y luego eliminar la clave de la caché, para que la siguiente lectura cargue datos frescos. Eliminar es más seguro que escribir el valor nuevo en la caché, porque evita condiciones de carrera en las que un valor antiguo sobrescribe uno más nuevo. Para eventos de otros sistemas, un change feed o un mensaje puede controlar la invalidación.</p>
+<p>Cuando la memoria está llena, la directiva de expulsión (eviction policy) decide qué pasa. <code>noeviction</code> rechaza las escrituras nuevas con un error. <code>allkeys-lru</code> expulsa las claves usadas menos recientemente entre todas las claves, un buen valor predeterminado para una caché pura. <code>volatile-lru</code> expulsa las claves usadas menos recientemente solo entre las que tienen TTL, lo que protege a las claves sin expiración. Hay variantes LFU (usadas con menos frecuencia), <code>allkeys-random</code> y <code>volatile-random</code>, y <code>volatile-ttl</code>, que expulsa primero las claves más cercanas a expirar. Si tu caché contiene solo datos desechables, conviene una directiva allkeys; si la misma instancia guarda datos que no deben desaparecer, usa una directiva volatile y asigna TTL solo a las entradas de caché.</p>
+<p>Supervisa la tasa de aciertos de la caché, el uso de memoria y las expulsiones. Una tasa de aciertos baja sugiere que los TTL son demasiado cortos o que las claves son demasiado específicas; las expulsiones frecuentes sugieren que la caché es demasiado pequeña.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Cache-aside</dt><dd>Un patrón en el que la app revisa la caché, carga desde la base de datos cuando hay un fallo y llena la caché por sí misma.</dd><dt>TTL (tiempo de vida)</dt><dd>Time to live: el número de segundos que existe una clave antes de que Redis la expire automáticamente.</dd><dt>Invalidation (invalidación)</dt><dd>Eliminar o actualizar una entrada de caché cuando cambian los datos subyacentes.</dd><dt>Eviction policy (directiva de expulsión)</dt><dd>La regla que sigue Redis para liberar memoria cuando está llena, como allkeys-lru o volatile-lru.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una API de páginas de productos tardaba 120 ms por solicitud leyendo PostgreSQL. Con cache-aside y un TTL de 5 minutos en Azure Managed Redis, las lecturas repetidas respondían en unos pocos milisegundos. Cuando un administrador cambiaba un precio, los clientes veían el precio anterior durante minutos, así que ahora la ruta de actualización elimina la clave del producto justo después de escribir en la base de datos, y la siguiente lectura la vuelve a cargar.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Conoce los nombres de las directivas: allkeys-* expulsa de entre todas las claves, volatile-* solo de las claves con TTL y noeviction devuelve errores en las escrituras cuando la memoria está llena.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>En cache-aside, ¿quién carga los datos en la caché cuando hay un fallo?</summary><p>La aplicación: lee la base de datos y luego escribe el valor en la caché con un TTL.</p></details>
+<details class="sq"><summary>¿Por qué eliminar la clave de caché después de actualizar la base de datos en lugar de escribir el valor nuevo?</summary><p>Eliminarla evita condiciones de carrera en las que un escritor más lento vuelve a poner datos desactualizados en la caché; la siguiente lectura carga el valor actual.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../retrieval-augmented-generation-chunking-embedding-storing-top-k-retrie/">← Generación aumentada por recuperación: fragmentación, embedd</a><a href="../redis-vector-indexes-and-semantic-caching-of-model-responses/">Índices vectoriales de Redis y caché semántica de las respue →</a></nav>
+</main>
+</body>
+</html>

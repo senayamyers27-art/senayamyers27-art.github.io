@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Control Plane Policing (CoPP) · Lección de ENCOR</title>
+<meta name="description" content="La CPU del procesador de rutas maneja los protocolos de enrutamiento, las sesiones de gestión y cualquier paquete enviado (punted) desde el plano de datos.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Control Plane Policing (CoPP) · Lección de ENCOR">
+<meta property="og:description" content="La CPU del procesador de rutas maneja los protocolos de enrutamiento, las sesiones de gestión y cualquier paquete enviado (punted) desde el plano de datos.">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/control-plane-policing-copp/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ccnp-encor/lessons/control-plane-policing-copp/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ccnp-encor/">ENCOR</a> / <a href="../">Lecciones</a> · <a href="../../../../ccnp-encor/lessons/control-plane-policing-copp/" hreflang="en" lang="en">English</a></p>
+<p class="note">Cisco CCNP Enterprise core exam (ENCOR) 350-401 v1.2</p>
+<h1>Control Plane Policing (CoPP)</h1>
+<article class="lbody">
+<p>La CPU del procesador de rutas maneja los protocolos de enrutamiento, las sesiones de gestión y cualquier paquete enviado (punted) desde el plano de datos. Tiene capacidad limitada, así que una avalancha de tráfico dirigido al dispositivo, ya sea por un ataque, una configuración errónea o un bucle, puede saturarla y hacer que se caigan las adyacencias de enrutamiento. Control Plane Policing (CoPP) protege la CPU aplicando una política de QoS al tráfico que se dirige al plano de control, limitando cada categoría de tráfico a una tasa segura.</p>
+<p>CoPP usa la Modular QoS CLI que ya conoces. Clasificas el tráfico del plano de control con ACL y class maps, defines un policy map con acciones police por clase y asocias la política a la interfaz especial <code>control-plane</code> en lugar de a una interfaz física:</p>
+<pre class="code" tabindex="0"><code>ip access-list extended COPP-ROUTING
+ permit ospf any any
+ permit tcp any any eq bgp
+ permit tcp any eq bgp any
+ip access-list extended COPP-MGMT
+ permit tcp 10.99.0.0 0.0.0.255 any eq 22
+ permit udp 10.99.0.0 0.0.0.255 any eq snmp
+!
+class-map match-all CM-ROUTING
+ match access-group name COPP-ROUTING
+class-map match-all CM-MGMT
+ match access-group name COPP-MGMT
+!
+policy-map PM-COPP
+ class CM-ROUTING
+  police 1000000 conform-action transmit exceed-action transmit
+ class CM-MGMT
+  police 500000 conform-action transmit exceed-action drop
+ class class-default
+  police 200000 conform-action transmit exceed-action drop
+!
+control-plane
+ service-policy input PM-COPP</code></pre>
+<p>Diseña las clases por importancia. El tráfico crítico, como los protocolos de enrutamiento, recibe una tasa generosa, y algunos diseños incluso transmiten su exceso para que las adyacencias nunca se vean afectadas. El tráfico de gestión desde fuentes confiables recibe una tasa moderada. Todo lo que no coincide con una clase definida cae en class-default, que se somete a un policing estricto. El tráfico que nunca esperas que llegue a la CPU, como los protocolos de gestión desde fuentes no confiables, puede clasificarse y descartarse. Ten en cuenta que en las ACL de CoPP, <code>permit</code> significa “este tráfico pertenece a la clase” y <code>deny</code> significa “no está en esta clase”; la acción proviene del policy map, no de la ACL.</p>
+<p>Elegir las tasas requiere conocer tu línea base. Las tasas demasiado bajas descartarán hellos legítimos durante las ráfagas normales; las tasas demasiado altas no dan protección. Un enfoque seguro es implementar con las acciones de exceso en transmit, observar los contadores con <code>show policy-map control-plane</code> para conocer los niveles normales de tráfico y luego ajustar y cambiar las acciones de exceso a drop.</p>
+<p>Las diferencias entre plataformas importan. En muchos switches Catalyst IOS XE se aplica por defecto una política CoPP definida por el sistema (<code>system-cpp-policy</code>) con clases preconfiguradas y limitadores de tasa por hardware, y puedes ajustar sus tasas en lugar de construir la tuya desde cero. En los routers, CoPP normalmente se configura manualmente como se mostró arriba.</p>
+<p>CoPP funciona junto con otros controles: las ACL de infraestructura en el borde bloquean el tráfico no deseado antes de que llegue al dispositivo, <code>access-class</code> restringe el acceso VTY, y funciones como la autenticación de los protocolos de enrutamiento protegen los propios protocolos. CoPP es la última línea de defensa que mantiene la CPU disponible cuando algo logra pasar.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>CoPP</dt><dd>Control Plane Policing: una política MQC aplicada a la interfaz control-plane que limita la tasa del tráfico hacia la CPU.</dd><dt>control-plane</dt><dd>El modo de configuración especial que representa al procesador de rutas, donde se asocia la service policy de CoPP.</dd><dt>class-default</dt><dd>La clase general para el tráfico que no coincide con ninguna clase definida, normalmente con policing estricto en CoPP.</dd><dt>Exceed action (acción de exceso)</dt><dd>Lo que hace un policer con el tráfico por encima de la tasa configurada, como drop o transmit.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un servidor de monitoreo mal configurado empieza a enviar miles de solicitudes SNMP por segundo a un router de núcleo, y la CPU sube. Como CoPP aplica policing a SNMP en su clase de gestión y en class-default, las solicitudes excedentes se descartan en el plano de control, la CPU se mantiene moderada y las adyacencias OSPF permanecen estables mientras el equipo corrige el servidor.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> CoPP se aplica con service-policy input bajo control-plane. El permit de la ACL solo clasifica el tráfico en una clase; la acción police decide si se descarta. Primero establece la línea base y luego ajusta.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Dónde se asocia una política de CoPP?</summary><p>Bajo el modo de configuración control-plane, con service-policy input.</p></details>
+<details class="sq"><summary>En una ACL de clasificación de CoPP, ¿qué significa una entrada deny?</summary><p>Que el tráfico no coincide con esa clase y se evalúa contra la siguiente clase; la ACL no lo descarta.</p></details>
+<details class="sq"><summary>¿Por qué empezar la implementación de CoPP con exceed-action transmit?</summary><p>Para medir el tráfico normal del plano de control sin descartar nada, de modo que las tasas puedan establecerse con seguridad antes de aplicar los descartes.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia ENCOR gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ccnp-encor/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../infrastructure-security-standard-and-extended-acls-placement-and-order/">← Seguridad de la infraestructura: ACL estándar y extendidas, </a><a href="../rest-api-security-https-tokens-secret-handling/">Seguridad de las API REST: HTTPS, tokens, manejo de secretos →</a></nav>
+</main>
+</body>
+</html>

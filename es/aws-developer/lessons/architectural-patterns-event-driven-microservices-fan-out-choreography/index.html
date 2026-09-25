@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Patrones de arquitectura: orientada a eventos, microservic… · Lección de Developer Associate</title>
+<meta name="description" content="La mayoría de los escenarios de DVA-C02 describen una aplicación construida con piezas pequeñas que se comunican entre sí, y preguntan qué diseño la mantie">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Patrones de arquitectura: orientada a eventos, microservic… · Lección de Developer Associate">
+<meta property="og:description" content="La mayoría de los escenarios de DVA-C02 describen una aplicación construida con piezas pequeñas que se comunican entre sí, y preguntan qué diseño la mantie">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/architectural-patterns-event-driven-microservices-fan-out-choreography/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/architectural-patterns-event-driven-microservices-fan-out-choreography/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/architectural-patterns-event-driven-microservices-fan-out-choreography/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Patrones de arquitectura: orientada a eventos, microservicios, fan-out, coreografía vs orquestación, diseños débilmente acoplados y sin estado</h1>
+<article class="lbody">
+<p>La mayoría de los escenarios de DVA-C02 describen una aplicación construida con piezas pequeñas que se comunican entre sí, y preguntan qué diseño la mantiene confiable y fácil de cambiar. La idea de fondo es el acoplamiento: cuánto necesita saber un componente sobre otro, y cuánto debe esperarlo. Un sistema fuertemente acoplado falla por completo cuando una parte está lenta o caída. Un sistema débilmente acoplado pone algo en medio (una cola, un tema, un bus de eventos o un contrato de API) para que cada parte pueda fallar, escalar y desplegarse por su cuenta.</p>
+<p>En una arquitectura orientada a eventos, los componentes anuncian que algo ocurrió (se hizo un pedido, se subió un archivo) en lugar de llamarse directamente entre sí. El productor emite un evento y sigue adelante; cualquier cantidad de consumidores reacciona a él. En AWS, los medios habituales son Amazon Simple Queue Service (SQS) para colas de trabajo, Amazon Simple Notification Service (SNS) para publicación/suscripción, Amazon EventBridge para enrutar eventos según su contenido y Amazon Kinesis Data Streams para flujos ordenados de alto volumen. Muchos servicios de AWS, como Amazon S3 y Amazon DynamoDB, pueden emitir eventos que invocan funciones de AWS Lambda directamente.</p>
+<p>Los microservicios aplican el mismo razonamiento a toda la aplicación: dividirla en servicios pequeños, cada uno dueño de una capacidad de negocio y de su propio almacén de datos, desplegados de forma independiente y accesibles solo a través de su API o de sus eventos. El beneficio es el escalado y la publicación independientes; el costo es más llamadas de red, más cosas que monitorear y la necesidad de manejar fallas parciales. Un distractor común en el examen es un diseño donde dos servicios comparten una misma tabla de base de datos, lo que silenciosamente los vuelve a acoplar.</p>
+<p>Fan-out significa que un mensaje se entrega a muchos consumidores en paralelo. El patrón clásico de AWS es SNS hacia varias colas SQS: un productor publica una sola vez en un tema, y cada cola suscrita recibe su propia copia, de modo que un servicio de correo, uno de analítica y uno de inventario procesan cada uno a su propio ritmo, y un consumidor lento nunca bloquea a los demás. Las reglas de EventBridge con varios destinos logran un resultado similar con filtrado basado en contenido.</p>
+<p>La coreografía y la orquestación son dos formas de coordinar un proceso de negocio de varios pasos. En la coreografía no hay un controlador central: cada servicio escucha eventos y emite otros nuevos, como bailarines que conocen cada uno su parte. Es muy débilmente acoplada, pero el flujo general es difícil de ver y depurar. En la orquestación, un coordinador, normalmente AWS Step Functions, llama a cada paso, lleva el estado y maneja los reintentos y la compensación. Elige orquestación cuando necesites visibilidad, orden, manejo de errores o pasos de aprobación humana; elige coreografía cuando los servicios deban evolucionar de forma independiente y simplemente reaccionar a eventos.</p>
+<p>El diseño sin estado es lo que permite que todo esto escale. Una unidad de cómputo sin estado no guarda datos de sesión ni de usuario en su propia memoria o disco local entre solicitudes, así que cualquier instancia o entorno de ejecución de Lambda puede atender cualquier solicitud y puede reemplazarse en cualquier momento. El estado vive en un almacén externo como DynamoDB, Amazon ElastiCache o S3. Las sesiones persistentes (sticky sessions) y los datos guardados solo en <code>/tmp</code> son señales de un diseño con estado que no escalará horizontalmente de forma limpia.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Loose coupling (acoplamiento débil)</dt><dd>Diseñar componentes para que interactúen a través de un intermediario o un contrato estable, de modo que cada uno pueda fallar, escalar y desplegarse de forma independiente.</dd><dt>Fan-out (distribución a múltiples destinos)</dt><dd>Entregar un mensaje publicado a muchos suscriptores en paralelo, por ejemplo un tema de SNS con varias suscripciones de colas SQS.</dd><dt>Choreography (coreografía)</dt><dd>Coordinación en la que cada servicio reacciona a eventos y emite otros nuevos, sin un controlador central.</dd><dt>Orchestration (orquestación)</dt><dd>Coordinación en la que un motor de flujos de trabajo central, como Step Functions, invoca cada paso y administra el estado y los errores.</dd><dt>Stateless service (servicio sin estado)</dt><dd>Un servicio que no guarda estado del cliente entre solicitudes y lo almacena externamente, para que cualquier instancia pueda atender cualquier solicitud.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>La función Lambda de pago de una tienda en línea publica un mensaje OrderPlaced en un tema de SNS. Tres colas SQS están suscritas: una alimenta el servicio de pagos, otra el servicio de almacén y otra el servicio de correo. Cuando el proveedor de correo sufre una interrupción, los mensajes simplemente esperan en su cola mientras los pagos y los envíos continúan con normalidad.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Cuando una pregunta dice que un evento debe disparar varios procesos independientes y que un consumidor lento no debe afectar a los demás, busca fan-out de SNS a colas SQS (o EventBridge con varios destinos). Cuando enfatiza un flujo visible y ordenado con manejo de errores, elige la orquestación con Step Functions.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué SNS publicando en varias colas SQS es más resiliente que SNS invocando varios servicios directamente?</summary><p>Cada cola almacena los mensajes para su consumidor, así que un consumidor lento o caído puede ponerse al día después sin perder mensajes ni retrasar a los demás consumidores.</p></details>
+<details class="sq"><summary>¿Cuándo elegirías orquestación en lugar de coreografía?</summary><p>Cuando el proceso necesita una vista central del estado, un orden estricto, reintentos o compensación de pasos fallidos, o aprobación humana, que es lo que ofrece una máquina de estados de Step Functions.</p></details>
+<details class="sq"><summary>¿Qué hace que una capa web sea sin estado?</summary><p>Guarda los datos de sesión y de usuario en un almacén externo como DynamoDB o ElastiCache en lugar de la memoria de la instancia o el disco local, así que cualquier instancia puede atender cualquier solicitud.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><span></span><a href="../resilient-code-retries-with-exponential-backoff-and-jitter-idempotency/">Código resiliente: reintentos con retroceso exponencial y ji →</a></nav>
+</main>
+</body>
+</html>

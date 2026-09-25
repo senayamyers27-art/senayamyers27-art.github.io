@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scripts más seguros: set -euo pipefail, trap, validación d… · Lección de Linux+</title>
+<meta name="description" content="De forma predeterminada, Bash es permisivo: si un comando falla, el script sigue adelante, una variable no definida se convierte silenciosamente en una cad">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Scripts más seguros: set -euo pipefail, trap, validación d… · Lección de Linux+">
+<meta property="og:description" content="De forma predeterminada, Bash es permisivo: si un comando falla, el script sigue adelante, una variable no definida se convierte silenciosamente en una cad">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/linux-plus/lessons/safer-scripts-set-euo-pipefail-trap-input-validation-shellcheck/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/linux-plus/lessons/safer-scripts-set-euo-pipefail-trap-input-validation-shellcheck/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../linux-plus/">Linux+</a> / <a href="../">Lecciones</a> · <a href="../../../../linux-plus/lessons/safer-scripts-set-euo-pipefail-trap-input-validation-shellcheck/" hreflang="en" lang="en">English</a></p>
+<p class="note">CompTIA Linux+ XK0-006</p>
+<h1>Scripts más seguros: set -euo pipefail, trap, validación de entradas, shellcheck</h1>
+<article class="lbody">
+<p>De forma predeterminada, Bash es permisivo: si un comando falla, el script sigue adelante, una variable no definida se convierte silenciosamente en una cadena vacía y un fallo al principio de una tubería se ignora. Esa tolerancia convierte pequeños errores en grandes daños, como un script que ejecuta <code>rm -rf &quot;$dir/&quot;*</code> cuando <code>dir</code> nunca se definió. Los hábitos de programación defensiva evitan esto, y Linux+ espera que los reconozcas.</p>
+<p><code>set -e</code> (errexit) hace que el script salga cuando un comando falla, a menos que el fallo sea parte de una condición, como una prueba <code>if</code> o un comando seguido de <code>||</code>. <code>set -u</code> (nounset) trata las referencias a variables no definidas como errores, detectando errores de tipeo y argumentos faltantes. <code>set -o pipefail</code> hace que una tubería devuelva el estado del último comando que falló en lugar de solo el del comando final, así que <code>grep pattern missing.txt | sort</code> informa el fallo. Combinados, <code>set -euo pipefail</code> cerca del inicio de un script es un punto de partida común de modo estricto. No es magia: algunos comandos devuelven legítimamente un valor distinto de cero (grep sin coincidencias devuelve 1), así que manéjalos con <code>|| true</code> o con una comprobación explícita. <code>set -x</code> imprime cada comando antes de ejecutarlo, lo cual es útil para depurar, y <code>bash -n script.sh</code> revisa la sintaxis sin ejecutar nada.</p>
+<p><code>trap</code> ejecuta un comando cuando el script recibe una señal o termina. <code>trap cleanup EXIT</code> llama a una función de limpieza sin importar cómo termine el script, lo cual es ideal para eliminar archivos temporales o liberar archivos de bloqueo. <code>trap 'echo interrupted; exit 130' INT TERM</code> maneja Ctrl+C y la terminación, y <code>trap '...' ERR</code> puede registrar la línea que falló. Crea archivos temporales de forma segura con <code>mktemp</code> en lugar de nombres fijos como <code>/tmp/data</code>, que otro usuario podría crear de antemano o convertir en un enlace simbólico.</p>
+<pre class="code" tabindex="0"><code>#!/usr/bin/env bash
+set -euo pipefail
+tmp=$(mktemp)
+trap 'rm -f &quot;$tmp&quot;' EXIT
+[[ $# -eq 1 ]] || { echo &quot;usage: $0 &lt;username&gt;&quot; &gt;&amp;2; exit 2; }
+user=$1
+[[ $user =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || { echo &quot;invalid username&quot; &gt;&amp;2; exit 2; }
+getent passwd &quot;$user&quot; &gt; &quot;$tmp&quot;</code></pre>
+<p>La validación de entradas trata cada argumento, variable de entorno y línea de archivo como no confiable. Comprueba la cantidad de argumentos (<code>$#</code>), compara los valores con una lista de permitidos o una expresión regular estricta, confirma que los archivos existen y que los directorios son lo que esperas, y rechaza valores peligrosos como una ruta vacía o <code>/</code>. Pon entre comillas cada expansión para que la entrada no se divida en argumentos extra ni expanda comodines, y usa <code>--</code> antes de los nombres de archivo que proporciona el usuario para que un nombre que empiece con guion no se trate como una opción (<code>rm -- &quot;$file&quot;</code>). Nunca pases entradas a <code>eval</code> ni construyas comandos como cadenas, porque eso invita a la inyección de comandos. Los scripts que se ejecutan con sudo o desde cron como root merecen un cuidado extra, y deberían usar rutas absolutas o establecer PATH explícitamente.</p>
+<p>ShellCheck es una herramienta de análisis estático que lee un script y advierte sobre errores comunes: variables sin comillas, uso inútil de cat, errores de <code>[ $a == $b ]</code>, código inalcanzable y muchos problemas de portabilidad. Ejecuta <code>shellcheck script.sh</code> y corrige o suprime conscientemente cada hallazgo; sus advertencias tienen códigos como SC2086 (usa comillas dobles para evitar el globbing y la división en palabras). Muchos equipos ejecutan ShellCheck automáticamente en pipelines de CI (integración continua) para detectar los problemas antes de que los scripts lleguen a los servidores.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>set -e</dt><dd>Hace que el script salga cuando un comando falla fuera de un contexto condicional.</dd><dt>set -u</dt><dd>Trata el uso de una variable no definida como un error.</dd><dt>pipefail</dt><dd>Hace que el estado de salida de una tubería refleje el comando fallido más a la derecha, no solo el último comando.</dd><dt>trap</dt><dd>Registra un comando que se ejecuta ante señales o al salir el script (EXIT), a menudo para limpieza.</dd><dt>ShellCheck</dt><dd>Un analizador estático que señala errores y patrones riesgosos en scripts de shell.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un script de limpieza contenía rm -rf &quot;$BASE_DIR&quot;/cache/*. Al ejecutarse desde cron, BASE_DIR no estaba definida, así que apuntaba a /cache. Después de salvarse por poco, el equipo agrega set -euo pipefail para que la variable no definida aborte el script, valida que BASE_DIR sea un directorio existente y no vacío, agrega un trap para eliminar los archivos temporales y ejecuta shellcheck en CI con cada cambio.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Conoce lo que atrapa cada opción del modo estricto: -e los comandos fallidos, -u las variables no definidas y pipefail los fallos ocultos dentro de las tuberías.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Sin pipefail, ¿qué estado de salida devuelve false | true?</summary><p>0, porque solo cuenta el estado del último comando (true).</p></details>
+<details class="sq"><summary>¿Cómo garantizas que un archivo temporal se elimine cuando un script termina, incluso por error?</summary><p>Créalo con mktemp y registra trap 'rm -f &quot;$tmp&quot;' EXIT (o una función de limpieza).</p></details>
+<details class="sq"><summary>¿Qué suele pedirte la advertencia SC2086 de ShellCheck?</summary><p>Poner entre comillas dobles una expansión de variable para evitar la división en palabras y el globbing.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Linux+ gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../linux-plus/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../bash-control-flow-if-test-case-for-and-while-loops-functions-arrays/">← Control de flujo en Bash: if/test, case, bucles for y while,</a><a href="../python-basics-for-admins-data-types-sets-and-dicts-venv-pip-running-sc/">Fundamentos de Python para administradores: tipos de datos,  →</a></nav>
+</main>
+</body>
+</html>

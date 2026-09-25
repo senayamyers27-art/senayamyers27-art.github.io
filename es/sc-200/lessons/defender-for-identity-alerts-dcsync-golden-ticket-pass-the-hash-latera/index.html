@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Alertas de Defender for Identity: DCSync, Golden Ticket, p… · Lección de SC-200</title>
+<meta name="description" content="Defender for Identity (MDI) genera alertas para los ataques clásicos contra Active Directory. No necesitas saber cómo ejecutarlos, pero sí debes reconocerl">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Alertas de Defender for Identity: DCSync, Golden Ticket, p… · Lección de SC-200">
+<meta property="og:description" content="Defender for Identity (MDI) genera alertas para los ataques clásicos contra Active Directory. No necesitas saber cómo ejecutarlos, pero sí debes reconocerl">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/sc-200/lessons/defender-for-identity-alerts-dcsync-golden-ticket-pass-the-hash-latera/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/sc-200/lessons/defender-for-identity-alerts-dcsync-golden-ticket-pass-the-hash-latera/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../sc-200/">SC-200</a> / <a href="../">Lecciones</a> · <a href="../../../../sc-200/lessons/defender-for-identity-alerts-dcsync-golden-ticket-pass-the-hash-latera/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Security Operations Analyst Associate SC-200</p>
+<h1>Alertas de Defender for Identity: DCSync, Golden Ticket, pass-the-hash; rutas de movimiento lateral; restablecimiento de KRBTGT</h1>
+<article class="lbody">
+<p>Defender for Identity (MDI) genera alertas para los ataques clásicos contra Active Directory. No necesitas saber cómo ejecutarlos, pero sí debes reconocerlos, entender qué obtuvo el atacante y conocer la respuesta correcta.</p>
+<p>DCSync abusa de la replicación del directorio. Los controladores de dominio se replican legítimamente entre sí usando el protocolo Directory Replication Service (DRS). Un atacante con una cuenta que tiene derechos de replicación (como Domain Admins, o una cuenta a la que se le dio el permiso 'Replicating Directory Changes All') le pide a un controlador de dominio que replique los datos de contraseñas, desde una máquina que no es un controlador de dominio. MDI alerta con 'Suspected DCSync attack (replication of directory services)' porque las solicitudes de replicación desde algo que no es un DC son anómalas. La respuesta es averiguar cómo obtuvo el atacante la cuenta privilegiada, quitar cualquier permiso de replicación inesperado, restablecer las credenciales afectadas y tratar como comprometido cualquier hash obtenido.</p>
+<p>Un Golden Ticket es un ticket de concesión de tickets (TGT) de Kerberos falsificado. Si un atacante roba el hash de la cuenta KRBTGT, la cuenta que firma todos los TGT del dominio, puede crear TGT para cualquier usuario, con cualquier pertenencia a grupos y vidas útiles largas, sin tocar nunca una contraseña. MDI detecta señales de tickets falsificados, como degradaciones del cifrado, tickets para cuentas inexistentes, anomalías de tiempo y datos de autorización falsificados. Un Golden Ticket significa que el dominio está totalmente comprometido.</p>
+<p>Pass-the-hash usa un hash de contraseña NTLM robado para autenticarse como un usuario sin conocer la contraseña. Pass-the-ticket hace lo mismo con un ticket de Kerberos robado. MDI señala 'Suspected identity theft (pass-the-hash)' o pass-the-ticket cuando las credenciales de un usuario aparecen en un dispositivo donde ese usuario no ha iniciado sesión. Respuesta: aislar el dispositivo de origen, restablecer la contraseña del usuario e investigar cómo se robó el hash, a menudo mediante el volcado de credenciales (credential dumping) de LSASS.</p>
+<p>Las rutas de movimiento lateral (LMP) muestran cómo un atacante podría pasar de una cuenta no sensible a una sensible encadenando sesiones y derechos de administrador local. Por ejemplo, un usuario de la mesa de ayuda es administrador local en una estación de trabajo donde ha iniciado sesión un administrador de dominio, así que comprometer al usuario de la mesa de ayuda podría exponer las credenciales del administrador de dominio. MDI muestra las LMP en las páginas de usuarios y dispositivos y en los informes. Las reduces quitando derechos de administrador local innecesarios, usando modelos de administración por niveles y Local Administrator Password Solution (LAPS), e impidiendo que las cuentas privilegiadas inicien sesión en estaciones de trabajo comunes.</p>
+<p>Recuperarse de un Golden Ticket requiere restablecer la contraseña de KRBTGT dos veces. Active Directory conserva la contraseña actual y la anterior de KRBTGT, y los tickets firmados con cualquiera de las dos siguen siendo válidos, así que un solo restablecimiento no basta. Espera a que la replicación se complete en todos los controladores de dominio entre los dos restablecimientos, y planifícalos con cuidado porque pueden interrumpir sesiones existentes. Primero elimina el acceso del atacante, o también robará el nuevo hash.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>DCSync</dt><dd>Un ataque que se hace pasar por un controlador de dominio para solicitar datos de contraseñas mediante la replicación del directorio.</dd><dt>Golden Ticket</dt><dd>Un TGT de Kerberos falsificado creado con el hash robado de KRBTGT, que otorga acceso como cualquier usuario.</dd><dt>Pass-the-hash</dt><dd>Autenticarse con un hash NTLM robado en lugar de la contraseña.</dd><dt>Lateral movement path (ruta de movimiento lateral)</dt><dd>Una cadena de sesiones y derechos de administrador que permite a un atacante moverse de una cuenta de bajo valor a una sensible.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>MDI genera 'Suspected DCSync attack' desde una estación de trabajo usando una cuenta de servicio a la que alguien otorgó derechos de replicación hace años. El SOC aísla la estación de trabajo, quita los permisos de replicación, restablece la cuenta de servicio y todas las contraseñas privilegiadas y, como el hash de KRBTGT pudo haber sido robado, realiza dos restablecimientos de KRBTGT separados por una replicación completa.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> KRBTGT se restablece dos veces porque AD acepta tickets firmados con la contraseña actual o la anterior. DCSync se reconoce por solicitudes de replicación que vienen de una máquina que no es controlador de dominio.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué un solo restablecimiento de KRBTGT no es suficiente después de un ataque Golden Ticket?</summary><p>Los tickets firmados con la contraseña anterior de KRBTGT siguen siendo válidos, así que se restablece dos veces, permitiendo la replicación entre ambos.</p></details>
+<details class="sq"><summary>¿Qué hace que el tráfico de replicación sea lo bastante sospechoso para una alerta de DCSync?</summary><p>Que viene de un dispositivo que no es controlador de dominio usando una cuenta con derechos de replicación.</p></details>
+<details class="sq"><summary>¿Cómo reduces las rutas de movimiento lateral?</summary><p>Quita los derechos de administrador local innecesarios, usa LAPS y la administración por niveles, y mantén las cuentas privilegiadas fuera de las estaciones de trabajo comunes.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia SC-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../sc-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../defender-for-office-365-threat-explorer-removing-delivered-phishing-us/">← Defender for Office 365: Threat Explorer, eliminación de phi</a><a href="../microsoft-entra-id-protection-risky-users-and-sign-ins-confirm-user-co/">Microsoft Entra ID Protection: usuarios e inicios de sesión  →</a></nav>
+</main>
+</body>
+</html>

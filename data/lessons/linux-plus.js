@@ -2473,4 +2473,4 @@ CertHub.addLessons("linux-plus", [
    ]
   ]
  }
-]);
+], { reviewed: "2026-09-25" });

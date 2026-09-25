@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Zonas privadas de Azure DNS, vínculos de red virtual y reg… · Lección de AZ-802</title>
+<meta name="description" content="Cuando trasladas servidores Windows a Azure, la resolución de nombres tiene que funcionar en tres direcciones: entre las VM de Azure, de Azure al entorno l">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Zonas privadas de Azure DNS, vínculos de red virtual y reg… · Lección de AZ-802">
+<meta property="og:description" content="Cuando trasladas servidores Windows a Azure, la resolución de nombres tiene que funcionar en tres direcciones: entre las VM de Azure, de Azure al entorno l">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/az-802/lessons/azure-dns-private-zones-virtual-network-links-and-auto-registration-az/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/az-802/lessons/azure-dns-private-zones-virtual-network-links-and-auto-registration-az/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../az-802/">AZ-802</a> / <a href="../">Lecciones</a> · <a href="../../../../az-802/lessons/azure-dns-private-zones-virtual-network-links-and-auto-registration-az/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Windows Server Administrator Associate (exam AZ-802: Administering Windows Server) AZ-802</p>
+<h1>Zonas privadas de Azure DNS, vínculos de red virtual y registro automático; Azure DNS Private Resolver</h1>
+<article class="lbody">
+<p>Cuando trasladas servidores Windows a Azure, la resolución de nombres tiene que funcionar en tres direcciones: entre las VM de Azure, de Azure al entorno local y del entorno local hacia Azure. Azure da a cada red virtual (VNet) un resolvedor integrado en la dirección especial <code>168.63.129.16</code>, pero ese resolvedor solo responde sobre los nombres que Azure conoce. Las zonas privadas de Azure DNS y Azure DNS Private Resolver son los dos servicios que te permiten ampliarlo de forma limpia.</p>
+<p>Una zona privada de Azure DNS es una zona DNS, como <code>corp.contoso.internal</code>, que solo se puede resolver desde las VNet que elijas. Conectas una zona a una VNet con un vínculo de red virtual. Cualquier VM de una VNet vinculada que use el DNS proporcionado por Azure puede entonces resolver los registros de la zona. Un vínculo puede tener opcionalmente activado el registro automático: Azure crea y mantiene entonces automáticamente registros A para las VM de esa VNet, actualizándolos cuando las VM se crean, cambian de IP o se eliminan. Una VNet puede vincularse a muchas zonas privadas para la resolución, pero el registro automático puede habilitarse solo para una zona privada por VNet. Las zonas privadas también son la forma en que funcionan los puntos de conexión privados: una zona como <code>privatelink.file.core.windows.net</code> contiene la IP privada de una cuenta de almacenamiento, de modo que el nombre público normal se resuelve en una dirección privada dentro de tu red.</p>
+<p>El problema es que los servidores locales no pueden enviar consultas a <code>168.63.129.16</code>; esa dirección solo es accesible desde dentro de Azure. Antes de que existiera Private Resolver, implementabas VM de reenviador DNS en Azure. Azure DNS Private Resolver reemplaza esas VM con un servicio administrado implementado en tu VNet. Tiene dos tipos de puntos de conexión, cada uno en su propia subred dedicada delegada al servicio. Un punto de conexión de entrada obtiene una dirección IP privada en la VNet; los servidores DNS locales crean un reenviador condicional para tus zonas de Azure que apunta a esa IP, y las consultas llegan por VPN o ExpressRoute. Un punto de conexión de salida, combinado con un conjunto de reglas de reenvío DNS (forwarding ruleset), envía consultas de Azure a otros servidores DNS, por ejemplo reenviando <code>contoso.local</code> a tus controladores de dominio locales.</p>
+<p>Al examen le gusta preguntar qué pieza resuelve qué dirección. Los clientes locales que resuelven nombres privados de Azure necesitan el punto de conexión de entrada más un reenviador condicional en los servidores DNS locales. Las VM de Azure que resuelven nombres de Active Directory local necesitan el punto de conexión de salida y una regla de reenvío, con el conjunto de reglas vinculado a las VNet que deben usarlo. Las VM que deben registrar sus propios nombres automáticamente necesitan un vínculo de zona privada con registro automático. Ten en cuenta que las VM unidas al dominio que usan tus controladores de dominio como servidores DNS (una configuración de DNS personalizado en la VNet) omiten el DNS proporcionado por Azure, así que los propios DC deben reenviar las consultas de las zonas privadas de Azure a <code>168.63.129.16</code>.</p>
+<p>En un laboratorio verás estos elementos como recursos separados en el portal: la zona DNS privada, su hoja Virtual network links con una casilla Enable auto registration, y el DNS private resolver con Inbound endpoints, Outbound endpoints y los conjuntos de reglas de reenvío vinculados. Las pruebas se hacen desde una VM con <code>Resolve-DnsName vm1.corp.contoso.internal</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Private DNS zone (zona DNS privada)</dt><dd>Una zona de Azure DNS que se resuelve solo desde las redes virtuales vinculadas a ella, no desde internet.</dd><dt>Virtual network link (vínculo de red virtual)</dt><dd>La conexión entre una zona privada y una VNet que permite a la VNet resolver la zona y, opcionalmente, registrar automáticamente los registros de las VM.</dd><dt>Auto-registration (registro automático)</dt><dd>Una configuración del vínculo que hace que Azure cree y mantenga registros A para las VM de la VNet vinculada; permitida solo para una zona privada por VNet.</dd><dt>Inbound endpoint (punto de conexión de entrada)</dt><dd>Una dirección IP de Private Resolver en la VNet a la que los servidores DNS locales reenvían las consultas sobre nombres privados de Azure.</dd><dt>Outbound endpoint and forwarding ruleset (punto de conexión de salida y conjunto de reglas de reenvío)</dt><dd>Los componentes de Private Resolver que reenvían las consultas de los dominios elegidos desde Azure a otros servidores DNS, como los DC locales.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Contoso traslada un nivel de aplicación a Azure. Las VM se registran automáticamente en la zona privada azure.contoso.internal. Los servidores DNS locales obtienen un reenviador condicional para esa zona hacia el punto de conexión de entrada de Private Resolver, y un conjunto de reglas de reenvío envía las consultas de contoso.local desde Azure de vuelta a los DC locales a través de la VPN de sitio a sitio. No se necesitan VM de reenviador.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Relaciona la dirección con el componente: del entorno local a Azure se usa el punto de conexión de entrada y un reenviador condicional; de Azure al entorno local se usa el punto de conexión de salida y un conjunto de reglas de reenvío. Solo una zona de registro automático por VNet.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué un servidor DNS local no puede simplemente reenviar consultas a 168.63.129.16?</summary><p>Esa dirección solo es accesible desde dentro de Azure. Los servidores locales necesitan una IP privada accesible, que proporciona el punto de conexión de entrada de Private Resolver (o una VM de reenviador).</p></details>
+<details class="sq"><summary>Una VNet ya se registra automáticamente en la zona A. ¿Puedes habilitar el registro automático para la zona B en la misma VNet?</summary><p>No. Una VNet puede vincularse a varias zonas para la resolución, pero el registro automático solo se permite para una zona privada por VNet.</p></details>
+<details class="sq"><summary>¿Qué recurso permite que las VM de Azure resuelvan nombres de contoso.local hospedados en DC locales sin servidores DNS personalizados?</summary><p>Un punto de conexión de salida de Azure DNS Private Resolver con un conjunto de reglas de reenvío que contenga una regla para contoso.local que apunte a los servidores DNS locales, vinculado a la VNet.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AZ-802 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../az-802/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../dnssec-signing-trust-anchors-and-the-name-resolution-policy-table-nrpt/">← Firma DNSSEC, anclajes de confianza y la Tabla de directivas</a><a href="../dhcp-scopes-reservations-options-and-relay-authorization-in-ad/">Ámbitos, reservas, opciones y retransmisión DHCP; autorizaci →</a></nav>
+</main>
+</body>
+</html>

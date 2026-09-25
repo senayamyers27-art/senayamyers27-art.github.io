@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gestionar las etiquetas de puertos de SELinux (semanage po… · Lección de RHCSA</title>
+<meta name="description" content="SELinux etiqueta los puertos de red además de los archivos. La política dice qué tipos de proceso pueden enlazarse (bind), es decir, escuchar, en qué tipos">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Gestionar las etiquetas de puertos de SELinux (semanage po… · Lección de RHCSA">
+<meta property="og:description" content="SELinux etiqueta los puertos de red además de los archivos. La política dice qué tipos de proceso pueden enlazarse (bind), es decir, escuchar, en qué tipos">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/managing-selinux-port-labels-semanage-port-a-t-http-port-t-p-tcp/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/managing-selinux-port-labels-semanage-port-a-t-http-port-t-p-tcp/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/managing-selinux-port-labels-semanage-port-a-t-http-port-t-p-tcp/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Gestionar las etiquetas de puertos de SELinux (semanage port -a -t http_port_t -p tcp)</h1>
+<article class="lbody">
+<p>SELinux etiqueta los puertos de red además de los archivos. La política dice qué tipos de proceso pueden enlazarse (bind), es decir, escuchar, en qué tipos de puerto. Por ejemplo, <code>httpd_t</code> puede enlazarse a los puertos etiquetados como <code>http_port_t</code>, que por defecto incluyen el 80, el 443 y algunos otros como el 8008 y el 8443 (el 8080 está etiquetado como http_cache_port_t). Si configuras un servicio para escuchar en un puerto que no tiene su tipo, SELinux bloquea el enlace y el servicio no arranca, aunque la configuración por lo demás sea perfecta.</p>
+<p><code>semanage port -l</code> lista los tipos de puerto y sus números. Fíltralo para encontrar lo que un servicio ya permite, por ejemplo <code>semanage port -l | grep http_port_t</code> o <code>grep ssh_port_t</code>. Esto te dice tanto si tu puerto ya está cubierto como qué nombre de tipo usar.</p>
+<pre class="code" tabindex="0"><code>semanage port -l | grep -w http_port_t
+# http_port_t   tcp   80, 81, 443, 488, 8008, 8009, 8443, 9000
+semanage port -a -t http_port_t -p tcp 82
+semanage port -l | grep -w http_port_t</code></pre>
+<p>Para permitir un puerto nuevo, añádelo con <code>semanage port -a -t type -p protocol port</code>. <code>-a</code> añade, <code>-t</code> da el tipo y <code>-p</code> da el protocolo, tcp o udp. El cambio se guarda en la política y sobrevive a los reinicios. Si el puerto ya está asignado a otro tipo, <code>-a</code> falla con un error que dice que ya está definido; usa en su lugar <code>-m</code> para modificarlo al nuevo tipo. <code>-d</code> borra una adición local. También funcionan los rangos, como <code>8100-8110</code>.</p>
+<p>Una tarea típica del examen: el servidor web debe servir contenido en el puerto 82. Eso necesita tres cambios, y si falta cualquiera la tarea falla. Pon <code>Listen 82</code> en la configuración de httpd. Añade la etiqueta de puerto de SELinux con <code>semanage port -a -t http_port_t -p tcp 82</code>. Abre el firewall con <code>firewall-cmd --permanent --add-port=82/tcp</code> y recarga. Luego <code>systemctl restart httpd</code> y prueba con <code>curl</code> desde otro host.</p>
+<p>El mismo patrón se aplica a SSH en un puerto no estándar (<code>ssh_port_t</code>) y a otros servicios con sus propios tipos de puerto. Cuando un servicio no arranca después de un cambio de puerto, <code>systemctl status</code> muestra un error de enlace como permission denied, y el log de auditoría muestra una denegación AVC (access vector cache) con <code>name_bind</code>, lo que apunta directamente a una etiqueta de puerto que falta.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Port type (tipo de puerto)</dt><dd>Una etiqueta de SELinux en un puerto de red, como http_port_t o ssh_port_t, que controla qué tipos de proceso pueden usarlo.</dd><dt>name_bind</dt><dd>El permiso que necesita un proceso para escuchar en un puerto; sus denegaciones indican que falta una etiqueta de puerto.</dd><dt>semanage port -a</dt><dd>Añade un número de puerto y un protocolo a un tipo de puerto de SELinux.</dd><dt>semanage port -m</dt><dd>Modifica un puerto que ya está definido con otro tipo.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>SSH también debe escuchar en el puerto 2222. Añades Port 22 y Port 2222 a un drop-in en /etc/ssh/sshd_config.d/, ejecutas semanage port -a -t ssh_port_t -p tcp 2222, abres 2222/tcp en firewalld de forma permanente, recargas y reinicias sshd. ss -tlnp muestra sshd escuchando en ambos puertos.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Un servicio movido a un puerto no estándar necesita tres cosas: su propia configuración, una etiqueta de puerto de SELinux y una regla de firewall. Si el puerto ya tiene otro tipo, usa -m en lugar de -a.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo compruebas en qué puertos puede enlazarse el servidor web?</summary><p>semanage port -l | grep http_port_t.</p></details>
+<details class="sq"><summary>semanage port -a informa que el puerto ya está definido. ¿Qué haces ahora?</summary><p>Usa semanage port -m con las mismas opciones para cambiar su tipo.</p></details>
+<details class="sq"><summary>httpd no arranca después de cambiar Listen a 8888. ¿Qué permiso de SELinux probablemente se deniega?</summary><p>name_bind en el puerto 8888, porque no está etiquetado como http_port_t.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../restoring-default-file-contexts-restorecon-rv-and-adding-rules-with-se/">← Restaurar los contextos de archivo predeterminados (restorec</a><a href="../using-selinux-booleans-getsebool-a-setsebool-p-semanage-boolean-l/">Usar los booleanos de SELinux (getsebool -a, setsebool -P, s →</a></nav>
+</main>
+</body>
+</html>

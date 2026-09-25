@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Decisiones de reenvío de paquetes: coincidencia del prefij… · Lección de JNCIA-Junos</title>
+<meta name="description" content="El trabajo central de un router es decidir, para cada paquete, a dónde enviarlo a continuación. Junos toma esa decisión en dos etapas. El Routing Engine re">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Decisiones de reenvío de paquetes: coincidencia del prefij… · Lección de JNCIA-Junos">
+<meta property="og:description" content="El trabajo central de un router es decidir, para cada paquete, a dónde enviarlo a continuación. Junos toma esa decisión en dos etapas. El Routing Engine re">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/jncia-junos/lessons/packet-forwarding-decisions-longest-prefix-match-next-hops-active-vs-i/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/jncia-junos/lessons/packet-forwarding-decisions-longest-prefix-match-next-hops-active-vs-i/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../jncia-junos/">JNCIA-Junos</a> / <a href="../">Lecciones</a> · <a href="../../../../jncia-junos/lessons/packet-forwarding-decisions-longest-prefix-match-next-hops-active-vs-i/" hreflang="en" lang="en">English</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106</p>
+<h1>Decisiones de reenvío de paquetes: coincidencia del prefijo más largo, siguientes saltos, rutas activas vs inactivas (`*`)</h1>
+<article class="lbody">
+<p>El trabajo central de un router es decidir, para cada paquete, a dónde enviarlo a continuación. Junos toma esa decisión en dos etapas. El Routing Engine reúne las rutas de todas las fuentes (interfaces directamente conectadas, configuración estática y protocolos de enrutamiento) en tablas de enrutamiento y elige la mejor ruta para cada prefijo de destino. Esas mejores rutas se copian a la tabla de reenvío, que el Packet Forwarding Engine (PFE) usa para reenviar los paquetes a alta velocidad.</p>
+<p>Cuando llega un paquete, la decisión de reenvío usa la coincidencia del prefijo más largo (longest-prefix match). El router compara la dirección de destino con todos los prefijos de la tabla de reenvío y elige el más específico que la contiene, es decir, el que tiene la longitud de prefijo más larga. Supongamos que la tabla tiene 0.0.0.0/0, 10.0.0.0/8 y 10.1.1.0/24. Un paquete hacia 10.1.1.7 coincide con los tres, pero /24 es el más largo, así que esa ruta gana. Un paquete hacia 10.2.3.4 coincide con la /8 y con la ruta por defecto y usa la /8. Un paquete hacia 8.8.8.8 coincide solo con la ruta por defecto. La coincidencia más larga siempre gana sobre la preferencia de ruta o la métrica, porque estas solo comparan rutas hacia el mismo prefijo.</p>
+<p>Cada ruta apunta a un siguiente salto (next hop): la dirección del router vecino y la interfaz de salida. También existen siguientes saltos especiales. Una ruta local (/32 para la propia dirección del dispositivo) sube los paquetes al Routing Engine. Un siguiente salto discard descarta los paquetes en silencio, y un siguiente salto reject los descarta y envía un mensaje ICMP unreachable. Cuando existen varios siguientes saltos iguales, una ruta puede listar más de uno.</p>
+<p>Ahora la idea de activa frente a inactiva. Para un solo prefijo, Junos puede aprender varias rutas, por ejemplo una ruta estática y una ruta OSPF hacia 10.5.0.0/16. Solo una de ellas se convierte en la ruta activa, elegida principalmente por la preferencia de ruta (menor es mejor) y luego por criterios de desempate como la métrica. La ruta activa es la única que se coloca en la tabla de reenvío. En la salida de <code>show route</code>, la ruta activa se marca con un asterisco <code>*</code>. También puedes ver <code>+</code> para la ruta activa y <code>-</code> para la ruta activa anterior, que aparecen en la línea de leyenda en la parte superior de la salida.</p>
+<pre class="code" tabindex="0"><code>user@R1&gt; show route 10.5.0.0/16
+inet.0: 12 destinations, 13 routes (12 active, 0 holddown, 0 hidden)
++ = Active Route, - = Last Active, * = Both
+10.5.0.0/16  *[Static/5] 00:12:40
+              &gt;  to 10.1.12.2 via ge-0/0/1.0
+              [OSPF/10] 00:03:11, metric 20
+              &gt;  to 10.1.13.2 via ge-0/0/2.0</code></pre>
+<p>Las rutas inactivas no son inútiles; son respaldos. Si la ruta activa desaparece, la siguiente mejor ruta para ese prefijo se vuelve activa y se instala en la tabla de reenvío. El símbolo <code>&gt;</code> marca el siguiente salto realmente seleccionado cuando una ruta tiene más de uno. Para ver exactamente lo que está usando el PFE, ejecuta <code>show route forwarding-table destination 10.5.1.1</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Longest-prefix match (coincidencia del prefijo más largo)</dt><dd>La regla de reenvío que elige el prefijo coincidente más específico para una dirección de destino.</dd><dt>Next hop (siguiente salto)</dt><dd>La dirección vecina y la interfaz de salida hacia donde se envía un paquete.</dd><dt>Active route (ruta activa)</dt><dd>La única mejor ruta para un prefijo, marcada con <code>*</code> en <code>show route</code>, y la única instalada en la tabla de reenvío.</dd><dt>Forwarding table (tabla de reenvío)</dt><dd>La tabla construida a partir de las rutas activas que el Packet Forwarding Engine usa para reenviar paquetes.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un router tiene una ruta por defecto hacia un ISP y una ruta estática para 172.16.0.0/12 hacia un socio. Un servidor envía tráfico a 172.16.40.9. Aunque la ruta por defecto también coincide, la /12 es más específica, así que el paquete va hacia el socio. El tráfico hacia cualquier dirección pública cae en la ruta por defecto.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> La coincidencia más larga se decide primero; la preferencia solo elige entre rutas hacia exactamente el mismo prefijo. El <code>*</code> marca la ruta activa y <code>&gt;</code> marca el siguiente salto seleccionado.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Un router tiene rutas hacia 10.0.0.0/8 (estática) y 10.20.0.0/16 (OSPF). ¿Cuál se usa para 10.20.5.5?</summary><p>La /16 aprendida por OSPF, porque la coincidencia del prefijo más largo le gana a la preferencia.</p></details>
+<details class="sq"><summary>¿Qué significa un asterisco delante de una ruta en <code>show route</code>?</summary><p>Que es la ruta activa para ese prefijo y está instalada en la tabla de reenvío.</p></details>
+<details class="sq"><summary>¿Qué le pasa a una ruta inactiva cuando se retira la ruta activa?</summary><p>Puede convertirse en la nueva ruta activa e instalarse en la tabla de reenvío.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia JNCIA-Junos gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../jncia-junos/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../ntp-snmp-and-remote-syslog-for-ongoing-operations/">← NTP, SNMP y syslog remoto para las operaciones del día a día</a><a href="../routing-tables-inet-0-inet6-0-inet-3-and-instance-tables-such-as-vr1-i/">Tablas de enrutamiento: inet.0, inet6.0, inet.3 y tablas de  →</a></nav>
+</main>
+</body>
+</html>

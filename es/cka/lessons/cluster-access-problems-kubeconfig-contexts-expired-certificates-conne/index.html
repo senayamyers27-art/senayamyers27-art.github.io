@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Problemas de acceso al clúster: contexts de kubeconfig, ce… · Lección de CKA</title>
+<meta name="description" content="Antes de poder arreglar nada necesitas llegar al clúster correcto. El CKA usa varios clústeres, y cada tarea te dice qué context usar. Los problemas de acc">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Problemas de acceso al clúster: contexts de kubeconfig, ce… · Lección de CKA">
+<meta property="og:description" content="Antes de poder arreglar nada necesitas llegar al clúster correcto. El CKA usa varios clústeres, y cada tarea te dice qué context usar. Los problemas de acc">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/cluster-access-problems-kubeconfig-contexts-expired-certificates-conne/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/cluster-access-problems-kubeconfig-contexts-expired-certificates-conne/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/cluster-access-problems-kubeconfig-contexts-expired-certificates-conne/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Problemas de acceso al clúster: contexts de kubeconfig, certificados vencidos y connection refused en el 6443</h1>
+<article class="lbody">
+<p>Antes de poder arreglar nada necesitas llegar al clúster correcto. El CKA usa varios clústeres, y cada tarea te dice qué context usar. Los problemas de acceso también son un tema de troubleshooting por derecho propio.</p>
+<p>kubectl lee su configuración de <code>~/.kube/config</code> por defecto, de los archivos listados en la variable de entorno <code>KUBECONFIG</code> o de <code>--kubeconfig</code>. Un kubeconfig tiene clusters, users y contexts, y un current-context. Conoce bien estos comandos.</p>
+<pre class="code" tabindex="0"><code>kubectl config get-contexts
+kubectl config current-context
+kubectl config use-context prod-admin@prod
+kubectl config set-context --current --namespace=app
+kubectl config view --minify          # solo el context activo
+kubectl --kubeconfig /etc/kubernetes/admin.conf get nodes</code></pre>
+<p>En el examen, ejecuta antes que nada el comando <code>use-context</code> que aparece al inicio de cada tarea. Trabajar en el clúster equivocado es una de las formas más fáciles de perder puntos, porque tu respuesta correcta termina en un lugar donde el evaluador no mira.</p>
+<p>Los mensajes de error apuntan a la capa que falló. 'connection refused' en el puerto 6443 significa que nada está escuchando en esa dirección: el API server está caído, el kubeconfig tiene el host o el puerto equivocados, o estás en una máquina que no puede llegar a él. Revisa la línea <code>server:</code> del cluster activo con <code>kubectl config view --minify</code>, y luego en el control plane usa <code>crictl ps -a | grep kube-apiserver</code> y sus logs, o <code>ss -tlnp | grep 6443</code> para ver si algo está escuchando. Un timeout en lugar de un rechazo sugiere un firewall o una IP equivocada.</p>
+<p>'x509: certificate has expired or is not yet valid' significa que un certificado de la cadena está fuera de su período de validez. Si venció el certificado de cliente de tu kubeconfig, necesitas uno nuevo; si vencieron los certificados del API server, todos los clientes fallan. En los clústeres de kubeadm ejecuta <code>kubeadm certs check-expiration</code>, luego <code>kubeadm certs renew all</code>, reinicia los static Pods del control plane y copia el <code>/etc/kubernetes/admin.conf</code> actualizado a <code>~/.kube/config</code>. 'not yet valid' también puede significar que el reloj del nodo está mal. 'x509: certificate signed by unknown authority' significa que los datos de la CA en el kubeconfig no coinciden con el clúster, a menudo por copiar un kubeconfig de otro clúster.</p>
+<p>Por último, distingue las dos fallas de autenticación y autorización. 'Unauthorized' (HTTP 401) es de autenticación: el servidor no acepta tus credenciales, como un token revocado o un certificado de la CA equivocada. 'Forbidden' (HTTP 403) es de autorización: el servidor sabe quién eres, pero RBAC no permite la acción. Para Forbidden, revisa los bindings con <code>kubectl auth can-i</code>; para Unauthorized, revisa las credenciales del kubeconfig.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Context (contexto)</dt><dd>Una entrada del kubeconfig que combina un cluster, un user y un namespace opcional.</dd><dt>KUBECONFIG</dt><dd>Variable de entorno que lista los archivos kubeconfig que kubectl debe combinar.</dd><dt>Unauthorized vs Forbidden</dt><dd>401 significa que falló la autenticación; 403 significa autenticado pero no permitido por RBAC.</dd><dt>kubeadm certs renew</dt><dd>Comando que renueva los certificados gestionados por kubeadm, incluidos los incrustados en los kubeconfigs.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una mañana, todos los comandos de kubectl fallan con un error x509 de vencimiento en un clúster de laboratorio construido hace un año y nunca actualizado. <code>kubeadm certs check-expiration</code> muestra que todo venció ayer. Ejecutas <code>kubeadm certs renew all</code>, reinicias los Pods del control plane sacando los manifiestos y volviéndolos a poner, copias admin.conf a ~/.kube/config y el acceso vuelve.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Refused significa que nada escucha (API server caído o dirección equivocada); x509 significa certificados; Unauthorized significa credenciales; Forbidden significa RBAC. El error te dice qué capa arreglar.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo ves solo los detalles del context activo actualmente?</summary><p><code>kubectl config view --minify</code>.</p></details>
+<details class="sq"><summary>¿Cuál es la diferencia entre una respuesta Unauthorized y una Forbidden?</summary><p>Unauthorized es una autenticación fallida; Forbidden significa que la identidad es conocida pero RBAC deniega la acción.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../dns-problems-coredns-pods-and-logs-loop-detection-with-systemd-resolve/">← Problemas de DNS: Pods y logs de CoreDNS, detección de bucle</a><a href="../output-handling-for-tasks-o-jsonpath-custom-columns-sort-by-writing-an/">Manejo de la salida en las tareas: -o jsonpath, custom-colum →</a></nav>
+</main>
+</body>
+</html>

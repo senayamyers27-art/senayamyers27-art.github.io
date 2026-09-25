@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Configurar direcciones IPv4 e IPv6 estáticas y por DHCP co… · Lección de RHCSA</title>
+<meta name="description" content="RHEL gestiona la red con NetworkManager, y nmcli es su interfaz de línea de comandos. NetworkManager separa los dispositivos (interfaces físicas o virtuale">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Configurar direcciones IPv4 e IPv6 estáticas y por DHCP co… · Lección de RHCSA">
+<meta property="og:description" content="RHEL gestiona la red con NetworkManager, y nmcli es su interfaz de línea de comandos. NetworkManager separa los dispositivos (interfaces físicas o virtuale">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/configuring-static-and-dhcp-ipv4-and-ipv6-addresses-with-nmcli-ipv4-me/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/configuring-static-and-dhcp-ipv4-and-ipv6-addresses-with-nmcli-ipv4-me/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/configuring-static-and-dhcp-ipv4-and-ipv6-addresses-with-nmcli-ipv4-me/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Configurar direcciones IPv4 e IPv6 estáticas y por DHCP con nmcli (ipv4.method manual/auto, ipv4.addresses, ipv4.gateway)</h1>
+<article class="lbody">
+<p>RHEL gestiona la red con NetworkManager, y <code>nmcli</code> es su interfaz de línea de comandos. NetworkManager separa los dispositivos (interfaces físicas o virtuales como <code>enp1s0</code>) de las conexiones (perfiles de configuración guardados). Un dispositivo puede tener varios perfiles de conexión, pero solo uno activo a la vez. Casi todas las tareas de red del examen consisten en: modificar o crear una conexión y luego activarla.</p>
+<p><code>nmcli device status</code> muestra los dispositivos y qué conexión usa cada uno. <code>nmcli connection show</code> (abreviado: <code>nmcli con show</code>) lista los perfiles, y <code>nmcli con show name</code> imprime todas sus propiedades. Las propiedades usan un estilo de nombre <code>setting.property</code>, como <code>ipv4.method</code>, <code>ipv4.addresses</code>, <code>ipv4.gateway</code> e <code>ipv4.dns</code>.</p>
+<p><code>ipv4.method auto</code> significa DHCP (Dynamic Host Configuration Protocol): la dirección, la puerta de enlace y el DNS vienen de un servidor. <code>ipv4.method manual</code> significa estática: tú proporcionas la dirección en forma CIDR (Classless Inter-Domain Routing), como <code>192.168.10.20/24</code>, y normalmente una puerta de enlace y servidores DNS. IPv6 es paralelo: <code>ipv6.method auto</code> usa los anuncios de router y DHCPv6, <code>manual</code> recibe <code>ipv6.addresses</code> como <code>fd00:10::20/64</code> y <code>disabled</code> desactiva IPv6.</p>
+<pre class="code" tabindex="0"><code>nmcli con add con-name static1 ifname enp1s0 type ethernet \
+  ipv4.method manual ipv4.addresses 192.168.10.20/24 \
+  ipv4.gateway 192.168.10.1 ipv4.dns 192.168.10.1 \
+  ipv6.method manual ipv6.addresses fd00:10::20/64
+nmcli con up static1</code></pre>
+<p>Para cambiar un perfil existente, usa <code>nmcli con mod</code>. Los cambios se guardan de inmediato, pero no llegan a la interfaz en ejecución hasta que reactivas la conexión con <code>nmcli con up name</code>. Esa es la razón más común por la que un cambio parece no funcionar. Para añadir una dirección adicional en lugar de reemplazar la lista, antepón un signo más a la propiedad: <code>nmcli con mod static1 +ipv4.addresses 10.0.0.5/24</code>; un signo menos quita una.</p>
+<pre class="code" tabindex="0"><code>nmcli con mod 'Wired connection 1' ipv4.method auto   # volver a DHCP
+nmcli con mod static1 ipv4.addresses 192.168.10.30/24
+nmcli con up static1
+ip addr show enp1s0</code></pre>
+<p>El orden importa al cambiar a manual: establecer <code>ipv4.method manual</code> sin dirección se rechaza, así que indica el método y la dirección en el mismo comando. Al volver a auto, borra los valores estáticos que queden con cadenas vacías, por ejemplo <code>ipv4.addresses ''</code> e <code>ipv4.gateway ''</code>, para que no se añadan encima de la concesión de DHCP. El autocompletado con Tab funciona con las propiedades de nmcli y ahorra escritura.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>NetworkManager</dt><dd>El servicio de RHEL que configura y gestiona las interfaces de red mediante perfiles de conexión.</dd><dt>Connection profile (perfil de conexión)</dt><dd>Un conjunto guardado de ajustes de red que NetworkManager aplica a un dispositivo cuando se activa.</dd><dt>ipv4.method</dt><dd>La propiedad que selecciona el direccionamiento auto (DHCP), manual (estático), link-local o disabled.</dd><dt>CIDR notation (notación CIDR)</dt><dd>Una dirección seguida de una barra y la longitud del prefijo, como 192.168.10.20/24, que da la dirección y la máscara de red juntas.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>El examen dice que asignes a serverb la dirección estática 172.25.250.11/24, la puerta de enlace 172.25.250.254 y el DNS 172.25.250.254 en su conexión existente. Ejecutas un solo comando nmcli con mod que establece ipv4.method manual con la dirección, la puerta de enlace y el DNS, luego nmcli con up, e ip addr e ip route muestran los nuevos valores.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> nmcli con mod guarda el perfil pero no lo aplica. Ejecuta siempre después nmcli con up (y ten en cuenta que puede cortar una sesión SSH si cambia la dirección).</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué valor de ipv4.method significa DHCP?</summary><p>auto.</p></details>
+<details class="sq"><summary>¿Cómo añades una segunda dirección IPv4 sin quitar la primera?</summary><p>nmcli con mod name +ipv4.addresses address/prefix, y luego reactiva la conexión.</p></details>
+<details class="sq"><summary>Cambiaste la dirección con nmcli con mod, pero ip addr muestra la anterior. ¿Por qué?</summary><p>El perfil está guardado pero no se ha vuelto a aplicar; ejecuta nmcli con up name para activarlo.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../choosing-the-default-kernel-and-adding-or-removing-kernel-arguments/">← Elegir el kernel predeterminado y añadir o quitar argumentos</a><a href="../networkmanager-keyfiles-in-etc-networkmanager-system-connections-rhel/">Keyfiles de NetworkManager en /etc/NetworkManager/system-con →</a></nav>
+</main>
+</body>
+</html>

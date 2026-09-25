@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>StorageClasses, provisioners y aprovisionamiento dinámico;… · Lección de CKA</title>
+<meta name="description" content="Crear PVs a mano no escala. Con el aprovisionamiento dinámico, un PVC indica una StorageClass, y un provisioner crea automáticamente un volumen y un PV coi">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="StorageClasses, provisioners y aprovisionamiento dinámico;… · Lección de CKA">
+<meta property="og:description" content="Crear PVs a mano no escala. Con el aprovisionamiento dinámico, un PVC indica una StorageClass, y un provisioner crea automáticamente un volumen y un PV coi">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/storageclasses-provisioners-and-dynamic-provisioning-the-default-stora/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/storageclasses-provisioners-and-dynamic-provisioning-the-default-stora/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/storageclasses-provisioners-and-dynamic-provisioning-the-default-stora/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>StorageClasses, provisioners y aprovisionamiento dinámico; la anotación de StorageClass predeterminada</h1>
+<article class="lbody">
+<p>Crear PVs a mano no escala. Con el aprovisionamiento dinámico, un PVC indica una StorageClass, y un provisioner crea automáticamente un volumen y un PV coincidentes en el momento en que se necesitan. Así es como la mayoría de los clústeres reales gestionan el almacenamiento.</p>
+<p>Una StorageClass es un objeto de alcance de clúster que describe una 'clase' de almacenamiento. Sus campos clave son <code>provisioner</code> (qué driver crea los volúmenes, normalmente el nombre de un driver CSI), <code>parameters</code> (opciones específicas del driver, como el tipo de disco o la replicación), <code>reclaimPolicy</code> (Delete por defecto, o Retain), <code>volumeBindingMode</code> (Immediate o WaitForFirstConsumer), <code>allowVolumeExpansion</code> y <code>mountOptions</code> opcionales. Los campos principales como el provisioner, los parameters y la reclaim policy no se pueden cambiar después de crearla, así que para cambiarlos creas una clase nueva.</p>
+<pre class="code" tabindex="0"><code>apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast
+  annotations:
+    storageclass.kubernetes.io/is-default-class: &quot;true&quot;
+provisioner: example.csi.vendor.com
+parameters:
+  type: ssd
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true</code></pre>
+<p>El provisioner hace el trabajo. Para un driver CSI, un sidecar external-provisioner vigila los PVCs que referencian su clase, llama al driver para crear un volumen y crea un PV vinculado al claim. Los clústeres de laboratorio a menudo usan un provisioner sencillo que crea directorios en los discos de los nodos, y algunas clases usan <code>kubernetes.io/no-provisioner</code>, lo que significa que no hay aprovisionamiento dinámico en absoluto; los PVs de esa clase deben crearse manualmente.</p>
+<p>Una StorageClass puede ser la predeterminada, marcada con la anotación <code>storageclass.kubernetes.io/is-default-class: &quot;true&quot;</code> y mostrada como <code>(default)</code> en <code>kubectl get storageclass</code>. Un PVC que omite <code>storageClassName</code> recibe la clase predeterminada. Un PVC que define explícitamente <code>storageClassName: &quot;&quot;</code> se excluye y solo se vinculará a PVs sin clase. Si hay más de una clase marcada como predeterminada, las versiones recientes eligen la más nueva, pero deberías evitar esa ambigüedad.</p>
+<pre class="code" tabindex="0"><code>kubectl get sc
+kubectl patch sc standard -p '{&quot;metadata&quot;:{&quot;annotations&quot;:{&quot;storageclass.kubernetes.io/is-default-class&quot;:&quot;false&quot;}}}'
+kubectl patch sc fast -p '{&quot;metadata&quot;:{&quot;annotations&quot;:{&quot;storageclass.kubernetes.io/is-default-class&quot;:&quot;true&quot;}}}'</code></pre>
+<p>Cuando un claim dinámico se queda en Pending, ejecuta <code>kubectl describe pvc</code>. Eventos como 'waiting for a volume to be created by external provisioner' apuntan al provisioner (revisa sus Pods y logs), mientras que 'no persistent volumes available for this claim and no storage class is set' significa que el claim no tiene clase y no existe una predeterminada.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>StorageClass</dt><dd>Una descripción de alcance de clúster de un tipo de almacenamiento y de cómo aprovisionarlo.</dd><dt>Provisioner (aprovisionador)</dt><dd>El componente, normalmente un driver CSI, que crea volúmenes para una StorageClass.</dd><dt>Dynamic provisioning (aprovisionamiento dinámico)</dt><dd>La creación automática de un PV cuando un PVC solicita una StorageClass.</dd><dt>Default StorageClass (StorageClass predeterminada)</dt><dd>La clase con la anotación is-default-class en true, que se aplica a los PVCs sin storageClassName.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una tarea dice que los PVCs nuevos sin clase deben usar <code>fast</code> en lugar de <code>standard</code>. Quitas la anotación de predeterminada de standard (la pones en false) y se la agregas a fast. Un PVC de prueba sin storageClassName obtiene entonces la clase fast y se le aprovisiona un volumen.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Omitir storageClassName significa 'usa la predeterminada'; definirlo como cadena vacía significa 'sin clase'. Se comportan de forma muy distinta.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué anotación convierte una StorageClass en la predeterminada?</summary><p>storageclass.kubernetes.io/is-default-class: &quot;true&quot;.</p></details>
+<details class="sq"><summary>¿Qué reclaim policy reciben los PVs aprovisionados dinámicamente si la StorageClass no especifica ninguna?</summary><p>Delete.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../reclaim-policies-retain-and-delete-recycle-deprecated-and-cleaning-up/">← Políticas de recuperación: Retain y Delete (Recycle obsoleta</a><a href="../volumebindingmode-immediate-vs-waitforfirstconsumer/">volumeBindingMode: Immediate frente a WaitForFirstConsumer →</a></nav>
+</main>
+</body>
+</html>

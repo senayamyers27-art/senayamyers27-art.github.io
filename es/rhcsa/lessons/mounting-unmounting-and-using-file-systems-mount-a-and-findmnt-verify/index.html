@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Montar, desmontar y usar sistemas de archivos; mount -a y … · Lección de RHCSA</title>
+<meta name="description" content="Linux tiene un único árbol de directorios que empieza en /. Montar conecta un sistema de archivos a un directorio de ese árbol, llamado punto de montaje, p">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Montar, desmontar y usar sistemas de archivos; mount -a y … · Lección de RHCSA">
+<meta property="og:description" content="Linux tiene un único árbol de directorios que empieza en /. Montar conecta un sistema de archivos a un directorio de ese árbol, llamado punto de montaje, p">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/rhcsa/lessons/mounting-unmounting-and-using-file-systems-mount-a-and-findmnt-verify/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/rhcsa/lessons/mounting-unmounting-and-using-file-systems-mount-a-and-findmnt-verify/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../rhcsa/">RHCSA</a> / <a href="../">Lecciones</a> · <a href="../../../../rhcsa/lessons/mounting-unmounting-and-using-file-systems-mount-a-and-findmnt-verify/" hreflang="en" lang="en">English</a></p>
+<p class="note">Red Hat Certified System Administrator EX200 (RHEL 10)</p>
+<h1>Montar, desmontar y usar sistemas de archivos; mount -a y findmnt --verify</h1>
+<article class="lbody">
+<p>Linux tiene un único árbol de directorios que empieza en <code>/</code>. Montar conecta un sistema de archivos a un directorio de ese árbol, llamado punto de montaje, para que su contenido aparezca ahí. Lo que hubiera antes dentro del directorio del punto de montaje queda oculto hasta que desmontas. En RHEL montas manualmente para probar y usas <code>/etc/fstab</code> para que los montajes persistan tras los reinicios.</p>
+<p>Un montaje manual recibe un dispositivo y un directorio. El dispositivo puede ser una ruta, <code>UUID=...</code> o <code>LABEL=...</code>. El kernel normalmente detecta el tipo de sistema de archivos, pero puedes indicarlo con <code>-t</code>. Las opciones van después de <code>-o</code>, por ejemplo <code>ro</code> para solo lectura o <code>noexec</code> para bloquear la ejecución de programas desde ese sistema de archivos.</p>
+<pre class="code" tabindex="0"><code>mkdir -p /data
+mount UUID=5b2e...c7 /data        # o: mount /dev/vg1/data /data
+mount -o remount,ro /data          # cambiar las opciones sin desmontar
+findmnt /data                      # mostrar origen, tipo, opciones
+df -h /data                        # tamaño y espacio libre
+umount /data                       # desconectarlo</code></pre>
+<p>Desmontar falla con target is busy si algún proceso tiene un archivo abierto ahí o un shell lo tiene como directorio actual, que a menudo es tu propio shell. Ejecuta <code>cd /</code> y vuelve a intentarlo. Para encontrar al culpable, <code>lsof /data</code> o <code>fuser -vm /data</code> lista los procesos que lo usan. No te acostumbres a los desmontajes diferidos (lazy); corrige la causa.</p>
+<p>Para montajes persistentes, añade una línea a <code>/etc/fstab</code> y luego pruébala. <code>mount -a</code> monta cada entrada de fstab que todavía no esté montada, así que un error ahí apunta a tu nueva línea. <code>findmnt --verify</code> va más allá: analiza todo el archivo e informa de problemas como un directorio de punto de montaje inexistente, un tipo de sistema de archivos desconocido o un UUID que no existe, sin montar nada. Ejecuta ambos antes de reiniciar.</p>
+<p>En RHEL, systemd convierte cada línea de fstab en una unidad de montaje al arrancar. Después de editar el archivo, ejecuta <code>systemctl daemon-reload</code> para que systemd tome el cambio; si no, <code>mount</code> puede avisar que fstab se modificó y que systemd sigue usando la versión anterior. Una línea de fstab incorrecta que no esté marcada con <code>nofail</code> puede llevar el sistema al modo de emergencia al arrancar, donde debes iniciar sesión como root, corregir el archivo y reiniciar.</p>
+<p>Para usar el sistema de archivos montado, simplemente trabaja en el punto de montaje. Recuerda que el propietario y los permisos del punto de montaje son los del directorio raíz del sistema de archivos montado, no los del directorio vacío que creaste, así que aplica <code>chown</code> y <code>chmod</code> después de montar.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Mount point (punto de montaje)</dt><dd>Un directorio existente donde se conecta un sistema de archivos al árbol de directorios.</dd><dt>mount -a</dt><dd>Monta todos los sistemas de archivos listados en /etc/fstab que aún no están montados; se usa para probar entradas nuevas.</dd><dt>findmnt --verify</dt><dd>Revisa /etc/fstab en busca de errores como puntos de montaje inexistentes, tipos incorrectos o dispositivos desconocidos, sin montar.</dd><dt>target is busy</dt><dd>El error de umount que aparece cuando un proceso tiene archivos abiertos o un directorio de trabajo dentro del sistema de archivos.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Después de añadir una línea de fstab para /backup, ejecutas systemctl daemon-reload y luego findmnt --verify, que avisa de que /backup no existe. Creas el directorio, ejecutas mount -a sin errores y findmnt /backup muestra el dispositivo y las opciones correctas, así que el reinicio es seguro.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Nunca reinicies después de editar /etc/fstab sin ejecutar mount -a y findmnt --verify. Un error de escritura puede dejar el sistema del examen en modo de emergencia y costarte tiempo en todas las demás tareas.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>umount /data informa target is busy. ¿Cuál es la causa habitual y cómo se soluciona?</summary><p>Un proceso o tu propio shell está usando un archivo o directorio ahí; sal de él con cd, o encuentra el proceso con lsof o fuser -vm y detenlo, y luego desmonta.</p></details>
+<details class="sq"><summary>¿Qué revisa findmnt --verify que mount -a no revisa?</summary><p>Analiza cada línea de fstab e informa de problemas como directorios de punto de montaje inexistentes, tipos desconocidos o UUID que no se pueden resolver, sin montar nada, incluidas las entradas ya montadas.</p></details>
+<details class="sq"><summary>¿Por qué ejecutar systemctl daemon-reload después de editar /etc/fstab?</summary><p>systemd genera unidades de montaje a partir de fstab; la recarga hace que las regenere para que use tus nuevas entradas.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../rhcsa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../creating-vfat-ext4-and-xfs-file-systems-mkfs-vfat-mkfs-ext4-mkfs-xfs/">← Crear sistemas de archivos vfat, ext4 y xfs (mkfs.vfat, mkfs</a><a href="../etc-fstab-fields-device-mount-point-type-options-dump-fsck-order/">Campos de /etc/fstab: dispositivo, punto de montaje, tipo, o →</a></nav>
+</main>
+</body>
+</html>

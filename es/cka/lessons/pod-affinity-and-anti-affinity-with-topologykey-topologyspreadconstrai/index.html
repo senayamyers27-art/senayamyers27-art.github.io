@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pod affinity y anti-affinity con topologyKey; topologySpre… · Lección de CKA</title>
+<meta name="description" content="La node affinity relaciona los Pods con las etiquetas de los nodos. La Pod affinity y la anti-affinity relacionan los Pods con otros Pods: pon este Pod web">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Pod affinity y anti-affinity con topologyKey; topologySpre… · Lección de CKA">
+<meta property="og:description" content="La node affinity relaciona los Pods con las etiquetas de los nodos. La Pod affinity y la anti-affinity relacionan los Pods con otros Pods: pon este Pod web">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/pod-affinity-and-anti-affinity-with-topologykey-topologyspreadconstrai/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/pod-affinity-and-anti-affinity-with-topologykey-topologyspreadconstrai/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/pod-affinity-and-anti-affinity-with-topologykey-topologyspreadconstrai/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Pod affinity y anti-affinity con topologyKey; topologySpreadConstraints</h1>
+<article class="lbody">
+<p>La node affinity relaciona los Pods con las etiquetas de los nodos. La Pod affinity y la anti-affinity relacionan los Pods con otros Pods: pon este Pod web cerca de un Pod de caché, o nunca pongas dos réplicas de la misma base de datos en la misma zona.</p>
+<p>El concepto clave es <code>topologyKey</code>, una etiqueta de nodo que define qué significa 'el mismo lugar'. Con <code>kubernetes.io/hostname</code>, el mismo lugar es el mismo nodo. Con <code>topology.kubernetes.io/zone</code>, es la misma zona. El scheduler busca Pods que coincidan con un <code>labelSelector</code> (por defecto en el namespace del propio Pod, o en los <code>namespaces</code> o el <code>namespaceSelector</code> que especifiques), agrupa los nodos según el valor de la topology key y aplica la regla por grupo.</p>
+<p>La Pod affinity dice: programa en un dominio de topología que ya tenga un Pod coincidente. La Pod anti-affinity dice: evita los dominios que tengan uno. Ambas vienen en formas required y preferred, igual que la node affinity. Un patrón clásico distribuye las réplicas una por nodo con anti-affinity required sobre las propias etiquetas del Pod.</p>
+<pre class="code" tabindex="0"><code>affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+    - labelSelector:
+        matchLabels: {app: web}
+      topologyKey: kubernetes.io/hostname
+  podAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 80
+      podAffinityTerm:
+        labelSelector:
+          matchLabels: {app: cache}
+        topologyKey: kubernetes.io/hostname</code></pre>
+<p>La anti-affinity required tiene un lado peligroso: con una por nodo, un Deployment de 4 réplicas en un clúster de 3 nodos deja el cuarto Pod en Pending. La anti-affinity preferred evita eso, pero no da ninguna garantía. La affinity entre Pods también es relativamente costosa para el scheduler en clústeres grandes.</p>
+<p><code>topologySpreadConstraints</code> es la herramienta más flexible para distribuir. Indicas una <code>topologyKey</code>, un <code>labelSelector</code> para los Pods que se van a contar y un <code>maxSkew</code>, la diferencia máxima permitida en la cantidad de Pods coincidentes entre el dominio más cargado y el menos cargado. <code>whenUnsatisfiable: DoNotSchedule</code> la convierte en una regla estricta; <code>ScheduleAnyway</code> la convierte en una preferencia de puntuación.</p>
+<pre class="code" tabindex="0"><code>topologySpreadConstraints:
+- maxSkew: 1
+  topologyKey: topology.kubernetes.io/zone
+  whenUnsatisfiable: DoNotSchedule
+  labelSelector:
+    matchLabels: {app: web}</code></pre>
+<p>Con maxSkew 1 en tres zonas, seis réplicas quedan dos por zona, y siete quedan 3-2-2, algo que la anti-affinity no podría expresar. Las restricciones solo se evalúan en el momento de la programación, así que fallas posteriores de nodos pueden dejar los Pods distribuidos de forma desigual hasta que se reprogramen.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>topologyKey</dt><dd>Una etiqueta de nodo cuyo valor define un dominio de topología, como un nodo o una zona.</dd><dt>Pod anti-affinity (anti-afinidad de Pods)</dt><dd>Una regla que mantiene un Pod alejado de los dominios que ya ejecutan Pods que coinciden con un selector.</dd><dt>topologySpreadConstraints</dt><dd>Reglas que limitan qué tan desigual es la distribución de los Pods coincidentes entre dominios.</dd><dt>maxSkew</dt><dd>La diferencia máxima permitida en la cantidad de Pods coincidentes entre dos dominios cualesquiera.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un Deployment de 3 réplicas con anti-affinity required sobre <code>app: web</code> y topologyKey kubernetes.io/hostname ubica un Pod en cada uno de los tres workers. Cuando un compañero lo escala a 4, el nuevo Pod queda en Pending con un mensaje de que node(s) didn't match pod anti-affinity rules, que es la regla funcionando tal como se diseñó.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Lee la topologyKey con cuidado: hostname significa por nodo, zone significa por zona. El mismo selector con una clave distinta da una ubicación completamente diferente.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué garantiza maxSkew: 1?</summary><p>Que ningún dominio de topología tiene más de un Pod coincidente por encima del dominio menos cargado.</p></details>
+<details class="sq"><summary>¿Por qué la Pod anti-affinity required podría dejar Pods en Pending?</summary><p>Si hay más réplicas que dominios de topología, las réplicas extra no tienen ningún lugar permitido al cual ir.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../taints-and-tolerations-noschedule-prefernoschedule-noexecute-and-toler/">← Taints y tolerations: NoSchedule, PreferNoSchedule, NoExecut</a><a href="../priorityclasses-and-preemption/">PriorityClasses y preemption (desplazamiento) →</a></nav>
+</main>
+</body>
+</html>

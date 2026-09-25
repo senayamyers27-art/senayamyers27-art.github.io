@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CloudFormation: plantillas, parámetros, salidas y exportac… · Lección de Developer Associate</title>
+<meta name="description" content="AWS CloudFormation es el servicio de infraestructura como código de AWS: describes los recursos en una plantilla (YAML o JSON), y CloudFormation los crea, ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="CloudFormation: plantillas, parámetros, salidas y exportac… · Lección de Developer Associate">
+<meta property="og:description" content="AWS CloudFormation es el servicio de infraestructura como código de AWS: describes los recursos en una plantilla (YAML o JSON), y CloudFormation los crea, ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/cloudformation-templates-parameters-outputs-and-exports-fn-importvalue/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/cloudformation-templates-parameters-outputs-and-exports-fn-importvalue/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/cloudformation-templates-parameters-outputs-and-exports-fn-importvalue/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>CloudFormation: plantillas, parámetros, salidas y exportaciones, Fn::ImportValue, change sets, empaquetado de artefactos locales en S3</h1>
+<article class="lbody">
+<p>AWS CloudFormation es el servicio de infraestructura como código de AWS: describes los recursos en una plantilla (YAML o JSON), y CloudFormation los crea, actualiza y elimina en conjunto como un stack, en el orden correcto, revirtiendo los cambios si algo falla. Tanto SAM como el CDK terminan produciendo CloudFormation, así que sus conceptos aparecen en todo el examen.</p>
+<p>Las secciones de una plantilla: <code>AWSTemplateFormatVersion</code> y <code>Description</code>; <code>Parameters</code> (entradas proporcionadas en el momento del despliegue, con tipos como <code>String</code>, <code>Number</code> o <code>AWS::EC2::KeyPair::KeyName</code> y tipos de parámetros de SSM, además de restricciones como <code>AllowedValues</code>, y <code>NoEcho</code> para ocultar valores sensibles); <code>Mappings</code> (tablas de búsqueda estáticas, por ejemplo ID de AMI por región, que se leen con <code>Fn::FindInMap</code>); <code>Conditions</code> (crear recursos solo, por ejemplo, en producción); <code>Transform</code> (para SAM o macros); <code>Resources</code> (la única sección obligatoria); y <code>Outputs</code>. Las funciones intrínsecas conectan las cosas: <code>Ref</code> devuelve el valor de un parámetro o el identificador principal de un recurso, <code>Fn::GetAtt</code> devuelve un atributo como un ARN, <code>Fn::Sub</code> sustituye variables dentro de cadenas, y <code>Fn::Join</code>, <code>Fn::Select</code> y <code>Fn::If</code> ayudan a construir valores. Los pseudoparámetros como <code>AWS::Region</code> y <code>AWS::AccountId</code> evitan codificar valores.</p>
+<p>Las salidas (Outputs) devuelven valores después del despliegue, como la URL de una API. Una salida con un nombre de <code>Export</code> pone el valor a disposición de otros stacks en la misma cuenta y región, que lo leen con <code>Fn::ImportValue</code>. Así es como un stack de red comparte los ID de la VPC y de las subredes con los stacks de aplicación. Los nombres de exportación deben ser únicos dentro de la región, y CloudFormation no te permite eliminar un stack, ni cambiar un valor exportado, mientras otro stack lo importe. Los stacks anidados (<code>AWS::CloudFormation::Stack</code>) son la alternativa para componentes reutilizables que se despliegan como parte de un stack padre.</p>
+<pre class="code" tabindex="0"><code># stack de red
+Outputs:
+  VpcId:
+    Value: !Ref Vpc
+    Export:
+      Name: !Sub '${AWS::StackName}-VpcId'
+# stack de aplicación
+  VpcId: !ImportValue network-VpcId</code></pre>
+<p>Actualizar un stack puede modificar los recursos en el lugar, interrumpirlos o reemplazarlos (por ejemplo, cambiar el esquema de claves de una tabla de DynamoDB crea una tabla nueva). Un change set te permite previsualizar exactamente lo que hará una actualización antes de ejecutarla, lo cual importa para cualquier cosa con datos. La detección de desviaciones (drift detection) muestra los recursos modificados fuera de CloudFormation. <code>DeletionPolicy: Retain</code> o <code>Snapshot</code> protege los datos cuando se elimina un recurso o un stack, y las políticas de stack pueden impedir actualizaciones a recursos críticos. Si la creación falla, el stack se revierte por defecto; para solucionar problemas, busca el primer evento fallido en la pestaña Events del stack.</p>
+<p>Las plantillas pueden apuntar a código local, como <code>CodeUri: ./src</code> para una función Lambda o un archivo de plantilla anidada. Esas rutas locales deben subirse antes del despliegue. <code>aws cloudformation package --template-file template.yaml --s3-bucket my-artifacts --output-template-file packaged.yaml</code> comprime y sube los artefactos locales a S3 y escribe una nueva plantilla con los URI de S3 en su lugar. Luego <code>aws cloudformation deploy --template-file packaged.yaml --stack-name my-app --capabilities CAPABILITY_IAM</code> crea un change set y lo ejecuta. El reconocimiento <code>CAPABILITY_IAM</code> o <code>CAPABILITY_NAMED_IAM</code> es obligatorio cuando la plantilla crea recursos de IAM, y <code>CAPABILITY_AUTO_EXPAND</code> cuando usa macros o transformaciones. <code>sam package</code> y <code>sam deploy</code> hacen el mismo trabajo.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Stack</dt><dd>Un conjunto de recursos de AWS creados y administrados en conjunto a partir de una plantilla de CloudFormation.</dd><dt>Export (exportación)</dt><dd>Un valor de salida que se pone a disposición de otros stacks en la misma región y que se lee con Fn::ImportValue.</dd><dt>Change set (conjunto de cambios)</dt><dd>Una vista previa de los cambios que CloudFormation hará en un stack, que revisas y luego ejecutas.</dd><dt>aws cloudformation package</dt><dd>Sube a S3 los artefactos locales referenciados por una plantilla y genera una plantilla con las ubicaciones en S3.</dd><dt>CAPABILITY_IAM</dt><dd>Un reconocimiento obligatorio al desplegar una plantilla que crea o modifica recursos de IAM.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>El stack de red de un equipo de plataforma exporta los ID de sus subredes privadas. La plantilla del servicio de pedidos usa Fn::ImportValue para colocar sus funciones Lambda en esas subredes. Más tarde, el equipo de plataforma intenta eliminar el stack de red y CloudFormation se niega, porque el stack de pedidos todavía importa la exportación.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Comparte valores entre stacks independientes con Outputs Export más Fn::ImportValue. Previsualiza las actualizaciones riesgosas con un change set. Despliega plantillas con rutas de código local ejecutando primero cloudformation package.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué sección de una plantilla es obligatoria?</summary><p>Resources.</p></details>
+<details class="sq"><summary>¿Por qué no se puede eliminar un stack cuando su exportación se importa en otro lugar?</summary><p>CloudFormation bloquea la eliminación o el cambio de una exportación de la que depende otro stack hasta que el stack que la importa deje de usarla.</p></details>
+<details class="sq"><summary>¿Qué error obtienes al desplegar una plantilla que crea roles de IAM sin reconocerlo, y cómo lo corriges?</summary><p>Un error InsufficientCapabilities; agrega --capabilities CAPABILITY_IAM o CAPABILITY_NAMED_IAM.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../aws-sam-template-structure-sam-build-sam-deploy-guided-sam-local-invok/">← AWS SAM: estructura de la plantilla, sam build, sam deploy -</a><a href="../aws-cdk-basics-constructs-cdk-bootstrap-cdk-synth-cdk-deploy/">Fundamentos de AWS CDK: constructs, cdk bootstrap, cdk synth →</a></nav>
+</main>
+</body>
+</html>

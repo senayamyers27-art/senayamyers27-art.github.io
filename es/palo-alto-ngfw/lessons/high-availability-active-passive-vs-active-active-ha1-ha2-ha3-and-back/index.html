@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Alta disponibilidad: active/passive vs active/active, enla… · Lección de NGFW Engineer</title>
+<meta name="description" content="La alta disponibilidad (HA, high availability) empareja dos firewalls idénticos para que, si uno falla, el otro continúe con una interrupción mínima. Ambos">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Alta disponibilidad: active/passive vs active/active, enla… · Lección de NGFW Engineer">
+<meta property="og:description" content="La alta disponibilidad (HA, high availability) empareja dos firewalls idénticos para que, si uno falla, el otro continúe con una interrupción mínima. Ambos">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/palo-alto-ngfw/lessons/high-availability-active-passive-vs-active-active-ha1-ha2-ha3-and-back/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/palo-alto-ngfw/lessons/high-availability-active-passive-vs-active-active-ha1-ha2-ha3-and-back/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../palo-alto-ngfw/">NGFW Engineer</a> / <a href="../">Lecciones</a> · <a href="../../../../palo-alto-ngfw/lessons/high-availability-active-passive-vs-active-active-ha1-ha2-ha3-and-back/" hreflang="en" lang="en">English</a></p>
+<p class="note">Palo Alto Networks Certified Next-Generation Firewall Engineer NGFW-Engineer</p>
+<h1>Alta disponibilidad: active/passive vs active/active, enlaces HA1/HA2/HA3 y de respaldo, prioridad y preemption, link y path monitoring, IP flotantes</h1>
+<article class="lbody">
+<p>La alta disponibilidad (HA, high availability) empareja dos firewalls idénticos para que, si uno falla, el otro continúe con una interrupción mínima. Ambos peers deben ser del mismo modelo, ejecutar las mismas versiones de PAN-OS y de contenido, y tener licencias equivalentes. HA se configura en Device &gt; High Availability.</p>
+<p>En el modo active/passive, un firewall maneja todo el tráfico mientras el otro se mantiene sincronizado y listo. En la conmutación por error (failover), el peer pasivo toma las mismas direcciones IP y MAC de las interfaces, así que los vecinos apenas lo notan. Funciona con despliegues Layer 3, Layer 2 y virtual wire, y es el modo recomendado para la mayoría de los diseños porque es sencillo de diagnosticar. En el modo active/active, ambos peers procesan tráfico a la vez. Solo admite Layer 3 y virtual wire, y existe principalmente para diseños con enrutamiento asimétrico en los que el tráfico puede llegar a cualquiera de los dos firewalls. Agrega conceptos como el session owner (el peer que realiza la inspección de Layer 7), el session setup peer y las direcciones IP flotantes. No duplica las garantías de rendimiento, porque cada peer debe seguir siendo capaz de soportar toda la carga después de una falla.</p>
+<p>Los peers se comunican por enlaces dedicados. HA1 es el enlace de control: hellos, heartbeats, estado de HA y sincronización de la configuración del plano de administración. HA2 es el enlace de datos: sincroniza sesiones, tablas de reenvío, asociaciones de seguridad IPsec y tablas ARP, para que las sesiones existentes sobrevivan al failover. HA2 puede usar transporte Ethernet, IP o UDP. HA3 solo existe en active/active y reenvía paquetes entre peers para el establecimiento de sesiones y el tráfico asimétrico; es un enlace Layer 2 y se beneficia de las jumbo frames. Los enlaces HA1 backup y HA2 backup proporcionan redundancia para los enlaces de control y de datos, lo que evita el split brain, situación en la que ambos peers creen que deben estar activos porque falló el único enlace HA1.</p>
+<p>La prioridad del dispositivo (device priority) decide qué peer debe estar activo; gana el número más bajo. Preemption permite que el firewall de mayor prioridad recupere el rol activo después de recuperarse. Preemption solo funciona si está habilitada en ambos peers, y viene desactivada de forma predeterminada, así que el peer que asumió el control tras el failover normalmente permanece activo.</p>
+<p>Los disparadores de failover incluyen la pérdida de heartbeats y el monitoreo. Link monitoring vigila interfaces físicas agrupadas en link groups; la condición de falla 'any' hace failover si un enlace del grupo se cae, 'all' solo cuando fallan todos los enlaces. Path monitoring hace ping a IP de destino, como el router ascendente, y hace failover cuando dejan de ser alcanzables. Juntos detectan fallas que un heartbeat no vería, como un puerto de switch muerto.</p>
+<p>Las direcciones IP flotantes pertenecen a active/active. En lugar de que un peer sea dueño de la dirección de la interfaz, una IP flotante se vincula a un device ID y se mueve al peer sobreviviente ante una falla. Para compartir carga, puedes usar dos IP flotantes (una activa en cada peer) o ARP load-sharing, donde ambos peers responden por una misma IP. Verifica el estado en el widget de HA del dashboard o con <code>show high-availability state</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>HA1</dt><dd>El enlace de control de HA que transporta hellos, heartbeats, estado y sincronización de configuración.</dd><dt>HA2</dt><dd>El enlace de datos de HA que sincroniza sesiones, tablas de reenvío, SA de IPsec y tablas ARP.</dd><dt>HA3</dt><dd>El enlace exclusivo de active/active que reenvía paquetes entre peers para el establecimiento de sesiones y los flujos asimétricos.</dd><dt>Preemption (apropiación)</dt><dd>La opción que permite al peer de mayor prioridad (número más bajo) recuperar el rol activo; debe habilitarse en ambos peers.</dd><dt>Floating IP (IP flotante)</dt><dd>Una dirección de active/active vinculada a un peer que se mueve al otro peer ante una falla.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>En un par active/passive, el puerto del switch ascendente de la interfaz Untrust del firewall activo se daña, pero el firewall sigue encendido. Como configuraste un link group que contiene ethernet1/1 con la condición 'any', el firewall hace failover, el peer pasivo se vuelve activo con la misma IP y MAC, y las sesiones sincronizadas por HA2 continúan.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Gana el número de prioridad más bajo, y preemption debe estar activada en ambos peers. Active/active solo admite Layer 3 y virtual wire. HA3 solo aparece en preguntas de active/active.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué enlace de HA mantiene vivas las sesiones existentes después del failover?</summary><p>HA2, porque sincroniza la tabla de sesiones y el estado relacionado entre los peers.</p></details>
+<details class="sq"><summary>El firewall A (prioridad 50) falló y se recuperó, pero no volvió a ser activo. ¿Por qué?</summary><p>Preemption no está habilitada en ambos peers, así que el peer activo actual conserva el rol.</p></details>
+<details class="sq"><summary>¿Por qué agregar un enlace HA1 backup?</summary><p>Para evitar el split brain si falla el único enlace HA1 y ambos peers asumirían que deben estar activos.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia NGFW Engineer gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../palo-alto-ngfw/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../nat-on-layer-3-interfaces-source-nat-dipp-dynamic-ip-static-destinatio/">← NAT en interfaces Layer 3: source NAT (DIPP, dynamic IP, sta</a><a href="../site-to-site-ipsec-ike-gateway-ike-and-ipsec-crypto-profiles-tunnel-in/">IPsec sitio a sitio: IKE gateway, perfiles criptográficos IK →</a></nav>
+</main>
+</body>
+</html>

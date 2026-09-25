@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Diseño de la clave de partición: alta cardinalidad, distri… · Lección de AI-200</title>
+<meta name="description" content="Cosmos DB escala horizontalmente mediante el particionamiento. El valor de la clave de partición de cada elemento lo coloca en una partición lógica, el con">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Diseño de la clave de partición: alta cardinalidad, distri… · Lección de AI-200">
+<meta property="og:description" content="Cosmos DB escala horizontalmente mediante el particionamiento. El valor de la clave de partición de cada elemento lo coloca en una partición lógica, el con">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ai-200/lessons/partition-key-design-high-cardinality-even-spread-point-reads-hierarch/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ai-200/lessons/partition-key-design-high-cardinality-even-spread-point-reads-hierarch/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ai-200/">AI-200</a> / <a href="../">Lecciones</a> · <a href="../../../../ai-200/lessons/partition-key-design-high-cardinality-even-spread-point-reads-hierarch/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Azure AI Cloud Developer Associate AI-200 (replaced AZ-204)</p>
+<h1>Diseño de la clave de partición: alta cardinalidad, distribución uniforme, lecturas puntuales y claves de partición jerárquicas</h1>
+<article class="lbody">
+<p>Cosmos DB escala horizontalmente mediante el particionamiento. El valor de la clave de partición de cada elemento lo coloca en una partición lógica, el conjunto de todos los elementos que comparten ese valor. Las particiones lógicas se agrupan en particiones físicas, cada una con su propio almacenamiento y una parte del rendimiento (throughput) del contenedor. Eliges la ruta de la clave de partición, como <code>/customerId</code>, al crear el contenedor, y no se puede cambiar después sin migrar los datos a un contenedor nuevo. Eso la convierte en la decisión de diseño más importante en Cosmos DB.</p>
+<p>Una buena clave de partición tiene alta cardinalidad: muchos valores distintos, para que los datos y la carga puedan repartirse entre muchas particiones lógicas y físicas. Una clave como <code>/country</code>, con un puñado de valores, o <code>/status</code>, con tres, es mala. Una clave como <code>/userId</code> o <code>/deviceId</code>, con millones de valores, suele ser buena.</p>
+<p>También debe repartir la carga de forma uniforme, tanto el almacenamiento como las solicitudes. Si un valor está mucho más ocupado que los demás, su partición se convierte en una partición caliente (hot partition): las solicitudes a ella se limitan con HTTP 429 aunque el contenedor en conjunto tenga rendimiento de sobra, porque el rendimiento se divide entre las particiones físicas. Una sola partición lógica también tiene un límite de almacenamiento de 20 GB, así que cualquier clave en la que un valor pueda acumular datos sin límite (un día de marca de tiempo para todos los inquilinos, o un inquilino enorme) es riesgosa.</p>
+<p>Por último, elige una clave que tus lecturas más frecuentes puedan proporcionar. Una lectura puntual con id y clave de partición cuesta alrededor de 1 RU para un elemento de 1 KB. Una consulta que filtra por la clave de partición se queda dentro de una partición. Una consulta sin ella se distribuye a todas las particiones y cuesta más a medida que crece el contenedor. Observa tu patrón de acceso dominante: si la app casi siempre carga datos por usuario, <code>/userId</code> encaja; si carga por pedido usando el id del pedido, hacer de <code>/id</code> la clave de partición puede ser ideal para las lecturas puntuales.</p>
+<p>A veces ninguna propiedad por sí sola cumple los tres objetivos. Una app SaaS multiinquilino particionada por <code>/tenantId</code> sufre cuando un inquilino grande supera los 20 GB o domina el tráfico. Las claves de partición jerárquicas (también llamadas subparticionamiento) te permiten definir hasta tres niveles, como <code>/tenantId</code>, luego <code>/userId</code> y luego <code>/sessionId</code>. Así, los datos de un inquilino pueden abarcar varias particiones físicas, mientras que las consultas que filtran por el inquilino (un prefijo de la jerarquía) se siguen enrutando de forma eficiente solo a las particiones que contienen a ese inquilino.</p>
+<pre class="code" tabindex="0"><code>from azure.cosmos import PartitionKey
+db.create_container(
+    id=&quot;events&quot;,
+    partition_key=PartitionKey(path=[&quot;/tenantId&quot;, &quot;/userId&quot;], kind=&quot;MultiHash&quot;))
+container.read_item(item=&quot;e1&quot;, partition_key=[&quot;contoso&quot;, &quot;u-77&quot;])</code></pre>
+<p>Una solución alternativa más antigua es una clave sintética, una propiedad que calculas concatenando valores (por ejemplo, <code>tenantId-userId</code>) o agregando un sufijo aleatorio. Sigue funcionando, pero hoy las claves jerárquicas son la respuesta más limpia cuando una pregunta menciona un inquilino grande que supera el límite de la partición lógica.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Logical partition (partición lógica)</dt><dd>Todos los elementos que comparten un valor de clave de partición; está limitada a 20 GB de almacenamiento.</dd><dt>Physical partition (partición física)</dt><dd>Una unidad interna de almacenamiento y rendimiento que aloja muchas particiones lógicas.</dd><dt>Hot partition (partición caliente)</dt><dd>Una partición que recibe una parte desproporcionada de las solicitudes, lo que provoca limitación con 429 pese a que sobra rendimiento total.</dd><dt>Hierarchical partition key (clave de partición jerárquica)</dt><dd>Una clave de partición de hasta tres niveles, como inquilino y luego usuario, que permite que un valor de nivel superior abarque varias particiones físicas.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una app de chat particionaba los mensajes por /roomId. Una sala popular provocaba errores 429 mientras otras salas estaban inactivas, y se acercaba al límite de 20 GB de la partición lógica. El equipo creó un contenedor nuevo con una clave jerárquica de /roomId y luego /userId, y migró con el change feed. La carga se repartió, y las consultas filtradas por roomId siguen apuntando solo a las particiones de esa sala.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> La clave de partición ganadora tiene alta cardinalidad, una distribución uniforme de solicitudes y almacenamiento, y aparece en la mayoría de las consultas; cuando un inquilino supera los 20 GB, piensa en claves de partición jerárquicas.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué /status (new, paid, shipped) es una mala clave de partición para pedidos?</summary><p>Tiene una cardinalidad muy baja, así que los datos y el tráfico se concentran en unas pocas particiones lógicas, lo que provoca particiones calientes y problemas con los límites de tamaño.</p></details>
+<details class="sq"><summary>¿Puedes cambiar la clave de partición de un contenedor después de crearlo?</summary><p>No. Debes crear un contenedor nuevo con la nueva clave y migrar los datos, por ejemplo con el change feed.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia AI-200 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ai-200/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../cosmos-db-for-nosql-with-the-python-sdk-azure-cosmos-cosmosclient-crea/">← Cosmos DB for NoSQL con el SDK de Python (azure-cosmos): Cos</a><a href="../request-units-point-reads-vs-queries-indexing-policy-include-exclude-p/">Request Units: lecturas puntuales vs consultas, rutas includ →</a></nav>
+</main>
+</body>
+</html>

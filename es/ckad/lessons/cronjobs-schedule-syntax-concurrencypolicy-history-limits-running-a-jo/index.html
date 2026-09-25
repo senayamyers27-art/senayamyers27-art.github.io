@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CronJobs: sintaxis de schedule, concurrencyPolicy, límites… · Lección de CKAD</title>
+<meta name="description" content="Un CronJob crea un Job según una programación repetitiva. Pertenece al grupo de API batch/v1, y su spec envuelve un jobTemplate, que a su vez envuelve la c">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="CronJobs: sintaxis de schedule, concurrencyPolicy, límites… · Lección de CKAD">
+<meta property="og:description" content="Un CronJob crea un Job según una programación repetitiva. Pertenece al grupo de API batch/v1, y su spec envuelve un jobTemplate, que a su vez envuelve la c">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/cronjobs-schedule-syntax-concurrencypolicy-history-limits-running-a-jo/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/cronjobs-schedule-syntax-concurrencypolicy-history-limits-running-a-jo/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/cronjobs-schedule-syntax-concurrencypolicy-history-limits-running-a-jo/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>CronJobs: sintaxis de schedule, concurrencyPolicy, límites de historial y ejecución manual de un Job desde un CronJob</h1>
+<article class="lbody">
+<p>Un CronJob crea un Job según una programación repetitiva. Pertenece al grupo de API <code>batch/v1</code>, y su spec envuelve un <code>jobTemplate</code>, que a su vez envuelve la conocida plantilla de Pod. Así que un manifiesto de CronJob tiene tres niveles anidados: spec del CronJob, spec del Job, spec del Pod.</p>
+<p>El campo <code>schedule</code> usa la sintaxis cron estándar de cinco campos: minuto, hora, día del mes, mes, día de la semana. <code>*/5 * * * *</code> significa cada cinco minutos, <code>0 2 * * *</code> significa a las 02:00 todos los días y <code>30 9 * * 1-5</code> significa a las 09:30 de lunes a viernes. Las programaciones se evalúan en la zona horaria del kube-controller-manager, a menos que definas el campo opcional <code>timeZone</code> con el nombre de una zona horaria. Pon comillas alrededor del schedule en YAML y en la línea de comandos para que ni el shell ni el parser de YAML interpreten los asteriscos.</p>
+<p><code>concurrencyPolicy</code> decide qué pasa cuando toca una nueva ejecución mientras el Job anterior sigue en marcha. <code>Allow</code> (el valor por defecto) permite que se superpongan. <code>Forbid</code> se salta la nueva ejecución. <code>Replace</code> cancela el Job en ejecución e inicia el nuevo. Elige Forbid para trabajos que no deben ejecutarse dos veces a la vez, como un backup que escribe en el mismo archivo.</p>
+<p><code>successfulJobsHistoryLimit</code> (por defecto 3) y <code>failedJobsHistoryLimit</code> (por defecto 1) controlan cuántos Jobs terminados, y sus Pods, se conservan para que puedas inspeccionarlos. Poner un límite en 0 elimina los Jobs terminados de inmediato. <code>startingDeadlineSeconds</code> define con cuánto retraso puede iniciar todavía una ejecución perdida; si el controlador no puede iniciarla dentro de esa ventana, la ejecución se omite. <code>suspend: true</code> pausa las ejecuciones futuras sin eliminar el CronJob.</p>
+<pre class="code" tabindex="0"><code>apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup
+spec:
+  schedule: &quot;0 2 * * *&quot;
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: backup
+            image: busybox
+            command: [&quot;sh&quot;, &quot;-c&quot;, &quot;echo backing up&quot;]</code></pre>
+<p>Genera el esqueleto rápidamente con <code>kubectl create cronjob backup --image=busybox --schedule=&quot;0 2 * * *&quot; --dry-run=client -o yaml -- sh -c 'echo backing up'</code>. Para probarlo sin esperar a la programación, crea un Job a partir de su plantilla: <code>kubectl create job backup-manual --from=cronjob/backup</code>. Ese Job se ejecuta de inmediato usando exactamente la misma spec, que es la forma estándar de comprobar que un CronJob funciona.</p>
+<p>Revisa lo que ha pasado con <code>kubectl get cronjob backup</code> (muestra LAST SCHEDULE y ACTIVE), <code>kubectl get jobs</code> y <code>kubectl describe cronjob backup</code>, cuyos eventos listan cada Job que creó o cualquier programación perdida.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>schedule</dt><dd>Expresión cron de cinco campos: minuto, hora, día del mes, mes, día de la semana.</dd><dt>concurrencyPolicy</dt><dd>Allow, Forbid o Replace: qué hacer si toca una ejecución mientras la anterior sigue activa.</dd><dt>History limits (límites de historial)</dt><dd>successfulJobsHistoryLimit y failedJobsHistoryLimit, el número de Jobs terminados que se conservan.</dd><dt>jobTemplate</dt><dd>La especificación de Job que el CronJob genera en cada ejecución.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un CronJob de reportes programado cada 10 minutos a veces tarda 15 minutos, lo que provoca que dos copias peleen por la misma tabla de salida. Definir <code>concurrencyPolicy: Forbid</code> hace que el controlador se salte una ejecución mientras otra esté activa, y <code>kubectl create job report-test --from=cronjob/report</code> permite al desarrollador probar cambios cuando lo necesite.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El comando para disparar un CronJob a mano es <code>kubectl create job &lt;new-name&gt; --from=cronjob/&lt;cronjob-name&gt;</code>. Recuerda también que restartPolicy va en la plantilla de Pod más interna.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué significa el schedule <code>*/15 * * * *</code>?</summary><p>Ejecutar cada 15 minutos.</p></details>
+<details class="sq"><summary>¿Qué concurrencyPolicy detiene el Job anterior e inicia el nuevo?</summary><p>Replace. Forbid se salta la nueva ejecución y Allow ejecuta ambos.</p></details>
+<details class="sq"><summary>¿Cómo ejecutas de inmediato el trabajo de un CronJob?</summary><p>Crea un Job a partir de él: <code>kubectl create job &lt;name&gt; --from=cronjob/&lt;cronjob&gt;</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../jobs-completions-parallelism-backofflimit-activedeadlineseconds-restar/">← Jobs: completions, parallelism, backoffLimit, activeDeadline</a><a href="../multi-container-patterns-init-containers-sidecars-including-native-sid/">Patrones multicontenedor: init containers, sidecars (incluid →</a></nav>
+</main>
+</body>
+</html>

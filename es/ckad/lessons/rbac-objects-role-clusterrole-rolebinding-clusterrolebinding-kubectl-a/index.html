@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Objetos RBAC: Role, ClusterRole, RoleBinding, ClusterRoleB… · Lección de CKAD</title>
+<meta name="description" content="El control de acceso basado en roles (RBAC) otorga permisos mediante dos tipos de objetos: los roles, que listan qué acciones están permitidas, y los bindi">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Objetos RBAC: Role, ClusterRole, RoleBinding, ClusterRoleB… · Lección de CKAD">
+<meta property="og:description" content="El control de acceso basado en roles (RBAC) otorga permisos mediante dos tipos de objetos: los roles, que listan qué acciones están permitidas, y los bindi">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/rbac-objects-role-clusterrole-rolebinding-clusterrolebinding-kubectl-a/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/rbac-objects-role-clusterrole-rolebinding-clusterrolebinding-kubectl-a/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/rbac-objects-role-clusterrole-rolebinding-clusterrolebinding-kubectl-a/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>Objetos RBAC: Role, ClusterRole, RoleBinding, ClusterRoleBinding; kubectl auth can-i con --as</h1>
+<article class="lbody">
+<p>El control de acceso basado en roles (RBAC) otorga permisos mediante dos tipos de objetos: los roles, que listan qué acciones están permitidas, y los bindings, que asignan esos roles a usuarios, grupos o ServiceAccounts. Los permisos solo se suman; no hay forma de escribir una regla de denegación.</p>
+<p>Un Role contiene reglas que se aplican dentro de un namespace. Cada regla lista <code>apiGroups</code>, <code>resources</code> y <code>verbs</code>. El grupo core, que contiene Pods, Services, ConfigMaps y Secrets, se escribe como la cadena vacía <code>&quot;&quot;</code>. Los Deployments están en <code>apps</code>, los Jobs en <code>batch</code>. Los recursos se escriben en plural y minúsculas, y los subrecursos con una barra, como <code>pods/log</code> o <code>pods/exec</code>. Los verbos incluyen <code>get</code>, <code>list</code>, <code>watch</code>, <code>create</code>, <code>update</code>, <code>patch</code>, <code>delete</code> y <code>*</code>. Puedes restringir una regla a objetos con nombre mediante <code>resourceNames</code>.</p>
+<p>Un ClusterRole tiene la misma estructura pero no tiene namespace. Se usa para recursos de alcance de clúster como nodes o PersistentVolumes, para URLs que no son recursos, o como un conjunto reutilizable de permisos para muchos namespaces. Kubernetes trae ClusterRoles como <code>view</code>, <code>edit</code> y <code>admin</code>.</p>
+<p>Un RoleBinding otorga un Role, o un ClusterRole, a sujetos dentro de un namespace. Vincular un ClusterRole con un RoleBinding es un patrón común: defines <code>pod-reader</code> una vez como ClusterRole y luego lo otorgas namespace por namespace. Un ClusterRoleBinding otorga un ClusterRole en todos los namespaces y para los recursos de alcance de clúster. El <code>roleRef</code> de un binding no se puede cambiar después de crearlo; elimina y vuelve a crear el binding para cambiar de rol.</p>
+<pre class="code" tabindex="0"><code>kubectl create role pod-reader -n dev --verb=get,list,watch --resource=pods,pods/log
+kubectl create rolebinding ci-reads-pods -n dev --role=pod-reader \
+  --serviceaccount=dev:ci-bot --user=jane
+kubectl create clusterrole node-viewer --verb=get,list --resource=nodes
+kubectl create clusterrolebinding ops-nodes --clusterrole=node-viewer --group=ops</code></pre>
+<p>Los sujetos son de kind <code>User</code>, <code>Group</code> o <code>ServiceAccount</code>. En la línea de comandos, <code>--serviceaccount</code> recibe <code>namespace:name</code>, una fuente frecuente de errores. Dentro del YAML, un sujeto ServiceAccount necesita su campo <code>namespace</code>.</p>
+<p>Prueba permisos sin cambiar de credenciales usando la suplantación (impersonation). <code>kubectl auth can-i create deployments -n dev</code> te verifica a ti mismo e imprime yes o no. <code>kubectl auth can-i list pods -n dev --as=jane</code> verifica como un usuario, y <code>--as=system:serviceaccount:dev:ci-bot</code> verifica como una ServiceAccount. <code>kubectl auth can-i --list -n dev --as=system:serviceaccount:dev:ci-bot</code> lista todo lo que esa cuenta puede hacer. Suplantar requiere que tú mismo tengas permitido el verbo <code>impersonate</code>, algo que los administradores del clúster normalmente tienen.</p>
+<p>Sigue el principio de mínimo privilegio: otorga solo los verbos y recursos que una aplicación necesita, en el namespace donde se ejecuta, y prefiere RoleBindings sobre ClusterRoleBindings. Recuerda que <code>get</code> o <code>list</code> sobre Secrets revela su contenido, y que <code>create</code> sobre Pods puede exponer indirectamente cualquier cosa que un Pod pueda montar, así que trata esos permisos como sensibles.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Role</dt><dd>Conjunto de verbos permitidos sobre recursos, con namespace.</dd><dt>ClusterRole</dt><dd>Conjunto de permisos sin namespace, utilizable en todo el clúster o vinculado por namespace.</dd><dt>RoleBinding</dt><dd>Otorga un Role o ClusterRole a sujetos dentro de un namespace.</dd><dt>ClusterRoleBinding</dt><dd>Otorga un ClusterRole a sujetos en todo el clúster.</dd><dt>kubectl auth can-i --as</dt><dd>Verifica si un usuario o ServiceAccount puede realizar una acción, usando suplantación.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una ServiceAccount de CI solo debe desplegar en <code>staging</code>. Creas un Role que permite get, list, create, update y patch sobre deployments del grupo <code>apps</code>, lo vinculas con un RoleBinding en <code>staging</code> y luego confirmas con <code>kubectl auth can-i create deployments -n staging --as=system:serviceaccount:staging:ci</code> (yes) y la misma verificación con <code>-n prod</code> (no).</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Los recursos core usan apiGroups [&quot;&quot;], y --serviceaccount recibe namespace:name. Un ClusterRole vinculado por un RoleBinding solo otorga acceso en el namespace de ese binding.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué grupo de API pones en una regla de Role para Pods?</summary><p>El grupo core, escrito como una cadena vacía &quot;&quot;.</p></details>
+<details class="sq"><summary>¿Qué acceso da un RoleBinding al ClusterRole <code>view</code>?</summary><p>Acceso de lectura a los recursos cubiertos solo en el namespace del RoleBinding.</p></details>
+<details class="sq"><summary>¿Cómo verificas si la ServiceAccount <code>bot</code> del namespace <code>qa</code> puede eliminar Pods ahí?</summary><p><code>kubectl auth can-i delete pods -n qa --as=system:serviceaccount:qa:bot</code>.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../request-flow-authentication-authorization-rbac-and-admission-control-m/">← Flujo de una solicitud: autenticación, autorización (RBAC) y</a><a href="../resource-requests-and-limits-for-cpu-and-memory-units-m-mi-gi-qos-clas/">Requests y limits de CPU y memoria; unidades (m, Mi, Gi); cl →</a></nav>
+</main>
+</body>
+</html>

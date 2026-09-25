@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Datos sensibles: valores `sensitive`, variables y recursos… · Lección de Terraform Associate</title>
+<meta name="description" content="El código de infraestructura maneja secretos constantemente: contraseñas de bases de datos, tokens de API, claves privadas. Terraform ofrece varias herrami">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Datos sensibles: valores `sensitive`, variables y recursos… · Lección de Terraform Associate">
+<meta property="og:description" content="El código de infraestructura maneja secretos constantemente: contraseñas de bases de datos, tokens de API, claves privadas. Terraform ofrece varias herrami">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/terraform/lessons/sensitive-data-sensitive-values-ephemeral-variables-and-resources-writ/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/terraform/lessons/sensitive-data-sensitive-values-ephemeral-variables-and-resources-writ/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../terraform/">Terraform Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../terraform/lessons/sensitive-data-sensitive-values-ephemeral-variables-and-resources-writ/" hreflang="en" lang="en">English</a></p>
+<p class="note">HashiCorp Certified: Terraform Associate Terraform Associate (004)</p>
+<h1>Datos sensibles: valores `sensitive`, variables y recursos efímeros, argumentos de solo escritura y secretos en el estado</h1>
+<article class="lbody">
+<p>El código de infraestructura maneja secretos constantemente: contraseñas de bases de datos, tokens de API, claves privadas. Terraform ofrece varias herramientas para ellos, y el examen espera que sepas exactamente qué protege cada una y qué no. La más antigua y peor entendida es el indicador <code>sensitive</code>.</p>
+<p>Configurar <code>sensitive = true</code> en una variable o un output le dice a Terraform que oculte ese valor en la salida de plan y apply, mostrando <code>(sensitive value)</code> en su lugar. La sensibilidad se propaga: cualquier expresión construida a partir de un valor sensible también se trata como sensible, y un output del módulo raíz que use uno debe marcarse también como sensible. Los providers también pueden marcar atributos de recursos como sensibles. Pero ocultar el valor solo tiene que ver con la visualización. El valor real igual se escribe en el archivo de estado en texto plano, y <code>terraform output -json</code> o <code>terraform output -raw NAME</code> lo mostrarán a cualquiera que pueda ejecutar el comando.</p>
+<p>Los valores efímeros cierran esa brecha. Una variable declarada con <code>ephemeral = true</code> puede usarse durante una ejecución, pero nunca se guarda en el archivo de plan ni en el estado. Los recursos efímeros, declarados con un bloque <code>ephemeral</code> en lugar de un bloque <code>resource</code>, obtienen o generan algo temporal en cada ejecución, como un secreto leído de un gestor de secretos o un token de corta duración, y Terraform no los persiste. Los valores efímeros solo pueden usarse en lugares que no los persisten: bloques de configuración de providers, otros contextos efímeros, bloques provisioner y connection, y argumentos de solo escritura. Los módulos hijos también pueden marcar outputs como efímeros para transmitirlos.</p>
+<p>Los argumentos de solo escritura son la pieza correspondiente del lado de los recursos. Un provider puede ofrecer un argumento, que a menudo termina en <code>_wo</code>, que acepta un valor (incluido uno efímero) y lo envía a la API, pero nunca lo registra en el plan ni en el estado. Como Terraform no puede comparar un valor que nunca guardó, estos argumentos suelen venir con un argumento de versión complementario; aumentas el número de versión cuando quieres que Terraform envíe un valor nuevo.</p>
+<pre class="code" tabindex="0"><code>ephemeral &quot;random_password&quot; &quot;db&quot; {
+  length = 20
+}
+
+resource &quot;aws_db_instance&quot; &quot;main&quot; {
+  # ...otros argumentos...
+  password_wo         = ephemeral.random_password.db.result
+  password_wo_version = 1
+}</code></pre>
+<p>Incluso con estas funciones, trata cada archivo de estado como sensible. Los providers más antiguos, los data sources y los atributos normales de los recursos todavía guardan secretos en el estado. Protege el estado con un backend remoto cifrado, un control de acceso estricto y sin commits en el control de versiones. Mantén los secretos fuera de los archivos <code>.tf</code> y <code>.tfvars</code> que van a Git, y prefiere variables de entorno (<code>TF_VAR_name</code>), un gestor de secretos o recursos efímeros para proporcionarlos.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>sensitive = true</dt><dd>Marca una variable o un output para que su valor se oculte en la salida de la CLI; el valor igual se guarda en el estado.</dd><dt>Ephemeral variable (variable efímera)</dt><dd>Una variable declarada con ephemeral = true cuyo valor está disponible durante una ejecución, pero nunca se escribe en el plan ni en el estado.</dd><dt>Ephemeral resource (recurso efímero)</dt><dd>Un bloque ephemeral que obtiene un valor temporal (como un secreto o un token) en cada ejecución sin persistirlo.</dd><dt>Write-only argument (argumento de solo escritura)</dt><dd>Un argumento de recurso que acepta un valor y lo pasa al provider, pero nunca lo guarda en el plan ni en el estado; suele ir acompañado de un argumento de versión.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un equipo marcó como sensible la variable de la contraseña de su base de datos y supuso que estaba segura, hasta que un auditor abrió terraform.tfstate y encontró la contraseña en texto plano. Cambiaron a un recurso efímero que lee la contraseña de su gestor de secretos y la pasa por el argumento de contraseña de solo escritura del provider, así que el estado ya no la contiene.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> La trampa favorita del examen: sensitive solo oculta los valores en la salida de la CLI. No los cifra ni los mantiene fuera del archivo de estado.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Marcar un output como sensible lo mantiene fuera de terraform.tfstate?</summary><p>No. Solo oculta el valor en plan, apply y en la visualización predeterminada de los outputs; el valor igual se guarda en el estado en texto plano.</p></details>
+<details class="sq"><summary>¿Por qué los argumentos de solo escritura suelen tener un argumento de versión complementario?</summary><p>Terraform nunca guarda el valor de solo escritura, así que no puede detectar un cambio; aumentar la versión le indica a Terraform que envíe el valor nuevo.</p></details>
+<details class="sq"><summary>Nombra dos lugares donde puede usarse un valor efímero.</summary><p>Algunos ejemplos son un bloque de configuración de provider, un argumento de solo escritura, otro recurso o variable efímeros, y los bloques provisioner o connection.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Terraform Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../terraform/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../custom-conditions-variable-validation-precondition-and-postcondition-a/">← Condiciones personalizadas: `validation` de variables, `prec</a><a href="../secrets-management-with-hashicorp-vault-and-the-vault-provider/">Gestión de secretos con HashiCorp Vault y el provider de Vau →</a></nav>
+</main>
+</body>
+</html>

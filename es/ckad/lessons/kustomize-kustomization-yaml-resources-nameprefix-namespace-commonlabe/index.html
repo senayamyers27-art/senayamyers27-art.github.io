@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kustomize: kustomization.yaml, resources, namePrefix, name… · Lección de CKAD</title>
+<meta name="description" content="Kustomize personaliza YAML de Kubernetes sin plantillas. Mantienes manifiestos normales y describes los cambios que se aplican encima de ellos en un archiv">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Kustomize: kustomization.yaml, resources, namePrefix, name… · Lección de CKAD">
+<meta property="og:description" content="Kustomize personaliza YAML de Kubernetes sin plantillas. Mantienes manifiestos normales y describes los cambios que se aplican encima de ellos en un archiv">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/kustomize-kustomization-yaml-resources-nameprefix-namespace-commonlabe/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/kustomize-kustomization-yaml-resources-nameprefix-namespace-commonlabe/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/kustomize-kustomization-yaml-resources-nameprefix-namespace-commonlabe/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>Kustomize: kustomization.yaml, resources, namePrefix, namespace, commonLabels/labels, images, patches, configMapGenerator</h1>
+<article class="lbody">
+<p>Kustomize personaliza YAML de Kubernetes sin plantillas. Mantienes manifiestos normales y describes los cambios que se aplican encima de ellos en un archivo llamado <code>kustomization.yaml</code>. Kustomize viene integrado en kubectl, así que en el examen no necesitas ninguna herramienta adicional.</p>
+<p><code>resources</code> lista los archivos de manifiesto (u otros directorios de kustomization) que se incluyen. Luego, los campos transformadores modifican todo lo que está en esa lista. <code>namespace</code> define el namespace en cada recurso con namespace. <code>namePrefix</code> y <code>nameSuffix</code> agregan texto al nombre de cada recurso, y Kustomize también actualiza las referencias a esos nombres, por ejemplo la referencia de un Deployment a un ConfigMap renombrado.</p>
+<p><code>commonLabels</code> agrega etiquetas a todos los recursos y también a los selectores y plantillas de Pod. Está obsoleto (deprecated) en favor de <code>labels</code>, una lista de entradas, cada una con <code>pairs</code> y una opción <code>includeSelectors</code>. Con <code>includeSelectors: false</code> (el valor por defecto de <code>labels</code>) solo se etiquetan los metadatos, lo que evita cambiar el selector inmutable de un Deployment. <code>commonAnnotations</code> agrega anotaciones de la misma manera.</p>
+<pre class="code" tabindex="0"><code>apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- deployment.yaml
+- service.yaml
+namespace: shop
+namePrefix: prod-
+labels:
+- pairs:
+    env: prod
+  includeSelectors: false
+images:
+- name: nginx
+  newTag: &quot;1.27&quot;
+patches:
+- path: replicas-patch.yaml
+  target:
+    kind: Deployment
+    name: web
+configMapGenerator:
+- name: web-config
+  literals:
+  - LOG_LEVEL=info</code></pre>
+<p><code>images</code> cambia las imágenes de los contenedores sin editar el Deployment: busca coincidencias por <code>name</code> (el nombre de la imagen tal como está escrito en el manifiesto) y define <code>newName</code>, <code>newTag</code> o <code>digest</code>. <code>patches</code> aplica cambios parciales. Un patch puede ser un strategic merge patch, un pequeño fragmento YAML que se parece al recurso pero solo con los campos que quieres cambiar, o un JSON 6902 patch con <code>op</code>, <code>path</code> y <code>value</code> explícitos. Cada entrada da el patch en línea con <code>patch:</code> o desde un archivo con <code>path:</code>, y puede usar <code>target</code> para seleccionar recursos por kind, nombre o etiqueta.</p>
+<p><code>configMapGenerator</code> construye ConfigMaps a partir de <code>literals</code>, <code>files</code> o <code>envs</code> (un archivo env). <code>secretGenerator</code> hace lo mismo para Secrets. Por defecto, al nombre generado se le agrega un hash del contenido, como <code>web-config-5g7k2m9b4t</code>, y Kustomize reescribe todas las referencias a él. Cuando el contenido cambia, el nombre cambia, así que los Deployments que lo usan obtienen una nueva plantilla de Pod y hacen el rollout automáticamente. Define <code>generatorOptions: disableNameSuffixHash: true</code> si necesitas un nombre fijo.</p>
+<p>Las kustomizations más antiguas pueden usar <code>patchesStrategicMerge</code> y <code>patchesJson6902</code>; todavía aparecen, pero están obsoletos en favor de <code>patches</code>. Si te los encuentras en una tarea, puedes conservarlos o convertirlos.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>kustomization.yaml</dt><dd>El archivo que lista los recursos y las transformaciones que Kustomize les aplica.</dd><dt>namePrefix</dt><dd>Texto agregado al inicio del nombre de cada recurso, con las referencias actualizadas.</dd><dt>labels / commonLabels</dt><dd>Campos que agregan etiquetas a todos los recursos; commonLabels también cambia los selectores y está obsoleto.</dd><dt>patches</dt><dd>Cambios parciales (strategic merge o JSON 6902) aplicados a los recursos seleccionados.</dd><dt>configMapGenerator</dt><dd>Crea ConfigMaps a partir de literales, archivos o archivos env, con un hash del contenido en el nombre.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un equipo mantiene un Deployment y un Service en una carpeta base. Para producción agregan una kustomization con <code>namespace: prod</code>, <code>namePrefix: prod-</code>, una entrada <code>images</code> que pone la etiqueta en 2.3 y un patch que sube las réplicas a 6, sin copiar ni editar el YAML original.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El name de <code>images</code> coincide con la imagen tal como está escrita en el manifiesto, no con el nombre del contenedor. Los ConfigMaps generados tienen un sufijo hash, así que búscalos con <code>kubectl get cm</code> en lugar de adivinar el nombre.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué hace <code>namespace: dev</code> en kustomization.yaml?</summary><p>Pone en dev el namespace de cada recurso con namespace del build.</p></details>
+<details class="sq"><summary>¿Por qué configMapGenerator agrega un sufijo hash al nombre?</summary><p>Para que un cambio de contenido produzca un nombre nuevo, actualizando las referencias y disparando un rollout de los Pods que lo usan.</p></details>
+<details class="sq"><summary>¿Qué riesgo tiene commonLabels para Deployments existentes?</summary><p>También agrega etiquetas a los selectores, y los selectores de un Deployment son inmutables, así que aplicarlo a un Deployment existente puede fallar.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../helm-values-helm-show-values-set-and-f-values-yaml-helm-template-names/">← Valores de Helm: helm show values, --set y -f values.yaml, h</a><a href="../applying-overlays-with-kubectl-apply-k-and-previewing-with-kubectl-kus/">Aplicar overlays con kubectl apply -k y previsualizar con ku →</a></nav>
+</main>
+</body>
+</html>

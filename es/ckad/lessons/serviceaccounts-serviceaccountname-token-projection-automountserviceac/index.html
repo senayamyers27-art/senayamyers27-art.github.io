@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ServiceAccounts: serviceAccountName, proyección de tokens,… · Lección de CKAD</title>
+<meta name="description" content="Las personas se autentican ante el API server con sus propias credenciales; las aplicaciones que se ejecutan en Pods usan ServiceAccounts. Una ServiceAccou">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="ServiceAccounts: serviceAccountName, proyección de tokens,… · Lección de CKAD">
+<meta property="og:description" content="Las personas se autentican ante el API server con sus propias credenciales; las aplicaciones que se ejecutan en Pods usan ServiceAccounts. Una ServiceAccou">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/serviceaccounts-serviceaccountname-token-projection-automountserviceac/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/serviceaccounts-serviceaccountname-token-projection-automountserviceac/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/serviceaccounts-serviceaccountname-token-projection-automountserviceac/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>ServiceAccounts: serviceAccountName, proyección de tokens, automountServiceAccountToken, kubectl create token</h1>
+<article class="lbody">
+<p>Las personas se autentican ante el API server con sus propias credenciales; las aplicaciones que se ejecutan en Pods usan ServiceAccounts. Una ServiceAccount es un objeto con namespace que le da una identidad a un Pod, a la que RBAC puede otorgar permisos. Cada namespace tiene automáticamente una llamada <code>default</code>, y un Pod que no indica ninguna ServiceAccount se ejecuta con esa.</p>
+<p>Crea una cuenta dedicada con <code>kubectl create serviceaccount ci-bot -n dev</code> (forma corta <code>sa</code>) y asígnala en la plantilla del Pod con <code>spec.serviceAccountName: ci-bot</code>. El campo se define cuando se crea el Pod y no se puede cambiar en un Pod en ejecución; en un Deployment, cambia la plantilla y deja que haga el rollout, o usa <code>kubectl set serviceaccount deploy/app ci-bot</code>. La ServiceAccount debe existir en el namespace del Pod, o el Pod se rechaza en la admisión. En RBAC y en <code>kubectl auth can-i --as</code>, el nombre completo de la cuenta es <code>system:serviceaccount:dev:ci-bot</code>.</p>
+<p>Por defecto, el kubelet le da a cada Pod un token de su ServiceAccount mediante un volumen proyectado, montado en <code>/var/run/secrets/kubernetes.io/serviceaccount</code>. El directorio contiene <code>token</code> (un JSON Web Token firmado), <code>ca.crt</code> (para verificar el certificado del API server) y <code>namespace</code>. Las bibliotecas cliente encuentran estos archivos automáticamente. Los tokens actuales son tokens vinculados (bound tokens): llevan una audiencia, caducan tras un tiempo limitado, están ligados al Pod específico y el kubelet los renueva antes de que caduquen. Los clústeres antiguos creaban automáticamente tokens de larga duración guardados en Secrets; eso ya no ocurre, lo que reduce el daño que puede causar un token filtrado.</p>
+<p>La mayoría de las aplicaciones nunca hablan con la API de Kubernetes, y para ellas el token es un riesgo innecesario: si un atacante compromete el contenedor, puede usar el token con los permisos que tenga la cuenta. Desactiva el montaje con <code>automountServiceAccountToken: false</code>, ya sea en la ServiceAccount (afectando a todos los Pods que la usan) o en la spec del Pod. Si ambos están definidos, gana la configuración del Pod.</p>
+<pre class="code" tabindex="0"><code>apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: web
+  namespace: shop
+automountServiceAccountToken: false
+---
+# extracto de la spec del Pod
+spec:
+  serviceAccountName: web
+  automountServiceAccountToken: false</code></pre>
+<p>Cuando una herramienta fuera del clúster necesita un token, solicita uno de corta duración: <code>kubectl create token ci-bot -n dev</code> imprime un token, y <code>--duration=1h</code> o <code>--audience=&lt;aud&gt;</code> lo ajustan. Puedes usarlo como bearer token para probar lo que puede hacer la cuenta. Si de verdad necesitas un token de larga duración, puedes crear un Secret de tipo <code>kubernetes.io/service-account-token</code> anotado con el nombre de la cuenta y el control plane lo completará, pero los tokens de corta duración son la opción por defecto más segura.</p>
+<p>También puedes proyectar en un Pod un token con una audiencia y caducidad personalizadas usando una fuente <code>serviceAccountToken</code> en un volumen proyectado, por ejemplo para autenticarte ante un servicio externo que confía en los tokens del clúster. Verifica la identidad con <code>kubectl get pod app -o jsonpath='{.spec.serviceAccountName}'</code> y <code>kubectl exec app -- ls /var/run/secrets/kubernetes.io/serviceaccount</code>.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>ServiceAccount</dt><dd>Una identidad con namespace para los procesos que se ejecutan en Pods.</dd><dt>serviceAccountName</dt><dd>Campo de la spec del Pod que elige con qué ServiceAccount se ejecuta el Pod.</dd><dt>Bound (projected) token (token vinculado o proyectado)</dt><dd>Un token de corta duración, limitado a una audiencia, ligado a un Pod y renovado por el kubelet.</dd><dt>automountServiceAccountToken</dt><dd>Configuración en una ServiceAccount o Pod que controla si se monta el token.</dd><dt>kubectl create token</dt><dd>Comando que emite un token de corta duración para una ServiceAccount.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un Pod que lista ConfigMaps recibe errores 403. Se ejecuta como <code>default</code>, que no tiene permisos. El desarrollador crea la ServiceAccount <code>config-reader</code>, vincula un Role que permite get y list sobre configmaps, define <code>serviceAccountName: config-reader</code> en el Deployment y verifica con <code>kubectl auth can-i list configmaps --as=system:serviceaccount:app:config-reader -n app</code>.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El campo del Pod es <code>serviceAccountName</code> (el antiguo <code>serviceAccount</code> está obsoleto), la configuración de automount a nivel de Pod sobrescribe la de la ServiceAccount y no puedes cambiar la ServiceAccount de un Pod en ejecución.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué ServiceAccount usa un Pod si no se especifica ninguna?</summary><p>La ServiceAccount <code>default</code> de su namespace.</p></details>
+<details class="sq"><summary>¿Dónde se monta el token de la ServiceAccount en un contenedor?</summary><p>En /var/run/secrets/kubernetes.io/serviceaccount, como el archivo token junto a ca.crt y namespace.</p></details>
+<details class="sq"><summary>¿Por qué poner automountServiceAccountToken en false?</summary><p>Las apps que no llaman a la API de Kubernetes no necesitan un token, y quitarlo limita lo que un atacante podría hacer tras comprometer el contenedor.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../secrets-generic-docker-registry-and-tls-types-base64-encoding-vs-encry/">← Secrets: tipos generic, docker-registry y tls; codificación </a><a href="../securitycontext-at-pod-and-container-level-runasuser-runasnonroot-fsgr/">SecurityContext a nivel de Pod y de contenedor: runAsUser, r →</a></nav>
+</main>
+</body>
+</html>

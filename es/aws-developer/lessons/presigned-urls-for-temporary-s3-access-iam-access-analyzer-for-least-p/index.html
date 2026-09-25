@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>URL prefirmadas para acceso temporal a S3; IAM Access Anal… · Lección de Developer Associate</title>
+<meta name="description" content="A veces un usuario sin credenciales de AWS necesita descargar o subir un objeto específico de S3: un cliente que obtiene el PDF de una factura, o una aplic">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="URL prefirmadas para acceso temporal a S3; IAM Access Anal… · Lección de Developer Associate">
+<meta property="og:description" content="A veces un usuario sin credenciales de AWS necesita descargar o subir un objeto específico de S3: un cliente que obtiene el PDF de una factura, o una aplic">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/presigned-urls-for-temporary-s3-access-iam-access-analyzer-for-least-p/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/presigned-urls-for-temporary-s3-access-iam-access-analyzer-for-least-p/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/presigned-urls-for-temporary-s3-access-iam-access-analyzer-for-least-p/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>URL prefirmadas para acceso temporal a S3; IAM Access Analyzer para el mínimo privilegio</h1>
+<article class="lbody">
+<p>A veces un usuario sin credenciales de AWS necesita descargar o subir un objeto específico de S3: un cliente que obtiene el PDF de una factura, o una aplicación móvil que sube una foto de perfil. Hacer público el bucket lo expondría todo. Una URL prefirmada (presigned URL) resuelve esto concediendo acceso temporal a exactamente una operación sobre un objeto.</p>
+<p>Tu backend, ejecutándose con credenciales que tienen permiso para la operación, genera la URL con el SDK o la CLI. La URL incluye el bucket, la clave, la operación y la expiración, además de una firma SigV4 hecha con las credenciales de quien la generó. Cualquiera que tenga la URL puede realizar esa operación hasta que expire; S3 comprueba la firma y si la identidad firmante todavía tiene permiso en el momento de la solicitud. El objeto y el bucket siguen siendo privados.</p>
+<pre class="code" tabindex="0"><code>url = s3.generate_presigned_url(
+    'get_object',
+    Params={'Bucket': 'invoices', 'Key': 'cust-42/inv-1001.pdf'},
+    ExpiresIn=300)  # segundos</code></pre>
+<p>Desde la CLI, <code>aws s3 presign s3://invoices/cust-42/inv-1001.pdf --expires-in 300</code> crea una URL de descarga. Para cargas, genera una URL prefirmada de <code>put_object</code> (o un POST prefirmado, que además te permite fijar condiciones como el tamaño máximo de archivo y el tipo de contenido para cargas desde formularios del navegador). Detalles importantes: la URL nunca puede conceder más que los permisos del firmante; deja de funcionar antes de tiempo si las credenciales firmantes expiran, por eso una URL generada por una función Lambda con credenciales de rol no puede sobrevivir a esa sesión de rol; con SigV4 la expiración máxima es de siete días; y una URL prefirmada es un bearer token, así que compártela solo por HTTPS y mantén expiraciones cortas. Para el contenido servido mediante CloudFront, las URL firmadas o las cookies firmadas de CloudFront son el equivalente.</p>
+<p>IAM Access Analyzer ayuda con la otra mitad del trabajo: asegurar que las políticas concedan solo lo necesario y que nada se comparta de forma involuntaria. Tiene varias capacidades. El análisis de acceso externo examina las políticas basadas en recursos de buckets de S3, claves de KMS, roles de IAM, funciones Lambda, colas SQS, secretos de Secrets Manager y otros recursos compatibles, y produce hallazgos cuando un recurso se comparte con un principal fuera de tu zona de confianza (tu cuenta u organización), como un bucket público o un rol en el que confía una cuenta desconocida. El análisis de acceso no utilizado encuentra roles, claves de acceso, contraseñas y permisos sin uso. La generación de políticas revisa tu actividad en CloudTrail para un rol o usuario durante un período y genera una política que contiene solo las acciones realmente usadas, lo cual es un excelente punto de partida para el mínimo privilegio. La validación de políticas revisa las políticas mientras las escribes en busca de errores, advertencias de seguridad y concesiones demasiado amplias, y las comprobaciones de políticas personalizadas pueden ejecutarse en CI/CD para bloquear cambios riesgosos antes del despliegue.</p>
+<p>Un flujo práctico de mínimo privilegio para un rol de aplicación: empieza con permisos amplios en desarrollo, ejecútalo con pruebas realistas, usa la generación de políticas de Access Analyzer a partir de la actividad de CloudTrail, afina la política generada con ARN de recursos específicos, valídala y revisa con el tiempo los hallazgos de acceso no utilizado.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Presigned URL (URL prefirmada)</dt><dd>Una URL firmada con las credenciales de una identidad que concede acceso temporal a una operación específica de S3 sobre un objeto.</dd><dt>Presigned POST (POST prefirmado)</dt><dd>Una política de formulario firmada que permite cargas a S3 desde el navegador con condiciones como límites de tamaño y prefijos de clave.</dd><dt>IAM Access Analyzer</dt><dd>Un servicio que encuentra accesos compartidos externamente y sin uso, valida políticas y genera políticas de mínimo privilegio a partir de la actividad.</dd><dt>Zone of trust (zona de confianza)</dt><dd>La cuenta u organización que Access Analyzer considera interna al informar sobre el acceso externo.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>La función Lambda del backend de una aplicación de fotos genera una URL PUT prefirmada que expira en cinco minutos para la clave uploads/user-123/avatar.jpg. El teléfono sube directamente a S3 con esa URL, así que los archivos grandes nunca pasan por la API, y el bucket permanece totalmente privado.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> ¿Acceso temporal a un objeto privado de S3 para alguien sin credenciales de AWS? URL prefirmada. Recuerda que la URL está limitada tanto por su expiración como por la vida útil y los permisos de las credenciales que la firmaron.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué una URL prefirmada creada en Lambda podría dejar de funcionar antes de su tiempo ExpiresIn?</summary><p>Se firmó con las credenciales temporales del rol de ejecución, y la URL deja de ser válida cuando esas credenciales expiran.</p></details>
+<details class="sq"><summary>¿Puede una URL prefirmada conceder un acceso que el firmante no tiene?</summary><p>No; S3 evalúa los permisos del firmante, así que la URL solo puede permitir lo que el firmante tiene permitido hacer.</p></details>
+<details class="sq"><summary>¿Qué función de Access Analyzer construye una política basada en lo que un rol realmente hizo?</summary><p>La generación de políticas, que analiza la actividad del rol en CloudTrail.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../keeping-sensitive-data-out-of-code-and-logs-default-credential-chain-n/">← Mantener los datos sensibles fuera del código y de los logs:</a><a href="../preparing-artifacts-zip-packages-vs-container-images-in-ecr-lambda-lay/">Preparar artefactos: paquetes .zip vs imágenes de contenedor →</a></nav>
+</main>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Identidades administradas: asignadas por el sistema vs asi… · Lección de SC-500</title>
+<meta name="description" content="Las aplicaciones a menudo necesitan llamar a otros servicios: un App Service que lee de Key Vault, una VM que escribe en Storage, una Function que consulta">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Identidades administradas: asignadas por el sistema vs asi… · Lección de SC-500">
+<meta property="og:description" content="Las aplicaciones a menudo necesitan llamar a otros servicios: un App Service que lee de Key Vault, una VM que escribe en Storage, una Function que consulta">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/sc-500/lessons/managed-identities-system-assigned-vs-user-assigned-and-replacing-stor/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/sc-500/lessons/managed-identities-system-assigned-vs-user-assigned-and-replacing-stor/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../sc-500/">SC-500</a> / <a href="../">Lecciones</a> · <a href="../../../../sc-500/lessons/managed-identities-system-assigned-vs-user-assigned-and-replacing-stor/" hreflang="en" lang="en">English</a></p>
+<p class="note">Microsoft Certified: Cloud and AI Security Engineer Associate (replaces Azure Security Engineer Associate / AZ-500) SC-500</p>
+<h1>Identidades administradas: asignadas por el sistema vs asignadas por el usuario, y reemplazo de secretos almacenados por acceso basado en tokens</h1>
+<article class="lbody">
+<p>Las aplicaciones a menudo necesitan llamar a otros servicios: un App Service que lee de Key Vault, una VM que escribe en Storage, una Function que consulta Azure SQL. La forma antigua era guardar una cadena de conexión, una clave o un secreto de cliente en la configuración, lo cual puede filtrarse, caducar u olvidarse en un repositorio de código. Una identidad administrada (managed identity) resuelve esto dándole al recurso de Azure su propia identidad en Microsoft Entra ID, cuyas credenciales Azure crea, almacena y rota por ti. Tu código nunca ve un secreto.</p>
+<p>Una identidad administrada asignada por el sistema (system-assigned) se habilita en un solo recurso (por ejemplo, en la hoja Identity de una VM o de una aplicación web) y está ligada al ciclo de vida de ese recurso. Se crea junto con el recurso, solo ese recurso puede usarla y se elimina cuando se elimina el recurso. Una identidad administrada asignada por el usuario (user-assigned) es un recurso de Azure independiente (<code>Microsoft.ManagedIdentity/userAssignedIdentities</code>) que creas primero y luego asocias a uno o varios recursos. Sobrevive cuando esos recursos se eliminan.</p>
+<p>Elige la asignada por el sistema cuando un solo recurso necesita su propia identidad y quieres que la limpieza sea automática. Elige la asignada por el usuario cuando varios recursos necesitan los mismos permisos (por ejemplo, un grupo de VMs en un scale set o muchas function apps), cuando quieres crear identidades por adelantado y conceder acceso antes de desplegar los recursos, o cuando los recursos se recrean con frecuencia y no quieres rehacer las asignaciones de roles cada vez. Un recurso puede tener al mismo tiempo una identidad asignada por el sistema y varias asignadas por el usuario.</p>
+<p>Por dentro, una identidad administrada es un service principal especial. El código que se ejecuta en el recurso solicita un token de acceso a un endpoint local: el Azure Instance Metadata Service (IMDS) en la dirección link-local <code>169.254.169.254</code> en las VMs, o un endpoint de identidad proporcionado mediante variables de entorno en App Service y Functions. Luego el token se presenta al servicio de destino, que debe aceptar la autenticación de Entra. En el código, <code>DefaultAzureCredential</code> o <code>ManagedIdentityCredential</code> de la biblioteca Azure Identity se encargan de todo esto.</p>
+<p>Obtener un token es solo la mitad del trabajo; la identidad también necesita permiso. Le concedes un rol de Azure RBAC en el destino, como Key Vault Secrets User en un vault o Storage Blob Data Contributor en un contenedor, o creas para ella un usuario de base de datos contenido (contained database user) en Azure SQL. Aplica el mínimo privilegio y el ámbito más reducido posible.</p>
+<p>Reemplazar secretos normalmente sigue estos pasos: habilitar la identidad, concederle el rol de plano de datos adecuado, cambiar la aplicación para que use credenciales basadas en tokens, eliminar la clave o cadena de conexión almacenada y, por último, rotar o deshabilitar la clave antigua (por ejemplo, deshabilitando el acceso con Shared Key en la cuenta de almacenamiento) para que el riesgo de un secreto filtrado desaparezca de verdad.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Managed identity (identidad administrada)</dt><dd>Una identidad de Entra para un recurso de Azure cuyas credenciales Azure administra y rota automáticamente.</dd><dt>System-assigned identity (identidad asignada por el sistema)</dt><dd>Una identidad administrada creada en un recurso y ligada a su ciclo de vida.</dd><dt>User-assigned identity (identidad asignada por el usuario)</dt><dd>Un recurso de identidad administrada independiente que puede asociarse a muchos recursos y persiste por separado.</dd><dt>IMDS</dt><dd>El Azure Instance Metadata Service en 169.254.169.254 que las VMs usan para solicitar tokens de identidad administrada.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una aplicación web guardaba una clave de cuenta de almacenamiento en su configuración (app settings). Habilitas la identidad asignada por el sistema de la aplicación web, le das Storage Blob Data Reader en el contenedor, actualizas el código para usar DefaultAzureCredential, eliminas el app setting y luego rotas ambas claves de almacenamiento para que la antigua deje de funcionar.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Si varios recursos deben compartir una identidad, o la identidad debe sobrevivir a la eliminación del recurso, elige la asignada por el usuario. Si el escenario dice 'ninguna credencial almacenada en el código o la configuración', la respuesta es una identidad administrada más un rol de RBAC en el destino.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué le pasa a una identidad asignada por el sistema cuando se elimina su VM?</summary><p>Se elimina junto con la VM, y sus asignaciones de roles dejan de poder usarse.</p></details>
+<details class="sq"><summary>Una VM tiene una identidad administrada pero recibe errores 403 al leer secretos de Key Vault. ¿Qué falta?</summary><p>Autorización en el vault, como el rol Key Vault Secrets User (modelo RBAC) o una directiva de acceso que conceda Get sobre los secretos.</p></details>
+<details class="sq"><summary>¿Por qué podrías crear por adelantado una identidad asignada por el usuario?</summary><p>Para poder concederle roles antes de que existan los recursos y reutilizarla en muchos recursos o nuevos despliegues.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia SC-500 gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../sc-500/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../mfa-and-authentication-methods-policy-phishing-resistant-methods-fido2/">← MFA y directiva de métodos de autenticación, métodos resiste</a><a href="../app-registrations-vs-enterprise-applications-service-principals-api-pe/">Registros de aplicaciones vs aplicaciones empresariales (ser →</a></nav>
+</main>
+</body>
+</html>

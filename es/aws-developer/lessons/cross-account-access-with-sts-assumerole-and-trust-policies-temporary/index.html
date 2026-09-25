@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Acceso entre cuentas con STS AssumeRole y políticas de con… · Lección de Developer Associate</title>
+<meta name="description" content="Las organizaciones operan muchas cuentas de AWS, y las aplicaciones a menudo necesitan llegar a recursos de otra cuenta: una canalización de compilación qu">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Acceso entre cuentas con STS AssumeRole y políticas de con… · Lección de Developer Associate">
+<meta property="og:description" content="Las organizaciones operan muchas cuentas de AWS, y las aplicaciones a menudo necesitan llegar a recursos de otra cuenta: una canalización de compilación qu">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-developer/lessons/cross-account-access-with-sts-assumerole-and-trust-policies-temporary/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-developer/lessons/cross-account-access-with-sts-assumerole-and-trust-policies-temporary/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-developer/">Developer Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-developer/lessons/cross-account-access-with-sts-assumerole-and-trust-policies-temporary/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Developer – Associate DVA-C02</p>
+<h1>Acceso entre cuentas con STS AssumeRole y políticas de confianza; credenciales temporales</h1>
+<article class="lbody">
+<p>Las organizaciones operan muchas cuentas de AWS, y las aplicaciones a menudo necesitan llegar a recursos de otra cuenta: una canalización de compilación que despliega en producción, un proceso de informes que lee el bucket de una cuenta de datos. La forma estándar y segura de hacerlo es que quien llama asuma un rol en la cuenta de destino y reciba credenciales de corta duración, en lugar de crear usuarios de IAM con claves de larga duración en cada cuenta.</p>
+<p>Dos políticas en el rol de destino hacen que esto funcione. La política de confianza (la política basada en recursos del rol, también llamada política de asunción de rol) dice quién puede asumir el rol: su <code>Principal</code> nombra la cuenta o el rol específico de confianza, y la acción es <code>sts:AssumeRole</code>. La política de permisos dice qué puede hacer el rol una vez asumido. Del lado de quien llama, su propia política de identidad debe permitir <code>sts:AssumeRole</code> sobre el ARN del rol de destino. Ambos lados deben estar de acuerdo; esa es la regla para todo acceso entre cuentas.</p>
+<pre class="code" tabindex="0"><code>{
+  &quot;Version&quot;: &quot;2012-10-17&quot;,
+  &quot;Statement&quot;: [{
+    &quot;Effect&quot;: &quot;Allow&quot;,
+    &quot;Principal&quot;: { &quot;AWS&quot;: &quot;arn:aws:iam::111122223333:role/ci-deployer&quot; },
+    &quot;Action&quot;: &quot;sts:AssumeRole&quot;,
+    &quot;Condition&quot;: { &quot;StringEquals&quot;: { &quot;sts:ExternalId&quot;: &quot;example-external-id&quot; } }
+  }]
+}</code></pre>
+<p>Luego quien llama invoca la API <code>AssumeRole</code> de AWS Security Token Service (STS) con el ARN del rol y un nombre de sesión. STS devuelve credenciales temporales: un ID de clave de acceso, una clave de acceso secreta y un token de sesión, además de una hora de expiración. La sesión dura una hora por defecto; puedes solicitar desde 15 minutos hasta la duración máxima de sesión configurada en el rol (que puede fijarse hasta en 12 horas). El código usa los tres valores, y el token de sesión es lo que distingue las credenciales temporales de las de larga duración. Cuando las credenciales expiran, quien llama debe volver a asumir el rol; los proveedores de credenciales de asunción de rol del SDK y los perfiles de la CLI con <code>role_arn</code> y <code>source_profile</code> se renuevan automáticamente.</p>
+<p>Un ID externo (external ID) es un valor semisecreto que un tercero debe pasar al asumir un rol en tu cuenta, exigido mediante una condición en la política de confianza. Protege contra el problema del suplente confundido cuando un proveedor atiende a muchos clientes. También se puede exigir autenticación multifactor (MFA) con la condición <code>aws:MultiFactorAuthPresent</code>. Cuando un rol asumido se usa para asumir otro, lo que se llama encadenamiento de roles (role chaining), la sesión se limita a una hora.</p>
+<p>STS tiene API relacionadas que conviene reconocer: <code>AssumeRoleWithWebIdentity</code> intercambia un token de un proveedor OpenID Connect (OIDC), como el token de identidad de un sistema de CI o Cognito, por credenciales de AWS; <code>AssumeRoleWithSAML</code> hace lo mismo para proveedores de identidad SAML; <code>GetSessionToken</code> devuelve credenciales temporales para un usuario de IAM, normalmente para cumplir un requisito de MFA; <code>GetCallerIdentity</code> te dice a quién pertenecen las credenciales actuales; y <code>DecodeAuthorizationMessage</code> decodifica el mensaje codificado que algunos servicios devuelven con una falla de autorización, lo que te ayuda a ver qué política denegó una solicitud.</p>
+<p>Cada acción realizada con un rol asumido se registra en AWS CloudTrail con el nombre de la sesión del rol, así que elige nombres de sesión significativos (como el ID de ejecución de la canalización) para facilitar la auditoría. En la cuenta de destino, las acciones aparecen como realizadas por el rol, y el nombre de sesión muestra quién lo usó.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Trust policy (política de confianza)</dt><dd>La política basada en recursos de un rol de IAM que especifica qué principales pueden asumirlo.</dd><dt>AssumeRole</dt><dd>La API de STS que devuelve credenciales temporales de un rol a quien llama si es de confianza.</dd><dt>Temporary credentials (credenciales temporales)</dt><dd>Un ID de clave de acceso, una clave de acceso secreta y un token de sesión que expiran después de una duración establecida.</dd><dt>External ID (ID externo)</dt><dd>Un valor exigido en una condición de la política de confianza que los terceros deben proporcionar al asumir un rol, lo que evita ataques de suplente confundido.</dd><dt>Role chaining (encadenamiento de roles)</dt><dd>Usar las credenciales de un rol asumido para asumir otro rol; las sesiones se limitan a una hora.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un proyecto de CodeBuild en una cuenta de herramientas despliega en una cuenta de producción. Producción tiene un rol de despliegue cuya política de confianza permite al rol de servicio del proyecto de compilación, y la política del rol de compilación permite sts:AssumeRole sobre ese ARN. El buildspec ejecuta aws sts assume-role, exporta los tres valores devueltos como variables de entorno y ejecuta el despliegue.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> El acceso entre cuentas necesita ambos lados: la política de confianza del rol de destino debe confiar en quien llama, y la política de IAM de quien llama debe permitir sts:AssumeRole sobre el rol. Si falta alguno, obtienes AccessDenied.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué tres valores componen las credenciales temporales?</summary><p>Un ID de clave de acceso, una clave de acceso secreta y un token de sesión.</p></details>
+<details class="sq"><summary>¿Qué política de un rol decide quién puede asumirlo?</summary><p>La política de confianza (documento de política de asunción de rol).</p></details>
+<details class="sq"><summary>¿Qué API de STS usaría un sistema de CI con un token OIDC para obtener credenciales de AWS sin claves almacenadas?</summary><p>AssumeRoleWithWebIdentity.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-developer/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../resource-based-policies-lambda-permissions-for-s3-sns-api-gateway-s3-b/">← Políticas basadas en recursos: permisos de Lambda para S3/SN</a><a href="../amazon-cognito-user-pools-sign-up-sign-in-id-access-refresh-tokens-vs/">Amazon Cognito: grupos de usuarios (registro, inicio de sesi →</a></nav>
+</main>
+</body>
+</html>

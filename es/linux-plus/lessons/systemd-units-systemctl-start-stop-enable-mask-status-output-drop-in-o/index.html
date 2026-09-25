@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Unidades de systemd: systemctl start/stop/enable/mask, sal… · Lección de Linux+</title>
+<meta name="description" content="systemd administra casi todo lo que se ejecuta en un sistema Linux moderno mediante unidades. Una unidad es un objeto de configuración de cierto tipo, iden">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Unidades de systemd: systemctl start/stop/enable/mask, sal… · Lección de Linux+">
+<meta property="og:description" content="systemd administra casi todo lo que se ejecuta en un sistema Linux moderno mediante unidades. Una unidad es un objeto de configuración de cierto tipo, iden">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/linux-plus/lessons/systemd-units-systemctl-start-stop-enable-mask-status-output-drop-in-o/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/linux-plus/lessons/systemd-units-systemctl-start-stop-enable-mask-status-output-drop-in-o/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../linux-plus/">Linux+</a> / <a href="../">Lecciones</a> · <a href="../../../../linux-plus/lessons/systemd-units-systemctl-start-stop-enable-mask-status-output-drop-in-o/" hreflang="en" lang="en">English</a></p>
+<p class="note">CompTIA Linux+ XK0-006</p>
+<h1>Unidades de systemd: systemctl start/stop/enable/mask, salida de status, anulaciones drop-in con systemctl edit</h1>
+<article class="lbody">
+<p>systemd administra casi todo lo que se ejecuta en un sistema Linux moderno mediante unidades. Una unidad es un objeto de configuración de cierto tipo, identificado por su sufijo: <code>.service</code> para demonios, <code>.socket</code> para activación por socket, <code>.timer</code> para tareas programadas, <code>.mount</code> para montajes, <code>.target</code> para grupos de unidades, y más. <code>systemctl</code> es la herramienta que usas para controlarlas.</p>
+<p>Los comandos básicos del ciclo de vida actúan sobre el sistema en ejecución: <code>systemctl start httpd</code>, <code>stop</code>, <code>restart</code> (detener y luego iniciar) y <code>reload</code> (pedir al servicio que vuelva a leer su configuración sin detenerse, si lo admite). El comportamiento en el arranque es aparte: <code>systemctl enable httpd</code> crea enlaces simbólicos para que la unidad arranque en el boot dentro de su target, y <code>disable</code> los elimina. Ambos son independientes, por eso existe <code>systemctl enable --now httpd</code> para hacer las dos cosas a la vez. <code>systemctl is-active</code> e <code>is-enabled</code> responden cada pregunta en scripts.</p>
+<p><code>mask</code> va más allá que disable. <code>systemctl mask httpd</code> enlaza el archivo de unidad a <code>/dev/null</code>, de modo que no se puede iniciar en absoluto, ni manualmente ni como dependencia de otra unidad, hasta que lo desenmascares con <code>unmask</code>. Úsalo cuando un servicio nunca deba ejecutarse, por ejemplo para evitar que se active un servicio en conflicto.</p>
+<p><code>systemctl status httpd</code> es tu primer diagnóstico. Muestra la línea Loaded (ruta del archivo de unidad y si está habilitada o deshabilitada), la línea Active (active (running), inactive (dead), failed, con una marca de tiempo), el PID principal, el cgroup (control group) de procesos y las últimas líneas del journal. Una unidad fallida también muestra el código de salida o la señal, como <code>status=203/EXEC</code>, que significa que no se pudo ejecutar el ejecutable. <code>systemctl --failed</code> lista todas las unidades fallidas y <code>systemctl list-units --type=service</code> lista los servicios activos.</p>
+<p>Los archivos de unidad viven en tres lugares, en orden de precedencia: <code>/etc/systemd/system/</code> (administrador), <code>/run/systemd/system/</code> (tiempo de ejecución) y <code>/usr/lib/systemd/system/</code> o <code>/lib/systemd/system/</code> (instalados por paquetes). Nunca edites directamente los archivos que proporcionan los paquetes, porque las actualizaciones los sobrescriben. En su lugar, crea una anulación drop-in con <code>systemctl edit httpd</code>, que abre un editor y guarda tus cambios en <code>/etc/systemd/system/httpd.service.d/override.conf</code>. Solo se anulan las configuraciones que incluyas. Por ejemplo:</p>
+<pre class="code" tabindex="0"><code>[Service]
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536</code></pre>
+<p><code>systemctl edit --full httpd</code> copia la unidad completa a /etc para reemplazarla por completo, y <code>systemctl cat httpd</code> muestra la unidad más todos los drop-ins. Un detalle sutil: las configuraciones de tipo lista como <code>ExecStart=</code> deben limpiarse primero con una línea <code>ExecStart=</code> vacía antes de establecer un nuevo valor en un drop-in. Después de editar archivos de unidad a mano, ejecuta <code>systemctl daemon-reload</code> para que systemd los vuelva a leer; <code>systemctl edit</code> lo hace por ti. Una sección de servicio típica contiene <code>ExecStart=</code>, <code>User=</code>, <code>Restart=</code> y una sección <code>[Install]</code> con <code>WantedBy=multi-user.target</code>, que es lo que usa enable.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Unit (unidad)</dt><dd>Un objeto de configuración de systemd como .service, .socket, .timer, .mount o .target.</dd><dt>enable vs start</dt><dd>enable configura una unidad para que arranque en el boot; start la ejecuta ahora. Ninguno implica al otro.</dd><dt>mask</dt><dd>Enlaza una unidad a /dev/null para que no pueda iniciarse manualmente ni como dependencia.</dd><dt>Drop-in override (anulación drop-in)</dt><dd>Un archivo .conf en /etc/systemd/system/&lt;unit&gt;.d/ que anula configuraciones seleccionadas de una unidad.</dd><dt>daemon-reload</dt><dd>Le indica a systemd que vuelva a leer los archivos de unidad después de que cambien en disco.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un servicio de API interno falla de vez en cuando y se queda caído. En lugar de editar la unidad del proveedor en /usr/lib/systemd/system, ejecutas systemctl edit api.service, agregas Restart=on-failure y RestartSec=5 bajo [Service], guardas y reinicias el servicio. systemctl cat api.service ahora muestra la anulación, y la siguiente falla provoca un reinicio automático.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Conoce la diferencia de alcance: stop afecta el ahora, disable afecta el arranque y mask bloquea la unidad por completo hasta que se desenmascare.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Un servicio se ejecuta ahora, pero no está en ejecución después de reiniciar. ¿Qué comando lo soluciona?</summary><p>systemctl enable &lt;service&gt; (o enable --now para iniciarlo también).</p></details>
+<details class="sq"><summary>¿Dónde guarda sus cambios systemctl edit nginx?</summary><p>En /etc/systemd/system/nginx.service.d/override.conf.</p></details>
+<details class="sq"><summary>¿Qué debes ejecutar después de editar manualmente un archivo de unidad en /etc/systemd/system?</summary><p>systemctl daemon-reload y luego reiniciar la unidad si es necesario.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Linux+ gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../linux-plus/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../account-files-etc-passwd-etc-shadow-etc-group-etc-skel-etc-login-defs/">← Archivos de cuentas: /etc/passwd, /etc/shadow, /etc/group, /</a><a href="../scheduling-cron-and-crontab-syntax-at-systemd-timers-oncalendar/">Programación de tareas: cron y sintaxis de crontab, at, time →</a></nav>
+</main>
+</body>
+</html>

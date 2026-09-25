@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ingress controllers, IngressClass y la clase por defecto; … · Lección de CKA</title>
+<meta name="description" content="Un Ingress es un objeto de API que describe el enrutamiento HTTP y HTTPS desde fuera del clúster hacia los Services, por hostname y ruta. Por sí solo no ha">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Ingress controllers, IngressClass y la clase por defecto; … · Lección de CKA">
+<meta property="og:description" content="Un Ingress es un objeto de API que describe el enrutamiento HTTP y HTTPS desde fuera del clúster hacia los Services, por hostname y ruta. Por sí solo no ha">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/cka/lessons/ingress-controllers-ingressclass-and-the-default-class-ingress-rules-p/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/cka/lessons/ingress-controllers-ingressclass-and-the-default-class-ingress-rules-p/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../cka/">CKA</a> / <a href="../">Lecciones</a> · <a href="../../../../cka/lessons/ingress-controllers-ingressclass-and-the-default-class-ingress-rules-p/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Administrator CKA (Kubernetes v1.35 curriculum)</p>
+<h1>Ingress controllers, IngressClass y la clase por defecto; reglas de Ingress, tipos de ruta y TLS</h1>
+<article class="lbody">
+<p>Un Ingress es un objeto de API que describe el enrutamiento HTTP y HTTPS desde fuera del clúster hacia los Services, por hostname y ruta. Por sí solo no hace nada. Un Ingress controller, un proxy inverso como un controlador basado en NGINX, HAProxy o Traefik que se ejecuta como Pods, vigila los objetos Ingress y se configura para que coincidan. Kubernetes no incluye ninguno, así que instalar un controlador (normalmente con Helm) es el primer paso. El propio controlador se expone con un Service NodePort o LoadBalancer.</p>
+<p>Como un clúster puede ejecutar varios controladores, cada Ingress indica el que quiere mediante <code>spec.ingressClassName</code>, que hace referencia a un objeto IngressClass. El campo <code>spec.controller</code> de la IngressClass identifica la implementación del controlador. Una IngressClass con la anotación <code>ingressclass.kubernetes.io/is-default-class: &quot;true&quot;</code> pasa a ser la predeterminada, y los Ingress creados sin nombre de clase se le asignan. Si no hay clase predeterminada ni nombre de clase, es posible que todos los controladores ignoren el Ingress. La antigua anotación <code>kubernetes.io/ingress.class</code> está obsoleta.</p>
+<p>Cada regla tiene un <code>host</code> opcional y una lista de <code>paths</code>, cada una con un <code>path</code>, un <code>pathType</code> y un <code>backend</code> con el nombre y el puerto de un Service. Hay tres tipos de ruta. <code>Exact</code> coincide exactamente con la ruta de la URL y distingue mayúsculas de minúsculas. <code>Prefix</code> coincide por elementos de la ruta separados por <code>/</code>, así que <code>/api</code> coincide con <code>/api</code> y <code>/api/v1</code> pero no con <code>/apiv1</code>. <code>ImplementationSpecific</code> deja la coincidencia en manos del controlador. Cuando coinciden varias rutas, gana la coincidencia más larga, y Exact le gana a Prefix a igual longitud. Un <code>defaultBackend</code> captura las solicitudes que no coinciden con ninguna regla.</p>
+<pre class="code" tabindex="0"><code>apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata: {name: shop, namespace: shop}
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts: [shop.example.com]
+    secretName: shop-tls
+  rules:
+  - host: shop.example.com
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service: {name: api, port: {number: 8080}}
+      - path: /
+        pathType: Prefix
+        backend:
+          service: {name: frontend, port: {number: 80}}</code></pre>
+<p>TLS se configura con una sección <code>tls</code> que lista los hosts y un <code>secretName</code> que apunta a un Secret de tipo <code>kubernetes.io/tls</code> en el mismo namespace que el Ingress, creado con <code>kubectl create secret tls shop-tls --cert=tls.crt --key=tls.key</code>. El controlador entonces termina TLS para esos hosts. Puedes crear Ingress sencillos de forma imperativa, por ejemplo <code>kubectl create ingress shop --class=nginx --rule=&quot;shop.example.com/api*=api:8080,tls=shop-tls&quot;</code>, donde un <code>*</code> al final significa Prefix.</p>
+<p>El comportamiento específico de cada controlador, como la reescritura de URL, se configura con anotaciones cuyos nombres dependen del controlador. La API de Ingress es estable pero sus funciones están congeladas; las nuevas capacidades van a Gateway API. Para el troubleshooting, <code>kubectl describe ingress</code> muestra los backends resueltos y los eventos, la columna ADDRESS muestra si un controlador lo tomó, y los logs del Pod del controlador muestran los errores de configuración.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Ingress controller (controlador de Ingress)</dt><dd>Un proxy que se ejecuta en el clúster y que implementa los objetos Ingress.</dd><dt>IngressClass</dt><dd>Un objeto de alcance de clúster que vincula un Ingress con un controlador específico.</dd><dt>Default IngressClass (IngressClass predeterminada)</dt><dd>La clase con la anotación is-default-class en true, usada cuando un Ingress no define ingressClassName.</dd><dt>pathType</dt><dd>Coincidencia de rutas Exact, Prefix (por elementos) o ImplementationSpecific.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un Ingress creado sin ingressClassName tiene el ADDRESS vacío y no enruta. <code>kubectl get ingressclass</code> muestra una sola clase, nginx, sin la anotación de predeterminada. Definir <code>ingressClassName: nginx</code> en el Ingress o anotar la clase como predeterminada hace que el controlador lo adopte.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> La coincidencia Prefix es por segmento de ruta, no por prefijo de cadena: /app coincide con /app/x pero no con /application. Y el Secret de TLS debe estar en el mismo namespace que el Ingress.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿La ruta /shop con pathType Prefix coincide con /shopping?</summary><p>No; Prefix coincide con elementos completos de la ruta, así que solo coincide con /shop y /shop/...</p></details>
+<details class="sq"><summary>¿Qué hace que una IngressClass sea la predeterminada?</summary><p>La anotación ingressclass.kubernetes.io/is-default-class con el valor &quot;true&quot;.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../cka/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../gateway-api-gatewayclass-gateway-listeners-and-allowedroutes-httproute/">← Gateway API: GatewayClass, listeners y allowedRoutes del Gat</a><a href="../coredns-the-coredns-configmap-and-corefile-forwarding-and-stub-zones-s/">CoreDNS: el ConfigMap coredns y el Corefile, reenvío y stub  →</a></nav>
+</main>
+</body>
+</html>

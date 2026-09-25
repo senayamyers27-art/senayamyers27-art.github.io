@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Construir, etiquetar, guardar y cargar imágenes con docker… · Lección de CKAD</title>
+<meta name="description" content="Una vez que tienes un Dockerfile, lo conviertes en una imagen con un motor de contenedores. Docker y Podman aceptan comandos casi idénticos, así que en el ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Construir, etiquetar, guardar y cargar imágenes con docker… · Lección de CKAD">
+<meta property="og:description" content="Una vez que tienes un Dockerfile, lo conviertes en una imagen con un motor de contenedores. Docker y Podman aceptan comandos casi idénticos, así que en el ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/ckad/lessons/building-tagging-saving-and-loading-images-with-docker-or-podman-build/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/ckad/lessons/building-tagging-saving-and-loading-images-with-docker-or-podman-build/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../ckad/">CKAD</a> / <a href="../">Lecciones</a> · <a href="../../../../ckad/lessons/building-tagging-saving-and-loading-images-with-docker-or-podman-build/" hreflang="en" lang="en">English</a></p>
+<p class="note">Certified Kubernetes Application Developer CKAD (Kubernetes v1.35 curriculum)</p>
+<h1>Construir, etiquetar, guardar y cargar imágenes con docker o podman (build, tag, save, load)</h1>
+<article class="lbody">
+<p>Una vez que tienes un Dockerfile, lo conviertes en una imagen con un motor de contenedores. Docker y Podman aceptan comandos casi idénticos, así que en el examen normalmente puedes escribir lo mismo con cualquiera de las dos herramientas. Podman funciona sin un daemon central y puede ejecutarse sin root (rootless), pero para construir, etiquetar y mover imágenes el flujo de trabajo es el mismo.</p>
+<p><code>docker build -t myapp:1.0 .</code> construye una imagen. La opción <code>-t</code> le da un nombre y una etiqueta, y el <code>.</code> final es el contexto de build: el directorio cuyos archivos se envían al builder y pueden referenciarse con <code>COPY</code>. Si el Dockerfile tiene otro nombre o ubicación, apúntalo con <code>-f path/to/Dockerfile</code>. Un archivo <code>.dockerignore</code> en el contexto mantiene fuera del build los archivos grandes o secretos, como <code>.git</code> o credenciales locales.</p>
+<p>Una referencia de imagen tiene la forma <code>registry/repository:tag</code>, por ejemplo <code>registry.example.com/team/myapp:1.0</code>. Si omites el registry, se asume Docker Hub; si omites la etiqueta, se asume <code>latest</code>. Una etiqueta es solo un rótulo movible que apunta a una imagen; la identidad inmutable es el digest del contenido, escrito <code>myapp@sha256:...</code>. <code>docker tag myapp:1.0 registry.example.com/team/myapp:1.0</code> agrega un segundo nombre a la misma imagen sin copiar nada, algo que haces antes de <code>docker push</code> a un registry.</p>
+<p>A veces no hay registry, por ejemplo en un host aislado (air-gapped) o en una tarea del examen que te pide exportar una imagen. <code>docker save -o myapp.tar myapp:1.0</code> escribe la imagen, con todas sus capas y etiquetas, en un archivo tar. <code>docker load -i myapp.tar</code> la importa en otra máquina. Podman admite los mismos comandos <code>save</code> y <code>load</code>, y además puede guardar en formato OCI (Open Container Initiative) con <code>--format oci-archive</code>. No los confundas con <code>docker export</code> y <code>docker import</code>, que trabajan con el sistema de archivos aplanado de un contenedor y pierden el historial de la imagen y metadatos como CMD.</p>
+<pre class="code" tabindex="0"><code>docker build -t myapp:1.0 .
+docker tag myapp:1.0 myapp:latest
+docker images | grep myapp
+docker save -o /tmp/myapp.tar myapp:1.0
+docker load -i /tmp/myapp.tar</code></pre>
+<p>En un clúster local, los nodos no ven las imágenes de tu estación de trabajo. Con kind ejecutas <code>kind load docker-image myapp:1.0</code>; con minikube puedes usar <code>minikube image load myapp:1.0</code>. En la especificación del Pod, define <code>imagePullPolicy: IfNotPresent</code> o <code>Never</code> para que el kubelet use la imagen cargada en lugar de intentar descargarla. Ten en cuenta que para una imagen con la etiqueta <code>latest</code> (o sin etiqueta), la política de descarga por defecto es <code>Always</code>, que fallará si la imagen existe solo localmente.</p>
+<p>Comandos útiles de inspección son <code>docker images</code> (o <code>podman images</code>) para listar imágenes, <code>docker image inspect</code> para ver el ENTRYPOINT, CMD, entorno y puertos expuestos configurados, y <code>docker history</code> para ver las capas y sus tamaños.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Build context (contexto de build)</dt><dd>El directorio enviado al builder cuyos archivos pueden alcanzar COPY y ADD.</dd><dt>Tag (etiqueta)</dt><dd>Un rótulo legible y movible, como 1.0, que apunta a una imagen.</dd><dt>Digest</dt><dd>El hash de contenido sha256 inmutable que identifica una imagen de forma única.</dd><dt>docker save / load</dt><dd>Comandos que exportan imágenes con todas sus capas y metadatos a un archivo tar y las vuelven a importar.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una tarea al estilo del examen dice: construye la imagen desde /opt/app con el nombre webapp y la etiqueta v2, luego guárdala en /opt/webapp-v2.tar. Ejecutas <code>podman build -t webapp:v2 /opt/app</code> seguido de <code>podman save -o /opt/webapp-v2.tar webapp:v2</code>, y luego verificas con <code>ls -lh /opt/webapp-v2.tar</code>.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Las tareas que piden un archivo de imagen quieren <code>save</code> (imagen con capas y metadatos), no <code>export</code> (el sistema de archivos plano de un contenedor). Lee también la etiqueta exacta y la ruta de salida que pide la tarea.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Qué significa el punto final en <code>docker build -t app:1 .</code>?</summary><p>Establece el contexto de build en el directorio actual, que se envía al builder y es desde donde COPY puede leer.</p></details>
+<details class="sq"><summary>Cargaste una imagen llamada app:latest en kind pero el Pod muestra ErrImagePull. ¿Por qué?</summary><p>Para una etiqueta latest la imagePullPolicy por defecto es Always, así que el kubelet intenta usar un registry; define imagePullPolicy en IfNotPresent o Never, o usa una etiqueta específica.</p></details>
+<details class="sq"><summary>¿<code>docker tag</code> copia la imagen?</summary><p>No, solo agrega otro nombre que apunta al mismo contenido de la imagen.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../ckad/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../writing-dockerfiles-base-images-layers-multi-stage-builds-entrypoint-v/">← Escribir Dockerfiles: imágenes base, capas, builds multietap</a><a href="../how-pod-command-and-args-override-the-image-entrypoint-and-cmd/">Cómo `command` y `args` del Pod sobrescriben ENTRYPOINT y CM →</a></nav>
+</main>
+</body>
+</html>

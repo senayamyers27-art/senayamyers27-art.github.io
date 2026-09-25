@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NTP, SNMP y syslog remoto para las operaciones del día a día · Lección de JNCIA-Junos</title>
+<meta name="description" content="Configurar NTP, SNMP y syslog una vez es solo el comienzo. En las operaciones diarias necesitas confirmar que están funcionando, mantenerlos seguros y usar">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="NTP, SNMP y syslog remoto para las operaciones del día a día · Lección de JNCIA-Junos">
+<meta property="og:description" content="Configurar NTP, SNMP y syslog una vez es solo el comienzo. En las operaciones diarias necesitas confirmar que están funcionando, mantenerlos seguros y usar">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/jncia-junos/lessons/ntp-snmp-and-remote-syslog-for-ongoing-operations/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/jncia-junos/lessons/ntp-snmp-and-remote-syslog-for-ongoing-operations/">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../jncia-junos/">JNCIA-Junos</a> / <a href="../">Lecciones</a> · <a href="../../../../jncia-junos/lessons/ntp-snmp-and-remote-syslog-for-ongoing-operations/" hreflang="en" lang="en">English</a></p>
+<p class="note">Juniper Networks Certified Associate, Junos (JNCIA-Junos) JN0-106</p>
+<h1>NTP, SNMP y syslog remoto para las operaciones del día a día</h1>
+<article class="lbody">
+<p>Configurar NTP, SNMP y syslog una vez es solo el comienzo. En las operaciones diarias necesitas confirmar que están funcionando, mantenerlos seguros y usarlos para detectar problemas antes que los usuarios. Esta lección se enfoca en verificar y usar estos servicios.</p>
+<p>Para NTP, los comandos clave de verificación son <code>show ntp associations</code> y <code>show ntp status</code>. La salida de associations lista cada servidor configurado con su stratum, alcanzabilidad y desfase (offset). Un asterisco (<code>*</code>) delante de un servidor significa que el dispositivo está sincronizado con él. Si ningún servidor tiene asterisco, el reloj no está sincronizado, quizás porque el servidor no es alcanzable, un firewall filter bloquea el puerto UDP 123 o el reloj estaba demasiado desfasado. <code>show system uptime</code> muestra la hora actual. Configura al menos dos o tres servidores para tener redundancia, y usa <code>source-address</code> si los servidores solo aceptan solicitudes de ciertas direcciones. Se pueden agregar claves de autenticación NTP para que el dispositivo solo confíe en fuentes de hora genuinas.</p>
+<pre class="code" tabindex="0"><code>user@R1&gt; show ntp associations
+     remote           refid      st t when poll reach   delay   offset  jitter
+==============================================================================
+*192.0.2.10      .GPS.            1 u   33   64  377    1.022    0.114   0.050
+ 192.0.2.11      192.0.2.10       2 u   40   64  377    1.305    0.240   0.071</code></pre>
+<p>Para SNMP, el dispositivo ejecuta un agente que responde a las consultas (get requests) de un sistema de gestión de red y envía traps cuando ocurren eventos, como un enlace que se cae o una alarma del chasis. Las consultas se autorizan con community strings en SNMPv2c o con usuarios con ajustes de autenticación y privacidad (cifrado) en SNMPv3. Los traps se definen con <code>set snmp trap-group &lt;name&gt; targets &lt;address&gt;</code> y una lista de categorías. <code>show snmp statistics</code> muestra los conteos de solicitudes, respuestas y traps, lo que ayuda a demostrar si el sistema de monitoreo realmente está llegando al dispositivo. Restringe el acceso con listas <code>clients</code> y autorización de solo lectura, y protege el Routing Engine con un firewall filter que solo permita SNMP desde los servidores de monitoreo.</p>
+<p>Para el syslog remoto, <code>set system syslog host &lt;address&gt; &lt;facility&gt; &lt;severity&gt;</code> envía los eventos a un servidor central por el puerto UDP 514 por defecto. El registro central importa porque los logs locales rotan y se pierden si el dispositivo falla, y porque un equipo de seguridad necesita los eventos de todos los dispositivos en un solo lugar para correlacionar incidentes. Las opciones útiles incluyen <code>source-address</code>, para que los logs siempre provengan de la dirección de loopback, y <code>structured-data</code>, para un formato más legible por máquinas. Combinar el syslog remoto con una hora NTP exacta es lo que hace confiables a los logs.</p>
+<p>Un buen hábito operativo es una revisión periódica: ¿están sincronizados los servidores NTP?, ¿el sistema de monitoreo sigue consultando (los contadores SNMP aumentan)?, ¿están llegando eventos recientes al servidor de logs? Un servidor de logs silencioso podría significar que todo está bien, o que el dispositivo dejó de enviar.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>show ntp associations</dt><dd>Lista los servidores NTP con stratum, alcanzabilidad y desfase; <code>*</code> marca el servidor con el que el dispositivo está sincronizado.</dd><dt>SNMP trap</dt><dd>Un mensaje no solicitado del agente SNMP del dispositivo hacia un sistema de gestión sobre un evento.</dd><dt>SNMPv3</dt><dd>Una versión de SNMP que agrega autenticación basada en usuarios y cifrado.</dd><dt>source-address</dt><dd>Una opción para servicios como syslog y NTP que fija la IP de origen de los paquetes salientes, a menudo en la loopback.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un analista de seguridad nota un hueco en los logs del firewall de un sitio. El ingeniero de red revisa el router y encuentra que <code>show ntp associations</code> no tiene <code>*</code> y que el host syslog está configurado, pero un nuevo filtro de lo0 está bloqueando el tráfico NTP de retorno. Después de permitir NTP en el filtro, el reloj se sincroniza y los logs con marcas de tiempo exactas vuelven a llegar al servidor central.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Un asterisco en <code>show ntp associations</code> significa sincronizado. El agente responde las consultas SNMP y envía los traps por iniciativa propia; SNMPv3 agrega autenticación y cifrado, que v2c no tiene.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Cómo puedes saber, a partir de <code>show ntp associations</code>, que el dispositivo está sincronizado?</summary><p>Un servidor está marcado con un asterisco (<code>*</code>).</p></details>
+<details class="sq"><summary>¿Por qué enviar syslog a un servidor remoto en lugar de depender solo de los archivos locales?</summary><p>Los logs locales rotan y pueden perderse junto con el dispositivo, y los logs centrales permiten correlacionar entre muchos dispositivos.</p></details>
+<details class="sq"><summary>¿Qué versión de SNMP ofrece cifrado?</summary><p>SNMPv3.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia JNCIA-Junos gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../jncia-junos/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../saving-and-restoring-a-rescue-configuration/">← Guardar y restaurar una configuración de rescate</a><a href="../packet-forwarding-decisions-longest-prefix-match-next-hops-active-vs-i/">Decisiones de reenvío de paquetes: coincidencia del prefijo  →</a></nav>
+</main>
+</body>
+</html>
