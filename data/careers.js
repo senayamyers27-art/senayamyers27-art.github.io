@@ -207,6 +207,45 @@ CertHub.addCareers([
       "Practice explaining how you would troubleshoot \"a user cannot log in\" from start to finish"
     ],
     labs: ["lab-home-lab", "lab-linux-cli", "lab-ad-gpo", "lab-systemd-services", "lab-powershell-admin", "lab-bia-backup"]
+  },
+  {
+    track: "cloud",
+    title: "Careers in cloud computing",
+    intro: "Cloud professionals design, build and run applications and infrastructure on platforms such as AWS and Microsoft Azure instead of in a company's own data center. The work covers identity and access, virtual networks, compute, storage, databases, monitoring, automation with infrastructure as code, and keeping the monthly bill under control. Almost every organization now runs at least part of its IT in the cloud, so these skills are in demand in every industry.\n\nIt suits people who like building systems from parts, enjoy automation and are comfortable with constant change, because cloud providers release new services and features every week. You do not need to be a programmer, but you do need to be at ease with the command line, reading documentation, and thinking about security and cost at the same time as functionality.\n\nMany people start in help desk, system administration or networking and add cloud skills, and some go straight into junior cloud support roles with a fundamentals certification and a strong home lab. Fundamentals exams prove you understand the concepts and pricing; associate-level and vendor-neutral certifications plus hands-on projects such as a secured account, a VPC design and infrastructure as code are what get you hired as an engineer.",
+    path: [
+      { cert: "aws-cloud-practitioner", why: "The gentlest start: cloud concepts, the shared responsibility model, core AWS services, security basics and pricing. It gives you the vocabulary every later cloud certification and interview assumes." },
+      { cert: "az-900", why: "Adds the Microsoft side of the market: Azure architecture, resource groups, RBAC, Azure Policy and cost management. Many employers run both clouds, and knowing two providers shows you understand concepts rather than one console." },
+      { cert: "cloud-plus", why: "A vendor-neutral, operations-focused exam covering architecture, deployment, security, automation and troubleshooting across clouds. It suits people coming from sysadmin or networking roles and is recognized for many government and contractor jobs." },
+      { cert: "aws-saa", why: "The most requested associate cloud credential: designing secure, resilient, high-performing and cost-optimized architectures on AWS. Take it once you have built VPCs, IAM policies and monitoring yourself, because the scenarios reward real experience." }
+    ],
+    jobs: [
+      { title: "Cloud Support Associate / Cloud Support Engineer", level: "Entry", does: "Troubleshoots customer or internal cloud issues such as access denied errors, networking problems and failed deployments, and documents fixes in runbooks." },
+      { title: "Junior Cloud Administrator", level: "Entry to Mid", does: "Manages accounts and subscriptions, users and roles, virtual machines, storage and backups, applies tagging and budgets, and handles routine change requests." },
+      { title: "Cloud Engineer", level: "Mid", does: "Builds and operates cloud infrastructure with infrastructure as code, designs networks and identity, sets up monitoring and alerting, and automates deployments." },
+      { title: "Cloud Operations / Site Reliability Engineer", level: "Mid to Senior", does: "Keeps cloud workloads available and fast, defines alerts and reliability targets, runs incident response for outages and reduces toil with automation." },
+      { title: "Cloud Security Engineer", level: "Mid to Senior", does: "Designs least-privilege access, guardrails and policies, reviews configurations for misconfigurations, and monitors cloud audit logs for threats." },
+      { title: "Cloud Solutions Architect", level: "Senior", does: "Designs whole solutions to meet business requirements for security, resilience, performance and cost, and guides teams and customers through trade-offs and migrations." }
+    ],
+    roles: ["arch", "sysadmin", "infra", "ssa", "entarch"],
+    skills: [
+      "Identity and access management: root and admin protection, least-privilege policies, roles and RBAC",
+      "Virtual networking: CIDR planning, public and private subnets, route tables, security groups and NSGs",
+      "Compute and storage services: virtual machines, object storage, block storage, snapshots and lifecycle rules",
+      "Monitoring and logging with CloudWatch or Azure Monitor, including alarms and log queries",
+      "Infrastructure as code with Terraform or CloudFormation, plus Git and code review",
+      "Cost management: pricing models, budgets, tagging and right-sizing",
+      "The shared responsibility model and cloud governance with policies, tags and locks",
+      "Linux command line and scripting with Bash, Python or PowerShell"
+    ],
+    firstSteps: [
+      "Create a free AWS account and secure it first: root MFA, a zero-spend budget and an Identity Center admin user",
+      "Complete the S3, EC2 and VPC labs and delete everything the same day, checking the bill the next morning",
+      "Create an Azure free account and practise resource groups, RBAC and Azure Policy in the governance lab",
+      "Rebuild one of your labs with Terraform or CloudFormation and put the code (without state files) in a Git repository",
+      "Estimate the cost of a small web application in both pricing calculators and write a one-page memo",
+      "Book AWS Cloud Practitioner or AZ-900 and set a weekly study block, then plan for Cloud+ or Solutions Architect Associate"
+    ],
+    labs: ["lab-cloud-aws-account-safety", "lab-cloud-iam-least-privilege", "lab-cloud-s3-static-site", "lab-cloud-ec2-basics", "lab-cloud-vpc-subnets", "lab-cloud-cloudwatch", "lab-cloud-azure-governance", "lab-cloud-azure-storage-vm", "lab-cloud-iac-deploy", "lab-cloud-pricing-responsibility", "lab-cloud-iam", "lab-cloud-posture", "lab-aws-vpc", "lab-azure-admin", "lab-terraform-docker"]
   }
 ]);
 CertHub.addInterview({

@@ -203,5 +203,30 @@ CertHub.labMap = {
     1: ["lab-wifi-survey"],
     4: ["lab-wifi-survey"],
     6: ["lab-wifi-survey"]
+  } },
+  "aws-cloud-practitioner": { domains: {
+    1: ["lab-cloud-pricing-responsibility", "lab-cloud-aws-account-safety", "lab-cloud-ec2-basics"],
+    2: ["lab-cloud-aws-account-safety", "lab-cloud-iam-least-privilege", "lab-cloud-s3-static-site", "lab-cloud-iam"],
+    3: ["lab-cloud-ec2-basics", "lab-cloud-s3-static-site", "lab-cloud-vpc-subnets", "lab-cloud-cloudwatch"],
+    4: ["lab-cloud-pricing-responsibility", "lab-cloud-aws-account-safety", "lab-cloud-cloudwatch"]
+  } },
+  "az-900": { domains: {
+    1: ["lab-cloud-pricing-responsibility", "lab-cloud-azure-governance"],
+    2: ["lab-cloud-azure-storage-vm", "lab-cloud-azure-governance", "lab-azure-admin"],
+    3: ["lab-cloud-azure-governance", "lab-cloud-azure-storage-vm", "lab-cloud-pricing-responsibility", "lab-azure-security-baseline"]
+  } },
+  "cloud-plus": { domains: {
+    1: ["lab-cloud-pricing-responsibility", "lab-cloud-vpc-subnets", "lab-cloud-azure-storage-vm"],
+    2: ["lab-cloud-iac-deploy", "lab-cloud-ec2-basics", "lab-cloud-s3-static-site", "lab-terraform-docker"],
+    3: ["lab-cloud-cloudwatch", "lab-cloud-azure-storage-vm", "lab-cloud-ec2-basics"],
+    4: ["lab-cloud-iam-least-privilege", "lab-cloud-azure-governance", "lab-cloud-posture", "lab-container-security", "lab-cloud-iam"],
+    5: ["lab-cloud-iac-deploy", "lab-terraform-docker", "lab-github-actions-ci", "lab-docker-compose-app"],
+    6: ["lab-cloud-vpc-subnets", "lab-cloud-cloudwatch", "lab-cloud-iam-least-privilege", "lab-aws-vpc"]
+  } },
+  "aws-saa": { domains: {
+    1: ["lab-cloud-iam-least-privilege", "lab-cloud-s3-static-site", "lab-cloud-iam", "lab-cloud-posture"],
+    2: ["lab-cloud-vpc-subnets", "lab-cloud-ec2-basics", "lab-cloud-iac-deploy", "lab-aws-vpc"],
+    3: ["lab-cloud-ec2-basics", "lab-cloud-cloudwatch", "lab-cloud-s3-static-site", "lab-lambda-api"],
+    4: ["lab-cloud-pricing-responsibility", "lab-cloud-aws-account-safety", "lab-cloud-cloudwatch", "lab-cloud-vpc-subnets"]
   } }
 };

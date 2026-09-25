@@ -77,6 +77,15 @@
     return loadScript(`data/pbq/${id}.js`).then(() => pbqs[id] || null);
   }
   function addPbqs(id, list) { if (Array.isArray(list)) pbqs[id] = list.filter(p => p && p.id && p.type); }
+  // Hands-on exercises (Python, terminal, KQL): data/handson/<id>.js.
+  const handson = {};
+  function loadHandson(id) {
+    const c = certs[id];
+    if (!c || !c.hasHandson) return Promise.resolve(null);
+    if (handson[id]) return Promise.resolve(handson[id]);
+    return loadScript(`data/handson/${id}.js`).then(() => handson[id] || null);
+  }
+  function addHandson(id, h) { if (h && Array.isArray(h.items)) handson[id] = { items: h.items.filter(x => x && x.id && x.kind), tables: h.tables || {} }; }
   // Career pages and interview practice: data/careers.js.
   const careers = { list: null, interview: {} };
   const loadCareers = () => loadScript("data/careers.js").then(() => careers);
@@ -445,7 +454,7 @@
     U, store, certs, buildPlan, loadProgress, saveProgress, freshProgress, applyTheme, themeButton, exportAll, importAll, activeNotices,
     backupText, restoreText, ui, install, labs, labOrder, loadLabProgress, saveLabProgress, labStatus,
     register(c) { certs[c.id] = c; if (Array.isArray(c.questions)) c.qCount = c.questions.length; },
-    loadQuestions, addQuestions, loadLessons, addLessons, lessonMeta, addDiagrams, diagramsFor, loadPbqs, addPbqs, loadCareers, addCareers, addInterview, careers, loadScript, activity, reminderIcs, addReminder, reportUrl, downloadFile, makeBadge, BASE,
+    loadQuestions, addQuestions, loadLessons, addLessons, lessonMeta, addDiagrams, diagramsFor, loadPbqs, addPbqs, loadHandson, addHandson, loadCareers, addCareers, addInterview, careers, loadScript, activity, reminderIcs, addReminder, reportUrl, downloadFile, makeBadge, BASE,
     registerLabs(list) { list.forEach(l => { if (!labs[l.id]) labOrder.push(l.id); labs[l.id] = l; }); }
   };
 })();

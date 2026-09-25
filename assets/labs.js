@@ -3,8 +3,8 @@
 (function () {
   const { U, labs, labOrder, loadLabProgress, saveLabProgress, labStatus, ui } = CertHub;
   const { $, esc } = U;
-  const TRACKS = ["Foundations", "Networking", "Blue team", "GRC & architecture", "Systems administration", "Software engineering"];
-  const trackColor = t => `var(--d${{ Foundations: 1, Networking: 3, "Blue team": 2, "GRC & architecture": 5, "Systems administration": 6, "Software engineering": 7 }[t] || 6})`;
+  const TRACKS = ["Foundations", "Networking", "Blue team", "GRC & architecture", "Systems administration", "Software engineering", "Cloud computing"];
+  const trackColor = t => `var(--d${{ Foundations: 1, Networking: 3, "Blue team": 2, "GRC & architecture": 5, "Systems administration": 6, "Software engineering": 7, "Cloud computing": 8 }[t] || 6})`;
   const STATE = { new: "Not started", doing: "In progress", done: "Done" };
   const filters = { track: "", cert: "", state: "", role: "", q: "" };
   const nice = () => CertHub.nice || { roles: [], rolesFor: () => [] };

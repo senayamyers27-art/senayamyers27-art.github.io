@@ -128,6 +128,13 @@
     const q = new URLSearchParams({ p, t: document.title, r: document.referrer && !document.referrer.startsWith(location.origin) ? document.referrer : "", rnd: Math.random().toString(36).slice(2) });
     try { fetch(`${gc}/count?${q}`, { mode: "no-cors", credentials: "omit", keepalive: true, referrerPolicy: "no-referrer" }).catch(() => {}); } catch (e) {}
   }
+  // A named event (e.g. a lesson rating) when page counts are on; same privacy rules as countView.
+  CertHub.countEvent = (name, title) => {
+    const gc = CertHub.site && CertHub.site.analytics;
+    if (!gc || navigator.doNotTrack === "1" || navigator.globalPrivacyControl) return;
+    const q = new URLSearchParams({ p: name, t: title || name, e: "true", rnd: Math.random().toString(36).slice(2) });
+    try { fetch(`${gc}/count?${q}`, { mode: "no-cors", credentials: "omit", keepalive: true, referrerPolicy: "no-referrer" }).catch(() => {}); } catch (e) {}
+  };
   function route() {
     let raw = "";
     try { raw = decodeURIComponent(location.hash.replace(/^#/, "")); } catch (e) { raw = ""; }

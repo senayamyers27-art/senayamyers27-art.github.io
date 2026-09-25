@@ -8,6 +8,7 @@
 
   let C, PLAN, W, DOM, Q, S, FREE_Q, PRO = null;
   let SIMS = null; // exam simulations for this certification: a list, false when there are none, null while loading
+  let HO = null; // hands-on exercises (Python, terminal, KQL): { items, tables }, false when there are none, null while loading
   let LES = null, LES_ES = null;
   // Lesson language: "en" or "es" (Spanish translation where it exists), remembered in this browser.
   let LANG = (CertHub.store.get("certhub:lang") === "es") ? "es" : "en";
@@ -18,7 +19,8 @@
   let active = false;
   const TAB_IDS = ["week", "learn", "plan", "practice", "labs", "progress", "guide", "about", "cheat"];
   const Pro = () => CertHub.pro || { available: false, active: false };
-  const toQ = ([id, w, d, q, o, a, e, src, why]) => ({ id, w, d, q, o, a, e, src, why: Array.isArray(why) && why.length === 4 ? why : null });
+  const toQ = ([id, w, d, q, o, a, e, src, why, lv]) => ({ id, w, d, q, o, a, e, src, why: Array.isArray(why) && why.length === 4 ? why : null, lv: [1, 2, 3].includes(lv) ? lv : 0 });
+  const LEVELS = ["", "Easy", "Medium", "Hard"];
 
   function open(id, tab) {
     if (C && C.id === id && S) {
@@ -48,6 +50,8 @@
     }
     SIMS = null;
     CertHub.loadPbqs(id).then(l => { if (!C || C.id !== id) return; SIMS = l || false; if (active && S.tab === "practice" && !(S.quiz && !S.quiz.done)) render(); });
+    HO = null;
+    CertHub.loadHandson(id).then(h => { if (!C || C.id !== id) return; HO = h || false; if (active && S.tab === "practice" && !(S.quiz && !S.quiz.done)) render(); });
     LES = null;
     LES_ES = null;
     if (LANG === "es") CertHub.loadLessons(id, "es").then(m => { if (!C || C.id !== id) return; LES_ES = m; if (active && (S.tab === "week" || S.tab === "learn")) render(); });
@@ -294,8 +298,15 @@
         ${l.tip ? `<div class="status notice"><strong>${tr("Exam tip:")}</strong> ${inline(l.tip)}</div>` : ""}
         ${l.check && l.check.length ? `<h3>${tr("Check yourself")}</h3><p class="note">${tr("Answer out loud first, then open to check.")}</p>${l.check.map(([q, a]) => `<details class="sq"><summary>${inline(q)}</summary><p>${inline(a)}</p></details>`).join("")}` : ""}
         <div class="btns">${readBtn(t)}${n ? `<button class="btn ghost sm" data-act="weekly" data-w="${n}">Quiz me on week ${n}</button>` : ""}</div>
+        ${rateHtml(t)}
         ${reportLink(`${C.short} lesson: ${t.slice(0, 80)}`, `Certification: ${C.name} (${C.exam})\nLesson: ${t}`)}
       </div></details></li>`;
+  }
+  // "Was this helpful?" per lesson, kept with progress; a "No" offers the report link.
+  function rateHtml(t) {
+    const k = lessonKey(t), v = (S.p.ratings || {})[k];
+    return `<div class="rate" data-k="${k}"><span>Was this lesson helpful?</span> <button type="button" class="btn ghost sm" data-act="rate" data-k="${k}" data-v="1" aria-pressed="${v === 1}">Yes</button><button type="button" class="btn ghost sm" data-act="rate" data-k="${k}" data-v="0" aria-pressed="${v === 0}">No</button>
+      <span class="note" role="status">${v === 1 ? "Thanks for letting us know." : v === 0 ? "Thanks. Use Report a mistake below to say what was unclear or wrong." : ""}</span></div>`;
   }
   // The lesson that best covers a question: same week (or domain), most shared words.
   const STOP = new Set("about after also another because been before being between both could does each from have into itself just more most much must only other over same should since some such than that their them then there these they this those through under uses using very what when where which while will with within would your which true false following best describes scenario question company administrator user users".split(" "));
@@ -618,6 +629,131 @@
     <p class="note" role="status">${d.fb ? (d.fb.ok ? "Correct" : `Answer: ${esc(q.a)}`) : ""}</p>`;
   }
 
+  /* ---------- hands-on practice: Python in the browser, a simulated Linux terminal, KQL queries ---------- */
+  const HO_KIND = { code: ["Python exercises", "Write code and run it against tests, right in your browser."], shell: ["Terminal tasks", "A simulated Linux shell. Type real commands; the tasks tick off as you complete them."], kql: ["Query tasks (KQL)", "Hunt through sample security logs with Kusto Query Language."] };
+  function handsonSection() {
+    if (HO === null) return C.hasHandson ? `<h2>Hands-on practice</h2><p class="note">Loading…</p>` : "";
+    if (!HO || !HO.items.length) return "";
+    const done = S.p.handson || {};
+    return `<h2>Hands-on practice</h2>` + Object.keys(HO_KIND).map(k => {
+      const list = HO.items.filter(x => x.kind === k); if (!list.length) return "";
+      return `<h3 class="hohead">${HO_KIND[k][0]} <span class="note">${list.filter(x => done[x.id]).length} of ${list.length} done</span></h3><p class="note">${HO_KIND[k][1]}</p>
+      <div class="panel">${list.map(x => `<div class="row"><div class="grow"><h3>${esc(x.title)}${done[x.id] ? ` <span class="chip done">Done</span>` : ""}</h3><span class="note">Domain ${esc(x.d)}</span></div><button class="btn ${done[x.id] ? "ghost" : ""}" data-act="hostart" data-id="${esc(x.id)}">${done[x.id] ? "Again" : "Start"}</button></div>`).join("")}</div>`;
+    }).join("");
+  }
+  function hoStart(id) {
+    const x = HO && HO.items.find(i => i.id === id); if (!x) return;
+    const st = { x, hint: false, sol: false, passed: false };
+    if (x.kind === "code") { st.code = x.starter || ""; st.out = ""; st.results = null; st.running = false; }
+    if (x.kind === "kql") { st.q = x.starter || ""; st.res = null; st.err = ""; }
+    S.ho = st;
+    if (x.kind === "shell") {
+      CertHub.loadScript("assets/shell.js").then(ok => {
+        if (S.ho !== st) return;
+        if (!ok || !CertHub.shell) { st.err = "The terminal couldn't load. Check your connection and try again."; render(); return; }
+        st.sh = CertHub.shell.create(x.setup || {}); st.log = []; st.hist = -1; hoShellScore(); render(); focusSoon("#hocmd");
+      });
+    }
+    if (x.kind === "kql") CertHub.loadScript("assets/kql.js").then(ok => { if (S.ho === st) { if (!ok) st.err = "The query engine couldn't load. Check your connection and try again."; render(); } });
+    render(); window.scrollTo(0, 0);
+  }
+  // Keep what the person typed when the view redraws.
+  function hoKeep() { const st = S.ho, a = $("#hocode"), b = $("#hoq"); if (!st) return; if (a) st.code = a.value; if (b) st.q = b.value; }
+  const focusSoon = sel => setTimeout(() => { const el = $(sel); if (el) el.focus(); }, 0);
+  function hoPass(st) {
+    if (st.passed) return; st.passed = true;
+    const h = S.p.handson || (S.p.handson = {}); h[st.x.id] = true; CertHub.activity.mark(); save();
+  }
+  // Python runs in a Web Worker (Pyodide). The first run downloads Python, about 10 MB, once.
+  let pyW = null, pySeq = 0, pyReady = false;
+  function pyRun(code, tests, stdin) {
+    return new Promise(resolve => {
+      if (!pyW) { try { pyW = new Worker(CertHub.BASE + "assets/py-worker.mjs", { type: "module" }); } catch (e) { resolve({ ok: false, error: "This browser can't run Python here." }); return; } }
+      const id = ++pySeq, w = pyW;
+      const t = setTimeout(() => { w.terminate(); if (pyW === w) pyW = null; pyReady = false; resolve({ ok: false, error: pyReady ? "Your code ran for more than 10 seconds and was stopped. Check for an endless loop." : "Python took too long to load. Check your connection and try again." }); }, pyReady ? 10000 : 90000);
+      w.onmessage = e => { if (!e.data || e.data.id !== id) return; clearTimeout(t); pyReady = true; resolve(e.data); };
+      w.onerror = () => { clearTimeout(t); w.terminate(); if (pyW === w) pyW = null; resolve({ ok: false, error: "Python couldn't start in this browser." }); };
+      w.postMessage({ id, code, tests, stdin });
+    });
+  }
+  async function hoRunCode() {
+    const st = S.ho; if (!st || st.running) return;
+    const ta = $("#hocode"); if (ta) st.code = ta.value;
+    st.running = true; st.out = ""; st.results = null; st.err = ""; render();
+    const r = await pyRun(st.code, st.x.tests || [], st.x.stdin || "");
+    if (S.ho !== st) return;
+    st.running = false; st.out = r.out || ""; st.err = r.ok ? "" : r.error; st.results = r.ok ? r.results : null;
+    if (r.ok && r.results.every(t => t.ok)) hoPass(st);
+    render(); focusSoon("#horesult");
+  }
+  function hoShellScore() { const st = S.ho; st.checks = (st.x.checks || []).map(c => CertHub.shell.check(st.sh, c)); if (st.checks.every(Boolean)) hoPass(st); }
+  function hoShellRun(line) {
+    const st = S.ho; if (!st || !st.sh) return;
+    line = line.trim(); st.hist = -1;
+    if (line === "clear") { st.log = []; st.sh.history.push(line); }
+    else st.log.push({ p: hoPrompt(st.sh), cmd: line, out: line ? CertHub.shell.run(st.sh, line) : "" });
+    if (st.log.length > 200) st.log = st.log.slice(-200);
+    hoShellScore(); render(); focusSoon("#hocmd");
+    const term = $("#hoterm"); if (term) term.scrollTop = term.scrollHeight;
+  }
+  const hoPrompt = sh => `${sh.user}@${sh.host}:${sh.cwd === sh.users[sh.user].home ? "~" : sh.cwd.replace(sh.users[sh.user].home + "/", "~/")}$`;
+  function hoRunKql() {
+    const st = S.ho; if (!st || !CertHub.kql) return;
+    const ta = $("#hoq"); if (ta) st.q = ta.value;
+    st.err = ""; st.res = null; st.match = false;
+    try {
+      st.res = CertHub.kql.run(st.q, HO.tables || {});
+      st.match = CertHub.kql.same(st.res, CertHub.kql.run(st.x.solution, HO.tables || {}));
+      if (st.match) hoPass(st);
+    } catch (e) { st.err = e.message; }
+    render(); focusSoon("#horesult");
+  }
+  function kqlTable(rows, max = 50) {
+    if (!rows.length) return `<p class="note">No rows.</p>`;
+    const cols = [...new Set(rows.flatMap(r => Object.keys(r)))], cell = v => v instanceof Date ? v.toISOString().replace(".000Z", "Z") : Array.isArray(v) ? JSON.stringify(v) : v == null ? "" : String(v);
+    return `<div class="tablewrap" tabindex="0"><table class="kqlt"><thead><tr>${cols.map(c => `<th scope="col">${esc(c)}</th>`).join("")}</tr></thead><tbody>${rows.slice(0, max).map(r => `<tr>${cols.map(c => `<td>${esc(cell(r[c]))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>${rows.length > max ? `<p class="note">Showing ${max} of ${rows.length} rows.</p>` : ""}`;
+  }
+  function handsonView() {
+    const st = S.ho, x = st.x;
+    const head = `<div class="qhead"><strong>${esc(x.title)}</strong><button class="btn ghost sm" data-act="hoquit">Back</button></div>
+    <p class="note">${HO_KIND[x.kind][0].replace(/s( \(KQL\))?$/, "$1")} · Domain ${esc(x.d)}${st.passed ? ` · <span class="chip done">Done</span>` : ""}</p>
+    <div class="hoprompt">${String(x.prompt).split("\n\n").map(p => `<p>${inline(p)}</p>`).join("")}</div>`;
+    const help = `<div class="btns"><button class="btn ghost sm" data-act="hohint" aria-expanded="${st.hint}">Hint</button><button class="btn ghost sm" data-act="hosol" aria-expanded="${st.sol}">${st.sol ? "Hide solution" : "Show solution"}</button><button class="btn ghost sm" data-act="horeset">Start over</button></div>
+    ${st.hint ? `<p class="note">${inline(x.hint)}</p>` : ""}
+    ${st.sol ? `<pre class="code" id="hosolution" tabindex="0" aria-label="Solution">${esc(Array.isArray(x.solution) ? x.solution.join("\n") : x.solution)}</pre>` : ""}
+    ${st.passed || st.sol ? `<div class="expl" style="--c:var(--ok)">${inline(x.explain)}</div>` : ""}`;
+    if (x.kind === "code") {
+      const res = st.results;
+      return head + `<label for="hocode" class="lbl">Your code <span class="note">(Tab indents 4 spaces; press Esc, then Tab, to leave the editor)</span></label>
+      <textarea id="hocode" class="codeedit" rows="${Math.min(22, Math.max(8, st.code.split("\n").length + 3))}" spellcheck="false" autocapitalize="off" autocomplete="off">${esc(st.code)}</textarea>
+      ${x.stdin ? `<p class="note">Input your program receives from <code>input()</code>:</p><pre class="code" tabindex="0">${esc(x.stdin)}</pre>` : ""}
+      <div class="btns"><button class="btn" data-act="horun" ${st.running ? "disabled" : ""}>${st.running ? (pyReady ? "Running…" : "Loading Python (first run only)…") : "Run and check"}</button></div>
+      <div id="horesult" tabindex="-1" role="status">
+      ${st.out || st.err ? `<p class="lbl">Output</p><pre class="code" tabindex="0">${esc(st.out)}${st.err ? `<span class="simbad">${esc(st.err)}</span>` : ""}</pre>` : ""}
+      ${res ? `<ul class="clean hochecks">${res.map(t => `<li>${t.ok ? `<span class="simok" aria-label="passed">✓</span>` : `<span class="simbad" aria-label="failed">✗</span>`} ${esc(t.name)}${t.ok ? "" : `<br><span class="note">${esc(t.msg || "")}</span>`}</li>`).join("")}</ul>
+        <p><strong>${res.filter(t => t.ok).length} of ${res.length} tests pass.</strong></p>` : ""}
+      </div>` + help;
+    }
+    if (x.kind === "shell") {
+      if (st.err) return head + `<p class="note">${esc(st.err)}</p>`;
+      if (!st.sh) return head + `<p class="note">Loading the terminal…</p>`;
+      return head + `<ul class="clean hochecks" aria-label="Tasks">${x.checks.map((c, i) => `<li>${st.checks[i] ? `<span class="simok" aria-label="done">✓</span>` : `<span class="hotodo" aria-label="not done yet">○</span>`} ${inline(c.label)}</li>`).join("")}</ul>
+      <div class="term"><pre class="code termout" id="hoterm" tabindex="0" aria-label="Terminal output">${st.log.length ? "" : `<span class="note">Type a command and press Enter. Try ls, pwd or help.</span>\n`}${st.log.map(l => `<span class="tp">${esc(l.p)}</span> ${esc(l.cmd)}${l.out ? "\n" + esc(l.out) : ""}`).join("\n")}</pre>
+      <form class="termin" data-form="hosh"><label for="hocmd" class="tp">${esc(hoPrompt(st.sh))}</label><input id="hocmd" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send"></form></div>
+      ${st.passed ? `<p role="status"><strong>All tasks complete.</strong></p>` : ""}` + help;
+    }
+    const tables = (x.tables || []).map(n => [n, (HO.tables || {})[n] || []]);
+    return head + tables.map(([n, rows]) => `<details class="week"><summary><span class="grow"><strong>${esc(n)}</strong> <span class="note">${rows.length} rows · ${esc(Object.keys(rows[0] || {}).join(", "))}</span></span></summary>${kqlTable(rows, 8)}</details>`).join("") + `
+      <label for="hoq" class="lbl">Your query</label>
+      <textarea id="hoq" class="codeedit" rows="6" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="${esc((x.tables || [""])[0])}&#10;| where ...">${esc(st.q)}</textarea>
+      <div class="btns"><button class="btn" data-act="hokql" ${CertHub.kql ? "" : "disabled"}>Run query</button></div>
+      <div id="horesult" tabindex="-1" role="status">
+      ${st.err ? `<p class="simbad">${esc(st.err)}</p>` : ""}
+      ${st.res ? `${st.match ? `<p><span class="simok">✓</span> <strong>That's the expected result.</strong></p>` : `<p><span class="simbad">✗</span> Not the expected result yet (${st.res.rows.length} row${st.res.rows.length === 1 ? "" : "s"}). Check your filters and columns.</p>`}${kqlTable(st.res.rows)}` : ""}
+      </div>
+      <p class="note">Supported: where, project, project-away, extend, summarize (count, dcount, sum, avg, min, max, make_set) by, sort / order by, top, take, distinct, count, with ago(), bin() and the has, contains, startswith, in and =~ operators.</p>` + help;
+  }
+
   function glossaryHtml(topics) {
     const seen = new Map();
     topics.forEach(t => (LES.get(t).terms || []).forEach(([a, b]) => { const k = a.toLowerCase(); if (!seen.has(k)) seen.set(k, [a, b, t]); }));
@@ -684,6 +820,8 @@
     if (S.quiz) return quizView();
     if (S.sim) return simView();
     if (S.drill) return drillView();
+    if (S.ho) return handsonView();
+    if (S.fc) return flashcardHtml();
     if (!Array.isArray(C.questions)) return `<h1>Quizzes & tests</h1><p class="note">Loading questions…</p>`;
     const due = dueIds().length;
     const cnt = d => Q.filter(q => q.d === d).length;
@@ -695,10 +833,12 @@
       <div class="row"><div class="grow"><h3>Placement test</h3><span class="note">${S.p.placement ? `Last taken ${esc(fmt(new Date(S.p.placement.at)))}. Retake it to see where you stand now.` : "A few questions from every domain to find what you already know and where to start"}</span></div><button class="btn ${S.p.placement ? "ghost" : ""}" data-act="placement">${S.p.placement ? "Retake" : "Start"}</button></div>
       <div class="row"><div class="grow"><h3>Weekly quiz</h3><span class="note">10 questions with instant feedback</span></div><select id="wsel" aria-label="Week">${W.map(w => `<option value="${w.n}" ${w.n === weekNow() ? "selected" : ""}>Week ${w.n}</option>`).join("")}</select><button class="btn" data-act="weekly-sel">Start</button></div>
       <div class="row"><div class="grow"><h3>Review queue</h3><span class="note">Questions you missed, spaced 1, 3, 7 and 14 days apart</span></div><button class="btn" data-act="review" ${due ? "" : "disabled"}>${due ? `Review ${due}` : "Nothing due"}</button></div>
-      <div class="row"><div class="grow"><h3>Domain drill</h3><span class="note">15 random questions</span></div><select id="dsel" aria-label="Domain">${C.domains.map(d => `<option value="${d.id}">D${d.id} (${cnt(d.id)})</option>`).join("")}</select><button class="btn" data-act="drill">Start</button></div>
+      <div class="row"><div class="grow"><h3>Domain drill</h3><span class="note">15 random questions</span></div><select id="dsel" aria-label="Domain">${C.domains.map(d => `<option value="${d.id}">D${d.id} (${cnt(d.id)})</option>`).join("")}</select>${Q.some(q => q.lv) ? `<select id="lvsel" aria-label="Difficulty"><option value="0">Any level</option>${[1, 2, 3].map(n => `<option value="${n}">${LEVELS[n]}</option>`).join("")}</select>` : ""}<button class="btn" data-act="drill">Start</button></div>
     </div>
     ${simsSection()}
+    ${handsonSection()}
     ${drillsSection()}
+    ${termCardsSection()}
     <h2>Checkpoint tests</h2>
     <p class="note">Timed, up to 25 questions, answers shown at the end. Aim for 80% or better before moving on.</p>
     <div class="panel">${PLAN.checkpoints.map(c => `<div class="row"><div class="grow"><h3>Domain ${c.dom}: ${esc(DOM[c.dom].name)}</h3><span class="note">End of week ${c.after} · ${Math.min(25, cnt(c.dom))} questions, ${Math.max(5, Math.round(30 * Math.min(25, cnt(c.dom)) / 25))} minutes</span></div><button class="btn ghost" data-act="checkpoint" data-d="${c.dom}">Start</button></div>`).join("")}</div>
@@ -734,7 +874,7 @@
       return `<button class="opt ${cls}" data-opt="${k}" aria-pressed="${z.picked === k}">${esc(o)}</button>`;
     }).join("");
     return `<div class="qhead"><strong>${esc(z.title)}</strong><span>${z.end ? `<span class="timer" id="timer" aria-label="Time left"></span> · ` : ""}<button class="btn ghost sm" data-act="quit">Quit</button></span></div>
-    <div class="flex note"><span>Question ${z.i + 1} of ${z.qs.length}</span><span>Domain ${q.d}</span></div>
+    <div class="flex note"><span>Question ${z.i + 1} of ${z.qs.length}</span><span>Domain ${q.d}${q.lv ? ` · ${LEVELS[q.lv]}` : ""}</span></div>
     <div class="prog" style="--c:${dc(q.d)}"><i style="width:${100 * (z.i + 1) / z.qs.length}%"></i></div>
     <p class="q">${esc(q.q)}</p>${opts}
     ${z.revealed ? `<div class="expl" role="status" style="--c:${z.picked === q.a ? "var(--ok)" : "var(--bad)"}"><strong>${z.picked === q.a ? "Correct." : "Not quite."}</strong> ${esc(q.e)}${whyHtml(q, z.picked)}${q.src ? `<br><small class="note">Source: ${esc(q.src)}</small>` : ""}${z.picked !== q.a ? `<br>${lessonLink(q)}` : ""}<br>${qReport(q)}</div>` : ""}
@@ -811,6 +951,22 @@
     ${recent.length >= 2 ? `<h3>Trend</h3><div class="panel"><div class="trend" role="img" aria-label="Last ${recent.length} scores">${recent.map(h => { const p = Math.round(100 * h.score / h.total); return `<span class="tbar" style="height:${Math.max(4, p)}%;--c:${p >= 85 ? "var(--ok)" : p >= 75 ? "var(--warn)" : "var(--bad)"}" title="${esc(h.title)}: ${p}%"></span>`; }).join("")}</div>
       <p class="note" style="margin:8px 0 0">Last ${recent.length} quizzes and tests, oldest to newest.${last5 != null && prev5 != null ? ` Average ${last5}% for the latest 5, ${last5 >= prev5 ? "up" : "down"} ${Math.abs(last5 - prev5)} points on the 5 before.` : ""}</p></div>` : ""}
     ${objs.length ? `<h3>Weakest objectives</h3><div class="panel">${objs.map(o => `<div class="row"><div class="grow">Objective ${esc(o.k)}<br><span class="note">${o.t} answered</span></div><strong>${o.pct}%</strong></div>`).join("")}<p class="note" style="margin:8px 0 0">Look these up in the official exam objectives and reread them before your next drill.</p></div>` : ""}`;
+  }
+
+  /* ---------- free flashcards from lesson key terms ---------- */
+  function termCards() {
+    if (!LES) return [];
+    const seen = new Set(), out = [];
+    W.forEach(w => lessonTopics(w).forEach(t => ((LES.get(t) || {}).terms || []).forEach(([a, b]) => { const k = a.toLowerCase(); if (!seen.has(k)) { seen.add(k); out.push([w.dom, plain(a), plain(b)]); } })));
+    return out;
+  }
+  const cardDue = (cards, d) => { const sched = S.p.cards || {}, now = today().getTime() + 1000; return cards.filter(f => (!d || f[0] === d) && (!sched[cardKey(f)] || sched[cardKey(f)].due <= now)); };
+  function termCardsSection() {
+    const cards = termCards(); if (!cards.length) return "";
+    const sched = S.p.cards || {}, learned = cards.filter(f => sched[cardKey(f)] && sched[cardKey(f)].box >= 2).length;
+    const doms = C.domains.filter(d => cards.some(f => f[0] === d.id));
+    return `<h2>Key-term flashcards</h2><p class="note">${cards.length} terms from your lessons · ${learned} learned. Cards you know come back after 1, 3, 7 and 14 days; cards you miss come back tomorrow.</p>
+    <div class="panel"><div class="row"><div class="grow"><h3>Study terms</h3><span class="note">Up to 20 due cards at a time</span></div><select id="tcsel" aria-label="Domain"><option value="0">All domains (${cardDue(cards, 0).length} due)</option>${doms.map(d => `<option value="${d.id}">D${d.id} ${esc(d.name)} (${cardDue(cards, d.id).length})</option>`).join("")}</select><button class="btn" data-act="tcstart">Start</button></div></div>`;
   }
 
   /* ---------- Pro: flashcards and study guide ---------- */
@@ -906,7 +1062,11 @@
     const a = t.dataset.act; if (!a) return;
     const d = +t.dataset.d;
     const cp = dom => { const qs = pickFor(q => q.d === dom, 25); startQuiz({ title: `Checkpoint: Domain ${dom}`, qs, mode: "test", minutes: Math.max(5, Math.round(30 * qs.length / 25)) }); };
-    const drill = dom => startQuiz({ title: `Domain ${dom} drill`, qs: pickFor(q => q.d === dom, 15), mode: "learn" });
+    const drill = dom => {
+      const lv = +(($("#lvsel") || {}).value || 0), qs = pickFor(q => q.d === dom && (!lv || q.lv === lv), 15);
+      if (!qs.length) { CertHub.ui.toast("No questions at that level in this domain yet."); return; }
+      startQuiz({ title: `Domain ${dom} drill${lv ? ` (${LEVELS[lv].toLowerCase()})` : ""}`, qs, mode: "learn" });
+    };
     const acts = {
       weekly: () => startQuiz({ title: `Week ${t.dataset.w} quiz`, qs: weeklyQs(+t.dataset.w), mode: "learn" }),
       "weekly-sel": () => { const n = +$("#wsel").value; startQuiz({ title: `Week ${n} quiz`, qs: weeklyQs(n), mode: "learn" }); },
@@ -922,6 +1082,18 @@
         if (!due.length) { CertHub.ui.toast("Nothing due in this domain. Come back tomorrow."); return; }
         S.fc = { deck: shuffle(due).slice(0, 20), i: 0, flipped: false, known: 0, seen: 0, graded: new Set() }; render(); window.scrollTo(0, 0);
       },
+      tcstart: () => {
+        const due = cardDue(termCards(), +$("#tcsel").value);
+        if (!due.length) { CertHub.ui.toast("Nothing due here. Come back tomorrow."); return; }
+        S.fc = { deck: shuffle(due).slice(0, 20), i: 0, flipped: false, known: 0, seen: 0, graded: new Set() }; render(); window.scrollTo(0, 0);
+      },
+      rate: () => {
+        const k = t.dataset.k, v = +t.dataset.v, r = S.p.ratings || (S.p.ratings = {});
+        const was = r[k]; r[k] = v; save();
+        if (was !== v && CertHub.countEvent) CertHub.countEvent(`lesson-${v ? "helpful" : "not-helpful"}/${C.id}/${k}`, `${C.short}: ${v ? "helpful" : "not helpful"}`);
+        const box = t.closest(".rate"), tt = LES && [...LES.keys()].find(x => lessonKey(x) === k);
+        if (box && tt) { box.outerHTML = rateHtml(tt); const nb = document.querySelector(`.rate[data-k="${k}"] [data-v="${v}"]`); if (nb) nb.focus(); }
+      },
       fcflip: () => { S.fc.flipped = true; render(); },
       fcknow: () => fcGrade(true),
       fcagain: () => fcGrade(false),
@@ -935,7 +1107,7 @@
         render();
       },
       offline: () => {
-        const base = CertHub.BASE, urls = [`data/lessons/${C.id}.js`, "data/diagrams.js", `data/gen/${C.id}-q.js`].concat(C.hasLessonsEs ? [`data/lessons-es/${C.id}.js`] : [], C.hasPbqs ? [`data/pbq/${C.id}.js`] : []).map(u => base + u);
+        const base = CertHub.BASE, urls = [`data/lessons/${C.id}.js`, "data/diagrams.js", `data/gen/${C.id}-q.js`].concat(C.hasLessonsEs ? [`data/lessons-es/${C.id}.js`] : [], C.hasPbqs ? [`data/pbq/${C.id}.js`] : [], C.hasHandson ? [`data/handson/${C.id}.js`] : []).map(u => base + u);
         const ctl = navigator.serviceWorker && navigator.serviceWorker.controller;
         if (!ctl) { CertHub.ui.toast("Offline saving needs the installed app or a second visit. Reload and try again."); return; }
         const ch = new MessageChannel();
@@ -946,6 +1118,13 @@
       simcheck: simCheck,
       simretry: () => simStart(S.sim.p.id),
       simquit: () => { S.sim = null; render(); },
+      hostart: () => hoStart(t.dataset.id),
+      hoquit: () => { S.ho = null; render(); },
+      horun: hoRunCode,
+      hokql: hoRunKql,
+      hohint: () => { S.ho.hint = !S.ho.hint; hoKeep(); render(); },
+      hosol: () => { S.ho.sol = !S.ho.sol; hoKeep(); render(); },
+      horeset: () => hoStart(S.ho.x.id),
       drillstart: () => drillStart(t.dataset.kind),
       drillquit: () => { clearTimeout(drillT); S.drill = null; render(); },
       golesson: () => {
@@ -999,6 +1178,26 @@
     if (el.id === "lsearch" && LES) searchLessons(el.value);
     if (S.sim && el.dataset.simf != null) S.sim.ans[+el.dataset.simf] = el.value;
   });
+  // Hands-on: the terminal prompt (Enter runs, arrows walk history) and Tab to indent in code editors.
+  let hoEsc = false;
+  document.addEventListener("keydown", e => {
+    if (!active || !S || !S.ho) return;
+    const el = e.target, st = S.ho;
+    if (el.id === "hocmd" && st.sh) {
+      const h = st.sh.history;
+      if (e.key === "Enter") { e.preventDefault(); hoShellRun(el.value); }
+      else if (e.key === "ArrowUp" && h.length) { e.preventDefault(); st.hist = st.hist < 0 ? h.length - 1 : Math.max(0, st.hist - 1); el.value = h[st.hist]; }
+      else if (e.key === "ArrowDown" && st.hist >= 0) { e.preventDefault(); st.hist = st.hist + 1 < h.length ? st.hist + 1 : -1; el.value = st.hist < 0 ? "" : h[st.hist]; }
+      return;
+    }
+    if (el.classList && el.classList.contains("codeedit")) {
+      if (e.key === "Escape") { hoEsc = true; return; }
+      if (e.key === "Tab" && !e.shiftKey && !hoEsc) { e.preventDefault(); el.setRangeText("    ", el.selectionStart, el.selectionEnd, "end"); }
+      else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); el.id === "hoq" ? hoRunKql() : hoRunCode(); }
+      hoEsc = false;
+    }
+  });
+  document.addEventListener("submit", e => { if (active && e.target.dataset.form === "hosh") e.preventDefault(); });
   document.addEventListener("change", e => {
     if (!active) return;
     const el = e.target;
@@ -1021,7 +1220,7 @@
     open, close,
     get active() { return active; },
     // A quiz or test in progress holds unsaved state; sync waits until it's finished.
-    get busy() { return !!(active && S && ((S.quiz && !S.quiz.done) || S.fc || (S.sim && !S.sim.done) || (S.drill && !S.drill.done))); },
+    get busy() { return !!(active && S && ((S.quiz && !S.quiz.done) || S.fc || S.ho || (S.sim && !S.sim.done) || (S.drill && !S.drill.done))); },
     // Sign-in or plan changed: load or drop the Pro bank for the open certification.
     proChanged() { if (C && S) { loadPro(); if (active) renderTabs(); } },
     // Re-read progress from storage after sync merged in changes from another device.

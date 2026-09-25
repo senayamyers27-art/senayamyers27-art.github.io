@@ -199,6 +199,16 @@ CertHub.niceRoles = [
 
 // Which NICE work roles each lab builds toward (1 to 3 each).
 CertHub.labRoles = {
+  "lab-cloud-aws-account-safety": ["sysadmin", "ssa"],
+  "lab-cloud-iam-least-privilege": ["ssa", "arch"],
+  "lab-cloud-s3-static-site": ["sysadmin", "ssa"],
+  "lab-cloud-ec2-basics": ["sysadmin", "infra"],
+  "lab-cloud-vpc-subnets": ["infra", "netops", "entarch"],
+  "lab-cloud-cloudwatch": ["sysadmin", "defensive"],
+  "lab-cloud-azure-governance": ["sysadmin", "policy", "arch"],
+  "lab-cloud-azure-storage-vm": ["sysadmin", "infra"],
+  "lab-cloud-iac-deploy": ["sysadmin", "entarch", "securedev"],
+  "lab-cloud-pricing-responsibility": ["entarch", "arch"],
   "lab-splunk-siem": ["defensive", "infra"], "lab-wazuh": ["defensive", "infra"], "lab-sysmon-detection": ["defensive", "threat"],
   "lab-phishing-analysis": ["defensive", "incident"], "lab-pcap-investigation": ["incident", "defensive"], "lab-vuln-management": ["vuln", "ssa"],
   "lab-incident-response": ["incident", "policy"], "lab-memory-forensics": ["forensics", "incident"], "lab-disk-forensics": ["forensics"],
