@@ -7,7 +7,7 @@ CertHub.register({
   exam: "DA0-002",
   blurb: "Entry-level data analysis certification for people who collect, clean, analyze, visualize and govern data: data concepts, acquisition and preparation, statistics, reporting and governance.",
   status: "check",
-  statusNote: "Domains and weights come from the published DA0-002 exam objectives as best known (Data concepts and environments 20%; Data acquisition and preparation 22%; Data analysis 24%; Visualization and reporting 20%; Data governance 14%). The CompTIA site could not be opened from this environment, so confirm the domains, weights, question count and passing score on the official Data+ page before booking.",
+  statusNote: "Domains and weights come from the published DA0-002 exam objectives as best known (Data concepts and environments 18%; Data acquisition and preparation 22%; Data analysis 24%; Visualization and reporting 20%; Data governance 16%). The CompTIA site could not be opened from this environment, so confirm the domains, weights, question count and passing score on the official Data+ page before booking.",
   lastVerified: "2026-09-25",
   notices: [],
   examInfo: { questions: "Up to 90 (multiple choice and performance-based)", minutes: 90, pass: "Check the official page (DA0-001 required 675 on a 100–900 scale)", extra: "No formal prerequisites. CompTIA suggests some experience working with data, such as 1–2 years in a report, business or data analyst role. The certification is valid for 3 years and can be renewed through continuing education." },
@@ -22,7 +22,7 @@ CertHub.register({
     {
       id: 1,
       name: "Data concepts and environments",
-      w: 20,
+      w: 18,
       topics: [
         "Structured, semi-structured and unstructured data, with examples of each",
         "Relational databases: tables, primary and foreign keys, normalization and relationships",
@@ -114,7 +114,7 @@ CertHub.register({
     {
       id: 5,
       name: "Data governance",
-      w: 14,
+      w: 16,
       topics: [
         "Data governance roles: data owner, data steward, data custodian and data consumer",
         "Metadata, data dictionaries, data catalogs and data lineage",

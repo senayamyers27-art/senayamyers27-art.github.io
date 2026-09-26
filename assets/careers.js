@@ -9,9 +9,11 @@
   const roleName = id => ((CertHub.niceRoles || []).find(r => r.id === id) || { name: id }).name;
 
   function index(list) {
+    const compare = ((CertHub.site || {}).compare || []).filter(p => CertHub.certs[p[0]] && CertHub.certs[p[1]]);
     return `<h1>Career paths</h1>
     <p class="meta">Where each track leads: which certification to take first, the jobs it opens up, the skills employers ask for, and interview practice for each role.</p>
-    <div class="cards">${CertHub.tracks.map(t => { const c = list.find(x => x.track === t.id); return c ? `<a class="card" href="#career-${esc(t.id)}"><strong>${esc(c.title)}</strong><span class="note">${esc(t.blurb || "")}</span><span class="note">${c.jobs.length} jobs · ${c.path.length}-step certification path</span></a>` : ""; }).join("")}</div>`;
+    <div class="cards">${CertHub.tracks.map(t => { const c = list.find(x => x.track === t.id); return c ? `<a class="card" href="#career-${esc(t.id)}"><strong>${esc(c.title)}</strong><span class="note">${esc(t.blurb || "")}</span><span class="note">${c.jobs.length} jobs · ${c.path.length}-step certification path</span></a>` : ""; }).join("")}</div>
+    ${compare.length ? `<h2>Compare certifications</h2><p class="note">Not sure which one to take? Side-by-side comparisons of popular pairs.</p><div class="panel"><ul class="clean">${compare.map(([a, b]) => `<li><a href="/compare/${esc(a)}-vs-${esc(b)}/">${esc(CertHub.certs[a].short)} vs ${esc(CertHub.certs[b].short)}</a></li>`).join("")}</ul></div>` : ""}`;
   }
   function track(c) {
     const t = CertHub.tracks.find(x => x.id === c.track);

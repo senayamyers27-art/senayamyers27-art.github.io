@@ -198,6 +198,7 @@
     if (!signedIn()) {
       return `<h1>Sign in</h1>
       <p class="meta">An account is optional. It syncs your progress, lab notes and portfolio across your phone and computer. Without one, everything stays on this device.</p>
+      ${PASSKEYS ? `<div class="panel"><div class="row" data-style="border-top:0;padding-top:0"><div class="grow"><strong>Have a passkey?</strong><br><span class="note">Sign in with your fingerprint, face or device PIN.</span></div><button type="button" class="btn" data-aact="passkey-signin">Sign in with a passkey</button></div><p class="note" id="passkey-msg" role="status" data-style="margin:0"></p></div>` : ""}
       <form id="signin-form" class="panel" novalidate>
         <label for="signin-email"><strong>Email</strong></label>
         <input type="email" id="signin-email" autocomplete="email" required placeholder="you@example.com" class="textin">
@@ -227,6 +228,10 @@
     <div id="orgpanel"></div>
     <h2>Classes</h2>
     <div id="classpanel"><p class="note">Loading…</p></div>
+    <h2>Passkeys</h2>
+    <div id="passkeypanel"><p class="note">Loading…</p></div>
+    <h2>Signed-in devices</h2>
+    <div id="devicepanel"><p class="note">Loading…</p></div>
     <h2>Your data</h2>
     <div class="panel">
       <div class="btns" data-style="margin-top:0"><button type="button" class="btn ghost sm" data-aact="export">Download my account data</button><button type="button" class="btn ghost sm" data-aact="delete">Delete my account</button></div>
@@ -281,6 +286,62 @@
     <li>Which certifications you study, and for each: exam readiness, lessons read, best practice exam score, questions answered, hands-on exercises done and when you were last active</li>
     <li>How many labs you've finished</li></ul>
     <p class="note" data-style="margin:0">Not shared: your answers, review queue, lab notes or write-ups. You can leave the class at any time from the Account page, which stops sharing at once.</p>`;
+
+  /* ---------- passkeys (WebAuthn) and signed-in devices ---------- */
+  const PASSKEYS = typeof window !== "undefined" && !!(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create);
+  const b64u = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const unb64u = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), c => c.charCodeAt(0));
+  const when = t => t ? new Date(t).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "never";
+  // A default name for a new passkey, from the browser and platform.
+  const deviceName = () => { const ua = navigator.userAgent; return (/iPhone|iPad/.test(ua) ? "iPhone or iPad" : /Android/.test(ua) ? "Android" : /Mac/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : /CrOS/.test(ua) ? "Chromebook" : /Linux/.test(ua) ? "Linux" : "This device") + " passkey"; };
+  const passkeyError = e => e && (e.name === "NotAllowedError" || e.name === "AbortError") ? new Error("The passkey request was cancelled or timed out.") : e && e.name === "InvalidStateError" ? new Error("This device already has a passkey for your account.") : e;
+
+  async function passkeyPanel() {
+    const el = document.getElementById("passkeypanel"); if (!el) return;
+    try {
+      const { data } = await api("GET", "/v1/passkeys");
+      el.innerHTML = `<div class="panel">
+        <p class="note" data-style="margin:0">Sign in with your fingerprint, face or device PIN instead of an emailed link. Passkeys can't be phished or reused on another site.</p>
+        ${data.passkeys.map(p => `<div class="row"><div class="grow"><strong>${esc(p.name)}</strong><br><span class="note">Added ${esc(when(p.createdAt))} · last used ${esc(when(p.lastUsedAt))}</span></div><button type="button" class="btn ghost sm" data-aact="passkey-del" data-id="${esc(p.id)}" data-name="${esc(p.name)}">Remove</button></div>`).join("")}
+        ${PASSKEYS ? `<div class="btns"><button type="button" class="btn sm" data-aact="passkey-add">Add a passkey</button></div>` : `<p class="note">This browser doesn't support passkeys.</p>`}
+      </div>`;
+    } catch (e) { el.innerHTML = `<p class="note">${esc(e.message)}</p>`; }
+  }
+  async function devicePanel() {
+    const el = document.getElementById("devicepanel"); if (!el) return;
+    try {
+      const { data } = await api("GET", "/v1/sessions");
+      const others = data.sessions.filter(x => !x.current);
+      el.innerHTML = `<div class="panel">
+        ${data.sessions.map(x => `<div class="row"><div class="grow"><strong>${esc(x.device)}</strong>${x.current ? ` <span class="chip done">This device</span>` : ""}<br><span class="note">Signed in ${esc(when(x.createdAt))}</span></div>${x.current ? "" : `<button type="button" class="btn ghost sm" data-aact="session-end" data-id="${esc(x.id)}" data-name="${esc(x.device)}">Sign out</button>`}</div>`).join("")}
+        ${others.length ? `<div class="btns"><button type="button" class="btn ghost sm" data-aact="session-others">Sign out everywhere else</button></div>` : ""}
+        <p class="note" data-style="margin:0">Sessions end after 30 days without use, and always after 90 days.</p>
+      </div>`;
+    } catch (e) { el.innerHTML = `<p class="note">${esc(e.message)}</p>`; }
+  }
+  async function passkeyAdd() {
+    const { data: o } = await api("POST", "/v1/passkeys/options", {});
+    let cred;
+    try {
+      cred = await navigator.credentials.create({ publicKey: { ...o, challenge: unb64u(o.challenge), user: { ...o.user, id: unb64u(o.user.id) }, excludeCredentials: o.excludeCredentials.map(c => ({ ...c, id: unb64u(c.id) })) } });
+    } catch (e) { throw passkeyError(e); }
+    const r = cred.response;
+    if (!r.getPublicKey || !r.getAuthenticatorData) throw new Error("This browser can't add passkeys here. Try an up-to-date Chrome, Edge, Firefox or Safari.");
+    const name = (await ui.prompt("Name this passkey so you can recognize it later.", { value: deviceName(), ok: "Save" })) || deviceName();
+    await api("POST", "/v1/passkeys", { id: cred.id, alg: r.getPublicKeyAlgorithm(), publicKey: b64u(r.getPublicKey()).replace(/-/g, "+").replace(/_/g, "/"), authenticatorData: b64u(r.getAuthenticatorData()), clientDataJSON: b64u(r.clientDataJSON), transports: r.getTransports ? r.getTransports() : [], name });
+    ui.toast("Passkey added. Next time, sign in with it."); passkeyPanel();
+  }
+  async function passkeySignin() {
+    const msg = $("#passkey-msg");
+    const { data: o } = await api("POST", "/v1/auth/passkey/options", {});
+    let cred;
+    try { cred = await navigator.credentials.get({ publicKey: { ...o, challenge: unb64u(o.challenge) } }); }
+    catch (e) { throw passkeyError(e); }
+    if (msg) msg.textContent = "Checking…";
+    const r = cred.response;
+    await api("POST", "/v1/auth/passkey/verify", { id: cred.id, clientDataJSON: b64u(r.clientDataJSON), authenticatorData: b64u(r.authenticatorData), signature: b64u(r.signature), userHandle: r.userHandle ? b64u(r.userHandle) : null });
+    ui.toast("Signed in."); await refreshMe(); CertHub.rerender(); syncAll();
+  }
 
   async function classPanel() {
     const el = document.getElementById("classpanel"); if (!el) return;
@@ -432,6 +493,17 @@
     try {
       if (a === "signout") { await api("POST", "/v1/auth/logout", {}); setMe(null); ui.toast("Signed out. Your progress stays on this device."); CertHub.rerender(); }
       if (a === "sync") await syncAll();
+      if (a === "passkey-signin") await passkeySignin().catch(err => { const m = $("#passkey-msg"); if (m) m.textContent = err.message; throw err; });
+      if (a === "passkey-add") await passkeyAdd();
+      if (a === "passkey-del") {
+        if (!(await ui.confirm(`Remove the passkey "${b.dataset.name}"? You can still sign in with an emailed link. Also delete it from the device's password manager.`, { ok: "Remove", cancel: "Keep it", danger: true }))) return;
+        await api("DELETE", `/v1/passkeys/${b.dataset.id}`); ui.toast("Passkey removed."); passkeyPanel();
+      }
+      if (a === "session-end") { await api("DELETE", `/v1/sessions/${b.dataset.id}`); ui.toast(`Signed out ${b.dataset.name}.`); devicePanel(); }
+      if (a === "session-others") {
+        if (!(await ui.confirm("Sign out on every other device? You stay signed in here.", { ok: "Sign out others", cancel: "Cancel" }))) return;
+        const { data } = await api("DELETE", "/v1/sessions/others"); ui.toast(`Signed out ${data.ended} other device${data.ended === 1 ? "" : "s"}.`); devicePanel();
+      }
       if (a === "upgrade" || a === "portal") {
         const { data } = await api("POST", a === "upgrade" ? "/v1/billing/checkout" : "/v1/billing/portal", a === "upgrade" ? { plan: "pro", interval: b.dataset.interval } : {});
         if (/^https:\/\//.test(data.url)) location.href = data.url;
@@ -509,7 +581,7 @@
   }
 
   CertHub.accountViews = {
-    account: () => { setTimeout(() => { renderStatus(); if (signedIn()) classPanel(); else turnstile(); }, 0); return accountView(); },
+    account: () => { setTimeout(() => { renderStatus(); if (signedIn()) { classPanel(); passkeyPanel(); devicePanel(); } else turnstile(); }, 0); return accountView(); },
     cohort: cohortView,
     join: joinView,
     classRoster: classView

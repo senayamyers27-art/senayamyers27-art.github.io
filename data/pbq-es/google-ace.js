@@ -108,7 +108,7 @@ CertHub.addPbqs("google-ace", [
 
   { id: "iam-policy-fill", d: 4, type: "fill", title: "Lee la política de IAM de un proyecto",
     prompt: "Ejecutaste gcloud projects get-iam-policy shop-prod. Usa la salida para completar las respuestas (solo direcciones de correo, sin el prefijo del tipo de miembro).",
-    context: "bindings:\n- members:\n  - group:data-team@example.com\n  - serviceAccount:etl-sa@shop-prod.iam.gserviceaccount.com\n  role: roles/bigquery.dataViewer\n- members:\n  - user:alice@example.com\n  role: roles/owner\n- members:\n  - group:ops@example.com\n  role: roles/compute.osAdminLogin\n- condition:\n    expression: request.time < timestamp(\"2026-12-31T00:00:00Z\")\n    title: audit-q4\n  members:\n  - user:auditor@example.net\n  role: roles/viewer\netag: BwYexample00=\nversion: 3",
+    context: "bindings:\n- members:\n  - group:data-team@example.com\n  - serviceAccount:etl-sa@shop-prod.iam.gserviceaccount.com\n  role: roles/bigquery.dataViewer\n- members:\n  - user:alice@example.com\n  role: roles/owner\n- members:\n  - group:ops@example.com\n  role: roles/compute.osAdminLogin\n- condition:\n    expression: request.time < timestamp(\"2026-12-31T00:00:00Z\")\n    title: audit-q4\n  members:\n  - user:auditor@example.net\n  role: roles/iam.securityReviewer\netag: BwYexample00=\nversion: 3",
     fields: [
       { label: "Principal que puede cambiar la política de IAM de este proyecto", answers: ["alice@example.com", "user:alice@example.com"] },
       { label: "Grupo que puede iniciar sesión en VMs Linux con sudo", answers: ["ops@example.com", "group:ops@example.com"] },
@@ -116,5 +116,5 @@ CertHub.addPbqs("google-ace", [
       { label: "Año en que termina el acceso del auditor", answers: ["2026"] },
       { label: "Versión de la política", answers: ["3"] }
     ],
-    explain: "De estos roles, solo Owner incluye el permiso para establecer políticas de IAM, así que alice@example.com puede cambiar la política. roles/compute.osAdminLogin le da al grupo ops acceso por OS Login con sudo. El binding de BigQuery Data Viewer incluye a etl-sa además del equipo de datos. El otorgamiento de Viewer del auditor tiene una IAM Condition que deja de aplicarse al final de 2026, y los bindings condicionales requieren la versión 3 de la política." }
+    explain: "De estos roles, solo Owner incluye el permiso para establecer políticas de IAM, así que alice@example.com puede cambiar la política. roles/compute.osAdminLogin le da al grupo ops acceso por OS Login con sudo. El binding de BigQuery Data Viewer incluye a etl-sa además del equipo de datos. El otorgamiento de Security Reviewer del auditor tiene una IAM Condition que deja de aplicarse al final de 2026, y los bindings condicionales requieren la versión 3 de la política." }
 ]);

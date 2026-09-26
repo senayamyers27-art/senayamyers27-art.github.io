@@ -1,6 +1,18 @@
 /* What's new: learner-facing release notes, newest first. Add an entry when something visible ships.
    Each entry: { date: "YYYY-MM-DD", title, items: [ ... ], es: { title, items } } (es: the Spanish version). Shown at #whats-new and on the home page. */
 CertHub.news = [
+  { date: "2026-09-28", title: "Blue-team labs, comparisons and a catch-up plan",
+    items: [
+      "Six blue-team labs in the practice VM: investigate a brute-force attack, harden SSH, find a tampered file, audit sudo rights, fix risky permissions and remove an unknown listener.",
+      "Compare certifications side by side, such as Security+ vs CySA+ and Network+ vs CCNA, with which to take first.",
+      "After a practice test, a catch-up plan for your two weakest domains: lessons, key terms, a drill, a lab and a checkpoint.",
+      "The practice VM labs, career paths and interview practice are now in Spanish."
+    ],
+    es: { title: "Laboratorios de blue team, comparaciones y un plan de refuerzo", items: [
+      "Seis laboratorios de blue team en la máquina virtual de práctica: investiga un ataque de fuerza bruta, refuerza SSH, encuentra un archivo alterado, audita los permisos de sudo, corrige permisos riesgosos y elimina un proceso que escucha en un puerto desconocido.",
+      "Compara certificaciones lado a lado, como Security+ vs CySA+ y Network+ vs CCNA, y descubre cuál tomar primero.",
+      "Después de un examen de práctica, un plan de refuerzo para tus dos dominios más débiles: lecciones, términos clave, una práctica, un laboratorio y un punto de control.",
+      "Los laboratorios de la máquina virtual, las rutas profesionales y la práctica de entrevistas ahora están en español."] } },
   { date: "2026-09-27", title: "Stronger security for the site",
     items: [
       "Your browser now checks every script and stylesheet against a fingerprint before using it, so a changed file is refused.",

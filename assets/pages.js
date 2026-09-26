@@ -17,7 +17,9 @@
     <ul>
       <li>Your email address, used to send sign-in links and nothing else (no newsletters unless you ask)</li>
       <li>A copy of your study progress and lab progress, including lab notes, so it can sync between your devices</li>
-      <li>One cookie, <code>__Host-cs_session</code>, that keeps you signed in for up to 30 days. It is secure, HTTP-only and not used for tracking. The site stores only a hash of it.</li>
+      <li>One cookie, <code>__Host-cs_session</code>, that keeps you signed in for up to 30 days without use and never more than 90 days. It is secure, HTTP-only and not used for tracking. The site stores only a hash of it.</li>
+      <li>For each device you're signed in on: when you signed in and your browser's user-agent string, so the account page can list your devices and let you sign any of them out.</li>
+      <li>If you add a passkey: its public key, the name you give it, and when it was added and last used. Your fingerprint, face or device PIN never leaves your device.</li>
       <li>If you buy Pro or a group plan: a Stripe customer ID and your plan status. Payment details are handled by Stripe; we never see card numbers.</li>
       <li>If you join an organization through an invite: your membership. Instructors of your cohort can see your email and progress numbers (questions answered, accuracy, days checked, labs finished, last test score and last activity). They cannot see your lab notes.</li>
       <li>If you join a class with a teacher's join code: the name you choose for that class and, only if you tick the box, your email address. Nothing is shared until you read what the teacher will see and agree to it. From then on the teacher sees a progress summary computed from your synced progress: which certifications you study and, for each, exam readiness, lessons read, best practice exam score, questions answered, hands-on exercises done and when you were last active, plus how many labs you've finished. Teachers never see your answers, review queue, lab notes or write-ups. You can leave a class at any time on the Account page, which stops sharing immediately; a teacher can also remove you or delete the class.</li>
@@ -157,7 +159,8 @@
     </tbody></table></div>
     ${accounts() ? `<h2>Accounts</h2>
     <div class="scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)"><table class="sectable"><tbody>
-      ${row("No passwords", "Sign-in uses one-time email links that expire in 15 minutes. Only a SHA-256 hash of each link and session token is stored, so a database leak can't be used to sign in.")}
+      ${row("No passwords", "Sign-in uses passkeys or one-time email links that expire in 15 minutes. Only a SHA-256 hash of each link and session token, and only the public half of each passkey, is stored, so a database leak can't be used to sign in.")}
+      ${row("Devices", "The account page lists every signed-in device, with a button to sign out any of them or everywhere else. Sessions end after 90 days, and at most 10 are kept.")}
       ${row("Session cookie", "<code>__Host-</code> prefixed, <code>Secure</code>, <code>HttpOnly</code>, <code>SameSite=Strict</code>, 30-day sliding expiry and a 90-day limit, at most 10 devices at once; signing out deletes it on the server.")}
       ${row("Request forgery", "Every change must come from the site's own origin; the API allows cross-origin requests only from the site.")}
       ${row("Abuse limits", "Sign-in links are rate-limited per IP address and per email, and request sizes are capped.")}

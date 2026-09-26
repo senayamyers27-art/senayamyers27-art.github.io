@@ -130,7 +130,23 @@
   }
   // Career pages and interview practice: data/careers.js.
   const careers = { list: null, interview: {} };
-  const loadCareers = () => loadScript("data/careers.js").then(() => careers);
+  // In Spanish mode, data/careers-es.js and data/interview-es.js replace the text; lists must match the English.
+  let careersLoading = null;
+  const loadCareers = () => careersLoading || (careersLoading = loadScript("data/careers.js").then(() => {
+    if (i18n.lang() !== "es" || !careers.list) return careers;
+    return Promise.all([loadScript("data/careers-es.js"), loadScript("data/interview-es.js")]).then(() => {
+      const t = CertHub.careersEs || {}, iv = CertHub.interviewEs || {}, same = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === b.length;
+      careers.list.forEach(c => {
+        const e = t[c.track];
+        if (!e || !same(e.path, c.path) || !same(e.jobs, c.jobs) || !same(e.skills, c.skills) || !same(e.firstSteps, c.firstSteps)) return;
+        Object.assign(c, { title: e.title, intro: e.intro, skills: e.skills, firstSteps: e.firstSteps });
+        c.path.forEach((p, i) => { p.why = e.path[i]; });
+        c.jobs.forEach((j, i) => { [j.title, j.level, j.does] = e.jobs[i]; });
+      });
+      Object.keys(careers.interview).forEach(r => { if (same(iv[r], careers.interview[r])) careers.interview[r] = iv[r]; });
+      return careers;
+    }, () => careers);
+  }));
   function addCareers(list) { if (Array.isArray(list)) careers.list = list; }
   function addInterview(map) { if (map && typeof map === "object") careers.interview = map; }
 
@@ -409,6 +425,26 @@
         document.addEventListener("keydown", key);
         document.body.appendChild(wrap);
         wrap.querySelector('[data-v="1"]').focus();
+      });
+    },
+    // Asks for one line of text; resolves to the text, or null when cancelled.
+    prompt(message, { value = "", ok = "OK", cancel = "Cancel", max = 60 } = {}) {
+      return new Promise(resolve => {
+        const prev = document.activeElement;
+        const wrap = document.createElement("div");
+        wrap.className = "modal-wrap";
+        wrap.innerHTML = `<form class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-msg" novalidate><label id="modal-msg" for="modal-in"></label><input type="text" id="modal-in" class="textin" autocomplete="off"><div class="btns"><button type="submit" class="btn"></button><button type="button" class="btn ghost" data-v="0"></button></div></form>`;
+        wrap.querySelector("#modal-msg").textContent = message;
+        const input = wrap.querySelector("#modal-in"); input.value = value; input.maxLength = max;
+        wrap.querySelector('[type="submit"]').textContent = ok;
+        wrap.querySelector('[data-v="0"]').textContent = cancel;
+        const close = v => { wrap.remove(); document.removeEventListener("keydown", key); if (prev && prev.focus) prev.focus(); resolve(v); };
+        const key = e => { if (e.key === "Escape") close(null); };
+        wrap.querySelector("form").addEventListener("submit", e => { e.preventDefault(); close(input.value.trim()); });
+        wrap.addEventListener("click", e => { if (e.target.closest('[data-v="0"]') || e.target === wrap) close(null); });
+        document.addEventListener("keydown", key);
+        document.body.appendChild(wrap);
+        input.focus(); input.select();
       });
     },
     toast(message) {

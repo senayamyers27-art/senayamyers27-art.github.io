@@ -108,7 +108,7 @@ CertHub.addPbqs("google-ace", [
 
   { id: "iam-policy-fill", d: 4, type: "fill", title: "Read a project's IAM policy",
     prompt: "You ran gcloud projects get-iam-policy shop-prod. Use the output to fill in the answers (email addresses only, without the member-type prefix).",
-    context: "bindings:\n- members:\n  - group:data-team@example.com\n  - serviceAccount:etl-sa@shop-prod.iam.gserviceaccount.com\n  role: roles/bigquery.dataViewer\n- members:\n  - user:alice@example.com\n  role: roles/owner\n- members:\n  - group:ops@example.com\n  role: roles/compute.osAdminLogin\n- condition:\n    expression: request.time < timestamp(\"2026-12-31T00:00:00Z\")\n    title: audit-q4\n  members:\n  - user:auditor@example.net\n  role: roles/viewer\netag: BwYexample00=\nversion: 3",
+    context: "bindings:\n- members:\n  - group:data-team@example.com\n  - serviceAccount:etl-sa@shop-prod.iam.gserviceaccount.com\n  role: roles/bigquery.dataViewer\n- members:\n  - user:alice@example.com\n  role: roles/owner\n- members:\n  - group:ops@example.com\n  role: roles/compute.osAdminLogin\n- condition:\n    expression: request.time < timestamp(\"2026-12-31T00:00:00Z\")\n    title: audit-q4\n  members:\n  - user:auditor@example.net\n  role: roles/iam.securityReviewer\netag: BwYexample00=\nversion: 3",
     fields: [
       { label: "Principal who can change this project's IAM policy", answers: ["alice@example.com", "user:alice@example.com"] },
       { label: "Group that can log in to Linux VMs with sudo", answers: ["ops@example.com", "group:ops@example.com"] },
@@ -116,5 +116,5 @@ CertHub.addPbqs("google-ace", [
       { label: "Year in which the auditor's access ends", answers: ["2026"] },
       { label: "Policy version", answers: ["3"] }
     ],
-    explain: "Only Owner among these roles includes permission to set IAM policies, so alice@example.com can change the policy. roles/compute.osAdminLogin gives the ops group OS Login access with sudo. The BigQuery Data Viewer binding includes etl-sa as well as the data team. The auditor's Viewer grant has an IAM Condition that stops applying at the end of 2026, and conditional bindings require policy version 3." }
+    explain: "Only Owner among these roles includes permission to set IAM policies, so alice@example.com can change the policy. roles/compute.osAdminLogin gives the ops group OS Login access with sudo. The BigQuery Data Viewer binding includes etl-sa as well as the data team. The auditor's Security Reviewer grant has an IAM Condition that stops applying at the end of 2026, and conditional bindings require policy version 3." }
 ]);

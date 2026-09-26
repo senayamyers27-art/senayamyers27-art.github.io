@@ -16,7 +16,22 @@
 
   /* ---------- loading ---------- */
   const loadCss = href => new Promise(res => { if (document.querySelector(`link[href="${href}"]`)) return res(); const l = document.createElement("link"); l.rel = "stylesheet"; l.href = href; l.onload = l.onerror = () => res(); document.head.appendChild(l); });
-  const libs = () => Promise.all([CertHub.loadScript(V + "xterm.js"), CertHub.loadScript(V + "libv86.js"), CertHub.loadScript("data/vmlabs.js"), loadCss(CertHub.BASE + V + "xterm.css")])
+  // Lab data, with the Spanish text (data/vmlabs-es.js) laid over it in Spanish mode. Commands in steps are the same
+  // in both languages, so only titles, intros, steps and check labels are replaced.
+  let labsLoading = null;
+  const loadLabs = () => labsLoading || (labsLoading = CertHub.loadScript("data/vmlabs.js").then(() => {
+    if (CertHub.i18n.lang() !== "es") return;
+    return CertHub.loadScript("data/vmlabs-es.js").then(() => {
+      const es = CertHub.vmLabsEs || {};
+      CertHub.vmLabs.labs.forEach(l => {
+        const t = es[l.id];
+        if (!t || (t.steps || []).length !== l.steps.length || (t.checks || []).length !== l.checks.length) return;
+        Object.assign(l, { title: t.title, intro: t.intro, steps: t.steps });
+        l.checks.forEach((c, i) => { c.label = t.checks[i]; });
+      });
+    }, () => {});
+  }));
+  const libs = () => Promise.all([CertHub.loadScript(V + "xterm.js"), CertHub.loadScript(V + "libv86.js"), loadLabs(), loadCss(CertHub.BASE + V + "xterm.css")])
     .then(r => { if (!r[0] || !r[1] || !window.V86 || !window.Terminal) throw new Error("The VM couldn't load. Check your connection and try again."); });
   const config = () => cfgP || (cfgP = fetch(CertHub.BASE + V + "config.json").then(r => r.json()).catch(e => { cfgP = null; throw e; }));
   // The snapshot is fetched once per page visit and shared by every VM on the page.
@@ -62,7 +77,7 @@
     vm.ready = new Promise(r => emu.add_listener("emulator-started", r)).then(() => new Promise(r => setTimeout(r, 300))).then(() => {
       const t = emu.serial_adapter && emu.serial_adapter.term, { cols, rows: rws } = termSize(box, rows, t);
       if (t && (t.cols !== cols || t.rows !== rws)) t.resize(cols, rws);
-      const h = HOSTS[host], now = `date -s @${Math.floor(Date.now() / 1000)} >/dev/null; echo '${rws} ${cols}' > /run/vm-size`;
+      const h = HOSTS[host], now = `date -s @${Math.floor(Date.now() / 1000)} >/dev/null; echo '${rws} ${cols}' > /run/vm-size; chmod 440 /etc/sudoers`; // (the saved image has 644; visudo -c wants 440)
       // A resumed save keeps its own names, addresses and session; a fresh VM gets its identity and a new login.
       return vm.run(init.saved ? `${now}; stty -F /dev/ttyS0 rows ${rws} cols ${cols}`
         : `${now}; hostname ${h.name}; echo ${h.name} > /etc/hostname; sed -i 's/^127.0.1.1.*/127.0.1.1\\t${h.name}/' /etc/hosts; ip link set eth0 down; ip link set eth0 address 02:00:0a:0a:00:${h.mac}; ip addr flush dev eth0; ip addr add ${h.ip} dev eth0; ip link set eth0 up; systemctl restart serial-getty@ttyS0`);
@@ -163,11 +178,13 @@
       <li>The first start downloads about 40 MB (then it's cached). A computer with 4 GB of memory or more works best.</li>
     </ul></div>`;
 
+  const labGrid = (list, d) => `<div class="labgrid">${list.map(l => `<a class="labcard" href="#vm-lab-${esc(l.id)}"><span class="labtop"><span class="chip">${l.mode === "network" ? "2 VMs" : "1 VM"}</span>${d[l.id] ? `<span class="chip done">Done</span>` : ""}</span><strong>${esc(l.title)}</strong><span class="note">${esc(l.level)} · about ${esc(l.minutes)} min · ${esc(l.certs.map(certName).join(", "))}</span></a>`).join("")}</div>`;
+
   function hubView() {
     const d = done(), best = store.get(EXAM_KEY, {}).best;
     return `<p class="crumbs"><a href="#labs">Labs</a> / Practice VMs</p>
     <h1>Practice VMs</h1>
-    <p class="meta">Real Linux servers in your browser for Linux+, RHCSA, A+, Server+, Security+ and Network+: free practice, two networked machines, graded labs and a timed exam. Nothing to install.</p>
+    <p class="meta">Real Linux servers in your browser for Linux+, RHCSA, A+, Server+, Security+, CySA+ and Network+: free practice, two networked machines, graded admin and blue-team labs, and a timed exam. Nothing to install.</p>
     ${facts}
     <h2>Free practice</h2>
     <div class="btns"><button type="button" class="btn" data-vm="free" id="vmgo">Start a VM</button><button type="button" class="btn ghost" data-vm="save" data-vmafter hidden>Save my VM</button><button type="button" class="btn ghost" data-vm="restart" data-vmafter hidden>Start fresh</button></div>
@@ -176,9 +193,12 @@
     ${terms(["lab"])}
     <h2>Two networked machines</h2>
     <div class="panel installcard vmcard"><div class="grow"><strong>server and client on one network</strong><br><span class="note">Practice SSH, firewalls, web servers and troubleshooting between two machines.</span></div><a class="btn sm" href="#vm-net">Open</a></div>
-    <h2>Graded labs</h2>
+    <h2>Admin labs</h2>
     <p class="note">Each lab starts a fresh VM, walks you through a real admin task and checks your work inside the machine. ${Object.keys(d).length} of ${labs().length} done.</p>
-    <div class="labgrid">${labs().map(l => `<a class="labcard" href="#vm-lab-${esc(l.id)}"><span class="labtop"><span class="chip">${l.mode === "network" ? "2 VMs" : "1 VM"}</span>${d[l.id] ? `<span class="chip done">Done</span>` : ""}</span><strong>${esc(l.title)}</strong><span class="note">${esc(l.level)} · about ${esc(l.minutes)} min · ${esc(l.certs.map(certName).join(", "))}</span></a>`).join("")}</div>
+    ${labGrid(labs().filter(l => l.group !== "blue"), d)}
+    <h2>Blue-team labs</h2>
+    <p class="note">Defend a server: investigate an attack in the logs, harden SSH, check file integrity, audit sudo rights and permissions, and remove an unknown listener. Each scenario is staged in the VM for you.</p>
+    ${labGrid(labs().filter(l => l.group === "blue"), d)}
     <h2>VM exam</h2>
     <div class="panel installcard vmcard"><div class="grow"><strong>Timed performance exam</strong><br><span class="note">${CertHub.vmLabs ? `${esc(CertHub.vmLabs.exam.tasks)} random admin tasks in ${esc(CertHub.vmLabs.exam.minutes)} minutes, scored inside the VM.` : "Random admin tasks against the clock, scored inside the VM."}${best != null ? ` Your best: ${esc(best)}%.` : ""}</span></div><a class="btn sm" href="#vm-exam">Take the exam</a></div>
     <h2>Use it offline</h2>
@@ -195,7 +215,7 @@
   }
   // Inline code in lab steps becomes a button that types it into the right machine ("On client: ..." steps).
   const stepHtml = (s, lab) => {
-    const host = lab.mode === "network" ? (/^On client:/i.test(s) ? "client" : "server") : "lab";
+    const host = lab.mode === "network" ? (/^(On|En) client:/i.test(s) ? "client" : "server") : "lab";
     return esc(s).replace(/`([^`\n]+)`/g, (m, c) => `<button type="button" class="vmcode" data-vmtype="${/* html: already escaped by esc(s) */ c}" data-vmhost="${host}" title="Type it into ${host}">${/* html: already escaped by esc(s) */ c}</button>`);
   };
   function labView(lab) {
@@ -282,7 +302,7 @@
     };
     if (CertHub.vmLabs) return draw();
     app.innerHTML = `<p class="meta" role="status">Loading…</p>`;
-    CertHub.loadScript("data/vmlabs.js").then(() => { if (location.hash === "#" + head) document.title = `${draw()} · StudyToCert`; });
+    loadLabs().then(() => { if (location.hash === "#" + head) document.title = `${draw()} · StudyToCert`; });
     return "Practice VMs";
   }
 

@@ -240,6 +240,7 @@
       C.domains.forEach(d => { const qs = z.qs.map((q, i) => [q, i]).filter(([q]) => q.d === d.id); if (qs.length) dom[d.id] = Math.round(100 * qs.filter(([q, i]) => z.ans[i] === q.a).length / qs.length); });
       S.p.placement = { at: Date.now(), dom };
     }
+    if (z.mode === "test" && z.qs.length >= 10) { const f = buildFix(z); if (f) S.p.fix = z.fix = f; }
     S.p.history.unshift({ at: Date.now(), title: z.title, score: z.score, total: z.qs.length, ...(z.kind ? { kind: z.kind } : {}) });
     S.p.history = S.p.history.slice(0, 60);
     save(); render(); window.scrollTo(0, 0);
@@ -297,6 +298,7 @@
     ${n === 1 ? checkBanner() : ""}
     ${!S.p.placement && !S.p.history.length ? `<div class="panel startcard"><div class="grow"><strong>New to ${esc(C.short)}?</strong><br><span class="note">Take a short placement test to find what you already know and which weeks to focus on.</span></div><button class="btn sm" data-act="placement">Take the placement test</button></div>` : ""}
     ${n === weekNow() && !pre ? todayHtml(w, n) : ""}
+    ${S.p.fix && !S.p.fix.hidden ? fixHtml(S.p.fix, "week") : ""}
     ${streakHtml()}
     ${w.light ? `<div class="status">Holiday week. Keep it to about 30 minutes a day.</div>` : ""}
     <div class="btns">
@@ -368,6 +370,43 @@
     });
     lessonIdx.set(q.id, best);
     return best;
+  }
+  // Catch-up plan after a practice test: the (up to) two weakest domains below 75%, each with the lessons behind
+  // the missed questions, key-term cards, a drill and a lab, then a checkpoint to retest. Saved in S.p.fix.
+  function buildFix(z) {
+    const doms = C.domains.map(d => {
+      const qs = z.qs.map((q, i) => [q, i]).filter(([q]) => q.d === d.id);
+      const miss = qs.filter(([q, i]) => z.ans[i] !== q.a).map(([q]) => q);
+      return { d: d.id, n: qs.length, pct: qs.length ? Math.round(100 * (qs.length - miss.length) / qs.length) : 100, miss, w: d.w };
+    }).filter(x => x.n >= 2 && x.pct < 75).sort((a, b) => a.pct - b.pct || b.w - a.w).slice(0, 2);
+    if (!doms.length) return null;
+    const steps = [];
+    doms.forEach(x => {
+      const topics = [...new Set(x.miss.map(lessonFor).filter(Boolean))].slice(0, 4);
+      if (topics.length) steps.push({ k: "lessons", d: x.d, topics });
+      steps.push({ k: "cards", d: x.d }, { k: "drill", d: x.d });
+      const lab = W.filter(w => w.dom === x.d).flatMap(weekLabs)[0];
+      if (lab) steps.push({ k: "lab", d: x.d, lab: lab.id });
+    });
+    steps.push({ k: "retest", d: doms[0].d });
+    return { at: Date.now(), title: z.title, doms: doms.map(x => ({ d: x.d, pct: x.pct })), steps, done: [] };
+  }
+  function fixHtml(f, where) {
+    if (!f) return "";
+    const done = f.done || [], left = f.steps.length - done.length;
+    const step = (s, i) => {
+      const dn = domName(s.d);
+      const body = s.k === "lessons" ? `<strong>Reread the lessons behind your misses</strong> <span class="note">${esc(dn)}</span><br>${s.topics.map(t => `<button type="button" class="linkbtn" data-act="golesson" data-k="${lessonKey(t)}">${esc(t)}</button>`).join("<br>")}`
+        : s.k === "cards" ? `<strong>Study the key terms</strong> <span class="note">${esc(dn)}</span><br><button type="button" class="btn ghost sm" data-act="tc-d" data-d="${esc(s.d)}">Study terms</button>`
+        : s.k === "drill" ? `<strong>Drill 15 questions</strong> <span class="note">${esc(dn)}</span><br><button type="button" class="btn ghost sm" data-act="drill-d" data-d="${esc(s.d)}">Start the drill</button>`
+        : s.k === "lab" ? `<strong>Do a hands-on lab</strong> <span class="note">${esc(dn)}</span><br><a href="#${esc(s.lab)}">${esc((CertHub.labs[s.lab] || {}).title || s.lab)}</a>`
+        : `<strong>Retest with a checkpoint</strong> <span class="note">25 questions from ${esc(dn)}</span><br><button type="button" class="btn ghost sm" data-act="checkpoint" data-d="${esc(s.d)}">Take the checkpoint</button>`;
+      return `<li class="${done.includes(i) ? "checked" : ""}"><label class="fixchk"><input type="checkbox" data-act="fixdone" data-i="${esc(i)}" ${done.includes(i) ? "checked" : ""}><span class="sr-only">Done</span></label><div class="grow">${body}</div></li>`;
+    };
+    return `<div class="panel fixplan"><div class="flex"><h2 data-style="margin:0">Your catch-up plan</h2>${where === "week" ? `<button type="button" class="btn ghost sm" data-act="fixclear">${left ? "Hide" : "Clear"}</button>` : ""}</div>
+    <p class="note"><span>Weakest domains in "${esc(f.title)}":</span> ${f.doms.map(x => `<span class="chip" data-style="--c:${dc(x.d)}">D${esc(x.d)} ${esc(x.pct)}%</span>`).join(" ")}</p>
+    <p class="note">${left ? "One step a day takes about a week. Tick each step off as you go." : "All done. Take another practice test to check your progress."}</p>
+    <ol class="days fixsteps">${f.steps.map(step).join("")}</ol></div>`;
   }
   // Why the chosen wrong answer is wrong, then the other wrong options behind a disclosure.
   function whyHtml(q, picked) {
@@ -922,6 +961,11 @@
     app.querySelectorAll(".learn-dom").forEach(sec => { sec.hidden = !!q && !sec.querySelector(".learn-week:not([hidden])"); });
     const n = $("#lsearch-n"); if (n) n.textContent = q ? `${shown} lesson${shown === 1 ? "" : "s"} match "${qs.trim()}".` : "";
   }
+  // Links to the comparison pages (/compare/<a>-vs-<b>/) that include this certification.
+  function compareLinks() {
+    const list = ((CertHub.site || {}).compare || []).filter(p => p.includes(C.id) && CertHub.certs[p[0]] && CertHub.certs[p[1]]);
+    return list.length ? `<p class="note no-print">Compare: ${list.map(([a, b]) => `<a href="/compare/${esc(a)}-vs-${esc(b)}/">${esc(CertHub.certs[a].short)} vs ${esc(CertHub.certs[b].short)}</a>`).join(" · ")}</p>` : "";
+  }
   function learnView() {
     const head = `<h1>Lessons</h1>`;
     if (LES === null) return head + `<p class="note">Loading lessons…</p>`;
@@ -1028,6 +1072,7 @@
       ${z.kind === "full" ? `<p data-style="margin:8px 0 0"><span class="chip" data-style="--c:${esc(passBand(pct)[1])}">${esc(passBand(pct)[0])}</span> <span class="note">Pass estimate. Real exams use scaled scores, so treat 85%+ on full-length exams as your target.</span></p>
       <div class="bars" data-style="margin-top:12px">${C.domains.map(d => { const qs = z.qs.map((q, i) => [q, i]).filter(([q]) => q.d === d.id); const c = qs.filter(([q, i]) => z.ans[i] === q.a).length; const p = qs.length ? Math.round(100 * c / qs.length) : 0; return `<div class="b" data-style="--c:${dc(d.id)}"><div class="flex"><span>D${esc(d.id)} ${esc(d.name)}</span><strong>${c}/${qs.length}</strong></div><div class="track"><i data-style="width:${p}%"></i></div></div>`; }).join("")}</div>` : ""}</div>
       ${z.kind === "placement" ? placementHtml() : ""}
+      ${z.fix ? fixHtml(S.p.fix === z.fix ? S.p.fix : z.fix, "result") : ""}
       <h2>Review</h2>${z.qs.map((q, i) => { const ok = z.ans[i] === q.a; return `<div class="panel" data-style="--c:${ok ? "var(--ok)" : "var(--bad)"}"><p data-style="margin:0 0 6px"><strong>${ok ? "Correct" : "Missed"}</strong> · <span class="note">${esc(domName(q.d))}</span></p><p class="qtext" data-style="margin:0 0 8px">${esc(q.q)}</p>${ok ? "" : `<p class="note" data-style="margin:0">Your answer: ${esc(z.ans[i] == null ? "none" : q.o[z.ans[i]])}</p>`}<p data-style="margin:4px 0 0"><strong>${esc(q.o[q.a])}</strong></p><div class="expl">${esc(q.e)}${whyHtml(q, z.ans[i])}${q.src ? `<br><small class="note">Source: ${esc(q.src)}</small>` : ""}${ok ? "" : `<br>${lessonLink(q)}`}<br>${qReport(q)}</div></div>`; }).join("")}`;
     }
     const q = z.qs[z.i];
@@ -1046,7 +1091,7 @@
     ${z.mode === "test" ? `<button class="btn ghost" data-act="finish">Submit test</button>` : ""}</div>`;
   }
   // Certifications whose objectives the practice VMs' graded labs cover (see data/vmlabs.js).
-  const VM_CERTS = new Set(["linux-plus", "rhcsa", "a-plus-core2", "server-plus", "security-plus", "network-plus", "cysa-plus"]);
+  const VM_CERTS = new Set(["linux-plus", "rhcsa", "a-plus-core2", "server-plus", "security-plus", "network-plus", "cysa-plus", "sscp", "isc2-cc", "securityx"]);
   function labsView() {
     const all = planLabs();
     const lp = CertHub.loadLabProgress();
@@ -1187,6 +1232,7 @@
     ${C.status === "verified" ? `<div class="status">${esc(C.statusNote || "")}</div>` : checkBanner()}
     ${noticeHtml()}
     <p class="note no-print"><a href="#exam-day">Exam-day guide</a>: scoring, question types, pacing and check-in${CertHub.examDay ? ` for ${esc(C.vendor || "this vendor")}` : ""}.</p>
+    ${compareLinks()}
     ${C.lastVerified ? `<p class="note">Exam details last checked ${esc(fmtLong(parseD(C.lastVerified)))}.</p>` : ""}
     <h2>Exam format</h2>
     <div class="panel">
@@ -1247,6 +1293,13 @@
       review: () => { const ids = dueIds(); startQuiz({ title: "Review queue", qs: shuffle(Q.filter(q => ids.includes(q.id))).slice(0, 20), mode: "learn", review: true }); },
       drill: () => drill(+$("#dsel").value),
       "drill-d": () => drill(d),
+      "tc-d": () => {
+        const due = cardDue(termCards(), d);
+        if (!due.length) { CertHub.ui.toast("No key-term cards due in this domain. Come back tomorrow."); return; }
+        S.tab = "practice"; history.replaceState(null, "", `#${C.id}.practice`);
+        S.fc = { deck: shuffle(due).slice(0, 20), i: 0, flipped: false, known: 0, seen: 0, graded: new Set() }; render(); window.scrollTo(0, 0);
+      },
+      fixclear: () => { if (!S.p.fix) return; if ((S.p.fix.done || []).length >= S.p.fix.steps.length) S.p.fix = null; else S.p.fix.hidden = true; save(); render(); },
       checkpoint: () => cp(d),
       exam: () => { const qs = examQs(); startQuiz({ title: "Practice exam", qs, mode: "test", minutes: examMinutes(qs.length) }); },
       smart: () => { const qs = smartQs(); if (!qs.length) return; startQuiz({ title: "Smart practice", qs, mode: "learn" }); },
@@ -1406,6 +1459,10 @@
     const el = e.target;
     if (S.sim && el.dataset.simm != null) { S.sim.ans[+el.dataset.simm] = el.value; return; }
     if (S.sim && el.dataset.sims != null) { el.checked ? S.sim.ans.add(+el.dataset.sims) : S.sim.ans.delete(+el.dataset.sims); return; }
+    if (el.dataset && el.dataset.act === "fixdone" && S.p.fix) {
+      const f = S.p.fix, i = +el.dataset.i; f.done = (f.done || []).filter(x => x !== i); if (el.checked) { f.done.push(i); CertHub.activity.mark(); }
+      save(); el.closest("li").classList.toggle("checked", el.checked); return;
+    }
     const c = el.dataset && el.dataset.check;
     if (c) { if (el.checked) CertHub.activity.mark(); S.p.checks[c] = el.checked; el.closest("li").classList.toggle("checked", el.checked); save(); return; }
     if (el.id === "exam" && el.value) { S.p.examDate = el.value; save(); renderTabs(); }
