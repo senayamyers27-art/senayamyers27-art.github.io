@@ -30,7 +30,7 @@
     if (C && C.id === id && S) {
       // Same certification: switch tabs but keep any quiz in progress.
       active = true;
-      if (TAB_IDS.includes(tab) && tab !== S.tab) { S.tab = tab; if (tab === "week") S.viewWeek = null; }
+      if (TAB_IDS.includes(tab) && tab !== S.tab) { S.tab = tab; S.planner = false; if (tab === "week") S.viewWeek = null; }
       if (pendingVideo) S.openLesson = pendingVideo;
       render(); return true;
     }
@@ -65,7 +65,7 @@
     CertHub.loadHandson(id).then(h => { if (!C || C.id !== id) return; HO = h || false; if (active && S.tab === "practice" && !(S.quiz && !S.quiz.done)) render(); });
     LES = null;
     LES_ES = null;
-    if (LANG === "es") CertHub.loadLessons(id, "es").then(m => { if (!C || C.id !== id) return; LES_ES = m; if (active && (S.tab === "week" || S.tab === "learn")) render(); });
+    if (LANG === "es") CertHub.loadLessons(id, "es").then(m => { if (!C || C.id !== id) return; LES_ES = m; if (active && (S.tab === "week" || S.tab === "learn" || S.tab === "cheat")) render(); });
     CertHub.loadLessons(id).then(m => {
       if (!C || C.id !== id) return;
       LES = m || false;
@@ -560,7 +560,7 @@
     <p class="meta">Every lesson's exam tip and key terms on one page, by domain. <button type="button" class="btn ghost sm no-print" data-act="printcheat">Print or save as PDF</button></p>
     ${C.domains.map(d => {
       const ts = W.filter(w => w.dom === d.id).flatMap(lessonTopics).filter(t => LES.has(t)); if (!ts.length) return "";
-      const ls = ts.map(t => LES.get(t));
+      const ls = ts.map(lessonOf);
       return `<h2 style="--c:${dc(d.id)}">Domain ${d.id}: ${esc(d.name)} <small class="note">${d.w}%</small></h2>
       <div class="panel cheat"><h3>Exam tips</h3><ul class="clean">${ls.map(l => `<li>${inline(l.tip)}</li>`).join("")}</ul>
       <h3>Key terms</h3><dl class="terms">${ls.flatMap(l => l.terms || []).filter((x, i, a) => a.findIndex(y => y[0].toLowerCase() === x[0].toLowerCase()) === i).map(([a, b]) => `<dt>${inline(a)}</dt><dd>${inline(b)}</dd>`).join("")}</dl></div>`;
@@ -949,12 +949,26 @@
     }).join("")}`;
   }
 
+  // Printable planner: every week on paper with a box to tick for each study day.
+  function plannerView() {
+    const short = ["Lessons", "Videos or reading", "Check yourself", "Lab", "Weekly quiz", "Review and tests", "Rest"];
+    return `<div class="planner"><div class="btns no-print"><button type="button" class="btn" data-act="printplanner">Print or save as PDF</button><button type="button" class="btn ghost" data-act="plannerclose">Back to the plan</button></div>
+    <h1>${esc(C.short)} study planner</h1>
+    <p class="meta">${esc(C.name)} · ${W.length} weeks, ${fmtLong(weekStart(1))} to the week of ${fmtLong(weekStart(W.length))}${S.p.examDate ? ` · exam ${fmtLong(parseD(S.p.examDate))}` : " · exam date: ____________"}</p>
+    <p class="note">Tick a box for each day you study. Days: ${DAYS().map(([d], i) => `${d} ${short[i].toLowerCase()}`).join(" · ")}.</p>
+    ${W.map(w => `<section class="pweek" style="--c:${dc(w.dom)}"><div class="pwhead"><strong>Week ${w.n}: ${esc(w.title)}</strong><span class="note">${fmt(weekStart(w.n))} – ${fmt(U.addDays(weekStart(w.n), 6))}</span></div>
+      <p class="pwtopics">${w.topics.map(t => esc(t)).join(" · ")}</p>
+      <div class="pdays">${DAYS().map(([d], i) => `<span class="pday"><i class="box${S.p.checks[`${w.n}-${i}`] ? " on" : ""}" aria-hidden="true"></i>${d}</span>`).join("")}<span class="pnote">Quiz score: ______</span></div></section>`).join("")}
+    <p class="note">StudyToCert · free study plans for IT certifications</p></div>`;
+  }
   function planView() {
+    if (S.planner) return plannerView();
     const now = weekNow();
     const hours = C.hoursPerWeek || "6–8";
     return `<h1>Your ${W.length}-week route</h1>
     <p class="meta">${fmtLong(weekStart(1))} to the week of ${fmtLong(weekStart(W.length))}. About ${esc(hours)} hours a week: 45–60 minutes on weekdays and a longer Saturday session. A checkpoint test closes each domain and full practice exams close the plan. Change the start date on the Progress tab.</p>
     ${checkBanner()}
+    <div class="btns no-print"><button type="button" class="btn ghost sm" data-act="planner">Printable study planner</button></div>
     ${routeMap(now)}
     ${PLAN.phases.map(([a, b, t]) => `<h2>${esc(t)}</h2>` + W.slice(a - 1, b).map(w => `<details class="week" style="--c:${dc(w.dom)}" ${w.n === now ? "open" : ""}><summary><span class="num">W${w.n}</span><span class="grow"><strong>${esc(w.title)}</strong><br><span class="note">${fmt(weekStart(w.n))} · ${esc(w.obj)}</span></span></summary>
       <ul class="clean">${w.topics.map(t => `<li>${esc(t)}</li>`).join("")}</ul>
@@ -1272,13 +1286,16 @@
       simstart: () => simStart(t.dataset.id),
       gosim: () => { S.tab = "practice"; history.replaceState(null, "", `#${C.id}.practice`); simStart(t.dataset.id); },
       printcheat: () => window.print(),
+      planner: () => { S.planner = true; render(); window.scrollTo(0, 0); },
+      plannerclose: () => { S.planner = false; render(); },
+      printplanner: () => window.print(),
       lang: () => {
         LANG = LANG === "es" ? "en" : "es"; CertHub.store.set("certhub:lang", LANG);
         if (LANG === "es" && !LES_ES) { const id = C.id; CertHub.loadLessons(id, "es").then(m => { if (C && C.id === id) { LES_ES = m; render(); } }); }
         render();
       },
       offline: () => {
-        const base = CertHub.BASE, urls = [`data/lessons/${C.id}.js`, "data/diagrams.js", `data/gen/${C.id}-q.js`].concat(C.hasLessonsEs ? [`data/lessons-es/${C.id}.js`] : [], C.hasPbqs ? [`data/pbq/${C.id}.js`] : [], C.hasHandson ? [`data/handson/${C.id}.js`] : []).map(u => base + u);
+        const base = CertHub.BASE, urls = [`data/lessons/${C.id}.js`, "data/diagrams.js", `data/gen/${C.id}-q.js`, `data/gen/${C.id}-plan.js`].concat(C.hasLessonsEs ? [`data/lessons-es/${C.id}.js`] : [], C.hasPbqs ? [`data/pbq/${C.id}.js`] : [], C.hasHandson ? [`data/handson/${C.id}.js`] : [], LANG === "es" && C.hasQuestionsEs ? [`data/questions-es/${C.id}.js`] : [], LANG === "es" && C.hasPbqsEs ? [`data/pbq-es/${C.id}.js`] : [], LANG === "es" && C.hasHandsonEs ? [`data/handson-es/${C.id}.js`] : []).map(u => base + u);
         const ctl = navigator.serviceWorker && navigator.serviceWorker.controller;
         if (!ctl) { CertHub.ui.toast("Offline saving needs the installed app or a second visit. Reload and try again."); return; }
         const ch = new MessageChannel();

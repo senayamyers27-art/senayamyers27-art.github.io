@@ -128,6 +128,21 @@
     return `<div class="panel installcard newscard"><div class="grow"><strong>Get study tips by email</strong><br><span class="note">${esc(n.blurb || "New labs, exam changes and a study tip now and then. Unsubscribe any time.")}</span></div><a class="btn sm" href="${esc(n.url)}" target="_blank" rel="noopener">Sign up</a></div>`;
   }
 
+  /* ---------- what's new (data/news.js) ---------- */
+  const NEWS = () => (Array.isArray(CertHub.news) ? CertHub.news : []).filter(n => n && /^\d{4}-\d{2}-\d{2}$/.test(n.date) && n.title && Array.isArray(n.items));
+  const newsDate = d => { try { return new Date(d + "T12:00:00").toLocaleDateString(CertHub.i18n.lang() === "es" ? "es" : "en", { year: "numeric", month: "long", day: "numeric" }); } catch (e) { return d; } };
+  // Spanish mode shows each entry's own Spanish text (marked as content so the interface dictionary leaves it alone).
+  const loc = n => CertHub.i18n.lang() === "es" && n.es && n.es.title && Array.isArray(n.es.items) ? n.es : n;
+  function newsView() {
+    return `<h1>What's new</h1><p class="meta">New certifications, features and content, newest first.</p>
+    ${NEWS().map(n => { const t = loc(n); return `<section class="panel"${t !== n ? " data-content" : ""}><p class="note" style="margin:0">${esc(newsDate(n.date))}</p><h2 style="margin-top:4px">${esc(t.title)}</h2><ul class="clean">${t.items.map(i => `<li>${esc(i)}</li>`).join("")}</ul></section>`; }).join("")}`;
+  }
+  function newsCard() {
+    const n = NEWS()[0]; if (!n) return "";
+    const t = loc(n);
+    return `<p class="note newsline"><strong>New:</strong> <span${t !== n ? " data-content" : ""}>${esc(t.title)}.</span> <a href="#whats-new">See what's new</a></p>`;
+  }
+
   function homeView() {
     const lp = loadLabProgress();
     const labList = labOrder.map(id => labs[id]);
@@ -137,9 +152,11 @@
     return `<section class="hero">
       <h1>Study to certify: free plans for ${nCerts} IT, cloud and cybersecurity certifications</h1>
       <p class="meta">Pick a certification and get a week-by-week plan: short lessons, hands-on labs, quizzes, timed checkpoints, a practice exam weighted like the real one and spaced review. No sign-up and no ads. Your progress stays in your browser.</p>
+      ${newsCard()}
       <div class="btns"><button type="button" class="btn" data-jump="pick">Pick your first certification</button><button type="button" class="btn ghost" data-jump="tracks-h">See all ${nCerts} certifications</button><a class="btn ghost" href="#labs">Browse ${labList.length} labs</a>${doneLabs ? `<a class="btn ghost" href="#portfolio">Your portfolio (${doneLabs})</a>` : ""}</div>
     </section>
     ${CertHub.install.installed() ? "" : `<div class="panel installcard"><div class="grow"><strong>Get the app on your phone</strong><br><span class="note">Install it from your browser: it opens full screen and works offline. No app store needed.</span></div><div class="btns" style="margin:0">${CertHub.install.prompt ? `<button type="button" class="btn sm" data-gact="install">Install</button>` : ""}<a class="btn ghost sm" href="#install">How to install</a></div></div>`}
+    ${CertHub.review ? CertHub.review.homeCard() : ""}
     ${continueHtml()}
     ${pickerHtml()}
     <h2 id="tracks-h">Certifications by career track</h2>
@@ -203,6 +220,7 @@
     const q = new URLSearchParams({ p: name, t: title || name, e: "true", rnd: Math.random().toString(36).slice(2) });
     try { fetch(`${gc}/count?${q}`, { mode: "no-cors", credentials: "omit", keepalive: true, referrerPolicy: "no-referrer" }).catch(() => {}); } catch (e) {}
   };
+  const LIGHT = new Set(["home", "whats-new", "review", "vm", "privacy", "terms", "security", "install", "support", "exam-day", "account"]);
   function route() {
     let raw = "";
     try { raw = decodeURIComponent(location.hash.replace(/^#/, "")); } catch (e) { raw = ""; }
@@ -210,8 +228,19 @@
     let [head, tab] = raw.split(".");
     if (!/^[a-z0-9-]{1,64}$/.test(head || "")) head = "home";
     if (tab && !/^([a-z]{1,16}|video-l[a-z0-9]{1,14})$/.test(tab)) tab = "";
+    // The home page and a few light pages only need the lab index; everything else waits for the full labs.
+    if ((!CertHub.labsLoaded() && !LIGHT.has(head)) || (own(certs, head) && certs[head].lite)) {
+      $("#app").innerHTML = `<p class="meta" role="status">Loading…</p>`;
+      const want = location.hash;
+      Promise.all([CertHub.loadLabs(), own(certs, head) ? CertHub.loadPlan(head) : true]).then(r => {
+        if (location.hash !== want) return;
+        if (r.every(Boolean)) route(); else $("#app").innerHTML = `<p class="meta" role="status">This page couldn't load. Check your connection and try again.</p>`;
+      });
+      return;
+    }
     const prev = view;
     if (prev.startsWith("lab-") || prev.startsWith("cap-")) CertHub.labViews.leave();
+    if (prev === "vm" && head !== "vm" && CertHub.vm) CertHub.vm.leave();
     let title = "StudyToCert", brand = "StudyToCert";
     if (own(certs, head)) {
       CertHub.certView.open(head, tab || "week");
@@ -231,6 +260,13 @@
       else if (head === "frameworks" && CertHub.frameworksView) { topNav("frameworks"); $("#app").innerHTML = CertHub.frameworksView(); title = "Frameworks"; view = "frameworks"; }
       else if ((head === "exam-day" || /^exam-day-[a-z]{2,20}$/.test(head)) && CertHub.examDay) { topNav("careers"); CertHub.examDay.show(head); title = "Exam-Day Guides"; view = head; }
       else if ((head === "careers" || /^career-[a-z]{2,20}$/.test(head)) && CertHub.careerViews) { topNav("careers"); CertHub.careerViews.show(head); title = "Career Paths"; view = head; }
+      else if (head === "vm") {
+        topNav("labs"); title = "Practice VM"; view = "vm";
+        if (CertHub.vm) $("#app").innerHTML = CertHub.vm.view();
+        else { $("#app").innerHTML = `<p class="meta" role="status">Loading…</p>`; CertHub.loadScript("assets/vm.js").then(ok => { if (location.hash === "#vm" && CertHub.vm) $("#app").innerHTML = CertHub.vm.view(); else if (!ok) $("#app").innerHTML = `<p class="meta" role="status">This page couldn't load. Check your connection and try again.</p>`; }); }
+      }
+      else if (head === "whats-new") { topNav(""); $("#app").innerHTML = newsView(); title = "What's New"; view = head; }
+      else if (head === "review" && CertHub.review) { topNav("home"); $("#app").innerHTML = CertHub.review.show(); title = "Daily Review"; view = "review"; }
       else if (head === "portfolio") { topNav("portfolio"); $("#app").innerHTML = CertHub.labViews.portfolio(); title = "Lab Portfolio"; view = "portfolio"; }
       else { topNav("home"); $("#app").innerHTML = homeView(); view = "home"; }
     }
@@ -242,6 +278,7 @@
     window.scrollTo(0, 0);
   }
   // Re-render the current view in place (after marking a lab done, for example).
+  CertHub.reviewActive = () => view === "review";
   CertHub.rerender = () => { const y = window.scrollY; route(); window.scrollTo(0, y); };
 
   document.addEventListener("click", e => {

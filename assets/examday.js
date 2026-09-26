@@ -5,7 +5,8 @@
   const { $, esc } = U;
   let data = null;
   CertHub.addExamDay = d => { data = d; };
-  const load = () => data ? Promise.resolve(data) : CertHub.loadScript("data/examday.js").then(() => data);
+  // Spanish mode reads data/examday-es.js (same shape) when it exists, and falls back to English.
+  const load = () => data ? Promise.resolve(data) : (CertHub.i18n.lang() === "es" ? CertHub.loadScript("data/examday-es.js") : Promise.resolve(false)).then(() => data || CertHub.loadScript("data/examday.js").then(() => data));
   const inline = x => esc(x).replace(/`([^`\n]+)`/g, "<code>$1</code>");
   const vendorOf = certId => data && data.vendors.find(v => v.certs.includes(certId));
   const sections = list => list.map(s => `<h2>${esc(s.h)}</h2><div class="panel"><ul class="clean">${s.points.map(p => `<li>${inline(p)}</li>`).join("")}</ul></div>`).join("");

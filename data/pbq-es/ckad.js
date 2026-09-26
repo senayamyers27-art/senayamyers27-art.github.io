@@ -1,0 +1,146 @@
+/* Spanish translation of the CKAD exam simulations. Same ids and structure as data/pbq/ckad.js. */
+CertHub.addPbqs("ckad", [
+  { id: "job-fields-match", d: 1, type: "match", title: "Relaciona los campos de Job y CronJob con su comportamiento",
+    prompt: "Una carga de trabajo batch en el namespace reports usa los campos de Job y CronJob de abajo. Relaciona cada campo con lo que controla.",
+    context: "apiVersion: batch/v1\nkind: CronJob\nmetadata:\n  name: nightly-report\n  namespace: reports\nspec:\n  schedule: \"30 2 * * *\"\n  concurrencyPolicy: Forbid\n  successfulJobsHistoryLimit: 3\n  jobTemplate:\n    spec:\n      completions: 6\n      parallelism: 2\n      backoffLimit: 4\n      activeDeadlineSeconds: 900\n      template:\n        spec:\n          restartPolicy: Never\n          containers:\n          - name: report\n            image: registry.example.com/reports/builder:1.8",
+    pairs: [
+      ["completions: 6", "Número total de Pods que deben terminar con éxito para que el Job se complete"],
+      ["parallelism: 2", "Número máximo de Pods del Job ejecutándose al mismo tiempo"],
+      ["backoffLimit: 4", "Número de reintentos antes de que el Job se marque como Failed"],
+      ["activeDeadlineSeconds: 900", "Límite de tiempo real tras el cual se termina todo el Job"],
+      ["concurrencyPolicy: Forbid", "Omitir una nueva ejecución programada mientras el Job anterior sigue en ejecución"],
+      ["successfulJobsHistoryLimit: 3", "Cuántos Jobs terminados con éxito se conservan para inspeccionarlos"]
+    ],
+    extra: ["Número de Pods que se mantienen en ejecución permanentemente en cada nodo", "Retraso en segundos antes de la primera ejecución tras crear el CronJob"],
+    explain: "completions es la meta de éxitos y parallelism limita cuántos Pods se ejecutan a la vez, así que este Job ejecuta 2 Pods a la vez hasta que 6 hayan terminado con éxito. backoffLimit cuenta los reintentos fallidos, mientras que activeDeadlineSeconds es un presupuesto de tiempo estricto para todo el Job que prevalece aunque queden reintentos. concurrencyPolicy y los límites de historial van en el spec del CronJob, no en la plantilla del Job: Forbid omite las ejecuciones superpuestas (Replace mataría la anterior) y successfulJobsHistoryLimit controla cuántos Jobs antiguos se conservan." },
+  { id: "entrypoint-cmd-fill", d: 1, type: "fill", title: "Determina el proceso que ejecuta un contenedor",
+    prompt: "La imagen registry.example.com/shop/api:2.0 se construyó a partir del Dockerfile mostrado. Para cada spec de Pod, escribe la línea de comando completa que ejecuta el contenedor (palabras separadas por un solo espacio).",
+    context: "# Dockerfile (last lines)\nENTRYPOINT [\"python\", \"app.py\"]\nCMD [\"--port\", \"8080\"]\n\n# Pod A container\n  image: registry.example.com/shop/api:2.0\n\n# Pod B container\n  image: registry.example.com/shop/api:2.0\n  args: [\"--port\", \"9090\"]\n\n# Pod C container\n  image: registry.example.com/shop/api:2.0\n  command: [\"python\", \"worker.py\"]",
+    fields: [
+      { label: "El Pod A ejecuta", answers: ["python app.py --port 8080"] },
+      { label: "El Pod B ejecuta", answers: ["python app.py --port 9090"] },
+      { label: "El Pod C ejecuta", answers: ["python worker.py"] }
+    ],
+    explain: "En Kubernetes, `command` reemplaza el ENTRYPOINT de la imagen y `args` reemplaza el CMD de la imagen. El Pod A no sobrescribe nada, así que se ejecuta ENTRYPOINT más CMD. El Pod B solo define args, así que el ENTRYPOINT se mantiene y los nuevos args reemplazan a CMD. El Pod C define command sin args, y cuando se define command el CMD de la imagen también se ignora, así que no se pasa ningún flag --port." },
+  { id: "rollout-undo-order", d: 2, type: "order", title: "Despliega una nueva imagen y revierte una versión defectuosa",
+    prompt: "El Deployment web del namespace shop debe pasar a la imagen web:1.5. La nueva versión falla su readiness probe, así que debes volver a la última revisión buena. Ordena correctamente los pasos.",
+    steps: [
+      "kubectl -n shop set image deployment/web web=registry.example.com/shop/web:1.5",
+      "kubectl -n shop rollout status deployment/web  (se queda atascado: los Pods nuevos nunca llegan a Ready)",
+      "kubectl -n shop rollout history deployment/web  (busca la revisión que ejecutaba web:1.4)",
+      "kubectl -n shop rollout undo deployment/web --to-revision=3",
+      "kubectl -n shop rollout status deployment/web  (confirma que informa successfully rolled out)"
+    ],
+    explain: "set image cambia la plantilla del Pod y genera un nuevo ReplicaSet, y rollout status es la forma de seguir su avance. Como el rolling update nunca elimina más Pods antiguos de los que permite maxUnavailable, una readiness probe que falla deja el rollout atascado en lugar de tumbar la app. rollout history lista las revisiones para que elijas el destino correcto, undo --to-revision vuelve a escalar el ReplicaSet antiguo y un rollout status final demuestra que la reversión terminó." },
+  { id: "rolling-update-math", d: 2, type: "fill", title: "Calcula los límites de un rolling update",
+    prompt: "Usa la estrategia del Deployment mostrada. Completa los límites de Pods que aplica el controlador durante el rollout.",
+    context: "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: checkout\nspec:\n  replicas: 10\n  strategy:\n    type: RollingUpdate\n    rollingUpdate:\n      maxSurge: 25%\n      maxUnavailable: 25%",
+    fields: [
+      { label: "maxSurge como cantidad de Pods", answers: ["3"] },
+      { label: "maxUnavailable como cantidad de Pods", answers: ["2"] },
+      { label: "Máximo total de Pods (antiguos + nuevos) en cualquier momento", answers: ["13"] },
+      { label: "Mínimo de Pods disponibles en cualquier momento", answers: ["8"] }
+    ],
+    explain: "El 25% de 10 es 2.5. Kubernetes redondea maxSurge hacia arriba (3) y maxUnavailable hacia abajo (2), lo que favorece mantener la capacidad. Así que el Deployment puede ejecutar hasta 10 + 3 = 13 Pods y debe mantener al menos 10 - 2 = 8 disponibles. Si ambos valores fueran 0, el rollout nunca podría avanzar, y por eso la API rechaza esa combinación." },
+  { id: "helm-commands-match", d: 2, type: "match", title: "Relaciona comandos de Helm con tareas",
+    prompt: "Administras una release de una aplicación llamada web con Helm 3. Relaciona cada tarea con el comando que la realiza.",
+    pairs: [
+      ["Ver los valores predeterminados configurables de un chart antes de instalarlo", "helm show values example/web"],
+      ["Renderizar los manifiestos localmente sin tocar el clúster", "helm template web example/web -f prod.yaml"],
+      ["Instalar en el namespace shop, que todavía no existe", "helm install web example/web -n shop --create-namespace"],
+      ["Devolver la release a la revisión 2 después de un upgrade fallido", "helm rollback web 2 -n shop"],
+      ["Actualizar la caché local de los índices de los repositorios de charts", "helm repo update"]
+    ],
+    extra: ["helm uninstall web -n shop", "helm list -A"],
+    explain: "helm show values imprime el values.yaml del chart para que sepas qué sobrescribir con --set o -f. helm template renderiza el YAML del lado del cliente, lo que es útil para revisarlo o pasarlo por pipe a kubectl. install -n con --create-namespace crea el namespace por ti, rollback recibe un nombre de release y un número de revisión, y repo update actualiza los índices para que search e install vean las nuevas versiones de los charts. uninstall elimina la release y list muestra las releases; ninguno de los dos realiza estas tareas." },
+  { id: "pod-status-match", d: 3, type: "match", title: "Relaciona los síntomas de los Pods con su causa probable",
+    prompt: "kubectl get pods -n shop muestra estos síntomas. Relaciona cada uno con la causa más probable.",
+    context: "NAME                      READY   STATUS                       RESTARTS   AGE\ncart-5f7c9d8b6-2kq4m      0/1     ImagePullBackOff             0          4m\norders-6b8d7c5f9-lx9pz    0/1     CrashLoopBackOff             7          12m\nsearch-7c6d5b4f8-mm2rt    0/1     Pending                      0          9m\npayments-84f6c7d9b-qw7nc  0/1     CreateContainerConfigError   0          3m\ncatalog-5d9f8b7c6-vt3hx   0/1     Running                      0          6m",
+    pairs: [
+      ["cart: ImagePullBackOff", "Nombre o tag de imagen incorrecto, o faltan las credenciales para descargar del registry"],
+      ["orders: CrashLoopBackOff", "El proceso arranca y termina una y otra vez; revisa kubectl logs --previous"],
+      ["search: Pending", "Ningún nodo tiene suficiente CPU o memoria sin solicitar para programarlo"],
+      ["payments: CreateContainerConfigError", "No existe un ConfigMap, Secret o clave referenciado"],
+      ["catalog: Running pero 0/1 READY", "La readiness probe está fallando"]
+    ],
+    extra: ["El selector del Service no coincide con las etiquetas del Pod", "El Deployment se pausó con kubectl rollout pause"],
+    explain: "ImagePullBackOff significa que el kubelet no puede descargar la imagen, así que revisa la cadena de la imagen y los imagePullSecrets. CrashLoopBackOff significa que el contenedor se ejecuta y termina; los logs del contenedor anterior suelen mostrar el motivo. Pending sin nodo asignado apunta al scheduler: kubectl describe muestra FailedScheduling, a menudo por CPU o memoria insuficientes. CreateContainerConfigError ocurre antes del arranque cuando env o envFrom hacen referencia a un ConfigMap, Secret o clave inexistente. Running pero no Ready es un problema de la readiness probe. Un selector de Service incorrecto no cambia en absoluto el estado del Pod; solo deja al Service sin endpoints." },
+  { id: "oomkilled-describe", d: 3, type: "select", title: "Encuentra la evidencia en kubectl describe",
+    prompt: "El Pod api se reinicia una y otra vez. Selecciona todas las líneas que son evidencia directa de que el contenedor se está matando por superar su límite de memoria.",
+    context: "$ kubectl -n shop describe pod api-7d9c5b6f4-x2k8q\nName:         api-7d9c5b6f4-x2k8q\nNamespace:    shop\nStatus:       Running\nContainers:\n  api:\n    Image:          registry.example.com/shop/api:2.4.1\n    State:          Waiting\n      Reason:       CrashLoopBackOff\n    Last State:     Terminated\n      Reason:       OOMKilled\n      Exit Code:    137\n    Restart Count:  6\n    Limits:\n      memory:  128Mi\n    Requests:\n      cpu:     100m\n      memory:  128Mi\nEvents:\n  Normal   Pulled   2m (x7 over 14m)  kubelet  Container image \"registry.example.com/shop/api:2.4.1\" already present on machine\n  Warning  BackOff  30s (x25 over 13m) kubelet  Back-off restarting failed container api",
+    options: [
+      "Status: Running",
+      "State: Waiting / Reason: CrashLoopBackOff",
+      "Last State: Terminated / Reason: OOMKilled",
+      "Exit Code: 137",
+      "Requests: cpu: 100m",
+      "Evento: Container image already present on machine"
+    ],
+    answers: [2, 3],
+    explain: "OOMKilled en Last State indica que el OOM killer del kernel terminó el contenedor al alcanzar su límite de memoria, y el exit code 137 (128 + 9, SIGKILL) es coherente con eso. CrashLoopBackOff solo dice que el contenedor se sigue reiniciando, no el porqué, y la fase Running del Pod no dice nada sobre la causa. El request de CPU y el evento de descarga de la imagen no tienen relación. La solución es aumentar el límite de memoria o reducir el uso de memoria de la app." },
+  { id: "securitycontext-match", d: 4, type: "match", title: "Asocia requisitos de seguridad con campos de securityContext",
+    prompt: "Una revisión de seguridad enumera requisitos para el Pod payments. Relaciona cada requisito con la configuración de securityContext que lo impone.",
+    pairs: [
+      ["Negarse a iniciar el contenedor si la imagen se ejecutaría como UID 0", "runAsNonRoot: true"],
+      ["Bloquear las escrituras en cualquier lugar excepto en los volúmenes montados", "readOnlyRootFilesystem: true"],
+      ["Impedir que los binarios setuid obtengan más privilegios que su proceso padre", "allowPrivilegeEscalation: false"],
+      ["Quitar todas las capabilities de Linux del contenedor", "capabilities: { drop: [\"ALL\"] }"],
+      ["Hacer que los volúmenes montados pertenezcan al grupo GID 2000 (a nivel de Pod)", "fsGroup: 2000"]
+    ],
+    extra: ["privileged: true", "runAsUser: 0"],
+    explain: "runAsNonRoot hace que el kubelet compruebe el UID efectivo y se niegue a iniciar un contenedor como root; no elige un UID por ti (eso lo hace runAsUser). readOnlyRootFilesystem obliga a escribir en volúmenes como un emptyDir. allowPrivilegeEscalation: false activa no_new_privs para que los binarios setuid no puedan elevar privilegios. Quitar ALL las capabilities elimina privilegios del kernel como NET_ADMIN, y fsGroup es un campo a nivel de Pod que asigna el grupo propietario en los volúmenes compatibles. privileged: true y runAsUser: 0 hacen lo contrario del hardening." },
+  { id: "rbac-can-i", d: 4, type: "select", title: "Decide qué puede hacer una ServiceAccount",
+    prompt: "Con el Role y el RoleBinding mostrados (y ningún otro binding para esta ServiceAccount), selecciona todas las solicitudes para las que kubectl auth can-i respondería yes.",
+    context: "apiVersion: rbac.authorization.k8s.io/v1\nkind: Role\nmetadata:\n  name: deployer\n  namespace: dev\nrules:\n- apiGroups: [\"\"]\n  resources: [\"pods\", \"pods/log\"]\n  verbs: [\"get\", \"list\", \"watch\"]\n- apiGroups: [\"apps\"]\n  resources: [\"deployments\"]\n  verbs: [\"get\", \"list\", \"patch\"]\n---\napiVersion: rbac.authorization.k8s.io/v1\nkind: RoleBinding\nmetadata:\n  name: ci-bot-deployer\n  namespace: dev\nsubjects:\n- kind: ServiceAccount\n  name: ci-bot\n  namespace: dev\nroleRef:\n  apiGroup: rbac.authorization.k8s.io\n  kind: Role\n  name: deployer\n\n# every check below uses --as=system:serviceaccount:dev:ci-bot",
+    options: [
+      "kubectl auth can-i list pods -n dev",
+      "kubectl auth can-i delete pods -n dev",
+      "kubectl auth can-i get pods/log -n dev",
+      "kubectl auth can-i patch deployments.apps -n dev",
+      "kubectl auth can-i list pods -n prod",
+      "kubectl auth can-i create deployments.apps -n dev",
+      "kubectl auth can-i get secrets -n dev",
+      "kubectl auth can-i create pods/exec -n dev"
+    ],
+    answers: [0, 2, 3],
+    explain: "RBAC es aditivo y deniega por defecto: solo se permiten las combinaciones de recurso y verbo que aparecen en la lista. El Role concede verbos de lectura sobre pods y pods/log, y get, list y patch sobre apps/deployments, lo que basta para kubectl logs y kubectl set image. Delete, create, secrets y el subrecurso pods/exec no aparecen, y un Role vinculado por un RoleBinding en dev no concede nada en prod." },
+  { id: "quota-requests-fill", d: 4, type: "fill", title: "Ajusta un Deployment a una ResourceQuota",
+    prompt: "El namespace team-a tiene la ResourceQuota mostrada y nada más en ejecución. El contenedor del Deployment usa los recursos mostrados. Completa los valores.",
+    context: "apiVersion: v1\nkind: ResourceQuota\nmetadata:\n  name: team-a-quota\n  namespace: team-a\nspec:\n  hard:\n    requests.cpu: \"1\"\n    requests.memory: 1Gi\n    limits.cpu: \"4\"\n    limits.memory: 2Gi\n\n# Deployment api, container resources:\nresources:\n  requests:\n    cpu: 200m\n    memory: 256Mi\n  limits:\n    cpu: 500m\n    memory: 256Mi",
+    fields: [
+      { label: "Clase de QoS de cada Pod api", answers: ["Burstable"] },
+      { label: "Máximo de réplicas de api que pueden ejecutarse dentro de la cuota", answers: ["4"] },
+      { label: "Recurso de la cuota que se agota primero", answers: ["requests.memory", "memory requests", "requests de memoria"] }
+    ],
+    explain: "El Pod es Burstable porque tiene requests y limits definidos, pero el request de CPU (200m) es distinto del límite de CPU (500m); Guaranteed requiere que los requests sean iguales a los limits en todos los recursos. Por réplica, la cuota ve 200m de CPU y 256Mi de memoria en requests, y 500m y 256Mi en limits. requests.memory permite 1024/256 = 4 réplicas, menos que requests.cpu (5), limits.cpu (8) o limits.memory (8), así que un quinto Pod se rechaza con un error de cuota excedida en el ReplicaSet." },
+  { id: "service-endpoints", d: 5, type: "select", title: "Predice los endpoints listos de un Service",
+    prompt: "El Service web está en el namespace shop con el selector mostrado. Selecciona todos los Pods cuya IP aparecerá como endpoint listo de este Service.",
+    context: "$ kubectl -n shop get svc web -o jsonpath='{.spec.selector}'\n{\"app\":\"web\",\"tier\":\"frontend\"}\n\n$ kubectl get pods -A --show-labels\nNAMESPACE  NAME        READY  STATUS   LABELS\nshop       web-1       1/1    Running  app=web,tier=frontend,version=v2\nshop       web-2       1/1    Running  app=web,tier=frontend\nshop       web-3       0/1    Running  app=web,tier=frontend\nshop       web-4       1/1    Running  app=Web,tier=frontend\nshop       web-canary  1/1    Running  app=web,tier=frontend,track=canary\nshop       web-old     1/1    Running  app=web\nshop       api-1       1/1    Running  app=api,tier=frontend\ndefault    web-5       1/1    Running  app=web,tier=frontend",
+    options: ["web-1", "web-2", "web-3", "web-4", "web-canary", "web-old", "api-1", "web-5 (namespace default)"],
+    answers: [0, 1, 4],
+    explain: "Un Service selecciona los Pods de su propio namespace cuyas etiquetas incluyen cada par clave/valor del selector; las etiquetas adicionales como version o track no importan, y así es como los Pods canary se unen a un Service. web-3 coincide pero no está Ready, así que queda fuera de los endpoints listos hasta que pase su readiness probe. Los valores de las etiquetas distinguen mayúsculas de minúsculas (Web no es web), a web-old le falta tier, api-1 tiene un app incorrecto y web-5 está en otro namespace." },
+  { id: "netpol-db-select", d: 5, type: "select", title: "Evalúa una NetworkPolicy",
+    prompt: "Esta es la única NetworkPolicy del clúster y el CNI aplica las políticas. Selecciona todas las conexiones permitidas.",
+    context: "apiVersion: networking.k8s.io/v1\nkind: NetworkPolicy\nmetadata:\n  name: db-ingress\n  namespace: shop\nspec:\n  podSelector:\n    matchLabels:\n      app: db\n  policyTypes:\n  - Ingress\n  ingress:\n  - from:\n    - podSelector:\n        matchLabels:\n          app: api\n    - namespaceSelector:\n        matchLabels:\n          team: monitoring\n    ports:\n    - protocol: TCP\n      port: 5432",
+    options: [
+      "Pod app=api del namespace shop -> Pod db en TCP 5432",
+      "Pod app=api del namespace shop -> Pod db en TCP 22",
+      "Pod app=web del namespace shop -> Pod db en TCP 5432",
+      "Cualquier Pod de un namespace con la etiqueta team=monitoring -> Pod db en TCP 5432",
+      "Pod app=api del namespace staging (sin etiqueta team) -> Pod db en TCP 5432",
+      "Pod db -> 203.0.113.10 en TCP 443",
+      "Pod app=api del namespace shop -> Pod db en UDP 5432"
+    ],
+    answers: [0, 3, 5],
+    explain: "Los dos elementos bajo from son entradas separadas de la lista, así que se combinan con OR: los Pods api del propio namespace de la política, o cualquier Pod de un namespace con la etiqueta team=monitoring, y solo en TCP 5432. Un podSelector sin namespaceSelector solo coincide con Pods del mismo namespace, así que el Pod api de staging queda bloqueado. policyTypes solo incluye Ingress, así que el tráfico de salida (egress) de los Pods db no está restringido. Combinar podSelector y namespaceSelector en una sola entrada (sin guion antes de namespaceSelector) los uniría con AND." },
+  { id: "nodeport-fill", d: 5, type: "fill", title: "Sigue los puertos a través de un Service NodePort",
+    prompt: "Usando el Service y el nodo mostrados, completa los valores.",
+    context: "apiVersion: v1\nkind: Service\nmetadata:\n  name: web\n  namespace: shop\nspec:\n  type: NodePort\n  selector:\n    app: web\n  ports:\n  - port: 80\n    targetPort: 8080\n    nodePort: 30080\n\n$ kubectl get nodes -o wide\nNAME     STATUS  INTERNAL-IP\nworker1  Ready   192.168.56.11",
+    fields: [
+      { label: "Puerto que usa un Pod del namespace shop para llegar al Service web por nombre", answers: ["80"] },
+      { label: "Puerto que usa un cliente fuera del clúster en 192.168.56.11", answers: ["30080"] },
+      { label: "Puerto en el que debe escuchar el contenedor web", answers: ["8080"] },
+      { label: "Nombre DNS más corto que puede usar un Pod del namespace payments para este Service", answers: ["web.shop"] }
+    ],
+    explain: "port es el puerto propio del Service en su ClusterIP y su nombre DNS, targetPort es donde se entrega el tráfico en los Pods seleccionados y nodePort (30000-32767 por defecto) se abre en cada nodo para los clientes externos. Desde otro namespace, el nombre corto web se resolvería dentro de payments, así que necesitas al menos web.shop; web.shop.svc.cluster.local es la forma totalmente calificada. Un Service NodePort igualmente recibe una ClusterIP, así que los clientes dentro del clúster siguen usando el puerto 80." }
+]);
