@@ -119,7 +119,7 @@ CertHub.addExtra("isc2-cc", {
     "x45": ["A switch forwards frames within a segment; it does not filter by rules.", null, "A hub simply repeats traffic to all ports without filtering.", "A wireless access point provides connectivity, not rule-based filtering."],
     "x46": ["A VLAN segments a local network; it does not tunnel across the internet.", "A DMZ is a screened subnet for public services, not an encrypted tunnel.", null, "NAT translates addresses; it does not create an encrypted tunnel."],
     "x47": ["Resource pooling shares infrastructure among tenants, not usage-based billing.", null, "Broad network access means reaching services over the network, not metering.", "Multitenancy means many customers share resources, not billing by usage."],
-    "x48": ["In IaaS the provider manages only the physical layer, not the guest OS.", "Guest OS patching is a defined responsibility, so it is not left to no one.", "The ISP provides connectivity and does not patch a customer's guest OS.", null],
+    "x48": ["In IaaS the provider manages the physical infrastructure and hypervisor, not the guest OS.", "Guest OS patching is a defined responsibility, so it is not left to no one.", "The ISP provides connectivity and does not patch a customer's guest OS.", null],
     "x49": [null, "Segmentation divides a network; it is not the act of forging source addresses.", "Encryption protects data confidentiality, not forging source addresses.", "Load balancing distributes traffic; it does not falsify source addresses."],
     "x50": ["The application layer handles services like HTTP, not TCP/UDP ports directly.", null, "The internet layer handles IP addressing and routing, not port numbers.", "The link layer handles local frame delivery, not transport ports."],
     "x51": ["Detection is recognizing the incident, which already happened before isolating.", null, "Recovery restores systems to normal after the threat is removed, not now.", "Preparation happens before any incident, not during an active response."],
@@ -140,10 +140,10 @@ CertHub.addExtra("isc2-cc", {
     "ic31": 1, "ic32": 2, "ic33": 2, "ic34": 1, "ic35": 1, "ic36": 3, "ic37": 1, "ic38": 1, "ic39": 2, "ic40": 2,
     "ic41": 1, "ic42": 1, "ic43": 2, "ic44": 2, "ic45": 2, "ic46": 3, "ic47": 1, "ic48": 2, "ic49": 1, "ic50": 1,
     "ic51": 1, "ic52": 1, "ic53": 2, "ic54": 2, "ic55": 1, "ic56": 2, "ic57": 1, "ic58": 3, "ic59": 3, "ic60": 1,
-    "x1": 2, "x2": 2, "x3": 3, "x4": 2, "x5": 3, "x6": 3, "x7": 2, "x8": 3, "x9": 1, "x10": 3,
-    "x11": 2, "x12": 2, "x13": 3, "x14": 2, "x15": 2, "x16": 1, "x17": 1, "x18": 3, "x19": 2, "x20": 1,
+    "x1": 2, "x2": 2, "x3": 3, "x4": 2, "x5": 3, "x6": 3, "x7": 2, "x8": 3, "x9": 1, "x10": 1,
+    "x11": 2, "x12": 2, "x13": 1, "x14": 2, "x15": 2, "x16": 1, "x17": 1, "x18": 3, "x19": 2, "x20": 1,
     "x21": 1, "x22": 2, "x23": 2, "x24": 3, "x25": 2, "x26": 3, "x27": 2, "x28": 2, "x29": 3, "x30": 2,
-    "x31": 3, "x32": 3, "x33": 3, "x34": 3, "x35": 2, "x36": 2, "x37": 3, "x38": 1, "x39": 1, "x40": 1,
+    "x31": 2, "x32": 1, "x33": 3, "x34": 3, "x35": 2, "x36": 2, "x37": 3, "x38": 1, "x39": 1, "x40": 1,
     "x41": 3, "x42": 2, "x43": 3, "x44": 2, "x45": 1, "x46": 2, "x47": 3, "x48": 3, "x49": 2, "x50": 1,
     "x51": 2, "x52": 2, "x53": 2, "x54": 3, "x55": 3, "x56": 2, "x57": 2, "x58": 3, "x59": 2, "x60": 3
   }

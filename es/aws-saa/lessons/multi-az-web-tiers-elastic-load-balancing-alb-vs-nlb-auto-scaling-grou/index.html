@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Capas web Multi-AZ: Elastic Load Balancing (ALB vs NLB), A… · Lección de Solutions Architect Associate</title>
+<meta name="description" content="Cada Región de AWS contiene varias Availability Zones (AZs, zonas de disponibilidad): grupos de centros de datos con energía, refrigeración y red independi">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Capas web Multi-AZ: Elastic Load Balancing (ALB vs NLB), A… · Lección de Solutions Architect Associate">
+<meta property="og:description" content="Cada Región de AWS contiene varias Availability Zones (AZs, zonas de disponibilidad): grupos de centros de datos con energía, refrigeración y red independi">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-saa/lessons/multi-az-web-tiers-elastic-load-balancing-alb-vs-nlb-auto-scaling-grou/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-saa/lessons/multi-az-web-tiers-elastic-load-balancing-alb-vs-nlb-auto-scaling-grou/">
+<meta property="og:image" content="https://senayamyers27-art.github.io/og/site.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Capas web Multi-AZ: Elastic Load Balancing (ALB vs NLB), A… · Lección de Solutions Architect Associate">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-saa/">Solutions Architect Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-saa/lessons/multi-az-web-tiers-elastic-load-balancing-alb-vs-nlb-auto-scaling-grou/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Solutions Architect – Associate SAA-C03</p>
+<h1>Capas web Multi-AZ: Elastic Load Balancing (ALB vs NLB), Auto Scaling groups y health checks de ELB</h1>
+<article class="lbody">
+<p>Cada Región de AWS contiene varias Availability Zones (AZs, zonas de disponibilidad): grupos de centros de datos con energía, refrigeración y red independientes, conectados por enlaces de baja latencia. Una capa web resiliente se ejecuta en al menos dos AZs, de modo que la pérdida de un centro de datos, o de una AZ, no tumbe la aplicación. Tres servicios lo hacen práctico: Elastic Load Balancing reparte el tráfico, Amazon EC2 Auto Scaling mantiene la cantidad correcta de instancias sanas y los health checks (comprobaciones de estado) los unen.</p>
+<p>Un Application Load Balancer (ALB) trabaja en la capa 7, el nivel de HTTP y HTTPS. Puede enrutar por nombre de host, ruta, encabezados HTTP, query strings e IP de origen, así que un solo ALB puede enviar <code>/api/*</code> a un target group y <code>/images/*</code> a otro. Los destinos pueden ser instancias EC2, direcciones IP, funciones Lambda o contenedores. Termina TLS, admite WebSockets y HTTP/2, puede autenticar usuarios mediante Cognito o un proveedor OIDC y se integra con AWS WAF. Un Network Load Balancer (NLB) trabaja en la capa 4 con TCP, UDP y TLS. Maneja un rendimiento muy alto con baja latencia, conserva la IP de origen del cliente y proporciona una dirección IP estática por AZ, a la que puedes asociar Elastic IPs. Elige el NLB para protocolos que no son HTTP, IP estáticas o rendimiento extremo, y para exponer un servicio mediante PrivateLink. Un Gateway Load Balancer es un tercer tipo que se usa para insertar appliances virtuales de terceros, como firewalls.</p>
+<p>Un Auto Scaling group (ASG) lanza instancias a partir de un launch template en las subredes que elijas, manteniendo la cantidad entre un mínimo y un máximo alrededor de una capacidad deseada. Equilibra las instancias entre AZs y, si una AZ falla, lanza reemplazos en las restantes. Asociar el ASG a un target group del balanceador de carga registra automáticamente las nuevas instancias.</p>
+<p>Los health checks deciden qué pasa con una instancia defectuosa. El balanceador de carga ejecuta su propio health check, por ejemplo un HTTP GET a <code>/health</code> que espera una respuesta 200, y deja de enviar tráfico a los destinos que fallan. El ASG, por defecto, usa solo los EC2 status checks, que detectan fallas de hardware y del sistema operativo, pero no un servidor web caído. Habilitar el tipo de health check ELB en el ASG hace que reemplace las instancias que el balanceador de carga marca como no sanas. Esa configuración es una respuesta frecuente en el examen.</p>
+<p>Por último, mantén la capa web sin estado (stateless). Guarda los datos de sesión en ElastiCache o DynamoDB en lugar de en la instancia, y guarda los archivos subidos en S3 o EFS. Las sticky sessions existen en el ALB, pero hacen que el escalado y la conmutación por error sean menos uniformes, así que son un parche más que un objetivo de diseño.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Availability Zone (zona de disponibilidad)</dt><dd>Uno o más centros de datos aislados en una Región, con energía y red independientes.</dd><dt>Application Load Balancer</dt><dd>Un balanceador de carga de capa 7 que enruta solicitudes HTTP y HTTPS según el contenido, como la ruta y el host.</dd><dt>Network Load Balancer</dt><dd>Un balanceador de carga de capa 4 para TCP, UDP y TLS, con IP estáticas por AZ y un rendimiento muy alto.</dd><dt>ELB health check type</dt><dd>Una opción del Auto Scaling group que reemplaza las instancias que el balanceador de carga reporta como no sanas.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una tienda en línea ejecuta un ALB delante de un Auto Scaling group que abarca tres AZs con un mínimo de tres instancias. Cuando un despliegue defectuoso hace que el servidor web de una instancia devuelva errores, el health check del ALB falla, el ASG (que usa health checks de ELB) la termina y lanza una instancia nueva, y los clientes nunca lo notan.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Enrutamiento basado en ruta o en host significa ALB. IP estática, UDP o millones de solicitudes por segundo con latencia ultrabaja significa NLB. Si un ASG no reemplaza las instancias que el balanceador de carga dice que no están sanas, cambia el ASG al tipo de health check ELB.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Un servidor de juegos usa UDP y los clientes deben poner en su lista de permitidos direcciones IP fijas. ¿Qué balanceador de carga sirve?</summary><p>Un Network Load Balancer, que admite UDP y da una dirección IP estática por AZ (opcionalmente Elastic IPs).</p></details>
+<details class="sq"><summary>¿Por qué los servidores web detrás de un ASG no deben guardar las sesiones de usuario en memoria local?</summary><p>Las instancias pueden terminarse o agregarse en cualquier momento; guardar las sesiones en ElastiCache o DynamoDB permite que cualquier instancia atienda a cualquier usuario.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Solutions Architect Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-saa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../detection-and-compliance-services-cloudtrail-aws-config-rules-guarddut/">← Servicios de detección y cumplimiento: CloudTrail, reglas de</a><a href="../decoupling-with-amazon-sqs-standard-vs-fifo-visibility-timeout-dead-le/">Desacoplamiento con Amazon SQS (standard vs FIFO, visibility →</a></nav>
+</main>
+</body>
+</html>

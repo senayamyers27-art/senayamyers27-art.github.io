@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Spot Instances en la práctica: avisos de interrupción, Aut… · Lección de Solutions Architect Associate</title>
+<meta name="description" content="Las Spot Instances pueden reducir drásticamente los costos de cómputo, pero solo se benefician las arquitecturas que toleran interrupciones. Esta lección c">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Spot Instances en la práctica: avisos de interrupción, Aut… · Lección de Solutions Architect Associate">
+<meta property="og:description" content="Las Spot Instances pueden reducir drásticamente los costos de cómputo, pero solo se benefician las arquitecturas que toleran interrupciones. Esta lección c">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-saa/lessons/spot-instances-in-practice-interruption-notices-mixed-instances-auto-s/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-saa/lessons/spot-instances-in-practice-interruption-notices-mixed-instances-auto-s/">
+<meta property="og:image" content="https://senayamyers27-art.github.io/og/site.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Spot Instances en la práctica: avisos de interrupción, Aut… · Lección de Solutions Architect Associate">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-saa/">Solutions Architect Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-saa/lessons/spot-instances-in-practice-interruption-notices-mixed-instances-auto-s/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Solutions Architect – Associate SAA-C03</p>
+<h1>Spot Instances en la práctica: avisos de interrupción, Auto Scaling groups con instancias mixtas y estrategias de asignación</h1>
+<article class="lbody">
+<p>Las Spot Instances pueden reducir drásticamente los costos de cómputo, pero solo se benefician las arquitecturas que toleran interrupciones. Esta lección cubre cómo funciona la interrupción y cómo diseñar flotas que la superen.</p>
+<p>Cuando EC2 necesita recuperar capacidad Spot, envía un Spot Instance interruption notice (aviso de interrupción) dos minutos antes de detener, hibernar o terminar la instancia (la terminación es el comportamiento predeterminado). El aviso está disponible en el servicio de metadatos de la instancia y como evento de Amazon EventBridge, así que un script o una función Lambda puede reaccionar: drenar las conexiones del balanceador de carga, guardar un punto de control del trabajo en S3, o terminar el trabajo actual y dejar de tomar nuevos de una cola. EC2 también puede enviar antes una señal de EC2 instance rebalance recommendation cuando una instancia tiene un riesgo elevado, y la función Capacity Rebalancing de Auto Scaling puede usarla para lanzar un reemplazo antes de que llegue la interrupción. Pagas el precio Spot actual, que cambia gradualmente según la oferta y la demanda a largo plazo; no necesitas pujar, y opcionalmente puedes fijar un precio máximo.</p>
+<p>El principio de diseño clave es la diversificación. La capacidad Spot se gestiona en pools: cada combinación de tipo de instancia y Availability Zone es un pool separado. Si pides solo un tipo en una AZ, una escasez de capacidad en ese pool interrumpe todo. Un Auto Scaling group con una mixed instances policy (política de instancias mixtas) puede combinar capacidad On-Demand y Spot y usar muchos tipos de instancia en varias AZs. Defines una On-Demand base capacity, por ejemplo dos instancias que siempre se ejecutan On-Demand, y un On-Demand percentage above base, con el resto en Spot. La selección de tipos de instancia basada en atributos te permite especificar los requisitos de vCPU y memoria en lugar de enumerar tipos, así que los tipos nuevos se incorporan automáticamente.</p>
+<p>Las allocation strategies (estrategias de asignación) deciden de qué pools proviene la capacidad Spot. Price-capacity-optimized, la estrategia que AWS recomienda para la mayoría de las cargas, elige los pools con más capacidad disponible y luego el precio más bajo entre ellos, reduciendo las tasas de interrupción. Capacity-optimized elige los pools con más capacidad disponible, lo que se adapta a cargas donde las interrupciones son costosas. Lowest-price elige los pools más baratos y puede traer tasas de interrupción más altas. Para la capacidad On-Demand en un grupo mixto, eliges lowest-price u orden priorizado (prioritized).</p>
+<p>Las buenas cargas para Spot son sin estado, con puntos de control o impulsadas por colas: contenedores en ECS o EKS con Spot capacity providers o node groups, task nodes de EMR, runners de CI y workers de SQS donde un mensaje interrumpido simplemente vuelve a ser visible para otro worker.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Spot interruption notice (aviso de interrupción de Spot)</dt><dd>Una advertencia de dos minutos, mediante los metadatos de la instancia y EventBridge, de que EC2 recuperará una Spot Instance.</dd><dt>Rebalance recommendation</dt><dd>Una señal temprana de que una Spot Instance tiene un riesgo elevado de interrupción.</dd><dt>Mixed instances policy (política de instancias mixtas)</dt><dd>Una configuración del Auto Scaling group que combina varios tipos de instancia y las opciones de compra On-Demand y Spot.</dd><dt>Price-capacity-optimized</dt><dd>Una estrategia de asignación de Spot que favorece los pools con alta capacidad disponible y luego el precio bajo.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Un servicio de transcodificación de video lee trabajos de SQS y se ejecuta en un Auto Scaling group con dos instancias On-Demand como base y el resto en Spot, repartido en 10 tipos de instancia en tres AZs, usando la asignación price-capacity-optimized. Cuando llega un aviso de interrupción, un pequeño agente deja de tomar trabajos nuevos y sube la salida parcial; los mensajes sin terminar reaparecen en la cola para otros workers.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Reduce las interrupciones de Spot diversificando los tipos de instancia y las AZs y usando la asignación price-capacity-optimized o capacity-optimized. El aviso es de dos minutos. Mantén una pequeña base On-Demand para la capacidad que siempre debe existir.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Con cuánta anticipación avisa EC2 antes de recuperar una Spot Instance, y dónde aparece el aviso?</summary><p>Dos minutos, a través del servicio de metadatos de la instancia y de un evento de EventBridge.</p></details>
+<details class="sq"><summary>¿Por qué limitar una flota Spot a un solo tipo de instancia en una AZ aumenta el riesgo?</summary><p>Todas las instancias comparten entonces un único pool de capacidad Spot, así que una sola escasez de capacidad puede interrumpirlas a todas.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Solutions Architect Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-saa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../ec2-purchase-options-on-demand-reserved-instances-compute-vs-ec2-insta/">← Opciones de compra de EC2: On-Demand, Reserved Instances, Co</a><a href="../right-sizing-compute-aws-compute-optimizer-graviton-instances-and-serv/">Ajuste de tamaño del cómputo: AWS Compute Optimizer, instanc →</a></nav>
+</main>
+</body>
+</html>

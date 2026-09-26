@@ -106,7 +106,7 @@ CertHub.addExtra("az-900", {
     "x41": [null,"RBAC decides whether a user may create VMs at all; it cannot require a tag on the VM being created.","Locks stop deletion or changes to existing resources, not creation of new resources without tags.","Advisor only recommends; it does not block noncompliant deployments."],
     "x42": ["Locks apply to the scope, so resources added later inherit them too.","Inheritance keeps the same lock type; it does not switch it to ReadOnly.",null,"CanNotDelete allows creating and changing resources; it only blocks deletion."],
     "x43": ["Contributor can manage resources but cannot manage locks, which need Microsoft.Authorization permissions.",null,"Reader can only view resources and cannot create or remove locks.","Viewing a resource grants no right to add or remove locks on it."],
-    "x44": ["Azure Policy never deletes existing resources.","Deny does not change existing resources; it only blocks new or updated deployments.","Policy does not stop running VMs, and exemptions only change how compliance is reported.",null],
+    "x44": ["Azure Policy never deletes existing resources.","Deny does not change existing resources; it only blocks new or updated deployments.","Policy never shuts down running VMs; an exemption only excludes resources from a policy's evaluation.",null],
     "x45": ["Policy assignments are inherited by every scope under the management group.","Existing subscriptions under the group are included as well as new ones.",null,"Assignments are not limited to one child; they flow to all of them."],
     "x46": [null,"Only deallocated VMs stop incurring compute charges; a VM stopped inside the OS still holds its hardware.","Shutting down never deletes managed disks, and disks are billed either way.","There is no half rate; compute is billed normally while the VM stays allocated."],
     "x47": ["Pay-as-you-go has no discount, so it costs more than using spare capacity.","Dedicated hosts give you a whole physical server, which adds cost rather than reducing it.","Reservations suit steady, always-on use; a nightly interruptible job fits spare capacity better.",null],
@@ -139,6 +139,6 @@ CertHub.addExtra("az-900", {
     "x21": 3, "x22": 2, "x23": 2, "x24": 2, "x25": 1, "x26": 1, "x27": 3, "x28": 2, "x29": 3, "x30": 1,
     "x31": 1, "x32": 1, "x33": 1, "x34": 1, "x35": 2, "x36": 2, "x37": 1, "x38": 2, "x39": 1, "x40": 2,
     "x41": 3, "x42": 2, "x43": 2, "x44": 3, "x45": 2, "x46": 3, "x47": 2, "x48": 2, "x49": 1, "x50": 1,
-    "x51": 2, "x52": 2, "x53": 2, "x54": 2, "x55": 2, "x56": 1, "x57": 2, "x58": 1, "x59": 3, "x60": 3
+    "x51": 2, "x52": 2, "x53": 2, "x54": 2, "x55": 2, "x56": 1, "x57": 2, "x58": 1, "x59": 3, "x60": 2
   }
 });

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Desacoplamiento con Amazon SQS (standard vs FIFO, visibili… · Lección de Solutions Architect Associate</title>
+<meta name="description" content="Los sistemas fuertemente acoplados fallan juntos: si una capa web llama directamente a un procesador de pedidos y el procesador se vuelve lento, la capa we">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Desacoplamiento con Amazon SQS (standard vs FIFO, visibili… · Lección de Solutions Architect Associate">
+<meta property="og:description" content="Los sistemas fuertemente acoplados fallan juntos: si una capa web llama directamente a un procesador de pedidos y el procesador se vuelve lento, la capa we">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-saa/lessons/decoupling-with-amazon-sqs-standard-vs-fifo-visibility-timeout-dead-le/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-saa/lessons/decoupling-with-amazon-sqs-standard-vs-fifo-visibility-timeout-dead-le/">
+<meta property="og:image" content="https://senayamyers27-art.github.io/og/site.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Desacoplamiento con Amazon SQS (standard vs FIFO, visibili… · Lección de Solutions Architect Associate">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-saa/">Solutions Architect Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-saa/lessons/decoupling-with-amazon-sqs-standard-vs-fifo-visibility-timeout-dead-le/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Solutions Architect – Associate SAA-C03</p>
+<h1>Desacoplamiento con Amazon SQS (standard vs FIFO, visibility timeout, dead-letter queues) y fan-out con SNS</h1>
+<article class="lbody">
+<p>Los sistemas fuertemente acoplados fallan juntos: si una capa web llama directamente a un procesador de pedidos y el procesador se vuelve lento, la capa web también se atasca. El desacoplamiento pone un búfer entre los componentes para que cada uno pueda escalar y fallar de forma independiente. Amazon Simple Queue Service (SQS) y Amazon Simple Notification Service (SNS) son los dos bloques de construcción clásicos.</p>
+<p>SQS es una cola de mensajes totalmente administrada. Los productores envían mensajes; los consumidores los sondean (poll), los procesan y los eliminan. Los mensajes se almacenan de forma redundante y se conservan durante un período de retención configurable (hasta 14 días). Una standard queue (cola estándar) ofrece un rendimiento casi ilimitado con entrega at-least-once (al menos una vez) y orden de mejor esfuerzo, así que los consumidores deben tolerar duplicados y mensajes fuera de orden, lo que implica diseñar un procesamiento idempotente. Una FIFO queue, cuyo nombre debe terminar en <code>.fifo</code>, garantiza el orden first-in-first-out dentro de un message group y el procesamiento exactly-once (exactamente una vez) dentro de un intervalo de deduplicación, con un rendimiento menor que las colas estándar.</p>
+<p>Cuando un consumidor recibe un mensaje, SQS lo oculta a los demás consumidores durante el visibility timeout (tiempo de visibilidad). Si el consumidor elimina el mensaje a tiempo, desaparece. Si el consumidor falla o tarda demasiado, el mensaje vuelve a ser visible y otro consumidor lo reintenta. Configura el visibility timeout más largo que tu tiempo normal de procesamiento; si a veces el procesamiento se alarga, el consumidor puede extenderlo con <code>ChangeMessageVisibility</code>. El long polling (sondeo largo), con un tiempo de espera de recepción de hasta 20 segundos, reduce las respuestas vacías y el costo. Una delay queue (cola de retraso) pospone la entrega de los mensajes nuevos.</p>
+<p>Algunos mensajes nunca tendrán éxito, quizá porque están mal formados. Una dead-letter queue (DLQ, cola de mensajes fallidos) los atrapa: una redrive policy en la cola de origen indica que, después de que un mensaje se haya recibido cierta cantidad de veces (el maxReceiveCount), se mueva a la DLQ. Eso evita que los mensajes venenosos bloqueen el trabajo y te permite inspeccionarlos y reenviarlos (redrive) más tarde. La DLQ de una FIFO queue también debe ser FIFO.</p>
+<p>SNS es un servicio de publicación-suscripción. Los publicadores envían un mensaje a un topic (tema), y SNS envía una copia a cada suscriptor: colas SQS, funciones Lambda, endpoints HTTP, correo electrónico o SMS. El patrón fan-out los combina: publicas una vez en un topic de SNS con varias colas SQS suscritas, y cada sistema posterior obtiene su propia copia duradera para procesarla a su propio ritmo. Las subscription filter policies permiten que cada suscriptor reciba solo los mensajes que le interesan. La access policy de la cola debe permitir que el topic le envíe mensajes.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Visibility timeout (tiempo de visibilidad)</dt><dd>El período durante el cual un mensaje de SQS recibido queda oculto a los demás consumidores mientras se procesa.</dd><dt>Dead-letter queue (cola de mensajes fallidos)</dt><dd>Una cola que recibe los mensajes que fallaron en su procesamiento más veces que el maxReceiveCount.</dd><dt>FIFO queue</dt><dd>Un tipo de cola de SQS que conserva el orden dentro de un message group y evita duplicados.</dd><dt>Fan-out</dt><dd>Publicar un mensaje una sola vez en un topic de SNS para que muchos suscriptores, a menudo colas SQS, reciban cada uno una copia.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Cuando se realiza un pedido, la capa web publica un mensaje en un topic de SNS. Tres colas SQS están suscritas: una para pagos, otra para envíos y otra para analítica. Durante una venta relámpago el servicio de envíos se queda atrás, pero sus mensajes esperan seguros en su cola mientras pagos y analítica se mantienen al día, y su Auto Scaling group escala según la profundidad de la cola.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Mensajes procesados dos veces suelen significar que el visibility timeout es más corto que el tiempo de procesamiento. Orden estricto y sin duplicados significa FIFO. Un evento entregado a varios consumidores independientes significa fan-out de SNS hacia SQS.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>Un consumidor tarda 90 segundos por mensaje, pero el visibility timeout es de 30 segundos. ¿Qué sucede?</summary><p>El mensaje vuelve a ser visible antes de eliminarse, así que otro consumidor también lo procesa, generando duplicados. Aumenta el visibility timeout por encima del tiempo de procesamiento.</p></details>
+<details class="sq"><summary>¿Cómo evitas que un mensaje mal formado se reintente para siempre?</summary><p>Configura una dead-letter queue con una redrive policy y un maxReceiveCount.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Solutions Architect Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-saa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../multi-az-web-tiers-elastic-load-balancing-alb-vs-nlb-auto-scaling-grou/">← Capas web Multi-AZ: Elastic Load Balancing (ALB vs NLB), Aut</a><a href="../event-driven-and-serverless-patterns-eventbridge-lambda-step-functions/">Patrones orientados a eventos y serverless: EventBridge, Lam →</a></nav>
+</main>
+</body>
+</html>

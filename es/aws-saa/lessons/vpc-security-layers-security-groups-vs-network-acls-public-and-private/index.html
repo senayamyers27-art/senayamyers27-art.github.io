@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Capas de seguridad de la VPC: security groups vs network A… · Lección de Solutions Architect Associate</title>
+<meta name="description" content="Una virtual private cloud (VPC) es tu red privada en una Región de AWS, definida por un bloque CIDR IPv4 como 10.0.0.0/16. La divides en subredes (subnets)">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Capas de seguridad de la VPC: security groups vs network A… · Lección de Solutions Architect Associate">
+<meta property="og:description" content="Una virtual private cloud (VPC) es tu red privada en una Región de AWS, definida por un bloque CIDR IPv4 como 10.0.0.0/16. La divides en subredes (subnets)">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-saa/lessons/vpc-security-layers-security-groups-vs-network-acls-public-and-private/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-saa/lessons/vpc-security-layers-security-groups-vs-network-acls-public-and-private/">
+<meta property="og:image" content="https://senayamyers27-art.github.io/og/site.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Capas de seguridad de la VPC: security groups vs network A… · Lección de Solutions Architect Associate">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-saa/">Solutions Architect Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-saa/lessons/vpc-security-layers-security-groups-vs-network-acls-public-and-private/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Solutions Architect – Associate SAA-C03</p>
+<h1>Capas de seguridad de la VPC: security groups vs network ACLs, subredes públicas y privadas, NAT gateways, bastion hosts vs Session Manager</h1>
+<article class="lbody">
+<p>Una virtual private cloud (VPC) es tu red privada en una Región de AWS, definida por un bloque CIDR IPv4 como <code>10.0.0.0/16</code>. La divides en subredes (subnets), cada una en una Availability Zone (AZ, zona de disponibilidad). Lo que hace pública a una subred es su route table (tabla de rutas): una subred pública tiene una ruta <code>0.0.0.0/0</code> que apunta a un internet gateway, y las instancias allí necesitan una dirección IP pública o Elastic IP para ser alcanzables. Una subred privada no tiene ruta hacia el internet gateway, así que nada en internet puede iniciar una conexión hacia ella.</p>
+<p>Las instancias en subredes privadas a menudo aún necesitan acceso saliente a internet para los parches. Un NAT gateway lo proporciona: lo colocas en una subred pública con una Elastic IP, y la route table de la subred privada envía <code>0.0.0.0/0</code> hacia él. Permite conexiones salientes y sus respuestas, pero bloquea las conexiones entrantes desde internet. Un NAT gateway vive en una sola AZ, así que para alta disponibilidad despliegas uno por AZ y enrutas cada subred privada al gateway de su propia AZ. Las NAT instances son la alternativa más antigua y autogestionada.</p>
+<p>Dos capas de firewall protegen los recursos. Los security groups (grupos de seguridad) se adjuntan a elastic network interfaces (y por lo tanto a instancias, balanceadores de carga y bases de datos RDS). Son stateful (con estado), lo que significa que el tráfico de retorno se permite automáticamente, solo admiten reglas de permiso y todas las reglas se evalúan juntas. El origen de una regla puede ser otro security group, que es la forma limpia de decir que solo la capa web puede llegar a la capa de base de datos. Las network ACLs (NACLs) se adjuntan a subredes, son stateless (sin estado), así que debes permitir explícitamente el tráfico de retorno en los puertos efímeros, admiten reglas de permiso y de denegación, y se evalúan en orden de número de regla, donde gana la primera coincidencia. Usa un deny en la NACL cuando necesites bloquear un rango de IP específico, porque los security groups no pueden denegar.</p>
+<p>Los administradores necesitan una forma de llegar a las instancias privadas. La respuesta clásica es un bastion host: una instancia reforzada en una subred pública que permite SSH desde rangos de IP conocidos, desde la cual saltas a las instancias privadas. Funciona, pero requiere parches, gestión de claves y un puerto entrante abierto. AWS Systems Manager Session Manager es la respuesta moderna: el SSM Agent de la instancia establece una conexión saliente hacia Systems Manager, y abres una shell desde la consola o la CLI, con IAM controlando quién puede conectarse. Sin puertos entrantes, sin claves SSH, y las sesiones pueden registrarse en CloudWatch Logs o S3. La instancia necesita un instance profile con los permisos básicos de Systems Manager y una ruta hacia los endpoints de Systems Manager, mediante NAT o interface endpoints.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Security group (grupo de seguridad)</dt><dd>Un firewall virtual stateful que solo permite, adjunto a interfaces de red.</dd><dt>Network ACL (lista de control de acceso de red)</dt><dd>Un firewall stateless a nivel de subred con reglas numeradas de permiso y denegación evaluadas en orden.</dd><dt>NAT gateway</dt><dd>Un servicio administrado en una subred pública que permite a las instancias privadas iniciar conexiones salientes a internet.</dd><dt>Session Manager</dt><dd>Una función de Systems Manager que da acceso de shell a las instancias mediante una conexión saliente del agente, controlada por IAM.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una app de tres capas coloca su ALB en subredes públicas, sus servidores web EC2 y su base de datos RDS en subredes privadas, y un NAT gateway en cada AZ. El security group de la base de datos permite el puerto 3306 solo desde el security group de la capa web, y los operadores usan Session Manager en lugar de un bastion host, así que ninguna instancia tiene abierto el puerto 22.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Stateful y solo de permiso significa security group; stateless con reglas de denegación y orden significa network ACL. Cuando una pregunta pida acceso de shell sin puertos entrantes abiertos y sin gestión de claves, elige Session Manager en lugar de un bastion host.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>El HTTPS saliente desde una instancia privada funciona a través de un NAT gateway, pero las respuestas se descartan. El security group está bien. ¿Qué debes revisar?</summary><p>La network ACL de la subred. Las NACLs son stateless, así que necesitan una regla de entrada que permita el tráfico de retorno en los puertos efímeros (1024-65535).</p></details>
+<details class="sq"><summary>¿Cómo haces que un diseño de NAT sobreviva a la pérdida de una Availability Zone?</summary><p>Despliega un NAT gateway en cada AZ y enruta cada subred privada al NAT gateway de su propia AZ.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Solutions Architect Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-saa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../federation-and-temporary-credentials-sts-assumerole-saml-and-oidc-fede/">← Federación y credenciales temporales: STS AssumeRole, federa</a><a href="../private-access-to-aws-services-gateway-endpoints-interface-endpoints-p/">Acceso privado a servicios de AWS: gateway endpoints, interf →</a></nav>
+</main>
+</body>
+</html>

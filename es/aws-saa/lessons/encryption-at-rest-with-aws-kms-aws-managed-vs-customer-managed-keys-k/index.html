@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cifrado en reposo con AWS KMS: claves administradas por AW… · Lección de Solutions Architect Associate</title>
+<meta name="description" content="AWS Key Management Service (KMS) crea y controla las claves que se usan para cifrar datos en reposo en todos los servicios de AWS. Las claves de KMS nunca ">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#EEF1F4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1319" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyber Cert Study">
+<meta property="og:title" content="Cifrado en reposo con AWS KMS: claves administradas por AW… · Lección de Solutions Architect Associate">
+<meta property="og:description" content="AWS Key Management Service (KMS) crea y controla las claves que se usan para cifrar datos en reposo en todos los servicios de AWS. Las claves de KMS nunca ">
+<link rel="canonical" href="https://senayamyers27-art.github.io/es/aws-saa/lessons/encryption-at-rest-with-aws-kms-aws-managed-vs-customer-managed-keys-k/">
+<meta property="og:url" content="https://senayamyers27-art.github.io/es/aws-saa/lessons/encryption-at-rest-with-aws-kms-aws-managed-vs-customer-managed-keys-k/">
+<meta property="og:image" content="https://senayamyers27-art.github.io/og/site.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Cifrado en reposo con AWS KMS: claves administradas por AW… · Lección de Solutions Architect Associate">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../../../../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../../../../assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cert Study">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="../../../../manifest.webmanifest">
+<link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../../../../assets/style.css">
+<script src="../../../../assets/theme.js"></script>
+
+</head>
+<body>
+<header class="top"><div class="bar"><a class="brand" href="../../../../">Cyber Cert Study</a></div></header>
+<main class="wrap lesson-page">
+<p class="crumbs"><a href="../../../../aws-saa/">Solutions Architect Associate</a> / <a href="../">Lecciones</a> · <a href="../../../../aws-saa/lessons/encryption-at-rest-with-aws-kms-aws-managed-vs-customer-managed-keys-k/" hreflang="en" lang="en">English</a></p>
+<p class="note">AWS Certified Solutions Architect – Associate SAA-C03</p>
+<h1>Cifrado en reposo con AWS KMS: claves administradas por AWS vs por el cliente, key policies, envelope encryption y S3 SSE-S3, SSE-KMS y SSE-C</h1>
+<article class="lbody">
+<p>AWS Key Management Service (KMS) crea y controla las claves que se usan para cifrar datos en reposo en todos los servicios de AWS. Las claves de KMS nunca salen del servicio sin cifrar; KMS realiza las operaciones criptográficas dentro de módulos de seguridad de hardware (HSM), y cada uso de una clave queda registrado en CloudTrail. El examen espera que sepas qué tipo de clave elegir y cómo se controla el acceso a las claves.</p>
+<p>Hay tres modelos de propiedad. Las AWS owned keys (claves propiedad de AWS) las usan internamente los servicios y nunca las ves. Las AWS managed keys (claves administradas por AWS), con alias como <code>aws/s3</code> o <code>aws/ebs</code>, las crea un servicio en tu cuenta la primera vez que lo usas; puedes verlas y auditar su uso, pero no puedes cambiar su key policy, y AWS las rota automáticamente. Las customer managed keys (claves administradas por el cliente) las creas tú: controlas la key policy, los grants y la rotación automática, y puedes deshabilitar la clave o programar su eliminación. Elige customer managed keys cuando necesites tu propio control de acceso, uso entre cuentas o la capacidad de cortar el acceso deshabilitando la clave.</p>
+<p>Cada clave de KMS tiene una key policy, una política basada en recursos, y es el control de acceso principal. A diferencia de la mayoría de los recursos, las políticas de IAM por sí solas no pueden otorgar acceso a una clave de KMS a menos que la key policy lo permita; la key policy predeterminada lo hace dando acceso al principal root de la cuenta, lo que delega en IAM. Para el uso entre cuentas, la key policy debe permitir a la otra cuenta, y la política de IAM de esa cuenta también debe permitir el uso. Los grants proporcionan permisos temporales y programáticos, a menudo usados por servicios como EBS.</p>
+<p>KMS solo puede cifrar directamente cargas pequeñas (hasta 4 KB), así que los servicios usan envelope encryption (cifrado de sobre). El servicio llama a <code>GenerateDataKey</code> y recibe una data key en texto plano y la misma clave cifrada con la clave de KMS. Cifra los datos localmente con la data key en texto plano, descarta esa clave de la memoria y guarda la data key cifrada junto a los datos. Para descifrar, envía la data key cifrada a KMS, recibe el texto plano y descifra localmente. Esto evita enviar datos masivos por la red hacia KMS y lo hace rápido.</p>
+<p>Amazon S3 ofrece tres opciones de cifrado del lado del servidor. SSE-S3 usa claves administradas completamente por S3 y es la opción predeterminada para objetos nuevos. SSE-KMS usa una clave de KMS, lo que agrega control mediante key policy, registros de CloudTrail del uso de la clave y la posibilidad de deshabilitarla; con tasas altas de solicitudes, las S3 Bucket Keys reducen el número de llamadas a KMS y su costo. SSE-C usa una clave que el cliente proporciona en cada solicitud por HTTPS; S3 la usa y la descarta, así que debes administrarla y nunca perderla. El cifrado del lado del cliente, donde los datos se cifran antes de subirlos, es la cuarta opción cuando AWS nunca debe ver el texto plano.</p>
+<h2>Términos clave</h2>
+<dl class="terms"><dt>Customer managed key (clave administrada por el cliente)</dt><dd>Una clave de KMS que creas y controlas, incluidas su key policy, rotación, deshabilitación y eliminación.</dd><dt>Key policy (política de clave)</dt><dd>La política basada en recursos de una clave de KMS, que es el control principal sobre quién puede usarla y administrarla.</dd><dt>Envelope encryption (cifrado de sobre)</dt><dd>Cifrar los datos con una data key y luego cifrar esa data key con una clave de KMS.</dd><dt>SSE-KMS</dt><dd>Cifrado del lado del servidor de S3 con una clave de KMS, con uso de clave auditable y control mediante key policy.</dd></dl>
+<div class="panel ex"><strong>Ejemplo real</strong><p>Una empresa de salud debe demostrar quién usó las claves que protegen los archivos de los pacientes y debe poder revocar el acceso al instante. Crea una customer managed key de KMS, otorga el uso solo al rol de la aplicación en la key policy, configura el cifrado predeterminado del bucket como SSE-KMS con una S3 Bucket Key y revisa los eventos de KMS en CloudTrail.</p></div>
+<div class="status notice"><strong>Consejo para el examen:</strong> Auditoría del uso de la clave, control de la key policy o capacidad de deshabilitar la clave: SSE-KMS con una customer managed key. El cliente debe proporcionar y conservar la clave por sí mismo: SSE-C. Lo más simple sin gestión de claves: SSE-S3.</div>
+<h2>Comprueba lo que sabes</h2>
+<details class="sq"><summary>¿Por qué no puedes compartir con otra cuenta un snapshot de EBS cifrado con la AWS managed key aws/ebs?</summary><p>Porque no puedes editar la política de una AWS managed key para dar acceso a otra cuenta. Vuelve a cifrarlo con una customer managed key y comparte esa clave.</p></details>
+<details class="sq"><summary>¿Qué devuelve GenerateDataKey?</summary><p>Una data key en texto plano para el cifrado local y una copia de esa data key cifrada con la clave de KMS, para guardarla junto con los datos.</p></details>
+</article>
+<div class="panel startcard"><div class="grow"><strong>Estudia Solutions Architect Associate gratis</strong><br><span class="note">Plan semanal, cuestionarios, simulaciones y laboratorios prácticos (en inglés).</span></div><a class="btn sm" href="../../../../aws-saa/">Abrir el plan de estudio</a></div>
+<nav class="pager" aria-label="Más lecciones"><a href="../protecting-the-edge-aws-waf-shield-standard-vs-shield-advanced-and-clo/">← Protección del borde: AWS WAF, Shield Standard vs Shield Adv</a><a href="../encryption-in-transit-acm-certificates-tls-on-alb-and-cloudfront-and-e/">Cifrado en tránsito: certificados de ACM, TLS en ALB y Cloud →</a></nav>
+</main>
+</body>
+</html>

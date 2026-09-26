@@ -141,7 +141,7 @@
     raw = raw || document.body.dataset.route || "home";
     let [head, tab] = raw.split(".");
     if (!/^[a-z0-9-]{1,64}$/.test(head || "")) head = "home";
-    if (tab && !/^[a-z]{1,16}$/.test(tab)) tab = "";
+    if (tab && !/^([a-z]{1,16}|video-l[a-z0-9]{1,14})$/.test(tab)) tab = "";
     const prev = view;
     if (prev.startsWith("lab-") || prev.startsWith("cap-")) CertHub.labViews.leave();
     let title = "Cyber Cert Study", brand = "Cyber Cert Study";
