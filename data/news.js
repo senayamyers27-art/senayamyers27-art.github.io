@@ -1,6 +1,18 @@
 /* What's new: learner-facing release notes, newest first. Add an entry when something visible ships.
    Each entry: { date: "YYYY-MM-DD", title, items: [ ... ], es: { title, items } } (es: the Spanish version). Shown at #whats-new and on the home page. */
 CertHub.news = [
+  { date: "2026-09-27", title: "Complete practice VMs: networking, graded labs and an exam",
+    items: [
+      "The practice VMs are now full Ubuntu 24.04 servers with systemd, SSH, iptables, LVM, cron and two empty disks, and they start in seconds.",
+      "Two networked machines, server and client, for SSH, firewall and web server practice.",
+      "15 graded labs that check your work inside the VM, and a timed VM exam.",
+      "Save your VM and resume it later, and download it for offline use."
+    ],
+    es: { title: "Máquinas virtuales completas: redes, laboratorios calificados y un examen", items: [
+      "Las máquinas virtuales de práctica ahora son servidores Ubuntu 24.04 completos con systemd, SSH, iptables, LVM, cron y dos discos vacíos, y arrancan en segundos.",
+      "Dos máquinas en red, server y client, para practicar SSH, firewalls y servidores web.",
+      "15 laboratorios calificados que revisan tu trabajo dentro de la máquina virtual, y un examen cronometrado.",
+      "Guarda tu máquina virtual para retomarla después y descárgala para usarla sin conexión."] } },
   { date: "2026-09-26", title: "A Linux practice VM in your browser",
     items: [
       "Practice VM: a real Linux machine with Ubuntu 24.04 tools that runs in your browser, with nothing to install.",

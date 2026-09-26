@@ -1043,12 +1043,15 @@
     ${(z.mode === "learn" && z.revealed) || z.mode === "test" ? `<button class="btn" data-act="next">${z.i + 1 === z.qs.length ? "Finish" : "Next"}</button>` : ""}
     ${z.mode === "test" ? `<button class="btn ghost" data-act="finish">Submit test</button>` : ""}</div>`;
   }
+  // Certifications whose objectives the practice VMs' graded labs cover (see data/vmlabs.js).
+  const VM_CERTS = new Set(["linux-plus", "rhcsa", "a-plus-core2", "server-plus", "security-plus", "network-plus", "cysa-plus"]);
   function labsView() {
     const all = planLabs();
     const lp = CertHub.loadLabProgress();
     const done = all.filter(x => CertHub.labStatus(x.lab, lp).state === "done").length;
     return `<h1>${esc(C.short)} labs</h1>
     <p class="meta">${all.length} hands-on labs linked to this plan · ${done} finished. They use free tools in your own home lab and build a portfolio as you go. <a href="#labs">All labs</a> · <a href="#portfolio">Your portfolio</a></p>
+    ${VM_CERTS.has(C.id) ? `<div class="panel installcard vmcard"><div class="grow"><strong>Practice VMs for ${esc(C.short)}</strong><br><span class="note">Real Ubuntu servers in your browser with graded labs and a timed exam: users, permissions, systemd, storage, SSH and firewalls.</span></div><a class="btn sm" href="#vm">Open the practice VMs</a></div>` : ""}
     ${all.length ? PLAN.phases.map(([a, b, t]) => {
       const here = all.filter(x => x.week.n >= a && x.week.n <= b);
       return here.length ? `<h2>${esc(t)}</h2><div class="labgrid">${here.map(x => CertHub.labCard(x.lab, `Week ${x.week.n}`)).join("")}</div>` : "";

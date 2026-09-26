@@ -49,7 +49,7 @@
     return `<h1>Hands-on labs</h1>
     <p class="meta">${all().length} labs built from what security, network and GRC teams actually do day to day. Each has step-by-step instructions with exact commands, checks that prove it worked, a place for your notes, and a write-up and resume bullet for your portfolio.</p>
     <div class="figs3"><div class="fig"><b>${counts.done}</b><span>done</span></div><div class="fig"><b>${counts.doing}</b><span>in progress</span></div><div class="fig"><b>${counts.new}</b><span>not started</span></div></div>
-    <div class="panel installcard vmcard"><div class="grow"><strong>New: practice VM</strong><br><span class="note">A real Linux terminal that runs in your browser. Practice users, permissions, processes, cron, storage and logs with nothing to install.</span></div><a class="btn sm" href="#vm">Open the practice VM</a></div>
+    <div class="panel installcard vmcard"><div class="grow"><strong>Practice VMs</strong><br><span class="note">Real Linux servers in your browser: free practice, two networked machines, graded labs checked inside the VM, and a timed exam. Nothing to install.</span></div><a class="btn sm" href="#vm">Open the practice VMs</a></div>
     ${first && labStatus(first, lp).state !== "done" ? `<div class="status notice"><strong>Start here:</strong> most labs run in the home lab you build in <a href="#lab-home-lab">${esc(first.title)}</a>.</div>` : ""}
     <div class="filters">
       <label>Track <select id="f-track"><option value="">All tracks</option>${TRACKS.map(t => `<option ${filters.track === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
@@ -75,7 +75,7 @@
     <p class="meta"><span class="chip" style="--c:${trackColor(lab.track)}">${esc(lab.track)}</span> ${esc(lab.level)} · about ${hours(lab.minutes)} · ${esc(lab.cost)}</p>
     <p class="lede">${esc(lab.summary)}</p>
     <div class="panel realworld"><strong>On the job</strong><p>${esc(lab.realWorld)}</p>${nice().rolesFor(lab).length ? `<p class="note" style="margin:8px 0 0">Builds skills for these <a href="#frameworks">NICE work roles</a>: ${nice().rolesFor(lab).map(r => `<strong>${esc(r.name)}</strong> (${esc(r.titles)})`).join("; ")}</p>` : ""}</div>
-    ${usesLinux(lab) ? `<div class="panel installcard vmcard"><div class="grow"><strong>Practice the Linux commands in your browser</strong><br><span class="note">The practice VM is a real Linux terminal with sudo, users, cron and storage tools, and nothing to install. Steps that need several machines or the internet still need your home lab.</span></div><a class="btn sm" href="#vm">Open the practice VM</a></div>` : ""}
+    ${usesLinux(lab) ? `<div class="panel installcard vmcard"><div class="grow"><strong>Practice the Linux commands in your browser</strong><br><span class="note">The practice VMs are real Ubuntu servers with systemd, SSH, LVM and iptables, including a two-machine network, with nothing to install. Steps that need the internet or a desktop still need your home lab.</span></div><a class="btn sm" href="#vm">Open the practice VM</a></div>` : ""}
     ${lab.safety ? `<div class="status warn"><strong>Safety:</strong> ${esc(lab.safety)}</div>` : ""}
     ${req.length ? `<p class="note">Do first: ${req.map(r => `<a href="#${esc(r.id)}">${esc(r.title)}</a> (${STATE[labStatus(r).state].toLowerCase()})`).join(", ")}</p>` : ""}
     <h2>You'll need</h2>
