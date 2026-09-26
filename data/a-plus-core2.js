@@ -33,7 +33,7 @@ CertHub.register({
         "Command-line tools: cd, dir, md, rmdir, robocopy, xcopy, diskpart, format, chkdsk, sfc, DISM, gpupdate, gpresult, net use, net user, whoami, winver, shutdown, ipconfig, ping, tracert, pathping, nslookup, netstat, hostname",
         "Settings and Control Panel: Accounts, Privacy, Update and Security, Apps, Power Options (sleep, hibernate, fast startup), Display, Devices",
         "Windows networking: workgroup vs domain, mapped drives and shares, firewall exceptions, static vs DHCP addressing, VPN and proxy settings, public vs private network profiles, metered connections",
-        "macOS: installing and removing apps (.dmg, .pkg, .app, App Store), System Settings, Time Machine, FileVault, Keychain, Spotlight, Mission Control, Terminal, Disk Utility, Force Quit",
+        "MacOS: installing and removing apps (.dmg, .pkg, .app, App Store), System Settings, Time Machine, FileVault, Keychain, Spotlight, Mission Control, Terminal, Disk Utility, Force Quit",
         "Linux: file and permission commands (ls, cp, mv, rm, chmod, chown, sudo, su), package managers (apt, dnf), ip, df, top, ps, grep, find, man, key files (/etc/passwd, /etc/shadow, /etc/hosts, /etc/fstab, /etc/resolv.conf)",
         "Installing applications: 32- vs 64-bit, RAM/CPU/GPU/storage requirements, distribution methods (ISO, download, image) and business impact",
         "Cloud productivity tools: email, synced storage, collaboration suites, account setup and licensing"

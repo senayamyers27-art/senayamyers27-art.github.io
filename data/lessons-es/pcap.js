@@ -48,7 +48,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  t: "dir() to list the names a module defines",
+  t: "Dir() to list the names a module defines",
   tt: "dir() para listar los nombres que define un módulo",
   body: [
    "La función integrada `dir()` te permite mirar dentro de un módulo, objeto o clase y ver qué nombres contiene. Devuelve una lista ordenada de cadenas. Es una herramienta de descubrimiento: cuando importas un módulo que nunca has usado, `dir()` te muestra lo que ofrece sin abrir la documentación, y en el examen es la forma en que las preguntas comprueban si entiendes qué nombres creó un import.",
@@ -71,7 +71,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  t: "sys.path: where Python searches for modules and how to extend it at runtime",
+  t: "Sys.path: where Python searches for modules and how to extend it at runtime",
   tt: "sys.path: dónde busca Python los módulos y cómo ampliarlo en tiempo de ejecución",
   body: [
    "Cuando escribes `import something`, Python tiene que encontrar un archivo o directorio llamado `something`. Después de revisar los módulos que ya cargó (guardados en `sys.modules`) y sus módulos integrados, busca en una lista de directorios almacenada en `sys.path`. Entender esa lista explica la mayoría de los mensajes ModuleNotFoundError y es un objetivo explícito del PCAP.",
@@ -95,7 +95,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  t: "math module: ceil(), floor(), trunc(), factorial(), hypot(), sqrt()",
+  t: "Math module: ceil(), floor(), trunc(), factorial(), hypot(), sqrt()",
   tt: "Módulo math: ceil(), floor(), trunc(), factorial(), hypot(), sqrt()",
   body: [
    "El módulo `math` ofrece funciones matemáticas para números reales. El PCAP elige unas cuantas y evalúa los detalles: qué devuelve cada una, de qué tipo, y cómo se comporta con números negativos. Impórtalo con `import math` y llama a las funciones como `math.name()`.",
@@ -121,7 +121,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  t: "random module: random(), seed(), choice(), sample()",
+  t: "Random module: random(), seed(), choice(), sample()",
   tt: "Módulo random: random(), seed(), choice(), sample()",
   body: [
    "El módulo `random` genera números pseudoaleatorios. Se llaman pseudoaleatorios porque provienen de un algoritmo determinista: dado el mismo estado inicial, produce la misma secuencia cada vez. Eso es perfecto para juegos, simulaciones y pruebas, pero también significa que `random` nunca debe usarse para contraseñas, tokens ni nada relacionado con seguridad; Python ofrece el módulo `secrets` para ese propósito.",
@@ -144,7 +144,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  t: "platform module: platform(), machine(), processor(), system(), version(), python_implementation(), python_version_tuple()",
+  t: "Platform module: platform(), machine(), processor(), system(), version(), python_implementation(), python_version_tuple()",
   tt: "Módulo platform: platform(), machine(), processor(), system(), version(), python_implementation(), python_version_tuple()",
   body: [
    "El módulo `platform` permite que un programa averigüe datos de la computadora y del intérprete de Python en el que se ejecuta. Eso es útil para reportes de errores, para elegir rutas de archivo o comandos que cambian entre sistemas operativos y para comprobar que el intérprete sea lo bastante nuevo. Cada función listada en el objetivo devuelve una cadena, excepto `python_version_tuple()`, que devuelve una tupla de cadenas. Los valores exactos dependen por completo de la máquina, así que las preguntas del examen piden qué tipo de información da cada función más que una salida concreta.",
@@ -238,7 +238,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  t: "try/except, multiple except branches and the order they are checked",
+  t: "Try/except, multiple except branches and the order they are checked",
   tt: "try/except, varias ramas except y el orden en que se revisan",
   body: [
    "Una excepción es la forma en que Python indica que algo salió mal mientras un programa se ejecutaba: dividir entre cero, convertir 'abc' a int, leer una clave inexistente de un diccionario. Si nada maneja la excepción, el programa se detiene e imprime un traceback. La sentencia `try` te permite manejarla, para que el programa pueda recuperarse, mostrar un mensaje amable o intentar otra cosa.",
@@ -285,7 +285,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  t: "except … as e and the args attribute",
+  t: "Except … as e and the args attribute",
   tt: "except … as e y el atributo args",
   body: [
    "Una excepción no es solo una señal; es un objeto, una instancia de una clase de excepción. Cuando la atrapas, puedes darle un nombre a ese objeto con `as` y luego inspeccionarlo. La sintaxis es `except ValueError as e:`, y dentro de la rama la variable `e` se refiere a la instancia de excepción que se lanzó.",
@@ -309,7 +309,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  t: "else and finally branches and when each runs",
+  t: "Else and finally branches and when each runs",
   tt: "Las ramas else y finally y cuándo se ejecuta cada una",
   body: [
    "Una sentencia `try` puede tener dos ramas opcionales más además de `except`. Saber exactamente cuándo se ejecuta cada una es una fuente confiable de preguntas de examen, normalmente en forma de código que imprime letras desde distintas ramas y pregunta cuál es la salida.",
@@ -356,7 +356,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  t: "raise, raise with an instance, and a bare raise to re-raise",
+  t: "Raise, raise with an instance, and a bare raise to re-raise",
   tt: "raise, raise con una instancia y raise sin argumentos para relanzar",
   body: [
    "Las excepciones no solo las lanza Python; tu propio código puede lanzarlas con la sentencia `raise`. Lo haces cuando una función detecta una situación que no puede manejar de forma sensata, como una edad negativa o una lista vacía donde se requieren datos. Lanzar una excepción le pasa el problema a quien llamó de una forma que no se puede ignorar en silencio.",
@@ -380,7 +380,7 @@ CertHub.addLessons("pcap", [
   ]
  },
 {
-  t: "assert and AssertionError",
+  t: "Assert and AssertionError",
   tt: "assert y AssertionError",
   body: [
    "La sentencia `assert` comprueba una condición que tú, como programador, crees que debe ser verdadera en cierto punto. Si la condición es verdadera, no pasa nada y la ejecución continúa. Si es falsa, Python lanza `AssertionError`. Las aserciones son una ayuda para depurar: detectan estados imposibles temprano, cerca de su causa, en lugar de dejar que datos incorrectos avancen y fallen en algún lugar confuso.",
@@ -473,7 +473,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  t: "ord() and chr()",
+  t: "Ord() and chr()",
   tt: "ord() y chr()",
   body: [
    "Dos funciones integradas conectan los caracteres con sus code points de Unicode. `ord(ch)` recibe una cadena de exactamente un carácter y devuelve su code point como entero. `chr(n)` hace lo contrario: recibe un code point entero y devuelve la cadena de un carácter correspondiente. Son inversas entre sí, así que `chr(ord(c)) == c` para cualquier carácter c, y `ord(chr(n)) == n` para cualquier code point válido n.",
@@ -644,7 +644,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  t: "join(), split(), find(), rfind(), index(), and the difference between find and index",
+  t: "Join(), split(), find(), rfind(), index(), and the difference between find and index",
   tt: "join(), split(), find(), rfind(), index() y la diferencia entre find e index",
   body: [
    "Estos métodos separan cadenas, las unen y buscan dentro de ellas. Están entre los más usados en código real y entre los más evaluados en PCAP.",
@@ -670,7 +670,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  t: "sorted() on strings versus list.sort()",
+  t: "Sorted() on strings versus list.sort()",
   tt: "sorted() sobre cadenas frente a list.sort()",
   body: [
    "Python te ofrece dos formas de ordenar, y se comportan de manera distinta en aspectos que el examen evalúa directamente. La función integrada `sorted()` acepta cualquier iterable, incluida una cadena, y devuelve una lista nueva con los elementos en orden. El método `list.sort()` solo existe en las listas, ordena esa lista en su lugar (in place) y devuelve None.",
@@ -888,7 +888,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  t: "isinstance(), issubclass(), and the is / is not operators versus ==",
+  t: "Isinstance(), issubclass(), and the is / is not operators versus ==",
   tt: "isinstance(), issubclass() y los operadores is / is not frente a ==",
   body: [
    "Estas herramientas responden a preguntas distintas: qué tipo de cosa es este objeto, cómo se relacionan estas clases, y si estos dos nombres se refieren al mismo objeto o solo a valores iguales. Confundirlas es una fuente habitual de respuestas equivocadas en el examen.",
@@ -986,7 +986,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  t: "map() and filter(), and the fact that they return one-shot iterators",
+  t: "Map() and filter(), and the fact that they return one-shot iterators",
   tt: "map() y filter(), y el hecho de que devuelven iteradores de un solo uso",
   body: [
    "`map()` y `filter()` aplican una función a los elementos de un iterable. `map(function, iterable)` llama a la función sobre cada elemento y produce los resultados. `filter(function, iterable)` llama a la función sobre cada elemento y conserva solo los elementos para los que devuelve un valor verdadero. Ambas se usan a menudo con lambdas.",
@@ -1113,7 +1113,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  t: "read(), readline(), readlines(), write(), readinto() with bytearray, close() and with",
+  t: "Read(), readline(), readlines(), write(), readinto() with bytearray, close() and with",
   tt: "read(), readline(), readlines(), write(), readinto() con bytearray, close() y with",
   body: [
    "Una vez abierto un archivo, su manejador ofrece métodos para meter y sacar datos. Cada uno lee o escribe desde la posición actual y la hace avanzar, así que las llamadas sucesivas continúan donde se detuvo la anterior.",
@@ -1138,7 +1138,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  t: "errno values (for example ENOENT, EACCES) on I/O errors",
+  t: "Errno values (for example ENOENT, EACCES) on I/O errors",
   tt: "Valores de errno (por ejemplo ENOENT, EACCES) en errores de E/S",
   body: [
    "La entrada y la salida pueden fallar por muchas razones ajenas al control de tu programa: el archivo no existe, no tienes permiso, el disco está lleno. Cuando falla una llamada al sistema operativo, Python lanza `OSError` (o una de sus subclases), y la excepción lleva el código de error del sistema operativo en su atributo `errno`. Comprobar ese código te permite responder con precisión a lo que salió mal.",

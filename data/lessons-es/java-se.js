@@ -470,7 +470,7 @@ CertHub.addLessons("java-se", [
   ]
  },
  {
-  "t": "if/else and the ternary operator",
+  "t": "If/else and the ternary operator",
   "tt": "if/else y el operador ternario",
   "body": [
    "Una sentencia `if` ejecuta un bloque solo cuando su condición es `true`. La condición debe ser una expresión `boolean`; a diferencia de C, Java no trata un `int` como verdadero o falso, así que `if (count)` no compila. Un `else` opcional se ejecuta cuando la condición es `false`, y puedes encadenar decisiones con `else if`. Solo se ejecuta la primera rama cuya condición sea verdadera.",
@@ -705,7 +705,7 @@ CertHub.addLessons("java-se", [
   ]
  },
  {
-  "t": "while, do-while, for and enhanced for loops",
+  "t": "While, do-while, for and enhanced for loops",
   "tt": "Bucles while, do-while, for y for mejorado",
   "body": [
    "Java tiene cuatro formas de bucle. Un bucle `while` comprueba su condición `boolean` antes de cada iteración, así que su cuerpo puede ejecutarse cero veces. Un bucle `do-while` ejecuta primero el cuerpo y comprueba la condición después, así que su cuerpo siempre se ejecuta al menos una vez. El `do-while` debe terminar con un punto y coma después de la condición: `do { ... } while (x < 3);`. Omitirlo es un error de compilación.",
@@ -752,7 +752,7 @@ CertHub.addLessons("java-se", [
   ]
  },
  {
-  "t": "break and continue, including labeled statements",
+  "t": "Break and continue, including labeled statements",
   "tt": "break y continue, incluidas las sentencias etiquetadas",
   "body": [
    "`break` y `continue` cambian el flujo normal de un bucle. `break` termina inmediatamente el bucle (o `switch`) más interno que lo contiene, y la ejecución continúa con la sentencia que sigue. `continue` salta el resto de la iteración actual y pasa directamente a la siguiente. En un bucle `for`, `continue` sigue ejecutando la expresión de actualización (como `i++`) antes de evaluar la condición de nuevo; en un bucle `while` o `do-while` salta a la evaluación de la condición.",
@@ -1222,7 +1222,7 @@ CertHub.addLessons("java-se", [
   ]
  },
  {
-  "t": "instanceof pattern matching and flow scoping",
+  "t": "Instanceof pattern matching and flow scoping",
   "tt": "Pattern matching con instanceof y alcance por flujo",
   "body": [
    "El operador `instanceof` comprueba si un objeto es una instancia de un tipo. Antes del pattern matching, una comprobación solía ir seguida de un cast: `if (obj instanceof String) { String s = (String) obj; ... }`. El pattern matching combina la comprobación, el cast y la declaración de la variable: `if (obj instanceof String s) { ... }`. Si la comprobación tiene éxito, `s` es una variable `String` lista para usar. Si `obj` es `null`, `instanceof` es `false` y no se enlaza nada.",
@@ -1410,7 +1410,7 @@ CertHub.addLessons("java-se", [
   ]
  },
  {
-  "t": "try/catch/finally flow, including return in try and finally",
+  "t": "Try/catch/finally flow, including return in try and finally",
   "tt": "Flujo de try/catch/finally, incluido return en try y en finally",
   "body": [
    "Un bloque `try` contiene código que podría lanzar una excepción. Debe ir seguido de al menos un bloque `catch`, un bloque `finally` o ambos; un `try` solo no compila (try-with-resources es la única excepción, que veremos más adelante). Las llaves son obligatorias en cada bloque, incluso con una sola sentencia. Cuando se lanza una excepción en el `try`, se salta el resto del `try`, y Java revisa los bloques `catch` de arriba hacia abajo, ejecutando el primero cuyo tipo coincida. Si ninguno coincide, la excepción se propaga a quien llama después de que se ejecuta el `finally`.",
@@ -1551,7 +1551,7 @@ CertHub.addLessons("java-se", [
   ]
  },
  {
-  "t": "try-with-resources, AutoCloseable and reverse close order",
+  "t": "Try-with-resources, AutoCloseable and reverse close order",
   "tt": "try-with-resources, AutoCloseable y cierre en orden inverso",
   "body": [
    "Muchos objetos mantienen recursos fuera de la JVM, como archivos abiertos, sockets de red y conexiones a bases de datos, y deben cerrarse cuando terminas. Cerrarlos de forma confiable en un bloque `finally` es verboso y fácil de hacer mal. La sentencia try-with-resources lo automatiza: los recursos declarados entre paréntesis después de `try` se cierran automáticamente cuando termina el bloque, tanto si termina normalmente como si lanza una excepción.",
@@ -2655,8 +2655,8 @@ CertHub.addLessons("java-se", [
   ]
  },
  {
-  "t": "module-info.java: module, requires, requires transitive, exports, opens",
-  "tt": "module-info.java: module, requires, requires transitive, exports, opens",
+  "t": "Module-info.java: module, requires, requires transitive, exports, opens",
+  "tt": "Module-info.java: module, requires, requires transitive, exports, opens",
   "body": [
    "El Java Platform Module System (JPMS), introducido en Java 9, agrupa paquetes en módulos con nombre con dependencias explícitas y APIs públicas explícitas. Un módulo se describe con un archivo llamado `module-info.java` colocado en la raíz de la carpeta de fuentes del módulo, junto a los directorios de los paquetes de nivel superior. Se compila a `module-info.class`. El nombre del módulo suele seguir el estilo de dominio invertido, como `com.shop.orders`, y debe ser único en el module path.",
    "```java\nmodule com.shop.orders {\n    requires java.sql;\n    requires transitive com.shop.model;\n    exports com.shop.orders.api;\n    exports com.shop.orders.spi to com.shop.plugins;\n    opens com.shop.orders.entity;\n}\n```",

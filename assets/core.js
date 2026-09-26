@@ -214,6 +214,14 @@
     const root = document.documentElement;
     if (t === "light" || t === "dark") root.setAttribute("data-theme", t); else root.removeAttribute("data-theme");
   }
+  // Accent color for buttons, selected chips and focus rings. Blue (the brand color) is the default.
+  const ACCENTS = [["blue", "Blue", "#2D5BD0"], ["green", "Green", "#12806A"], ["purple", "Purple", "#7646AE"], ["rose", "Rose", "#BE185D"], ["amber", "Amber", "#8F6100"], ["classic", "Charcoal", "#16202C"]];
+  const accent = () => { const a = store.get("certhub:accent"); return ACCENTS.some(x => x[0] === a) ? a : "blue"; };
+  function applyAccent(a) {
+    const root = document.documentElement;
+    if (a && a !== "blue" && ACCENTS.some(x => x[0] === a)) root.setAttribute("data-accent", a); else root.removeAttribute("data-accent");
+  }
+  function setAccent(a) { store.set("certhub:accent", a); applyAccent(a); }
   /* Spanish interface: data/ui-es.js is a dictionary of interface text (exact strings and a few patterns with
      numbers). Text is translated as it's drawn; lesson, question and lab content is skipped (Spanish content comes
      from its own files). */
@@ -343,7 +351,7 @@
     }
   };
   window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); install.prompt = e; document.documentElement.classList.add("can-install"); if (window.CertHub && CertHub.rerender && location.hash.replace("#", "") in { "": 1, home: 1, install: 1 }) CertHub.rerender(); });
-  window.addEventListener("appinstalled", () => { install.prompt = null; document.documentElement.classList.remove("can-install"); if (window.CertHub && CertHub.ui) CertHub.ui.toast("Installed. Open Cyber Cert Study from your home screen."); });
+  window.addEventListener("appinstalled", () => { install.prompt = null; document.documentElement.classList.remove("can-install"); if (window.CertHub && CertHub.ui) CertHub.ui.toast("Installed. Open StudyToCert from your home screen."); });
 
   // Inside a frame, file downloads are usually blocked, so hide download-only buttons.
   try { if (window.self !== window.top) document.documentElement.classList.add("framed"); } catch (e) { document.documentElement.classList.add("framed"); }
@@ -434,7 +442,7 @@
     const end = new Date(start.getTime() + minutes * 60000);
     const now = new Date(), stamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}00Z`;
     const txt = x => String(x).replace(/[\\;,]/g, c => "\\" + c).replace(/\n/g, "\\n");
-    return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Cyber Cert Study//Reminder//EN", "BEGIN:VEVENT",
+    return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//StudyToCert//Reminder//EN", "BEGIN:VEVENT",
       `UID:${stamp}-${Math.random().toString(36).slice(2)}@certstudy`, `DTSTAMP:${stamp}`, `DTSTART:${dt(start)}`, `DTEND:${dt(end)}`,
       "RRULE:FREQ=DAILY", `SUMMARY:${txt(title)}`, `DESCRIPTION:${txt("Read a lesson, clear your review queue and take a quiz." + (url ? " " + url : ""))}`, url ? `URL:${url}` : "",
       "BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${txt(title)}`, "TRIGGER:-PT0M", "END:VALARM", "END:VEVENT", "END:VCALENDAR"].filter(Boolean).join("\r\n") + "\r\n";
@@ -476,7 +484,7 @@
     g.strokeStyle = "#fff"; g.lineWidth = 14; g.lineCap = "round"; g.beginPath(); g.moveTo(990, 172); g.lineTo(1020, 202); g.lineTo(1074, 140); g.stroke();
     g.fillStyle = "#fff"; g.textBaseline = "alphabetic";
     const font = (w, px) => `${w} ${px}px "Public Sans", system-ui, sans-serif`;
-    g.font = font(600, 34); g.fillText("Cyber Cert Study", 90, 130);
+    g.font = font(600, 34); g.fillText("StudyToCert", 90, 130);
     g.font = font(800, 76); g.fillText(String(title).slice(0, 26), 90, 290);
     g.font = font(600, 46); g.fillText(String(line1).slice(0, 40), 90, 370);
     g.font = font(400, 32); g.fillStyle = "rgba(255,255,255,.85)"; g.fillText(String(line2).slice(0, 60), 90, 440);
@@ -493,7 +501,7 @@
   }
 
   window.CertHub = {
-    i18n, addUiEs: d => i18n.add(d), U, store, certs, buildPlan, loadProgress, saveProgress, freshProgress, applyTheme, themeButton, exportAll, importAll, activeNotices,
+    i18n, addUiEs: d => i18n.add(d), U, store, certs, buildPlan, loadProgress, saveProgress, freshProgress, applyTheme, themeButton, ACCENTS, accent, setAccent, exportAll, importAll, activeNotices,
     backupText, restoreText, ui, install, labs, labOrder, loadLabProgress, saveLabProgress, labStatus,
     register(c) { certs[c.id] = c; if (Array.isArray(c.questions)) c.qCount = c.questions.length; },
     loadQuestions, addQuestions, loadLessons, addLessons, lessonMeta, addDiagrams, diagramsFor, loadPbqs, addPbqs, loadQuestionsEs, addQuestionsEs, loadHandson, addHandson, loadCareers, addCareers, addInterview, careers, loadScript, activity, reminderIcs, addReminder, reportUrl, downloadFile, makeBadge, BASE,

@@ -846,7 +846,7 @@ CertHub.addLessons("ccst-networking", [
       ["¿Qué filtro de visualización muestra solo el tráfico hacia o desde 10.0.0.25?", "`ip.addr == 10.0.0.25`."],
       ["¿Por qué una captura de Wireshark en tu laptop podría no mostrar el tráfico entre otros dos hosts de un switch?", "Un switch reenvía las tramas unicast solo al puerto de destino, así que necesitas port mirroring (SPAN) para ver el tráfico de otros."]
     ] },
-  { t: "ping, tracert/traceroute, ipconfig/ifconfig/ip and nslookup: running them and reading the results", tt: "ping, tracert/traceroute, ipconfig/ifconfig/ip y nslookup: cómo ejecutarlos y leer sus resultados",
+  { t: "Ping, tracert/traceroute, ipconfig/ifconfig/ip and nslookup: running them and reading the results", tt: "ping, tracert/traceroute, ipconfig/ifconfig/ip y nslookup: cómo ejecutarlos y leer sus resultados",
     body: [
       "Estas cuatro familias de herramientas responden las preguntas más comunes del soporte de redes: cuál es mi configuración, puedo llegar al destino, qué ruta toma el tráfico y se resuelve el nombre. Saber ejecutar cada una y leer su salida es esencial para el examen y para el trabajo diario.",
       "`ipconfig` (Windows), `ifconfig` (macOS y Linux antiguo) e `ip addr` (Linux moderno) muestran tu configuración. Verifica que el adaptador esté conectado, que la dirección IPv4 sea válida para tu red (no 169.254.x.x), que la máscara de subred coincida con la red, que haya un default gateway y, con `ipconfig /all`, que aparezcan los servidores DNS y el servidor DHCP. Muchos problemas se resuelven simplemente leyendo esta salida con cuidado.",

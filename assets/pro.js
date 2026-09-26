@@ -71,7 +71,7 @@
     const lab = list && list.find(l => l.id === id);
     if (!lab) { shell(`<h1>Capstone project</h1><p class="note">This project wasn't found.</p>`); return; }
     $("#app").innerHTML = CertHub.labViews.detail(lab) + rubricHtml(lab);
-    document.title = `${lab.title} · Cyber Cert Study`;
+    document.title = `${lab.title} · StudyToCert`;
   };
 
   // Sign-in, sign-out and plan changes: drop or fetch paid content and redraw.

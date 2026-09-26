@@ -568,7 +568,7 @@ CertHub.addLessons("ckad", [
   ]
  },
  {
-  "t": "kubectl rollout status, history, undo (--to-revision), pause and resume; kubectl set image and scale",
+  "t": "Kubectl rollout status, history, undo (--to-revision), pause and resume; kubectl set image and scale",
   "body": [
    "Deployments keep a history of revisions, one per Pod template change, and kubectl gives you a small set of commands to drive and inspect them. These commands are fast to type and appear constantly on the exam, so it pays to know them by heart.",
    "`kubectl set image deployment/web nginx=nginx:1.27` changes the image of the container named `nginx` in the Deployment `web`, which starts a rolling update. The part before `=` is the container name, not the image name; get it wrong and kubectl reports that the container was not found. `kubectl scale deployment/web --replicas=5` changes the replica count without creating a new revision. `kubectl rollout restart deployment/web` triggers a fresh rollout with the same spec (it adds a timestamp annotation to the template), useful for picking up a changed ConfigMap consumed as environment variables.",
@@ -1070,7 +1070,7 @@ CertHub.addLessons("ckad", [
   ]
  },
  {
-  "t": "kubectl get, describe, get events, top pod/node (metrics-server) for monitoring",
+  "t": "Kubectl get, describe, get events, top pod/node (metrics-server) for monitoring",
   "body": [
    "Monitoring an application in Kubernetes starts with four kubectl commands. Each answers a different question, and knowing which to reach for saves minutes on every exam task.",
    "`kubectl get` answers 'What exists and what state is it in?' It prints a one-line summary per object: for Pods the READY count, STATUS, RESTARTS and AGE. Combine types with commas (`kubectl get deploy,rs,pods,svc`), filter with labels (`-l app=web`), look across namespaces (`-A`) and watch changes live (`-w`). `kubectl get all` shows the common workload and Service types in a namespace but not ConfigMaps, Secrets, PVCs or Ingresses.",
@@ -1979,7 +1979,7 @@ CertHub.addLessons("ckad", [
   ]
  },
  {
-  "t": "kubectl expose, kubectl create service and kubectl port-forward",
+  "t": "Kubectl expose, kubectl create service and kubectl port-forward",
   "body": [
    "Writing Service YAML by hand is slow and error-prone. kubectl offers two imperative generators, and a third command for reaching Pods without a Service at all. Knowing their differences saves time and avoids a classic selector trap.",
    "`kubectl expose` creates a Service for an existing resource and copies its selector for you. `kubectl expose deployment web --port=80 --target-port=8080` creates a ClusterIP Service named `web` whose selector is the Deployment's selector. Add `--type=NodePort` or `--type=LoadBalancer`, `--name=web-svc` to choose a name, and `--protocol=UDP` if needed. You can expose a Deployment, ReplicaSet, Pod or another Service. Exposing a Pod requires that it has labels, since they become the selector; Pods made with `kubectl run` get a `run=<name>` label automatically. If you omit `--target-port`, it defaults to `--port`; if you omit `--port`, kubectl uses the container port declared in the resource.",

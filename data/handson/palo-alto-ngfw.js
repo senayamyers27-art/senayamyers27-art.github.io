@@ -69,7 +69,7 @@ CertHub.addHandson("palo-alto-ngfw", {
     },
     {
       id: "pa-fw-app-default", kind: "fw", d: 1,
-      title: "application-default versus any",
+      title: "Application-default versus any",
       prompt: "The outbound rule allows `ssl`, `web-browsing` and `dns` with service `any`, so those apps work on any port, which lets tools tunnel out on unusual ports.\n\nLock the apps to their default ports. One exception is required: the partner portal (`partner-portal`, 198.51.100.40) really does run web-browsing on TCP 8080, using the service object `tcp-8080`.",
       hint: "Change the service of the general rule to application-default. Add a second rule for web-browsing to partner-portal with service tcp-8080.",
       explain: "With service any, an allowed application matches on every port, so ssl on TCP 4444 or web-browsing on 8080 passes. application-default restricts each app to the ports Palo Alto lists for it (ssl on 443, web-browsing on 80, dns on 53), which is the recommended setting. When a legitimate app really uses a non-standard port, write a narrow rule for that destination with a specific service object instead of opening the port for everyone.",

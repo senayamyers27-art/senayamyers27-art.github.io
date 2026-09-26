@@ -60,7 +60,7 @@ CertHub.register({
         "Cosmos DB vector search: container vector policy (path, data type, dimensions, distance function), vector indexes (flat, quantizedFlat, diskANN) and VectorDistance()",
         "Change feed: change feed processor with a lease container, Azure Functions Cosmos DB trigger, latest-version mode vs all versions and deletes",
         "Azure Database for PostgreSQL flexible server: allow-listing and enabling the vector (pgvector) extension",
-        "pgvector: vector(n) columns, distance operators (<-> L2, <=> cosine, <#> inner product), HNSW vs IVFFlat indexes and tuning (m, ef_search, lists, probes)",
+        "Pgvector: vector(n) columns, distance operators (<-> L2, <=> cosine, <#> inner product), HNSW vs IVFFlat indexes and tuning (m, ef_search, lists, probes)",
         "Retrieval-augmented generation: chunking, embedding, storing, top-k retrieval with metadata filters, adding results to the prompt",
         "Azure Managed Redis: cache-aside pattern, TTL and invalidation, eviction policies",
         "Redis vector indexes and semantic caching of model responses",

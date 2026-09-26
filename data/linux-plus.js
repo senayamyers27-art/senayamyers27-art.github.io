@@ -53,7 +53,7 @@ CertHub.register({
       topics: [
         "Local accounts and groups: useradd, usermod -aG, userdel, groupadd, passwd, chage",
         "Account files: /etc/passwd, /etc/shadow, /etc/group, /etc/skel, /etc/login.defs",
-        "systemd units: systemctl start/stop/enable/mask, status output, drop-in overrides with systemctl edit",
+        "Systemd units: systemctl start/stop/enable/mask, status output, drop-in overrides with systemctl edit",
         "Scheduling: cron and crontab syntax, at, systemd timers (OnCalendar)",
         "Processes and jobs: ps, top, kill signals, nice/renice, bg/fg/jobs, nohup",
         "Package management: dnf/rpm, apt/dpkg, repositories, provides and file ownership queries",

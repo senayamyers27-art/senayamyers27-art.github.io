@@ -368,7 +368,7 @@ CertHub.registerLabs([
   },
   {
     "id": "lab-systemd-services",
-    "title": "systemd services, timers and journald: build, harden and fix a failing service",
+    "title": "Systemd services, timers and journald: build, harden and fix a failing service",
     "track": "Systems administration",
     "level": "Intermediate",
     "minutes": 150,

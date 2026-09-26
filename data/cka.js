@@ -33,10 +33,10 @@ CertHub.register({
       topics: [
         "Control plane and node components: kube-apiserver, etcd, kube-scheduler, kube-controller-manager, kubelet, kube-proxy, container runtime",
         "Preparing hosts for kubeadm: containerd, matching systemd cgroup driver, swap, overlay and br_netfilter modules, ip_forward and bridge sysctls, required ports",
-        "kubeadm init (pod network CIDR, control-plane endpoint), installing a CNI plugin, kubeadm join and bootstrap tokens",
+        "Kubeadm init (pod network CIDR, control-plane endpoint), installing a CNI plugin, kubeadm join and bootstrap tokens",
         "Static Pods and /etc/kubernetes/manifests; kubeadm certificates (check-expiration, renew) and kubeconfig files",
         "Cluster upgrades with kubeadm: one minor version at a time, upgrade plan/apply/node, drain, kubelet upgrade, uncordon, version skew",
-        "etcd backup and restore with etcdctl/etcdutl and the etcd PKI; pointing the etcd static Pod at a restored data directory",
+        "Etcd backup and restore with etcdctl/etcdutl and the etcd PKI; pointing the etcd static Pod at a restored data directory",
         "Highly available control planes: stacked vs external etcd, quorum, load balancer in front of API servers, --upload-certs and --certificate-key",
         "RBAC: Roles, ClusterRoles, RoleBindings, ClusterRoleBindings, aggregated and built-in roles, users via CertificateSigningRequests, kubectl auth can-i",
         "Node maintenance: cordon, drain, uncordon and PodDisruptionBudgets",
@@ -80,7 +80,7 @@ CertHub.register({
       w: 20,
       topics: [
         "Kubernetes network model: one IP per Pod, NAT-free Pod-to-Pod traffic, the CNI plugin's role, Pod and Service CIDRs",
-        "kube-proxy modes (iptables, IPVS, nftables) and how Service virtual IPs work",
+        "Kube-proxy modes (iptables, IPVS, nftables) and how Service virtual IPs work",
         "Service types: ClusterIP, NodePort (30000–32767), LoadBalancer (cloud controller or MetalLB), headless and ExternalName",
         "EndpointSlices, Services without selectors, externalTrafficPolicy and sessionAffinity",
         "NetworkPolicies: default deny, ingress and egress rules, podSelector, namespaceSelector (kubernetes.io/metadata.name), ipBlock, ports",
@@ -105,7 +105,7 @@ CertHub.register({
         "Access modes: ReadWriteOnce, ReadOnlyMany, ReadWriteMany, ReadWriteOncePod",
         "Reclaim policies: Retain and Delete (Recycle deprecated) and cleaning up Released PVs",
         "StorageClasses, provisioners and dynamic provisioning; the default StorageClass annotation",
-        "volumeBindingMode Immediate vs WaitForFirstConsumer",
+        "VolumeBindingMode Immediate vs WaitForFirstConsumer",
         "Volume expansion with allowVolumeExpansion",
         "Static PVs: hostPath for labs, local volumes with nodeAffinity, NFS",
         "CSI drivers and StatefulSet volumeClaimTemplates with PVC retention"

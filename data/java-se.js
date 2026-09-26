@@ -49,13 +49,13 @@ CertHub.register({
       name: "Controlling program flow",
       w: 8,
       topics: [
-        "if/else and the ternary operator",
+        "If/else and the ternary operator",
         "Classic switch statements, fall-through and break",
         "Switch expressions with arrow labels, multiple labels and yield",
         "Pattern matching in switch: type patterns, record patterns and when guards",
         "Case dominance and exhaustiveness (enums, sealed types, default)",
-        "while, do-while, for and enhanced for loops",
-        "break and continue, including labeled statements",
+        "While, do-while, for and enhanced for loops",
+        "Break and continue, including labeled statements",
         "Unreachable code and definite assignment compile errors"
       ],
       notes: ["Topic group: Controlling Program Flow"],
@@ -78,7 +78,7 @@ CertHub.register({
         "Sealed classes and interfaces: permits, final, sealed and non-sealed subclasses",
         "Enums with fields, constructors, methods and values()/valueOf()/ordinal()",
         "Nested, inner, local and anonymous classes",
-        "instanceof pattern matching and flow scoping",
+        "Instanceof pattern matching and flow scoping",
         "Encapsulation, immutable objects and var local type inference",
         "Object lifecycle and garbage collection eligibility"
       ],
@@ -95,10 +95,10 @@ CertHub.register({
       w: 8,
       topics: [
         "Checked vs unchecked exceptions and the Throwable hierarchy",
-        "try/catch/finally flow, including return in try and finally",
+        "Try/catch/finally flow, including return in try and finally",
         "Multi-catch rules: no related types; the catch variable is effectively final",
         "Catch block ordering and unreachable catch compile errors",
-        "try-with-resources, AutoCloseable and reverse close order",
+        "Try-with-resources, AutoCloseable and reverse close order",
         "Suppressed exceptions and Throwable.getSuppressed()",
         "Declaring exceptions with throws and overriding rules",
         "Creating custom checked and unchecked exceptions"
@@ -160,7 +160,7 @@ CertHub.register({
       name: "Packaging and deploying Java code",
       w: 7,
       topics: [
-        "module-info.java: module, requires, requires transitive, exports, opens",
+        "Module-info.java: module, requires, requires transitive, exports, opens",
         "Services: uses, provides ... with, and ServiceLoader",
         "Module path vs class path, named, automatic and unnamed modules",
         "Compiling and running modules with javac --module-path and java --module",

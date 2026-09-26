@@ -733,7 +733,7 @@ CertHub.addLessons("ai-200", [
   ]
  },
  {
-  "t": "pgvector: vector(n) columns, distance operators (<-> L2, <=> cosine, <#> inner product), HNSW vs IVFFlat indexes and tuning (m, ef_search, lists, probes)",
+  "t": "Pgvector: vector(n) columns, distance operators (<-> L2, <=> cosine, <#> inner product), HNSW vs IVFFlat indexes and tuning (m, ef_search, lists, probes)",
   "body": [
    "With the extension created, you store embeddings in a column of type `vector(n)`, where n is the number of dimensions your embedding model returns. Inserting a vector with a different length fails, which protects you from mixing models. A typical table keeps the chunk text, its metadata and its embedding together, so a single SQL query can filter and rank.",
    "```sql\nCREATE TABLE chunks (\n  id bigserial PRIMARY KEY,\n  doc_id int, lang text, body text,\n  embedding vector(1536));\n\nSELECT id, body, embedding <=> $1 AS distance\nFROM chunks WHERE lang = 'en'\nORDER BY embedding <=> $1\nLIMIT 5;\n```",

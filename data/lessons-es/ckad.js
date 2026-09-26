@@ -317,7 +317,7 @@ CertHub.addLessons("ckad", [
   ]
  },
  {
-  "t": "kubectl rollout status, history, undo (--to-revision), pause and resume; kubectl set image and scale",
+  "t": "Kubectl rollout status, history, undo (--to-revision), pause and resume; kubectl set image and scale",
   "tt": "kubectl rollout status, history, undo (--to-revision), pause y resume; kubectl set image y scale",
   "body": [
    "Los Deployments guardan un historial de revisiones, una por cada cambio en la plantilla de Pod, y kubectl te da un pequeño conjunto de comandos para dirigirlas e inspeccionarlas. Estos comandos son rápidos de escribir y aparecen constantemente en el examen, así que vale la pena sabérselos de memoria.",
@@ -602,7 +602,7 @@ CertHub.addLessons("ckad", [
   ]
  },
  {
-  t: "kubectl get, describe, get events, top pod/node (metrics-server) for monitoring",
+  t: "Kubectl get, describe, get events, top pod/node (metrics-server) for monitoring",
   tt: "kubectl get, describe, get events y top pod/node (metrics-server) para monitoreo",
   body: [
    "Monitorear una aplicación en Kubernetes empieza con cuatro comandos de kubectl. Cada uno responde una pregunta distinta, y saber cuál usar te ahorra minutos en cada tarea del examen.",
@@ -1107,7 +1107,7 @@ CertHub.addLessons("ckad", [
   ]
  },
  {
-  t: "kubectl expose, kubectl create service and kubectl port-forward",
+  t: "Kubectl expose, kubectl create service and kubectl port-forward",
   tt: "kubectl expose, kubectl create service y kubectl port-forward",
   body: [
    "Escribir YAML de Services a mano es lento y propenso a errores. kubectl ofrece dos generadores imperativos, y un tercer comando para llegar a los Pods sin ningún Service. Conocer sus diferencias ahorra tiempo y evita una trampa clásica con los selectores.",

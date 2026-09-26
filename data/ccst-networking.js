@@ -117,7 +117,7 @@ CertHub.register({
         "Troubleshooting methodology: identify the problem, theory, test, plan, fix, verify, document",
         "Help desk practice: tickets, gathering information, priorities, escalation and clear documentation",
         "Wireshark: capturing on the right interface, simple display filters and saving a .pcapng file",
-        "ping, tracert/traceroute, ipconfig/ifconfig/ip and nslookup: running them and reading the results",
+        "Ping, tracert/traceroute, ipconfig/ifconfig/ip and nslookup: running them and reading the results",
         "How firewalls can make ping or traceroute fail even when the service works",
         "Remote access and data collection: console cable and terminal emulator, SSH vs Telnet, RDP, VPN",
         "Cloud-managed devices (for example Cisco Meraki dashboard)",

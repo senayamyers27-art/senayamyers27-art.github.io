@@ -6,7 +6,7 @@ CertHub.addHandson("pcap", {
       id: "pcap-math-rounding",
       kind: "code",
       d: 1,
-      title: "floor, ceil and trunc from math",
+      title: "Floor, ceil and trunc from math",
       prompt: "Import the `math` module and write `round_three(x)` that returns a tuple `(math.floor(x), math.ceil(x), math.trunc(x))`.\n\nFor `2.5` the result is `(2, 3, 2)` and for `-2.5` it is `(-3, -2, -2)`. The starter uses `int()` everywhere, which only gets some of these right.",
       hint: "floor always goes down, ceil always goes up, and trunc just drops the fraction. The difference shows up with negative numbers.",
       starter: `def round_three(x):

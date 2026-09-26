@@ -101,7 +101,7 @@ CertHub.addLessons("rhcsa", [
   ]
  },
  {
-  "t": "grep and regular expressions: ^, $, ., *, [ ], -i, -v, -r, -E",
+  "t": "Grep and regular expressions: ^, $, ., *, [ ], -i, -v, -r, -E",
   "body": [
    "`grep` prints the lines of its input that match a pattern. On the RHCSA you use it constantly: to find a setting in a configuration file, to pick lines out of a log, or to satisfy a task such as 'save every line of /usr/share/dict/words containing the string ich into /root/lines'. The pattern is a regular expression (regex), a small language for describing text.",
    "The core regex characters are few. `^` anchors the match to the start of a line and `$` to the end, so `^root` matches lines beginning with root and `bash$` matches lines ending in bash. A dot `.` matches any single character. A star `*` means 'zero or more of the preceding item', so `a*` matches nothing, a, aa and so on, and `.*` matches any run of characters. Square brackets list a set of allowed characters: `[0-9]` is one digit, `[aeiou]` one vowel, and `[^0-9]` (with a caret inside the brackets) any character that is not a digit.",
@@ -549,7 +549,7 @@ CertHub.addLessons("rhcsa", [
   ]
  },
  {
-  "t": "dnf config-manager --add-repo, dnf repolist and dnf clean all",
+  "t": "Dnf config-manager --add-repo, dnf repolist and dnf clean all",
   "body": [
    "Writing a `.repo` file by hand is only one way to add a repository. The `config-manager` subcommand, provided by the dnf-plugins-core package that RHEL installs by default, can create the file for you, and two other commands let you check the result and reset dnf's cache. Together they make repository tasks quick to complete and easy to verify.",
    "`dnf config-manager --add-repo` followed by a URL creates a new `.repo` file in `/etc/yum.repos.d/`. If the URL ends in `.repo`, dnf downloads that file. Otherwise it treats the URL as a repository location and writes a minimal definition with an ID and name derived from the URL, the URL as `baseurl` and `enabled=1`. It does not add a `gpgkey`, so after using it you usually open the generated file and add `gpgcheck=0` or the correct `gpgkey` line as the task requires.",
@@ -1248,7 +1248,7 @@ CertHub.addLessons("rhcsa", [
   ]
  },
  {
-  "t": "case statements for simple argument handling",
+  "t": "Case statements for simple argument handling",
   "body": [
    "When a script must choose among several fixed options, such as start, stop and status, a long chain of `if`/`elif` string comparisons becomes hard to read. The `case` statement matches one value against a list of patterns and runs the block for the first pattern that matches. It is the standard way to handle a command-line argument that selects an action.",
    "The structure is `case WORD in`, then one or more clauses, then `esac` (case spelled backwards). Each clause is a pattern ending in `)`, followed by commands, and ends with `;;`. The patterns are shell glob patterns, not regular expressions: `*` matches anything, `?` any single character and `[ ]` a set. You can list alternatives in one clause with `|`. A final `*)` clause acts as the default, catching anything not matched earlier.",

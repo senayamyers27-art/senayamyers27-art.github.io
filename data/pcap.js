@@ -27,11 +27,11 @@ CertHub.register({
       topics: [
         "Import variants: import, import as, from … import, from … import *, and what each puts in the namespace",
         "Qualifying names in nested modules and packages (package.subpackage.module.name)",
-        "dir() to list the names a module defines",
-        "sys.path: where Python searches for modules and how to extend it at runtime",
-        "math module: ceil(), floor(), trunc(), factorial(), hypot(), sqrt()",
-        "random module: random(), seed(), choice(), sample()",
-        "platform module: platform(), machine(), processor(), system(), version(), python_implementation(), python_version_tuple()",
+        "Dir() to list the names a module defines",
+        "Sys.path: where Python searches for modules and how to extend it at runtime",
+        "Math module: ceil(), floor(), trunc(), factorial(), hypot(), sqrt()",
+        "Random module: random(), seed(), choice(), sample()",
+        "Platform module: platform(), machine(), processor(), system(), version(), python_implementation(), python_version_tuple()",
         "__name__ and the if __name__ == \"__main__\" idiom",
         "__pycache__ and compiled .pyc files",
         "Package layout: directories, __init__.py, nested packages and private (_name) module variables"
@@ -48,13 +48,13 @@ CertHub.register({
       name: "Exceptions",
       w: 14,
       topics: [
-        "try/except, multiple except branches and the order they are checked",
+        "Try/except, multiple except branches and the order they are checked",
         "Catching several exceptions in one branch: except (E1, E2)",
-        "except … as e and the args attribute",
-        "else and finally branches and when each runs",
+        "Except … as e and the args attribute",
+        "Else and finally branches and when each runs",
         "The built-in exception hierarchy: BaseException, Exception, ArithmeticError, LookupError, and their subclasses",
-        "raise, raise with an instance, and a bare raise to re-raise",
-        "assert and AssertionError",
+        "Raise, raise with an instance, and a bare raise to re-raise",
+        "Assert and AssertionError",
         "Why except Exception does not catch KeyboardInterrupt or SystemExit",
         "Defining your own exception classes and adding attributes to them"
       ],
@@ -71,15 +71,15 @@ CertHub.register({
       w: 18,
       topics: [
         "Character encoding: ASCII, Unicode, code points, UTF-8",
-        "ord() and chr()",
+        "Ord() and chr()",
         "String literals and escape sequences (\\n, \\t, \\\\, quotes)",
         "Indexing, negative indexing and slicing, including steps",
         "Immutability: why item assignment fails",
         "Iterating over strings; in and not in",
         "Concatenation, replication and comparison of strings (and why comparing strings with numbers using < fails)",
         "Character tests: isdigit(), isalpha(), isalnum(), isspace(), isupper(), islower()",
-        "join(), split(), find(), rfind(), index(), and the difference between find and index",
-        "sorted() on strings versus list.sort()"
+        "Join(), split(), find(), rfind(), index(), and the difference between find and index",
+        "Sorted() on strings versus list.sort()"
       ],
       notes: ["Section 3 objectives: 3.1–3.3 (encoding, string operations, string methods)"],
       labs: [
@@ -101,7 +101,7 @@ CertHub.register({
         "Introspection: hasattr(), type(), __name__, __module__, __bases__, __class__",
         "Single and multiple inheritance, method overriding and super()",
         "Method resolution order (MRO), diamonds and inconsistent hierarchies",
-        "isinstance(), issubclass(), and the is / is not operators versus ==",
+        "Isinstance(), issubclass(), and the is / is not operators versus ==",
         "Polymorphism and the __str__() method"
       ],
       notes: ["Section 4 objectives: 4.1–4.6 (OOP concepts, classes and objects, properties, methods, inheritance, polymorphism)"],
@@ -118,13 +118,13 @@ CertHub.register({
       topics: [
         "List comprehensions, including if filters and nested loops",
         "Lambda functions and functions that take a lambda as an argument",
-        "map() and filter(), and the fact that they return one-shot iterators",
+        "Map() and filter(), and the fact that they return one-shot iterators",
         "Closures: inner functions that remember variables from an enclosing scope, and late binding",
         "Generators: yield, next(), and StopIteration",
         "File I/O: open() modes (r, w, a, x, b, t, +), text versus binary",
         "Stream handles and the predefined streams sys.stdin, sys.stdout, sys.stderr",
-        "read(), readline(), readlines(), write(), readinto() with bytearray, close() and with",
-        "errno values (for example ENOENT, EACCES) on I/O errors"
+        "Read(), readline(), readlines(), write(), readinto() with bytearray, close() and with",
+        "Errno values (for example ENOENT, EACCES) on I/O errors"
       ],
       notes: ["Section 5 objectives: 5.1–5.4 (comprehensions, lambdas, closures, generators, file processing)"],
       labs: [

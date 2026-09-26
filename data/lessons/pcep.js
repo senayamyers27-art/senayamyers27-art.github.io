@@ -554,7 +554,7 @@ CertHub.addLessons("pcep", [
   ]
  },
  {
-  "t": "if, if-else and if-elif-else statements, and why the order of elif conditions matters",
+  "t": "If, if-else and if-elif-else statements, and why the order of elif conditions matters",
   "body": [
    "Conditional statements let a program choose what to do based on data. The simplest form is `if`: a header line with a condition and a colon, followed by an indented block. If the condition is true, the block runs; if not, Python skips it and carries on after the block.",
    "Adding `else` gives a two-way choice. The `else:` line sits at the same indentation as its `if` and has no condition of its own; its block runs exactly when the `if` condition is false. One of the two blocks always runs, never both.",
@@ -730,7 +730,7 @@ CertHub.addLessons("pcep", [
   ]
  },
  {
-  "t": "while loops, loop conditions and avoiding infinite loops",
+  "t": "While loops, loop conditions and avoiding infinite loops",
   "body": [
    "A `while` loop repeats a block as long as its condition is true. Python checks the condition before each pass (iteration). If it is true, the body runs, then Python goes back and checks again. When it is false, the loop ends and execution continues after the block. If the condition is false the very first time, the body never runs at all.",
    "```python\ncount = 3\nwhile count > 0:\n    print(count)\n    count -= 1\nprint(\"Liftoff\")   # prints 3, 2, 1, Liftoff\n```",
@@ -776,7 +776,7 @@ CertHub.addLessons("pcep", [
   ]
  },
  {
-  "t": "for loops over range() with start, stop and step, including negative steps and empty ranges",
+  "t": "For loops over range() with start, stop and step, including negative steps and empty ranges",
   "body": [
    "A `for` loop runs its body once for each item in a sequence. To repeat something a known number of times, you usually loop over `range()`, which produces a series of integers on demand. The loop variable takes each value in turn.",
    "`range()` takes one, two or three integer arguments. `range(stop)` counts from 0 up to but not including `stop`: `range(4)` gives 0, 1, 2, 3. `range(start, stop)` counts from `start` up to but not including `stop`: `range(2, 5)` gives 2, 3, 4. `range(start, stop, step)` moves by `step` each time: `range(0, 10, 3)` gives 0, 3, 6, 9. The stop value is always excluded, which is the most important rule to remember.",
@@ -865,7 +865,7 @@ CertHub.addLessons("pcep", [
   ]
  },
  {
-  "t": "break and continue, and how break affects only the innermost loop",
+  "t": "Break and continue, and how break affects only the innermost loop",
   "body": [
    "Normally a loop runs its whole body on every iteration and stops only when its condition fails or its sequence runs out. Two keywords let you change that from inside the body. `break` ends the loop immediately; execution jumps to the first statement after the loop. `continue` ends only the current iteration; the rest of the body is skipped and the loop moves on to its next iteration (a `while` loop re-checks its condition, a `for` loop takes the next item).",
    "```python\nfor n in range(1, 8):\n    if n == 3:\n        continue      # skip 3\n    if n == 6:\n        break         # stop completely at 6\n    print(n, end=\" \")\n# output: 1 2 4 5\n```",
@@ -908,7 +908,7 @@ CertHub.addLessons("pcep", [
   ]
  },
  {
-  "t": "while-else and for-else: when the else clause runs and when break skips it",
+  "t": "While-else and for-else: when the else clause runs and when break skips it",
   "body": [
    "Python lets a loop have an `else` clause, which surprises people who know `else` only from `if`. The `else` block is written at the same indentation as the `for` or `while` header and runs once, after the loop, if the loop finished normally. \"Normally\" means the `while` condition became false or the `for` loop ran out of items. If the loop was ended by `break`, the `else` block is skipped.",
    "```python\nfor n in [3, 7, 9]:\n    if n % 2 == 0:\n        print(\"Found even\", n)\n        break\nelse:\n    print(\"No even numbers\")   # runs: no break happened\n```",
@@ -1426,7 +1426,7 @@ CertHub.addLessons("pcep", [
     "Dictionary-like ordering that compares strings character by character by code point."
    ],
    [
-    "ord() and chr()",
+    "Ord() and chr()",
     "ord() gives a character's code point; chr() gives the character for a code point."
    ]
   ],
@@ -1633,7 +1633,7 @@ CertHub.addLessons("pcep", [
   ]
  },
  {
-  "t": "return and yield, returning several values as a tuple, the None value",
+  "t": "Return and yield, returning several values as a tuple, the None value",
   "body": [
    "The `return` statement ends a function immediately and sends a value back to the caller. The call expression then evaluates to that value, so you can assign it, print it or use it in a larger expression: `total = add(2, 3)`. Any code after an executed `return` in the same function is skipped. A function can contain several `return` statements, for example one in each branch of an `if`, but only one of them runs per call.",
    "```python\ndef sign(n):\n    if n > 0:\n        return \"positive\"\n    elif n < 0:\n        return \"negative\"\n    return \"zero\"\n\nprint(sign(-4))   # negative\n```",
@@ -1967,7 +1967,7 @@ CertHub.addLessons("pcep", [
   ]
  },
  {
-  "t": "try-except, except with several exceptions, bare except and except Exception",
+  "t": "Try-except, except with several exceptions, bare except and except Exception",
   "body": [
    "Exception handling lets your program respond to errors instead of crashing. You put code that might fail in a `try` block and the recovery code in one or more `except` blocks. If no exception occurs in the `try` block, all `except` blocks are skipped. If an exception occurs, the rest of the `try` block is abandoned immediately, and Python looks for the first `except` clause whose type matches the exception or one of its parent classes. If one matches, its block runs and execution continues after the whole statement. If none matches, the exception continues upward as if there were no handler.",
    "```python\ntry:\n    n = int(input(\"Number: \"))\n    print(100 / n)\nexcept ValueError:\n    print(\"That was not a whole number\")\nexcept ZeroDivisionError:\n    print(\"Zero is not allowed\")\nprint(\"Carrying on\")\n```",

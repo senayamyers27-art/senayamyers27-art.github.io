@@ -269,7 +269,7 @@ CertHub.addLessons("pcep", [
       ["Si el usuario escribe 5, ¿qué muestra print(input() * 2)?", "55, porque input() devuelve la cadena \"5\" y * la replica."],
       ["¿Qué hace int(input()) cuando el usuario escribe 7.0?", "Lanza ValueError, porque int() no puede interpretar una cadena que contiene un punto decimal."]
     ] },
-  { t: "if, if-else and if-elif-else statements, and why the order of elif conditions matters", tt: "Instrucciones if, if-else e if-elif-else, y por qué importa el orden de las condiciones elif",
+  { t: "If, if-else and if-elif-else statements, and why the order of elif conditions matters", tt: "Instrucciones if, if-else e if-elif-else, y por qué importa el orden de las condiciones elif",
     body: [
       "Las instrucciones condicionales permiten que un programa elija qué hacer según los datos. La forma más simple es `if`: una línea de encabezado con una condición y dos puntos, seguida de un bloque indentado. Si la condición es verdadera, el bloque se ejecuta; si no, Python lo salta y continúa después del bloque.",
       "Agregar `else` da una elección de dos caminos. La línea `else:` está a la misma indentación que su `if` y no tiene condición propia; su bloque se ejecuta exactamente cuando la condición del `if` es falsa. Uno de los dos bloques siempre se ejecuta, nunca ambos.",
@@ -359,7 +359,7 @@ CertHub.addLessons("pcep", [
       ["¿Qué devuelve una función con cuerpo pass?", "None, como cualquier función que termina sin una instrucción return."],
       ["En un bucle, ¿cuál es la diferencia entre pass y continue?", "pass no hace nada y la ejecución continúa con la siguiente línea; continue salta el resto de la iteración y empieza la siguiente."]
     ] },
-  { t: "while loops, loop conditions and avoiding infinite loops", tt: "Bucles while, condiciones de bucle y cómo evitar bucles infinitos",
+  { t: "While loops, loop conditions and avoiding infinite loops", tt: "Bucles while, condiciones de bucle y cómo evitar bucles infinitos",
     body: [
       "Un bucle `while` repite un bloque mientras su condición sea verdadera. Python comprueba la condición antes de cada pasada (iteración). Si es verdadera, el cuerpo se ejecuta y luego Python vuelve y la comprueba otra vez. Cuando es falsa, el bucle termina y la ejecución continúa después del bloque. Si la condición es falsa desde la primera vez, el cuerpo nunca se ejecuta.",
       "```python\ncount = 3\nwhile count > 0:\n    print(count)\n    count -= 1\nprint(\"Liftoff\")   # imprime 3, 2, 1, Liftoff\n```",
@@ -382,7 +382,7 @@ CertHub.addLessons("pcep", [
       ["¿Qué pasa con n = 0 seguido de while n: print(n)?", "No se imprime nada; 0 es falsy, así que el cuerpo nunca se ejecuta."],
       ["¿Cómo se termina normalmente un bucle while True?", "Con una instrucción break dentro del cuerpo cuando se cumple alguna condición (o con una excepción o un return)."]
     ] },
-  { t: "for loops over range() with start, stop and step, including negative steps and empty ranges", tt: "Bucles for sobre range() con start, stop y step, incluidos pasos negativos y rangos vacíos",
+  { t: "For loops over range() with start, stop and step, including negative steps and empty ranges", tt: "Bucles for sobre range() con start, stop y step, incluidos pasos negativos y rangos vacíos",
     body: [
       "Un bucle `for` ejecuta su cuerpo una vez por cada elemento de una secuencia. Para repetir algo una cantidad conocida de veces, normalmente recorres `range()`, que produce una serie de enteros bajo demanda. La variable del bucle toma cada valor por turnos.",
       "`range()` recibe uno, dos o tres argumentos enteros. `range(stop)` cuenta desde 0 hasta `stop` sin incluirlo: `range(4)` da 0, 1, 2, 3. `range(start, stop)` cuenta desde `start` hasta `stop` sin incluirlo: `range(2, 5)` da 2, 3, 4. `range(start, stop, step)` avanza `step` cada vez: `range(0, 10, 3)` da 0, 3, 6, 9. El valor de stop siempre se excluye, y esa es la regla más importante que debes recordar.",
@@ -428,7 +428,7 @@ CertHub.addLessons("pcep", [
       ["Después de nums = [1, 2] y for n in nums: n = n * 10, ¿cuánto vale nums?", "[1, 2]; volver a vincular la variable del bucle no modifica la lista."],
       ["¿Qué obtienes al recorrer directamente un diccionario?", "Sus claves."]
     ] },
-  { t: "break and continue, and how break affects only the innermost loop", tt: "break y continue, y por qué break solo afecta al bucle más interno",
+  { t: "Break and continue, and how break affects only the innermost loop", tt: "break y continue, y por qué break solo afecta al bucle más interno",
     body: [
       "Normalmente un bucle ejecuta todo su cuerpo en cada iteración y se detiene solo cuando su condición falla o su secuencia se agota. Dos palabras clave te permiten cambiar eso desde dentro del cuerpo. `break` termina el bucle de inmediato; la ejecución salta a la primera instrucción después del bucle. `continue` termina solo la iteración actual; el resto del cuerpo se salta y el bucle pasa a su siguiente iteración (un bucle `while` vuelve a comprobar su condición, un bucle `for` toma el siguiente elemento).",
       "```python\nfor n in range(1, 8):\n    if n == 3:\n        continue      # salta el 3\n    if n == 6:\n        break         # se detiene por completo en 6\n    print(n, end=\" \")\n# salida: 1 2 4 5\n```",
@@ -451,7 +451,7 @@ CertHub.addLessons("pcep", [
       ["Si break se ejecuta en un bucle interior, ¿qué pasa con el bucle exterior?", "Continúa con su siguiente iteración; solo se sale del bucle más interno."],
       ["¿Por qué continue puede causar un bucle while infinito?", "Si la variable del bucle se actualiza después del continue, esa actualización se salta, así que la condición puede no cambiar nunca."]
     ] },
-  { t: "while-else and for-else: when the else clause runs and when break skips it", tt: "while-else y for-else: cuándo se ejecuta la cláusula else y cuándo break la salta",
+  { t: "While-else and for-else: when the else clause runs and when break skips it", tt: "while-else y for-else: cuándo se ejecuta la cláusula else y cuándo break la salta",
     body: [
       "Python permite que un bucle tenga una cláusula `else`, lo cual sorprende a quienes solo conocen `else` en `if`. El bloque `else` se escribe a la misma indentación que el encabezado del `for` o del `while` y se ejecuta una vez, después del bucle, si el bucle terminó normalmente. \"Normalmente\" significa que la condición del `while` se volvió falsa o que el bucle `for` se quedó sin elementos. Si el bucle terminó con `break`, el bloque `else` se salta.",
       "```python\nfor n in [3, 7, 9]:\n    if n % 2 == 0:\n        print(\"Found even\", n)\n        break\nelse:\n    print(\"No even numbers\")   # se ejecuta: no hubo break\n```",
@@ -820,7 +820,7 @@ CertHub.addLessons("pcep", [
       ["¿Qué pasa si defines dos funciones llamadas f?", "La segunda definición reemplaza a la primera; las llamadas usan la más reciente."],
       ["def a(): return b() se define antes de def b(): return 1, y luego se llama a a() al final. ¿Funciona?", "Sí. Cuando a() se ejecuta, b ya existe, así que la búsqueda tiene éxito y devuelve 1."]
     ] },
-  { t: "return and yield, returning several values as a tuple, the None value", tt: "return y yield, devolver varios valores como una tupla, el valor None",
+  { t: "Return and yield, returning several values as a tuple, the None value", tt: "return y yield, devolver varios valores como una tupla, el valor None",
     body: [
       "La instrucción `return` termina una función de inmediato y envía un valor de vuelta a quien la llamó. La expresión de llamada entonces se evalúa a ese valor, así que puedes asignarlo, imprimirlo o usarlo en una expresión más grande: `total = add(2, 3)`. Cualquier código posterior a un `return` ejecutado en la misma función se omite. Una función puede contener varias instrucciones `return`, por ejemplo una en cada rama de un `if`, pero solo una de ellas se ejecuta en cada llamada.",
       "```python\ndef sign(n):\n    if n > 0:\n        return \"positive\"\n    elif n < 0:\n        return \"negative\"\n    return \"zero\"\n\nprint(sign(-4))   # negative\n```",
@@ -987,7 +987,7 @@ CertHub.addLessons("pcep", [
       ["¿Qué lanza {\"a\": 1}.get(\"b\")?", "Nada. get() devuelve None para una clave inexistente; solo indexar con [] lanza KeyError."],
       ["¿Qué excepción lanza a, b = [1, 2, 3]?", "ValueError: too many values to unpack (demasiados valores para desempaquetar)."]
     ] },
-  { t: "try-except, except with several exceptions, bare except and except Exception", tt: "try-except, except con varias excepciones, except solo y except Exception",
+  { t: "Try-except, except with several exceptions, bare except and except Exception", tt: "try-except, except con varias excepciones, except solo y except Exception",
     body: [
       "El manejo de excepciones permite que tu programa responda a los errores en lugar de fallar. Pones el código que podría fallar en un bloque `try` y el código de recuperación en uno o más bloques `except`. Si no ocurre ninguna excepción en el bloque `try`, todos los bloques `except` se omiten. Si ocurre una excepción, el resto del bloque `try` se abandona de inmediato, y Python busca la primera cláusula `except` cuyo tipo coincida con la excepción o con una de sus clases padre. Si una coincide, se ejecuta su bloque y la ejecución continúa después de toda la instrucción. Si ninguna coincide, la excepción sigue hacia arriba como si no hubiera ningún manejador.",
       "```python\ntry:\n    n = int(input(\"Number: \"))\n    print(100 / n)\nexcept ValueError:\n    print(\"That was not a whole number\")\nexcept ZeroDivisionError:\n    print(\"Zero is not allowed\")\nprint(\"Carrying on\")\n```",

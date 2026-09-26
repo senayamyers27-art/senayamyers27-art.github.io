@@ -84,7 +84,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  "t": "dir() to list the names a module defines",
+  "t": "Dir() to list the names a module defines",
   "body": [
    "The built-in function `dir()` lets you look inside a module, object or class and see which names it holds. It returns a sorted list of strings. It is a discovery tool: when you import a module you have never used, `dir()` shows you what it offers without opening documentation, and in the exam it is how questions check whether you understand which names an import created.",
    "Called with a module object, `dir(math)` returns every attribute name defined in that module, including dunder (double-underscore) names such as `__name__`, `__doc__` and `__file__` alongside functions such as `ceil` and `sqrt`. The module must be imported under a name you can pass in: after `import math` you call `dir(math)`; after `import math as m` you call `dir(m)`. After `from math import sqrt`, you cannot call `dir(math)` because the name `math` does not exist in your namespace.",
@@ -121,7 +121,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  "t": "sys.path: where Python searches for modules and how to extend it at runtime",
+  "t": "Sys.path: where Python searches for modules and how to extend it at runtime",
   "body": [
    "When you write `import something`, Python has to find a file or directory called `something`. After checking modules it has already loaded (kept in `sys.modules`) and its built-in modules, it searches a list of directories stored in `sys.path`. Understanding that list explains most ModuleNotFoundError messages and is a named PCAP objective.",
    "`sys.path` is an ordinary Python list of strings. Its first entry is normally the directory containing the script you ran (or an empty string meaning the current directory when you work interactively). After that come any directories named in the `PYTHONPATH` environment variable, then the standard library locations, and then the `site-packages` directory where installed third-party packages live. Python checks the entries in order and uses the first match it finds, so earlier entries win.",
@@ -162,7 +162,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  "t": "math module: ceil(), floor(), trunc(), factorial(), hypot(), sqrt()",
+  "t": "Math module: ceil(), floor(), trunc(), factorial(), hypot(), sqrt()",
   "body": [
    "The `math` module provides mathematical functions for real numbers. PCAP picks out a handful and tests the details: what each returns, what type it returns, and how it behaves with negative numbers. Import it with `import math` and call functions as `math.name()`.",
    "Three functions turn a float into an integer, and they differ only in the direction they move. `math.floor(x)` returns the largest integer less than or equal to x, so it always moves down the number line: `floor(2.7)` is 2 and `floor(-2.7)` is -3. `math.ceil(x)` (ceiling) returns the smallest integer greater than or equal to x, always moving up: `ceil(2.1)` is 3 and `ceil(-2.7)` is -2. `math.trunc(x)` simply chops off the fractional part, moving toward zero: `trunc(2.7)` is 2 and `trunc(-2.7)` is -2. In Python 3 all three return an `int`, not a float. For positive numbers `floor` and `trunc` agree; for negative numbers `ceil` and `trunc` agree.",
@@ -208,7 +208,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  "t": "random module: random(), seed(), choice(), sample()",
+  "t": "Random module: random(), seed(), choice(), sample()",
   "body": [
    "The `random` module generates pseudo-random numbers. They are called pseudo-random because they come from a deterministic algorithm: given the same starting state, it produces the same sequence every time. That is perfect for games, simulations and tests, but it also means `random` must never be used for passwords, tokens or anything security-related; Python provides the `secrets` module for that purpose.",
    "`random.random()` takes no arguments and returns a float in the half-open range from 0.0 up to, but not including, 1.0. Many other functions build on it. To get a random integer you would normally use `random.randint(a, b)`, which includes both ends, or `random.randrange(start, stop)`, which excludes stop like `range()` does.",
@@ -245,7 +245,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  "t": "platform module: platform(), machine(), processor(), system(), version(), python_implementation(), python_version_tuple()",
+  "t": "Platform module: platform(), machine(), processor(), system(), version(), python_implementation(), python_version_tuple()",
   "body": [
    "The `platform` module lets a program find out about the computer and the Python interpreter it is running on. That is useful for bug reports, for choosing file paths or commands that differ between operating systems, and for checking that the interpreter is new enough. Every function listed in the objective returns a string, except `python_version_tuple()`, which returns a tuple of strings. The exact values depend entirely on the machine, so exam questions ask about what kind of information each function gives rather than a specific output.",
    "`platform.platform()` returns a single human-readable string describing the underlying platform, combining the operating system name, release and other details, for example something like `Linux-6.5.0-x86_64-with-glibc2.35` or `Windows-10-10.0.19045-SP0`. It accepts optional arguments such as `aliased` and `terse`; `terse=True` asks for a shorter string.",
@@ -398,7 +398,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  "t": "try/except, multiple except branches and the order they are checked",
+  "t": "Try/except, multiple except branches and the order they are checked",
   "body": [
    "An exception is Python's way of signalling that something went wrong while a program was running: dividing by zero, converting 'abc' to an int, reading a missing dictionary key. If nothing handles the exception, the program stops and prints a traceback. The `try` statement lets you handle it instead, so the program can recover, report a friendly message or try something else.",
    "You put the risky code in a `try` block and one or more `except` branches after it. Python runs the `try` block. If no exception occurs, all `except` branches are skipped. If an exception occurs, Python abandons the rest of the `try` block immediately (the remaining lines never run) and looks through the `except` branches from top to bottom. The first branch whose exception class matches, either the same class or a superclass of the raised exception, is executed, and all later branches are ignored. At most one `except` branch runs for a given exception.",
@@ -476,7 +476,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  "t": "except … as e and the args attribute",
+  "t": "Except … as e and the args attribute",
   "body": [
    "An exception is not just a signal; it is an object, an instance of an exception class. When you catch it, you can give that object a name with `as` and then inspect it. The syntax is `except ValueError as e:`, and inside the branch the variable `e` refers to the exception instance that was raised.",
    "Every exception object has an attribute called `args`, a tuple of the arguments passed to the exception's constructor. When Python itself raises an exception, `args` usually contains a single message string. When you raise one yourself, `args` contains whatever you passed. `raise ValueError('bad value', 42)` produces an exception whose `args` is `('bad value', 42)`, and `raise ValueError()` produces empty `args`, `()`.",
@@ -514,7 +514,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  "t": "else and finally branches and when each runs",
+  "t": "Else and finally branches and when each runs",
   "body": [
    "A `try` statement can have two more optional branches beyond `except`. Knowing exactly when each runs is a reliable source of exam questions, usually in the form of code that prints letters from different branches and asks what the output is.",
    "The `else` branch comes after all `except` branches and runs only if the `try` block finished without raising any exception. It is where you put code that should happen only on success but that you do not want protected by the handlers. Keeping the `try` block small and moving follow-up work into `else` means an unexpected error in that follow-up code is not accidentally caught by a handler meant for something else. A `try` with `else` must have at least one `except` branch.",
@@ -592,7 +592,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  "t": "raise, raise with an instance, and a bare raise to re-raise",
+  "t": "Raise, raise with an instance, and a bare raise to re-raise",
   "body": [
    "Exceptions are not only raised by Python; your own code can raise them with the `raise` statement. You do this when a function detects a situation it cannot sensibly handle, such as a negative age or an empty list where data is required. Raising an exception hands the problem to the caller in a way that cannot be silently ignored.",
    "The statement takes an exception class or an exception instance. `raise ValueError` names a class; Python creates an instance for you with no arguments, so its `args` is empty. `raise ValueError('age must be positive')` creates an instance yourself, passing a message that ends up in `args` and in the printed traceback. Passing a message is almost always better, because it tells whoever reads the error what went wrong. Whatever you raise must be a class or instance derived from `BaseException`; raising anything else, like a string, is a TypeError.",
@@ -630,7 +630,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  "t": "assert and AssertionError",
+  "t": "Assert and AssertionError",
   "body": [
    "The `assert` statement checks a condition that you, the programmer, believe must be true at a certain point. If the condition is true, nothing happens and execution continues. If it is false, Python raises `AssertionError`. Assertions are a debugging aid: they catch impossible states early, close to their cause, instead of letting bad data travel further and fail somewhere confusing.",
    "The syntax has an optional message: `assert condition` or `assert condition, message`. The message becomes the exception's argument, so it appears in the traceback and in `e.args`. The condition is any expression; Python evaluates its truth value, so zero, empty strings and empty containers count as false, just as in an `if`.",
@@ -782,7 +782,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  "t": "ord() and chr()",
+  "t": "Ord() and chr()",
   "body": [
    "Two built-in functions connect characters and their Unicode code points. `ord(ch)` takes a string of exactly one character and returns its code point as an integer. `chr(n)` does the reverse: it takes an integer code point and returns the one-character string for it. They are inverses of each other, so `chr(ord(c)) == c` for any single character c, and `ord(chr(n)) == n` for any valid code point n.",
    "```python\nprint(ord('A'), ord('a'), ord('0'), ord(' '))  # 65 97 48 32\nprint(chr(66), chr(122))                       # B z\nprint(ord('a') - ord('A'))                     # 32\nprint(chr(ord('c') + 1))                       # d\n```",
@@ -1063,7 +1063,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  "t": "join(), split(), find(), rfind(), index(), and the difference between find and index",
+  "t": "Join(), split(), find(), rfind(), index(), and the difference between find and index",
   "body": [
    "These methods break strings apart, glue them together and search inside them. They are among the most used in real code and the most tested in PCAP.",
    "`split()` breaks a string into a list of substrings. With no argument it splits on runs of whitespace and discards leading and trailing whitespace, so `'  a  b\\tc '.split()` is `['a', 'b', 'c']`. With a separator argument it splits on exactly that string and keeps empty pieces: `'a,,b'.split(',')` is `['a', '', 'b']`. An optional second argument limits the number of splits.",
@@ -1109,7 +1109,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  "t": "sorted() on strings versus list.sort()",
+  "t": "Sorted() on strings versus list.sort()",
   "body": [
    "Python gives you two ways to sort, and they behave differently in ways the exam checks directly. The built-in function `sorted()` accepts any iterable, including a string, and returns a new list containing the items in order. The method `list.sort()` exists only on lists, sorts that list in place, and returns None.",
    "Apply `sorted()` to a string and you get a list of its characters, not a string: `sorted('python')` is `['h', 'n', 'o', 'p', 't', 'y']`. To turn it back into a string, join it: `''.join(sorted('python'))` gives 'hnopty'. The original string is untouched, as it must be, since strings are immutable. That is also why strings have no `sort()` method at all; `'python'.sort()` raises AttributeError.",
@@ -1468,7 +1468,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  "t": "isinstance(), issubclass(), and the is / is not operators versus ==",
+  "t": "Isinstance(), issubclass(), and the is / is not operators versus ==",
   "body": [
    "These tools answer different questions: what kind of thing is this object, how are these classes related, and are these two names referring to the same object or just equal values? Mixing them up is a common source of wrong exam answers.",
    "`isinstance(obj, Class)` returns True if the object is an instance of that class or of any of its subclasses. So with `class Dog(Animal):` and `d = Dog()`, both `isinstance(d, Dog)` and `isinstance(d, Animal)` are True, and so is `isinstance(d, object)`, since everything is an object. The second argument can be a tuple of classes, and the result is True if any matches: `isinstance(x, (int, float))`. Prefer `isinstance` over `type(x) == Dog` checks, because comparing types exactly ignores inheritance.",
@@ -1628,7 +1628,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  "t": "map() and filter(), and the fact that they return one-shot iterators",
+  "t": "Map() and filter(), and the fact that they return one-shot iterators",
   "body": [
    "`map()` and `filter()` apply a function across the items of an iterable. `map(function, iterable)` calls the function on each item and produces the results. `filter(function, iterable)` calls the function on each item and keeps only the items for which it returns a true value. Both are often used with lambdas.",
    "```python\nnums = [1, 2, 3, 4, 5]\nprint(list(map(lambda n: n * n, nums)))         # [1, 4, 9, 16, 25]\nprint(list(filter(lambda n: n % 2 == 1, nums))) # [1, 3, 5]\nprint(list(map(str, nums)))                     # ['1', '2', '3', '4', '5']\n```",
@@ -1843,7 +1843,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  "t": "read(), readline(), readlines(), write(), readinto() with bytearray, close() and with",
+  "t": "Read(), readline(), readlines(), write(), readinto() with bytearray, close() and with",
   "body": [
    "Once a file is open, its handle offers methods for moving data in and out. Each reads or writes from the current position and moves it forward, so successive calls continue where the previous one stopped.",
    "`read()` with no argument reads everything from the current position to the end and returns it as one string (text mode) or bytes object (binary mode). `read(n)` reads at most n characters or bytes. At end of file, `read()` returns an empty string or empty bytes, which is how you detect that nothing is left. `readline()` reads one line including its trailing newline, `'\\n'`, and returns an empty string at end of file; a blank line in the middle of a file comes back as `'\\n'`, not as an empty string. `readlines()` reads all remaining lines and returns them as a list of strings, each still ending with its newline. The handle is also iterable: `for line in f:` reads one line at a time, which is memory-efficient for large files.",
@@ -1885,7 +1885,7 @@ CertHub.addLessons("pcap", [
   ]
  },
  {
-  "t": "errno values (for example ENOENT, EACCES) on I/O errors",
+  "t": "Errno values (for example ENOENT, EACCES) on I/O errors",
   "body": [
    "Input and output can fail for many reasons outside your program's control: the file does not exist, you lack permission, the disk is full. When an operating system call fails, Python raises `OSError` (or one of its subclasses), and the exception carries the operating system's error code in its `errno` attribute. Checking that code lets you respond precisely to what went wrong.",
    "The codes are integers, but their numeric values can differ between operating systems, so you should never compare against raw numbers. Instead, the `errno` module provides named constants. The ones PCAP expects you to recognize include `errno.ENOENT` (no such file or directory), `errno.EACCES` (permission denied), `errno.EEXIST` (file exists), `errno.EISDIR` (is a directory), `errno.EBADF` (bad file descriptor, for example using an invalid handle), `errno.EMFILE` (too many open files), `errno.ENOSPC` (no space left on device) and `errno.EFBIG` (file too large).",

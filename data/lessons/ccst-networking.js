@@ -1751,7 +1751,7 @@ CertHub.addLessons("ccst-networking", [
   ]
  },
  {
-  "t": "ping, tracert/traceroute, ipconfig/ifconfig/ip and nslookup: running them and reading the results",
+  "t": "Ping, tracert/traceroute, ipconfig/ifconfig/ip and nslookup: running them and reading the results",
   "body": [
    "These four tool families answer the most common questions in network support: what are my settings, can I reach it, which path does traffic take, and does the name resolve. Knowing how to run each and read its output is essential for the exam and daily work.",
    "`ipconfig` (Windows), `ifconfig` (macOS and older Linux) and `ip addr` (modern Linux) show your configuration. Check that the adapter is connected, the IPv4 address is valid for your network (not 169.254.x.x), the subnet mask matches the network, a default gateway is present and, with `ipconfig /all`, that DNS servers and the DHCP server are listed. Many problems are solved just by reading this output carefully.",

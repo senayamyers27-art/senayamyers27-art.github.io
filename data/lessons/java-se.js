@@ -461,7 +461,7 @@ CertHub.addLessons("java-se", [
   ]
  },
  {
-  "t": "if/else and the ternary operator",
+  "t": "If/else and the ternary operator",
   "body": [
    "An `if` statement runs a block only when its condition is `true`. The condition must be a `boolean` expression; unlike C, Java will not treat an `int` as true or false, so `if (count)` does not compile. An optional `else` runs when the condition is `false`, and you can chain decisions with `else if`. Only the first branch whose condition is true runs.",
    "Braces are optional when a branch has a single statement, and this is where many exam questions hide. Without braces, only the next statement belongs to the `if`, no matter how it is indented. An `else` always attaches to the nearest preceding unmatched `if`, which is known as the dangling else. Reading indentation instead of structure leads to the wrong answer.",
@@ -691,7 +691,7 @@ CertHub.addLessons("java-se", [
   ]
  },
  {
-  "t": "while, do-while, for and enhanced for loops",
+  "t": "While, do-while, for and enhanced for loops",
   "body": [
    "Java has four loop forms. A `while` loop checks its `boolean` condition before each iteration, so its body may run zero times. A `do-while` loop runs the body first and checks the condition afterwards, so its body always runs at least once. The `do-while` must end with a semicolon after the condition: `do { ... } while (x < 3);`. Leaving it out is a compile error.",
    "The basic `for` loop has three parts in parentheses: initialization, condition and update, as in `for (int i = 0; i < 5; i++)`. The initialization runs once, the condition is checked before each iteration, and the update runs after each iteration. All three parts are optional, so `for (;;)` is an infinite loop. The initialization can declare several variables of the same type (`int i = 0, j = 10`) but not of different types, and the update can list several expressions separated by commas (`i++, j--`). A variable declared in the initialization exists only inside the loop.",
@@ -737,7 +737,7 @@ CertHub.addLessons("java-se", [
   ]
  },
  {
-  "t": "break and continue, including labeled statements",
+  "t": "Break and continue, including labeled statements",
   "body": [
    "`break` and `continue` change the normal flow of a loop. `break` ends the innermost enclosing loop (or `switch`) immediately, and execution continues with the statement after it. `continue` skips the rest of the current iteration and goes straight to the next one. In a `for` loop, `continue` still runs the update expression (such as `i++`) before testing the condition again; in a `while` or `do-while` loop it jumps to the condition test.",
    "Without a label, both statements affect only the innermost loop. That is often not what you want with nested loops. A label is an identifier followed by a colon placed before a statement, such as `outer: for (...)`. Then `break outer;` ends the labeled loop entirely, and `continue outer;` ends the current iteration of the inner loop and moves on to the next iteration of the labeled outer loop.",
@@ -1197,7 +1197,7 @@ CertHub.addLessons("java-se", [
   ]
  },
  {
-  "t": "instanceof pattern matching and flow scoping",
+  "t": "Instanceof pattern matching and flow scoping",
   "body": [
    "The `instanceof` operator tests whether an object is an instance of a type. Before pattern matching, a test was usually followed by a cast: `if (obj instanceof String) { String s = (String) obj; ... }`. Pattern matching combines the test, the cast and the variable declaration: `if (obj instanceof String s) { ... }`. If the test succeeds, `s` is a `String` variable ready to use. If `obj` is `null`, `instanceof` is `false` and nothing is bound.",
    "The variable introduced by a pattern is a pattern variable, and its scope follows flow scoping: it is in scope only where the compiler can prove the pattern matched. In `if (o instanceof String s) { ... } else { ... }`, `s` is usable in the `if` block and not in the `else` block. You can also use it later in the same condition, after `&&`: `if (o instanceof String s && s.length() > 3)` is fine, because the right side only runs when the left side is true.",
@@ -1381,7 +1381,7 @@ CertHub.addLessons("java-se", [
   ]
  },
  {
-  "t": "try/catch/finally flow, including return in try and finally",
+  "t": "Try/catch/finally flow, including return in try and finally",
   "body": [
    "A `try` block contains code that might throw. It must be followed by at least one `catch` block, a `finally` block, or both; a `try` alone does not compile (try-with-resources is the one exception, covered later). Braces are required for every block, even with a single statement. When an exception is thrown in the `try`, the rest of the `try` is skipped, and Java checks the `catch` blocks from top to bottom, running the first one whose type matches. If none matches, the exception propagates to the caller after the `finally` runs.",
    "The `finally` block runs whether the `try` completes normally, a `catch` handles an exception, or an exception escapes uncaught. That makes it the place for cleanup. The only practical ways to skip it are for the JVM to stop, for example with `System.exit()`, or for the thread to die abruptly.",
@@ -1519,7 +1519,7 @@ CertHub.addLessons("java-se", [
   ]
  },
  {
-  "t": "try-with-resources, AutoCloseable and reverse close order",
+  "t": "Try-with-resources, AutoCloseable and reverse close order",
   "body": [
    "Many objects hold resources outside the JVM, such as open files, network sockets and database connections, and they must be closed when you are done. Closing them reliably in a `finally` block is verbose and easy to get wrong. The try-with-resources statement automates it: resources declared in parentheses after `try` are closed automatically when the block finishes, whether it completes normally or throws.",
    "A resource must implement `java.lang.AutoCloseable`, whose single method is `void close() throws Exception`. `java.io.Closeable` extends it with `close() throws IOException` and is implemented by streams, readers and writers. Declaring a variable of a class that implements neither interface in the resource list is a compile error. Your own classes can implement `AutoCloseable` and be used the same way.",
@@ -2600,7 +2600,7 @@ CertHub.addLessons("java-se", [
   ]
  },
  {
-  "t": "module-info.java: module, requires, requires transitive, exports, opens",
+  "t": "Module-info.java: module, requires, requires transitive, exports, opens",
   "body": [
    "The Java Platform Module System (JPMS), introduced in Java 9, groups packages into named modules with explicit dependencies and explicit public APIs. A module is described by a file named `module-info.java` placed at the root of the module's source folder, next to the top-level package directories. It compiles to `module-info.class`. The module name usually follows reverse-domain style, like `com.shop.orders`, and it must be unique on the module path.",
    "```java\nmodule com.shop.orders {\n    requires java.sql;\n    requires transitive com.shop.model;\n    exports com.shop.orders.api;\n    exports com.shop.orders.spi to com.shop.plugins;\n    opens com.shop.orders.entity;\n}\n```",

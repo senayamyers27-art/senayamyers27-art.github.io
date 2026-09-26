@@ -655,7 +655,7 @@ CertHub.addLessons("linux-plus", [
   ]
  },
  {
-  "t": "systemd units: systemctl start/stop/enable/mask, status output, drop-in overrides with systemctl edit",
+  "t": "Systemd units: systemctl start/stop/enable/mask, status output, drop-in overrides with systemctl edit",
   "body": [
    "systemd manages almost everything that runs on a modern Linux system through units. A unit is a configuration object of a certain type, named by suffix: `.service` for daemons, `.socket` for socket activation, `.timer` for scheduled jobs, `.mount` for mounts, `.target` for groups of units, and more. `systemctl` is the tool you use to control them.",
    "The basic lifecycle commands act on the running system: `systemctl start httpd`, `stop`, `restart` (stop then start), and `reload` (ask the service to reread its config without stopping, if it supports that). Boot-time behavior is separate: `systemctl enable httpd` creates symlinks so the unit starts at boot in its target, and `disable` removes them. The two are independent, which is why `systemctl enable --now httpd` exists to do both at once. `systemctl is-active` and `is-enabled` answer each question in scripts.",

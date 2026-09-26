@@ -72,6 +72,12 @@
       if (active && !(S.quiz && !S.quiz.done) && (S.tab === "week" || S.tab === "learn")) render();
     });
     const p = loadProgress(C.id);
+    // Some lesson titles were capitalized (September 2026); keep "read" marks and ratings saved under the old title.
+    if (p.read || p.ratings) W.forEach(w => w.topics.forEach(t => {
+      if (!/^[A-Z][a-z]/.test(t)) return;
+      const ok = lessonKey(t[0].toLowerCase() + t.slice(1)), nk = lessonKey(t);
+      ["read", "ratings"].forEach(m => { const o = p[m]; if (o && o[ok] != null && o[nk] == null) { o[nk] = o[ok]; delete o[ok]; } });
+    }));
     if (!p.start) p.start = C.start || U.iso(U.nextMonday(today()));
     if (!p.examDate) p.examDate = C.examDate || U.iso(U.addDays(parseD(p.start), W.length * 7 + 1));
     S = { tab: TAB_IDS.includes(tab) ? tab : "week", viewWeek: null, quiz: null, fc: null, p };
@@ -534,12 +540,12 @@
     const b = badgeState(), h = S.p.handson || {}, sims = S.p.sims || {}, name = (CertHub.store.get("certhub:name") || "").trim();
     const hoN = HO ? HO.items.filter(x => h[x.id]).length : Object.keys(h).length, simN = Object.keys(sims).length;
     if (!b.earned) return `<h1>Certificate of completion</h1><p class="meta">Finish the plan first: read every lesson (${b.read} of ${b.total}) and score 80% or better on a practice exam (best so far: ${b.best || 0}%).</p><button class="btn ghost" data-tab="progress">Back to progress</button>`;
-    const li = `https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=${encodeURIComponent(`${C.short} ${C.exam} study plan (Cyber Cert Study)`)}&organizationName=${encodeURIComponent("Cyber Cert Study")}&issueYear=${today().getFullYear()}&issueMonth=${today().getMonth() + 1}`;
+    const li = `https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=${encodeURIComponent(`${C.short} ${C.exam} study plan (StudyToCert)`)}&organizationName=${encodeURIComponent("StudyToCert")}&issueYear=${today().getFullYear()}&issueMonth=${today().getMonth() + 1}`;
     return `<div class="no-print"><p class="crumbs"><button type="button" class="linkbtn" data-tab="progress">Progress</button> / Certificate</p>
       <div class="flex"><label class="grow">Name on the certificate <input type="text" id="certname" value="${esc(name)}" autocomplete="name"></label></div>
       <div class="btns"><button class="btn" data-act="printcheat">Print or save as PDF</button><button class="btn ghost" data-act="badge">Download image</button><a class="btn ghost" href="${esc(li)}" target="_blank" rel="noopener">Add to LinkedIn</a></div>
       <p class="note">This records that you completed a free study plan. It is not the vendor's certification; add the real one when you pass the exam.</p></div>
-      <div class="certificate panel"><p class="note">Cyber Cert Study · Certificate of completion</p>
+      <div class="certificate panel"><p class="note">StudyToCert · Certificate of completion</p>
       <h1>${esc(name || "Your name")}</h1><p>completed the free study plan for</p><h2>${esc(C.name)} (${esc(C.exam)})</h2>
       <ul class="clean"><li>${b.total} lessons read</li><li>Best practice exam: ${b.best}%</li>${hoN ? `<li>${hoN} hands-on exercises completed</li>` : ""}${simN ? `<li>${simN} exam simulations completed</li>` : ""}</ul>
       <p class="note">${esc(fmtLong(today()))}</p></div>`;

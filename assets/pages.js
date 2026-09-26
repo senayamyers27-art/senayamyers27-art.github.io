@@ -3,7 +3,7 @@
    what the code actually does, so update them whenever storage, hosting or tracking changes. */
 (function () {
   const EFFECTIVE = "September 26, 2026";
-  const SITE = "Cyber Cert Study";
+  const SITE = "StudyToCert";
   const U = CertHub.U;
   const contact = () => `<a href="https://github.com/senayamyers27-art/Claude.ai-stuff/security/advisories/new" target="_blank" rel="noopener">GitHub private reporting</a>`;
 
@@ -194,7 +194,7 @@
       : framed
       ? `<div class="status warn"><strong>This is a preview copy.</strong> To install, open the live site in your phone's browser (Safari on iPhone, Chrome on Android) and follow the steps below.</div>`
       : I.prompt
-      ? `<div class="btns"><button type="button" class="btn" data-gact="install">Install Cyber Cert Study</button></div>`
+      ? `<div class="btns"><button type="button" class="btn" data-gact="install">Install StudyToCert</button></div>`
       : "";
     const step = (n, t) => `<li><strong>${n}</strong> ${t}</li>`;
     return `<h1>Install the app</h1>
@@ -205,7 +205,7 @@
       ${step("Open the site in Safari.", "Installing works from Safari (and from Chrome or Edge on iOS 16.4 and later).")}
       ${step("Tap the Share button", "(the square with an arrow pointing up) at the bottom of the screen, or at the top on iPad.")}
       ${step("Scroll down and tap “Add to Home Screen”.", "If you don't see it, tap “Edit Actions” and add it.")}
-      ${step("Tap “Add”.", "The Cert Study icon appears on your home screen.")}
+      ${step("Tap “Add”.", "The StudyToCert icon appears on your home screen.")}
     </ol>
     <p class="note">On iPhone the installed app keeps its own storage, separate from Safari. If you already studied in Safari, use <strong>Copy backup</strong> there, then <strong>Restore from text</strong> in the app.</p>
 `], ["android", `    <h2${plat === "android" ? ' class="here"' : ""}>Android</h2>
@@ -217,7 +217,7 @@
 `], ["desktop", `    <h2${plat === "desktop" ? ' class="here"' : ""}>Computer (Chrome or Edge)</h2>
     <ol class="steps-list plain">
       ${step("Look for the install icon", "(a monitor with a down arrow) at the right end of the address bar, or open the browser menu.")}
-      ${step("Choose “Install Cyber Cert Study”.", "It opens in its own window and appears with your other apps.")}
+      ${step("Choose “Install StudyToCert”.", "It opens in its own window and appears with your other apps.")}
     </ol>
 `]].sort((x, y) => (y[0] === plat) - (x[0] === plat)).map(x => x[1]).join("")}
     <h2>Good to know</h2>

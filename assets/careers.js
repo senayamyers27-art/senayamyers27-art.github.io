@@ -40,10 +40,10 @@
       const want = location.hash.replace(/^#/, "") || document.body.dataset.route;
       if (want !== head) return; // moved on while loading
       if (!d.list) { shell(`<h1>Career paths</h1><p class="note">Career pages couldn't load. Check your connection and try again.</p>`); return; }
-      if (head === "careers") { shell(index(d.list)); document.title = "Career Paths · Cyber Cert Study"; return; }
+      if (head === "careers") { shell(index(d.list)); document.title = "Career Paths · StudyToCert"; return; }
       const c = d.list.find(x => "career-" + x.track === head);
       if (!c) { shell(index(d.list)); return; }
-      shell(track(c)); document.title = `${c.title} · Cyber Cert Study`;
+      shell(track(c)); document.title = `${c.title} · StudyToCert`;
     }
   };
 })();

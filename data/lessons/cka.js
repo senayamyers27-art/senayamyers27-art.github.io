@@ -101,7 +101,7 @@ CertHub.addLessons("cka", [
   ]
  },
  {
-  "t": "kubeadm init (pod network CIDR, control-plane endpoint), installing a CNI plugin, kubeadm join and bootstrap tokens",
+  "t": "Kubeadm init (pod network CIDR, control-plane endpoint), installing a CNI plugin, kubeadm join and bootstrap tokens",
   "body": [
    "Once hosts are prepared, `kubeadm init` turns the first machine into a control plane node. It generates a certificate authority and certificates, writes kubeconfig files, creates static Pod manifests for the API server, etcd, scheduler and controller-manager, starts them through the kubelet, and installs CoreDNS and kube-proxy.",
    "Two flags matter most. `--pod-network-cidr` tells the cluster which address range Pods will use, and it must match what your CNI plugin is configured to use and must not overlap your node or Service networks. For example, Flannel's default manifest expects `10.244.0.0/16`. `--control-plane-endpoint` sets a stable DNS name or IP for the API server, usually a load balancer address. You must set it at init time if you ever want to add more control plane nodes, because it is baked into certificates and kubeconfig files.",
@@ -227,7 +227,7 @@ CertHub.addLessons("cka", [
   ]
  },
  {
-  "t": "etcd backup and restore with etcdctl/etcdutl and the etcd PKI; pointing the etcd static Pod at a restored data directory",
+  "t": "Etcd backup and restore with etcdctl/etcdutl and the etcd PKI; pointing the etcd static Pod at a restored data directory",
   "body": [
    "Because etcd holds all cluster state, a snapshot of etcd is a backup of the cluster's configuration. The CKA regularly asks you to take one to a given path and later restore one. You need to know the tools, the certificates and how to repoint the etcd static Pod.",
    "`etcdctl` is the client that talks to a running etcd over the network. On a kubeadm cluster etcd requires mutual TLS, so you pass three files from `/etc/kubernetes/pki/etcd`: the CA, and a client certificate and key. The simplest way to find the right paths and endpoint is to read them from `/etc/kubernetes/manifests/etcd.yaml` (look at `--listen-client-urls`, `--trusted-ca-file`, `--cert-file` and `--key-file`). The server certificate works as a client certificate in most kubeadm setups, and a dedicated `healthcheck-client` certificate is also present.",
@@ -1002,7 +1002,7 @@ CertHub.addLessons("cka", [
   ]
  },
  {
-  "t": "kube-proxy modes (iptables, IPVS, nftables) and how Service virtual IPs work",
+  "t": "Kube-proxy modes (iptables, IPVS, nftables) and how Service virtual IPs work",
   "body": [
    "A Service's ClusterIP is virtual: no machine owns it and no process listens on it. Instead, kube-proxy on every node watches Services and EndpointSlices and programs the node's kernel so that packets sent to ClusterIP:port are rewritten (destination NAT) to one of the ready backend Pod IPs. Because every node has the same rules, a client Pod anywhere can reach any Service.",
    "kube-proxy supports several modes on Linux. In `iptables` mode, long the default, it creates chains in the nat table: `KUBE-SERVICES` matches the ClusterIP and port, jumps to a per-Service `KUBE-SVC-...` chain that picks a backend with random probability, and a per-endpoint `KUBE-SEP-...` chain performs the DNAT. It is reliable but rule evaluation grows with the number of Services, so very large clusters see slower updates.",
@@ -1516,7 +1516,7 @@ CertHub.addLessons("cka", [
   ]
  },
  {
-  "t": "volumeBindingMode Immediate vs WaitForFirstConsumer",
+  "t": "VolumeBindingMode Immediate vs WaitForFirstConsumer",
   "body": [
    "A StorageClass's `volumeBindingMode` decides when a PVC is bound and, for dynamic provisioning, when the volume is created. The choice matters whenever storage is tied to a topology, such as a zone or a single node.",
    "With `Immediate`, the default, binding and provisioning happen as soon as the PVC is created, before any Pod uses it. That is fine for storage reachable from every node, such as NFS. But for topology-constrained storage, the volume might be created in a zone, or on a node, where the Pod later cannot run, for example because of resource limits, node affinity or taints. The Pod then fails to schedule with a volume node affinity conflict.",

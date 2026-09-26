@@ -394,7 +394,7 @@ CertHub.addLessons("a-plus-core2", [
   ]
  },
  {
-  "t": "macOS: installing and removing apps (.dmg, .pkg, .app, App Store), System Settings, Time Machine, FileVault, Keychain, Spotlight, Mission Control, Terminal, Disk Utility, Force Quit",
+  "t": "MacOS: installing and removing apps (.dmg, .pkg, .app, App Store), System Settings, Time Machine, FileVault, Keychain, Spotlight, Mission Control, Terminal, Disk Utility, Force Quit",
   "body": [
    "Support technicians increasingly meet Macs, and the exam checks that you can do everyday tasks on them. Start with software. The simplest source is the App Store, which installs, updates and removes vetted apps tied to the user's Apple ID. Outside the store, apps usually arrive as a .dmg (disk image) file: double-click it to mount it like a virtual drive, then drag the .app into the Applications folder and eject the image. A .app is actually a folder-like bundle containing the program and its resources. A .pkg is an installer package that runs a step-by-step wizard and can place files in several system locations; it is used when an app needs drivers, services or components beyond a single bundle.",
    "Removing apps is usually easy: drag the .app from Applications to the Trash, or in Launchpad hold an App Store app until it jiggles and click the delete button. Apps installed from a .pkg may leave components behind, so check whether the vendor provides an uninstaller. Gatekeeper, a built-in macOS protection, checks that downloaded apps are signed and notarized by identified developers and warns before opening anything else.",

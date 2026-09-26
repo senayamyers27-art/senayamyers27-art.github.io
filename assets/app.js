@@ -66,18 +66,82 @@
     const box = document.getElementById("trackcards"); if (box) box.innerHTML = trackCards();
   });
 
+  /* ---------- "Pick your first certification" guide ---------- */
+  // Goal (a career track, or "not sure") and starting point -> a suggested first certification.
+  const PICK_GOALS = [["unsure", "Not sure yet"], ["cybersecurity", "Cybersecurity"], ["network", "Networking"], ["sysadmin", "IT support and systems"], ["cloud", "Cloud"], ["software", "Programming"], ["data-ai", "Data and AI"]];
+  const PICK_LEVELS = [["new", "New to IT"], ["some", "I know the basics"], ["work", "I work in IT"]];
+  const PICKS = {
+    unsure: { new: "a-plus-core1", some: "network-plus", work: "security-plus" },
+    cybersecurity: { new: "isc2-cc", some: "security-plus", work: "cysa-plus" },
+    network: { new: "ccst-networking", some: "network-plus", work: "ccna" },
+    sysadmin: { new: "a-plus-core1", some: "linux-plus", work: "az-104" },
+    cloud: { new: "aws-cloud-practitioner", some: "cloud-plus", work: "aws-saa" },
+    software: { new: "pcep", some: "pcap", work: "aws-developer" },
+    "data-ai": { new: "ai-900", some: "data-plus", work: "ai-102" }
+  };
+  const PICK_WHY = {
+    new: "A good first step with no experience needed: it teaches the basics the rest of the track builds on.",
+    some: "A common next step once you know the basics, and a widely recognized certification for this kind of work.",
+    work: "Goes deeper into the day-to-day work of this role, building on the experience you already have."
+  };
+  const PICK_KEY = "certhub:pick";
+  const pickState = () => { try { const v = JSON.parse(CertHub.store.get(PICK_KEY) || "{}"); return { g: PICKS[v.g] ? v.g : "", l: PICK_LEVELS.some(x => x[0] === v.l) ? v.l : "" }; } catch (e) { return { g: "", l: "" }; } };
+  function pickResult() {
+    const st = pickState();
+    if (!st.g || !st.l) return `<p class="note">Choose one answer to each question to see a suggestion.</p>`;
+    const id = PICKS[st.g][st.l];
+    if (!certs[id]) return "";
+    const track = TRACKS.find(t => t.id === st.g);
+    const next = track ? track.certs.slice(track.certs.indexOf(id) + 1).find(x => certs[x]) : "";
+    return `<p class="why"><strong>Start with ${esc(certs[id].short || certs[id].name)}.</strong> ${esc(PICK_WHY[st.l])}${next ? ` After it, a natural next step is ${esc(certs[next].short || certs[next].name)}.` : ""} <a href="#careers">Compare career paths</a>.</p><div class="cards">${certCard(id)}</div>`;
+  }
+  function pickerHtml() {
+    const st = pickState();
+    const chips = (name, list, cur) => `<div class="trackpick" role="group" aria-label="${name}">${list.map(([k, l]) => `<button type="button" class="chipbtn" data-pick="${name === "Goal" ? "g" : "l"}:${k}" aria-pressed="${cur === k}">${esc(l)}</button>`).join("")}</div>`;
+    return `<h2 id="pick" tabindex="-1">Pick your first certification</h2>
+    <div class="panel"><p class="pickq">What do you want to work in?</p>${chips("Goal", PICK_GOALS, st.g)}
+      <p class="pickq">Where are you starting from?</p>${chips("Starting point", PICK_LEVELS, st.l)}
+      <div class="pickres" id="pickres" aria-live="polite">${pickResult()}</div></div>`;
+  }
+  document.addEventListener("click", e => {
+    const b = e.target.closest("[data-pick]"); if (!b) return;
+    const [k, v] = b.dataset.pick.split(":"); const st = pickState(); st[k] = v;
+    CertHub.store.set(PICK_KEY, JSON.stringify(st));
+    document.querySelectorAll(`[data-pick^="${k}:"]`).forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    const box = document.getElementById("pickres"); if (box) box.innerHTML = pickResult();
+  });
+  document.addEventListener("click", e => {
+    const b = e.target.closest("[data-jump]"); if (!b) return;
+    const t = document.getElementById(b.dataset.jump); if (!t) return;
+    if (!t.hasAttribute("tabindex")) t.setAttribute("tabindex", "-1");
+    t.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); t.focus({ preventScroll: true });
+  });
+  document.addEventListener("click", e => {
+    const b = e.target.closest("button[data-accent]"); if (!b) return;
+    CertHub.setAccent(b.dataset.accent);
+    document.querySelectorAll("button[data-accent]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  });
+  // Optional email newsletter: a link to a hosted sign-up form (site.config.json "newsletter"). Hidden when not set.
+  function newsHtml() {
+    const n = CertHub.site && CertHub.site.newsletter;
+    if (!n || !n.url) return "";
+    return `<div class="panel installcard newscard"><div class="grow"><strong>Get study tips by email</strong><br><span class="note">${esc(n.blurb || "New labs, exam changes and a study tip now and then. Unsubscribe any time.")}</span></div><a class="btn sm" href="${esc(n.url)}" target="_blank" rel="noopener">Sign up</a></div>`;
+  }
+
   function homeView() {
     const lp = loadLabProgress();
     const labList = labOrder.map(id => labs[id]);
     const doneLabs = labList.filter(l => labStatus(l, lp).state === "done").length;
     const start = labs["lab-home-lab"];
+    const nCerts = CertHub.catalog.filter(id => certs[id]).length;
     return `<section class="hero">
-      <h1>Study plans and hands-on labs for IT and cybersecurity certifications</h1>
-      <p class="meta">Pick a career track and a certification for a week-by-week plan with quizzes, timed checkpoint tests, a practice exam weighted like the real one, and spaced review. Every week links to step-by-step labs you do in your own home lab, so you finish with real experience and a portfolio, not just a score.</p>
-      <div class="btns">${start ? `<a class="btn" href="#lab-home-lab">Start with the home lab</a>` : ""}<a class="btn ghost" href="#labs">Browse ${labList.length} labs</a><a class="btn ghost" href="#portfolio">Your portfolio${doneLabs ? ` (${doneLabs})` : ""}</a></div>
+      <h1>Study to certify: free plans for ${nCerts} IT, cloud and cybersecurity certifications</h1>
+      <p class="meta">Pick a certification and get a week-by-week plan: short lessons, hands-on labs, quizzes, timed checkpoints, a practice exam weighted like the real one and spaced review. No sign-up and no ads. Your progress stays in your browser.</p>
+      <div class="btns"><button type="button" class="btn" data-jump="pick">Pick your first certification</button><button type="button" class="btn ghost" data-jump="tracks-h">See all ${nCerts} certifications</button><a class="btn ghost" href="#labs">Browse ${labList.length} labs</a>${doneLabs ? `<a class="btn ghost" href="#portfolio">Your portfolio (${doneLabs})</a>` : ""}</div>
     </section>
     ${CertHub.install.installed() ? "" : `<div class="panel installcard"><div class="grow"><strong>Get the app on your phone</strong><br><span class="note">Install it from your browser: it opens full screen and works offline. No app store needed.</span></div><div class="btns" style="margin:0">${CertHub.install.prompt ? `<button type="button" class="btn sm" data-gact="install">Install</button>` : ""}<a class="btn ghost sm" href="#install">How to install</a></div></div>`}
     ${continueHtml()}
+    ${pickerHtml()}
     <h2 id="tracks-h">Certifications by career track</h2>
     <p class="note"><a href="#careers">Career paths</a>: which certification to take first, the jobs each track leads to, and interview practice. <a href="#exam-day">Exam-day guides</a>: scoring, question types and what to expect on test day.</p>
     ${trackPicker()}
@@ -88,6 +152,10 @@
       <p class="note" style="margin:0">Progress, lab notes and checkmarks are saved in this browser only. Nothing is sent anywhere. Back up to move them to another device.</p>
       <div class="btns"><button type="button" class="btn ghost sm no-framed" data-gact="download">Download backup</button><button type="button" class="btn ghost sm" data-gact="copybackup">Copy backup</button><label class="btn ghost sm" for="imp">Restore from file</label><input type="file" id="imp" accept="application/json" class="hide"><button type="button" class="btn ghost sm" data-gact="pasterestore">Restore from text</button></div>
     </div>
+    ${newsHtml()}
+    <h2>Appearance</h2>
+    <div class="panel"><p class="note" style="margin:0">Accent color for buttons and highlights. Use the button at the top right to switch between light, dark and your device's setting.</p>
+      <div class="swatches" role="group" aria-label="Accent color">${CertHub.ACCENTS.map(([k, l, c]) => `<button type="button" class="chipbtn swatch" data-accent="${k}" aria-pressed="${CertHub.accent() === k}" style="--sw:${c}"><i aria-hidden="true"></i>${l}</button>`).join("")}</div></div>
     <div class="panel installcard supportcard"><div class="grow"><strong>Keep it free</strong><br><span class="note">No ads and no tracking. Share it, report a mistake${CertHub.site && CertHub.site.support && CertHub.site.support.url ? " or chip in" : ""} to help.</span></div><a class="btn ghost sm" href="#support">Support this site</a></div>`;
   }
 
@@ -144,7 +212,7 @@
     if (tab && !/^([a-z]{1,16}|video-l[a-z0-9]{1,14})$/.test(tab)) tab = "";
     const prev = view;
     if (prev.startsWith("lab-") || prev.startsWith("cap-")) CertHub.labViews.leave();
-    let title = "Cyber Cert Study", brand = "Cyber Cert Study";
+    let title = "StudyToCert", brand = "StudyToCert";
     if (own(certs, head)) {
       CertHub.certView.open(head, tab || "week");
       view = "cert:" + head;
@@ -166,9 +234,10 @@
       else if (head === "portfolio") { topNav("portfolio"); $("#app").innerHTML = CertHub.labViews.portfolio(); title = "Lab Portfolio"; view = "portfolio"; }
       else { topNav("home"); $("#app").innerHTML = homeView(); view = "home"; }
     }
-    $("#brandname").textContent = brand;
+    const bn = $("#brandname span");
+    if (brand === "StudyToCert") bn.innerHTML = "Study<b>To</b>Cert"; else bn.textContent = brand;
     $("#back").hidden = view === "home";
-    document.title = title === "Cyber Cert Study" ? title : `${title} · Cyber Cert Study`;
+    document.title = title === "StudyToCert" ? title : `${title} · StudyToCert`;
     countView();
     window.scrollTo(0, 0);
   }
@@ -183,7 +252,7 @@
     if (a === "pasterestore") CertHub.restoreFromText();
     if (a === "reminder") CertHub.addReminder("Study for my certification", location.origin + location.pathname);
     if (a === "share") {
-      const data = { title: "Cyber Cert Study", text: "Free study plans, quizzes and hands-on labs for cybersecurity certifications.", url: location.origin + "/" };
+      const data = { title: "StudyToCert", text: "Free study plans, quizzes and hands-on labs for cybersecurity certifications.", url: location.origin + "/" };
       if (navigator.share) navigator.share(data).catch(() => {}); else ui.copy(data.url, "site link");
     }
     if (a === "install") CertHub.install.run().then(ok => { if (!ok) location.hash = "install"; else CertHub.rerender(); });

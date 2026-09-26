@@ -33,7 +33,7 @@ CertHub.register({
       topics: [
         "Using a shell prompt and running commands with correct syntax",
         "Input and output redirection: >, >>, 2>, 2>&1, <, pipes and tee",
-        "grep and regular expressions: ^, $, ., *, [ ], -i, -v, -r, -E",
+        "Grep and regular expressions: ^, $, ., *, [ ], -i, -v, -r, -E",
         "Accessing remote systems with ssh; logging in and switching users (su -, sudo -i) in multiuser targets",
         "Archiving and compressing with tar, gzip, bzip2 and xz (-c, -x, -t, -z, -j, -J, -f)",
         "Creating and editing text files with vim or nano",
@@ -55,7 +55,7 @@ CertHub.register({
       w: 7,
       topics: [
         "Configuring access to RPM repositories: .repo files in /etc/yum.repos.d/ (baseurl, enabled, gpgcheck, gpgkey)",
-        "dnf config-manager --add-repo, dnf repolist and dnf clean all",
+        "Dnf config-manager --add-repo, dnf repolist and dnf clean all",
         "Installing, updating and removing RPM packages with dnf (install, remove, update, reinstall, history undo)",
         "Finding packages and files: dnf search, dnf provides, dnf info",
         "Querying installed packages with rpm -q, -qa, -qi, -ql, -qf, -qc",
@@ -82,7 +82,7 @@ CertHub.register({
         "Processing script inputs: $1, $2, $#, $@ and $0",
         "Processing the output of shell commands with $( ) command substitution",
         "Reading input and using variables and quoting correctly",
-        "case statements for simple argument handling"
+        "Case statements for simple argument handling"
       ],
       notes: ["Objective group: Create simple shell scripts"],
       labs: [

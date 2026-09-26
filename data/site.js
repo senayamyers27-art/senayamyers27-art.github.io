@@ -10,5 +10,9 @@ CertHub.site = {
     "yearly": "$49"
   },
   "apiUrl": "",
-  "analytics": ""
+  "analytics": "",
+  "newsletter": {
+    "url": "",
+    "blurb": ""
+  }
 };
