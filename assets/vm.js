@@ -155,7 +155,7 @@
   const labs = () => (CertHub.vmLabs && CertHub.vmLabs.labs) || [];
   const done = () => store.get(LABS_KEY, {});
   const certName = id => (CertHub.certs[id] && CertHub.certs[id].short) || id;
-  const terms = hosts => `<div class="vmterms${hosts.length > 1 ? " two" : ""}">${hosts.map(h => `<div class="vmcol">${hosts.length > 1 ? `<p class="vmhost"><strong>${esc(h)}</strong> <span class="note">${esc(HOSTS[h].ip.replace("/24", ""))}</span></p>` : ""}<div class="vmterm" data-vmbox="${h}" hidden></div></div>`).join("")}</div>`;
+  const terms = hosts => `<div class="vmterms${hosts.length > 1 ? " two" : ""}">${hosts.map(h => `<div class="vmcol">${hosts.length > 1 ? `<p class="vmhost"><strong>${esc(h)}</strong> <span class="note">${esc(HOSTS[h].ip.replace("/24", ""))}</span></p>` : ""}<div class="vmterm" data-vmbox="${esc(h)}" hidden></div></div>`).join("")}</div>`;
   const facts = `<div class="panel vminfo"><ul class="clean">
       <li>You're logged in as <code>student</code> (password <code>student</code>) with <code>sudo</code>. The root password is <code>root</code>.</li>
       <li>Real Ubuntu 24.04 tools with systemd, SSH, iptables, LVM, cron and two empty disks (<code>/dev/sda</code>, <code>/dev/sdb</code>).</li>
@@ -178,9 +178,9 @@
     <div class="panel installcard vmcard"><div class="grow"><strong>server and client on one network</strong><br><span class="note">Practice SSH, firewalls, web servers and troubleshooting between two machines.</span></div><a class="btn sm" href="#vm-net">Open</a></div>
     <h2>Graded labs</h2>
     <p class="note">Each lab starts a fresh VM, walks you through a real admin task and checks your work inside the machine. ${Object.keys(d).length} of ${labs().length} done.</p>
-    <div class="labgrid">${labs().map(l => `<a class="labcard" href="#vm-lab-${esc(l.id)}"><span class="labtop"><span class="chip">${l.mode === "network" ? "2 VMs" : "1 VM"}</span>${d[l.id] ? `<span class="chip done">Done</span>` : ""}</span><strong>${esc(l.title)}</strong><span class="note">${esc(l.level)} · about ${l.minutes} min · ${esc(l.certs.map(certName).join(", "))}</span></a>`).join("")}</div>
+    <div class="labgrid">${labs().map(l => `<a class="labcard" href="#vm-lab-${esc(l.id)}"><span class="labtop"><span class="chip">${l.mode === "network" ? "2 VMs" : "1 VM"}</span>${d[l.id] ? `<span class="chip done">Done</span>` : ""}</span><strong>${esc(l.title)}</strong><span class="note">${esc(l.level)} · about ${esc(l.minutes)} min · ${esc(l.certs.map(certName).join(", "))}</span></a>`).join("")}</div>
     <h2>VM exam</h2>
-    <div class="panel installcard vmcard"><div class="grow"><strong>Timed performance exam</strong><br><span class="note">${CertHub.vmLabs ? `${CertHub.vmLabs.exam.tasks} random admin tasks in ${CertHub.vmLabs.exam.minutes} minutes, scored inside the VM.` : "Random admin tasks against the clock, scored inside the VM."}${best != null ? ` Your best: ${best}%.` : ""}</span></div><a class="btn sm" href="#vm-exam">Take the exam</a></div>
+    <div class="panel installcard vmcard"><div class="grow"><strong>Timed performance exam</strong><br><span class="note">${CertHub.vmLabs ? `${esc(CertHub.vmLabs.exam.tasks)} random admin tasks in ${esc(CertHub.vmLabs.exam.minutes)} minutes, scored inside the VM.` : "Random admin tasks against the clock, scored inside the VM."}${best != null ? ` Your best: ${esc(best)}%.` : ""}</span></div><a class="btn sm" href="#vm-exam">Take the exam</a></div>
     <h2>Use it offline</h2>
     <p class="note">Download the VM once and it keeps working without a connection. <button type="button" class="btn ghost sm" data-vm="offline">Download for offline use</button></p>
     <p class="note">Built from Ubuntu 24.04 packages and the v86 emulator. <a href="${V}NOTICE.txt">Open-source notice</a> · <a href="${V}SOURCES.txt">Package versions</a></p>`;
@@ -196,13 +196,13 @@
   // Inline code in lab steps becomes a button that types it into the right machine ("On client: ..." steps).
   const stepHtml = (s, lab) => {
     const host = lab.mode === "network" ? (/^On client:/i.test(s) ? "client" : "server") : "lab";
-    return esc(s).replace(/`([^`\n]+)`/g, (m, c) => `<button type="button" class="vmcode" data-vmtype="${c}" data-vmhost="${host}" title="Type it into ${host}">${c}</button>`);
+    return esc(s).replace(/`([^`\n]+)`/g, (m, c) => `<button type="button" class="vmcode" data-vmtype="${/* html: already escaped by esc(s) */ c}" data-vmhost="${host}" title="Type it into ${host}">${/* html: already escaped by esc(s) */ c}</button>`);
   };
   function labView(lab) {
     const hosts = lab.mode === "network" ? ["server", "client"] : ["lab"], d = done()[lab.id];
     return `<p class="crumbs"><a href="#vm">Practice VMs</a> / Graded lab</p>
     <h1>${esc(lab.title)}</h1>
-    <p class="meta">${esc(lab.level)} · about ${lab.minutes} minutes · ${lab.mode === "network" ? "2 VMs" : "1 VM"} · ${esc(lab.certs.map(certName).join(", "))}${d ? ` · <span class="chip done">Done</span>` : ""}</p>
+    <p class="meta">${esc(lab.level)} · about ${esc(lab.minutes)} minutes · ${lab.mode === "network" ? "2 VMs" : "1 VM"} · ${esc(lab.certs.map(certName).join(", "))}${d ? ` · <span class="chip done">Done</span>` : ""}</p>
     <p class="lede">${inline(lab.intro)}</p>
     <h2>Steps</h2>
     <ol class="vmsteps">${lab.steps.map(s => `<li>${stepHtml(s, lab)}</li>`).join("")}</ol>
@@ -216,8 +216,8 @@
     const ex = CertHub.vmLabs.exam, r = store.get(EXAM_KEY, {});
     return `<p class="crumbs"><a href="#vm">Practice VMs</a> / VM exam</p>
     <h1>VM exam</h1>
-    <p class="meta">${ex.tasks} admin tasks picked at random, ${ex.minutes} minutes, one VM. Like the performance-based parts of Linux+ and RHCSA: no step-by-step hints, and every task is checked inside the machine when you submit. ${ex.pass}% passes.</p>
-    ${r.last ? `<p class="note">Last attempt: ${r.last.score}% on ${esc(new Date(r.last.when).toLocaleDateString())}. Best: ${r.best}%.</p>` : ""}
+    <p class="meta">${esc(ex.tasks)} admin tasks picked at random, ${esc(ex.minutes)} minutes, one VM. Like the performance-based parts of Linux+ and RHCSA: no step-by-step hints, and every task is checked inside the machine when you submit. ${esc(ex.pass)}% passes.</p>
+    ${r.last ? `<p class="note">Last attempt: ${esc(r.last.score)}% on ${esc(new Date(r.last.when).toLocaleDateString())}. Best: ${esc(r.best)}%.</p>` : ""}
     <div class="btns"><button type="button" class="btn" data-vm="exam" id="vmgo">Start the exam</button></div>
     <p class="note" id="vmstatus" role="status" aria-live="polite"></p>
     <div id="vmexam"></div>
@@ -245,7 +245,7 @@
     const box = $("#vmresults"); status("Checking your work…");
     const res = await runChecks(lab); if (!S) return;
     const passed = res.filter(r => r.ok).length, all = passed === res.length;
-    box.innerHTML = `<div class="panel" style="--c:${all ? "var(--ok)" : "var(--warn)"}"><p><strong>${all ? "Lab complete. Nice work." : `${passed} of ${res.length} checks pass.`}</strong></p><ul class="checks">${res.map(r => `<li class="${r.ok ? "ok" : "no"}"><span aria-hidden="true">${r.ok ? "✓" : "✗"}</span> ${esc(r.c.label)}<span class="sr-only">${r.ok ? " (passed)" : " (not yet)"}</span></li>`).join("")}</ul></div>`;
+    box.innerHTML = `<div class="panel" data-style="--c:${all ? "var(--ok)" : "var(--warn)"}"><p><strong>${all ? "Lab complete. Nice work." : `${passed} of ${res.length} checks pass.`}</strong></p><ul class="checks">${res.map(r => `<li class="${r.ok ? "ok" : "no"}"><span aria-hidden="true">${r.ok ? "✓" : "✗"}</span> ${esc(r.c.label)}<span class="sr-only">${r.ok ? " (passed)" : " (not yet)"}</span></li>`).join("")}</ul></div>`;
     status(all ? "All checks pass." : "Keep going, then check again.");
     CertHub.activity.mark();
     if (all) { const d = done(); d[lab.id] = { when: Date.now() }; store.set(LABS_KEY, d); }
@@ -263,8 +263,8 @@
     const score = total ? Math.round(100 * got / total) : 0, pass = score >= CertHub.vmLabs.exam.pass;
     const r = store.get(EXAM_KEY, {}); r.last = { score, when: Date.now() }; r.best = Math.max(r.best || 0, score); store.set(EXAM_KEY, r);
     CertHub.activity.mark();
-    box.innerHTML = `<div class="panel" style="--c:${pass ? "var(--ok)" : "var(--bad)"}"><div class="big">${score}%</div><p class="meta">${pass ? "Pass." : "Not a pass yet."} ${got} of ${total} checks across ${rows.length} tasks.</p>
-      ${rows.map(x => `<h3>${esc(x.lab.title)} <small class="note">${x.p}/${x.n}</small></h3><ul class="checks">${x.res.filter(r => !r.c.keep || !r.ok).map(r => `<li class="${r.ok ? "ok" : "no"}"><span aria-hidden="true">${r.ok ? "✓" : "✗"}</span> ${esc(r.c.label)}</li>`).join("")}</ul><p class="note"><a href="#vm-lab-${esc(x.lab.id)}">Practice this lab</a></p>`).join("")}
+    box.innerHTML = `<div class="panel" data-style="--c:${pass ? "var(--ok)" : "var(--bad)"}"><div class="big">${score}%</div><p class="meta">${pass ? "Pass." : "Not a pass yet."} ${got} of ${total} checks across ${rows.length} tasks.</p>
+      ${rows.map(x => `<h3>${esc(x.lab.title)} <small class="note">${esc(x.p)}/${esc(x.n)}</small></h3><ul class="checks">${x.res.filter(r => !r.c.keep || !r.ok).map(r => `<li class="${r.ok ? "ok" : "no"}"><span aria-hidden="true">${r.ok ? "✓" : "✗"}</span> ${esc(r.c.label)}</li>`).join("")}</ul><p class="note"><a href="#vm-lab-${esc(x.lab.id)}">Practice this lab</a></p>`).join("")}
       <div class="btns"><button type="button" class="btn" data-vm="exam">Take another exam</button></div></div>`;
     status("Exam scored. The VM stays open so you can look around.");
   }

@@ -30,7 +30,7 @@
         <p>${esc(f.what)}</p>
         <h3>Key parts</h3><ul class="clean">${f.parts.map(p => `<li>${esc(p)}</li>`).join("")}</ul>
         <p><strong>Use it when:</strong> ${esc(f.useWhen)}</p>
-        ${f.exams.length ? `<p class="fwexams"><strong>On these exams:</strong> ${f.exams.filter(id => certs[id]).map(id => `<a class="chip" style="--c:var(--ink)" href="#${esc(id)}">${esc(certs[id].short)}</a>`).join(" ")}</p>` : ""}
+        ${f.exams.length ? `<p class="fwexams"><strong>On these exams:</strong> ${f.exams.filter(id => certs[id]).map(id => `<a class="chip" data-style="--c:var(--ink)" href="#${esc(id)}">${esc(certs[id].short)}</a>`).join(" ")}</p>` : ""}
         ${labs.length ? `<p><strong>Practice it:</strong> ${labs.map(l => `<a href="#${esc(l.id)}">${esc(l.title)}</a>`).join(" · ")}</p>` : ""}
         ${f.url ? `<p class="note"><a href="${esc(f.url)}" target="_blank" rel="noopener">Official source</a></p>` : ""}
         </details>`;
@@ -38,7 +38,7 @@
     }).join("")}
     <h2 id="fw-roles">Job roles (NICE Framework)</h2>
     <p class="note">Work roles from the NICE Workforce Framework for Cybersecurity, with common job titles and the labs that build each one's skills. Filter the <a href="#labs">lab library</a> by role to plan a path.</p>
-    <div class="panel">${ROLES.map(r => { const n = labsForRole(r.id).length; return `<div class="row"><div class="grow"><strong>${esc(r.name)}</strong> <span class="note">· ${esc(r.category)}</span><br><span class="note">${esc(r.titles)}</span><p style="margin:4px 0 0">${esc(r.about)}</p></div><button type="button" class="btn ghost sm" data-role-labs="${esc(r.id)}">${n} lab${n === 1 ? "" : "s"}</button></div>`; }).join("")}</div>`;
+    <div class="panel">${ROLES.map(r => { const n = labsForRole(r.id).length; return `<div class="row"><div class="grow"><strong>${esc(r.name)}</strong> <span class="note">· ${esc(r.category)}</span><br><span class="note">${esc(r.titles)}</span><p data-style="margin:4px 0 0">${esc(r.about)}</p></div><button type="button" class="btn ghost sm" data-role-labs="${esc(r.id)}">${n} lab${n === 1 ? "" : "s"}</button></div>`; }).join("")}</div>`;
   }
 
   // "Jump to" links scroll within the page instead of changing the route.

@@ -63,6 +63,27 @@
   }
   const mergeDoc = (docKey, local, server) => docKey === "labs" ? mergeLabs(local, server) : mergePlan(local, server);
 
+  /* ---------- optional Turnstile bot check on sign-in (site.config.json turnstileSiteKey) ---------- */
+  const TS_KEY = (CertHub.site && CertHub.site.turnstileSiteKey) || "";
+  let tsToken = "", tsWidget = null, tsLoading = null;
+  function turnstile() {
+    const box = $("#ts-box");
+    if (!TS_KEY || !box || box.dataset.ready) return;
+    box.dataset.ready = "1";
+    tsLoading = tsLoading || new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+      s.async = true; s.onload = res; s.onerror = () => rej(new Error("The bot check couldn't load. Check your connection and reload the page."));
+      document.head.appendChild(s);
+    });
+    tsLoading.then(() => {
+      if (!document.contains(box)) return;
+      tsToken = "";
+      tsWidget = window.turnstile.render(box, { sitekey: TS_KEY, action: "signin", callback: t => { tsToken = t; }, "expired-callback": () => { tsToken = ""; }, "error-callback": () => { tsToken = ""; } });
+    }, e => { const m = $("#signin-msg"); if (m) m.textContent = e.message; });
+  }
+  function turnstileReset() { tsToken = ""; if (tsWidget != null && window.turnstile) window.turnstile.reset(tsWidget); }
+
   /* ---------- API client ---------- */
   async function api(method, path, body) {
     const res = await fetch(API + path, {
@@ -165,7 +186,7 @@
   const PLAN = { free: "Free", pro: "Pro", org: "Organization" };
   const PRICE = (CertHub.site && CertHub.site.pro) || {};
   // What Pro adds. Everything else on the site stays free.
-  const proPitch = () => `<p style="margin:0">Everything on the site stays free. Pro adds:</p><ul class="clean">
+  const proPitch = () => `<p data-style="margin:0">Everything on the site stays free. Pro adds:</p><ul class="clean">
       <li>About 300 extra practice questions per certification, with explanations</li>
       <li>Full-length timed exams at the real exam's length, with a pass estimate</li>
       <li>A score report: weakest domains and objectives, trend and exam readiness</li>
@@ -180,11 +201,12 @@
       <form id="signin-form" class="panel" novalidate>
         <label for="signin-email"><strong>Email</strong></label>
         <input type="email" id="signin-email" autocomplete="email" required placeholder="you@example.com" class="textin">
+        ${TS_KEY ? `<div id="ts-box" class="tsbox"></div>` : ""}
         <div class="btns"><button type="submit" class="btn">Email me a sign-in link</button></div>
         <p class="note" id="signin-msg" role="status"></p>
       </form>
       <p class="note">No password. We email a link that signs you in once and expires in 15 minutes. Accounts are for ages 13 and up. See the <a href="#terms">Terms</a> and <a href="#privacy">Privacy Policy</a>.</p>
-      ${me && me.billing ? `<h2>Pro</h2><div class="panel">${proPitch()}<p class="note" style="margin:0">${PRICE.monthly ? `${esc(PRICE.monthly)} a month or ${esc(PRICE.yearly)} a year. ` : ""}Sign in first, then upgrade from this page.</p></div>` : ""}`;
+      ${me && me.billing ? `<h2>Pro</h2><div class="panel">${proPitch()}<p class="note" data-style="margin:0">${PRICE.monthly ? `${esc(PRICE.monthly)} a month or ${esc(PRICE.yearly)} a year. ` : ""}Sign in first, then upgrade from this page.</p></div>` : ""}`;
     }
     const u = me.user, plan = me.plan || "free";
     const orgs = me.orgs || [];
@@ -193,11 +215,11 @@
       <div class="row"><div class="grow"><strong>${esc(u.email)}</strong><br><span class="note">Plan: ${esc(PLAN[plan] || plan)}</span></div><button type="button" class="btn ghost sm" data-aact="signout">Sign out</button></div>
       <div class="row"><div class="grow"><strong>Sync</strong><br><span class="note" id="syncstatus"></span></div><button type="button" class="btn sm" data-aact="sync">Sync now</button></div>
     </div>
-    ${plan === "org" ? `<h2>Pro</h2><div class="panel"><p style="margin:0">Your organization's plan includes every Pro feature.</p></div>` : me.billing ? `<h2>Pro</h2><div class="panel">${plan === "pro"
-      ? `<p style="margin:0">You have Pro. Thanks for supporting the site. Manage or cancel your plan any time.</p><div class="btns"><button type="button" class="btn ghost" data-aact="portal">Manage billing</button></div>`
-      : `${proPitch()}<div class="btns"><button type="button" class="btn" data-aact="upgrade" data-interval="month">${PRICE.monthly ? `${esc(PRICE.monthly)} a month` : "Upgrade monthly"}</button><button type="button" class="btn ghost" data-aact="upgrade" data-interval="year">${PRICE.yearly ? `${esc(PRICE.yearly)} a year` : "Upgrade yearly"}</button></div><p class="note" style="margin:0">Cancel any time from Manage billing. 7-day refund on your first payment. Payments are handled by Stripe.</p>`}</div>` : ""}
+    ${plan === "org" ? `<h2>Pro</h2><div class="panel"><p data-style="margin:0">Your organization's plan includes every Pro feature.</p></div>` : me.billing ? `<h2>Pro</h2><div class="panel">${plan === "pro"
+      ? `<p data-style="margin:0">You have Pro. Thanks for supporting the site. Manage or cancel your plan any time.</p><div class="btns"><button type="button" class="btn ghost" data-aact="portal">Manage billing</button></div>`
+      : `${proPitch()}<div class="btns"><button type="button" class="btn" data-aact="upgrade" data-interval="month">${PRICE.monthly ? `${esc(PRICE.monthly)} a month` : "Upgrade monthly"}</button><button type="button" class="btn ghost" data-aact="upgrade" data-interval="year">${PRICE.yearly ? `${esc(PRICE.yearly)} a year` : "Upgrade yearly"}</button></div><p class="note" data-style="margin:0">Cancel any time from Manage billing. 7-day refund on your first payment. Payments are handled by Stripe.</p>`}</div>` : ""}
     <h2>Organizations</h2>
-    <div class="panel">${orgs.length ? orgs.map(o => `<div class="row"><div class="grow"><strong>${esc(o.name)}</strong><br><span class="note">${esc(o.role)}${o.active ? "" : " · no active seats"}</span></div>${o.role !== "learner" ? `<button type="button" class="btn ghost sm" data-aact="manage" data-org="${esc(o.id)}">Manage</button>` : ""}</div>`).join("") : `<p class="note" style="margin:0">You're not in an organization. If your school or employer gave you an invite link, open it and you'll join automatically.</p>`}
+    <div class="panel">${orgs.length ? orgs.map(o => `<div class="row"><div class="grow"><strong>${esc(o.name)}</strong><br><span class="note">${esc(o.role)}${o.active ? "" : " · no active seats"}</span></div>${o.role !== "learner" ? `<button type="button" class="btn ghost sm" data-aact="manage" data-org="${esc(o.id)}">Manage</button>` : ""}</div>`).join("") : `<p class="note" data-style="margin:0">You're not in an organization. If your school or employer gave you an invite link, open it and you'll join automatically.</p>`}
       <details class="sq"><summary>Create an organization (for instructors)</summary>
         <form id="org-form"><input type="text" id="org-name" maxlength="80" placeholder="e.g. UTD Cybersecurity Bootcamp" class="textin" required><div class="btns"><button type="submit" class="btn sm">Create</button></div></form>
       </details>
@@ -207,8 +229,8 @@
     <div id="classpanel"><p class="note">Loading…</p></div>
     <h2>Your data</h2>
     <div class="panel">
-      <div class="btns" style="margin-top:0"><button type="button" class="btn ghost sm" data-aact="export">Download my account data</button><button type="button" class="btn ghost sm" data-aact="delete">Delete my account</button></div>
-      <p class="note" style="margin:0">Deleting your account removes everything stored on the server. Progress on this device stays unless you clear it.</p>
+      <div class="btns" data-style="margin-top:0"><button type="button" class="btn ghost sm" data-aact="export">Download my account data</button><button type="button" class="btn ghost sm" data-aact="delete">Delete my account</button></div>
+      <p class="note" data-style="margin:0">Deleting your account removes everything stored on the server. Progress on this device stays unless you clear it.</p>
     </div>`;
   }
 
@@ -220,7 +242,7 @@
       const certs = Object.values(CertHub.certs);
       el.innerHTML = `<h2>Cohorts</h2>
       <p class="note">${+data.members} member${data.members === 1 ? "" : "s"} · ${+data.seats} seat${data.seats === 1 ? "" : "s"}</p>
-      <div class="panel">${data.cohorts.length ? data.cohorts.map(c => `<div class="row"><div class="grow"><strong>${esc(c.name)}</strong><br><span class="note">${esc((CertHub.certs[c.certId] || {}).short || c.certId)} · ${+c.learners} learner${c.learners === 1 ? "" : "s"}</span></div><a class="btn ghost sm" href="#cohort-${esc(c.id.replace(/^coh_/, ""))}">Progress</a><button type="button" class="btn ghost sm" data-aact="invite" data-org="${esc(orgId)}" data-cohort="${esc(c.id)}">Invite link</button></div>`).join("") : `<p class="note" style="margin:0">No cohorts yet.</p>`}
+      <div class="panel">${data.cohorts.length ? data.cohorts.map(c => `<div class="row"><div class="grow"><strong>${esc(c.name)}</strong><br><span class="note">${esc((CertHub.certs[c.certId] || {}).short || c.certId)} · ${+c.learners} learner${c.learners === 1 ? "" : "s"}</span></div><a class="btn ghost sm" href="#cohort-${esc(c.id.replace(/^coh_/, ""))}">Progress</a><button type="button" class="btn ghost sm" data-aact="invite" data-org="${esc(orgId)}" data-cohort="${esc(c.id)}">Invite link</button></div>`).join("") : `<p class="note" data-style="margin:0">No cohorts yet.</p>`}
         <details class="sq"><summary>New cohort</summary>
           <form id="cohort-form" data-org="${esc(orgId)}">
             <input type="text" id="cohort-name" maxlength="80" placeholder="Cohort name" class="textin" required>
@@ -258,23 +280,23 @@
   const SHARED = `<ul class="clean"><li>The name you enter below (and your email only if you tick the box)</li>
     <li>Which certifications you study, and for each: exam readiness, lessons read, best practice exam score, questions answered, hands-on exercises done and when you were last active</li>
     <li>How many labs you've finished</li></ul>
-    <p class="note" style="margin:0">Not shared: your answers, review queue, lab notes or write-ups. You can leave the class at any time from the Account page, which stops sharing at once.</p>`;
+    <p class="note" data-style="margin:0">Not shared: your answers, review queue, lab notes or write-ups. You can leave the class at any time from the Account page, which stops sharing at once.</p>`;
 
   async function classPanel() {
     const el = document.getElementById("classpanel"); if (!el) return;
     try {
       const { data } = await api("GET", "/v1/classes");
       el.innerHTML = `<div class="panel">
-        <p style="margin:0"><strong>Classes you're in</strong></p>
-        ${data.joined.length ? data.joined.map(j => `<div class="row"><div class="grow"><strong>${esc(j.name)}</strong><br><span class="note">Teacher: ${esc(j.teacherName)}${j.certId ? ` · ${esc(certLabel(j.certId))}` : ""} · you appear as ${esc(j.displayName)}${j.showEmail ? " (with your email)" : ""}</span></div><button type="button" class="btn ghost sm" data-aact="leaveclass" data-class="${esc(j.id)}" data-name="${esc(j.name)}">Leave</button></div>`).join("") : `<p class="note" style="margin:0">None. Your teacher shares a join link or code; your progress is shared only after you agree.</p>`}
+        <p data-style="margin:0"><strong>Classes you're in</strong></p>
+        ${data.joined.length ? data.joined.map(j => `<div class="row"><div class="grow"><strong>${esc(j.name)}</strong><br><span class="note">Teacher: ${esc(j.teacherName)}${j.certId ? ` · ${esc(certLabel(j.certId))}` : ""} · you appear as ${esc(j.displayName)}${j.showEmail ? " (with your email)" : ""}</span></div><button type="button" class="btn ghost sm" data-aact="leaveclass" data-class="${esc(j.id)}" data-name="${esc(j.name)}">Leave</button></div>`).join("") : `<p class="note" data-style="margin:0">None. Your teacher shares a join link or code; your progress is shared only after you agree.</p>`}
         <form id="classcode-form" class="row" novalidate>
           <div class="grow"><label for="classcode-in">Class code</label><input type="text" id="classcode-in" class="textin" maxlength="16" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="e.g. k7m2qx9fab"></div>
           <button type="submit" class="btn sm">Join a class</button>
         </form>
       </div>
       <div class="panel">
-        <p style="margin:0"><strong>Classes you teach</strong> <span class="note">Free. Up to ${+data.limit}.</span></p>
-        ${data.teaching.length ? data.teaching.map(c => `<div class="row"><div class="grow"><strong>${esc(c.name)}</strong><br><span class="note">${c.certId ? `${esc(certLabel(c.certId))} · ` : ""}${plural(c.students, "student")} · code <code>${esc(c.code)}</code></span></div><a class="btn ghost sm" href="#class-${esc(c.id.replace(/^cls_/, ""))}">Roster</a><button type="button" class="btn ghost sm" data-aact="copyjoin" data-code="${esc(c.code)}">Copy join link</button></div>`).join("") : `<p class="note" style="margin:0">Create a class, then share its join link with your students. You'll see a progress summary for each student who agrees.</p>`}
+        <p data-style="margin:0"><strong>Classes you teach</strong> <span class="note">Free. Up to ${+data.limit}.</span></p>
+        ${data.teaching.length ? data.teaching.map(c => `<div class="row"><div class="grow"><strong>${esc(c.name)}</strong><br><span class="note">${c.certId ? `${esc(certLabel(c.certId))} · ` : ""}${plural(c.students, "student")} · code <code>${esc(c.code)}</code></span></div><a class="btn ghost sm" href="#class-${esc(c.id.replace(/^cls_/, ""))}">Roster</a><button type="button" class="btn ghost sm" data-aact="copyjoin" data-code="${esc(c.code)}">Copy join link</button></div>`).join("") : `<p class="note" data-style="margin:0">Create a class, then share its join link with your students. You'll see a progress summary for each student who agrees.</p>`}
         ${data.teaching.length < data.limit ? `<details class="sq"><summary>Create a class</summary>
           <form id="class-form">
             <label for="class-name">Class name</label><input type="text" id="class-name" class="textin" maxlength="80" required placeholder="e.g. Period 3 Security+">
@@ -288,7 +310,7 @@
 
   const JOIN_KEY = "certhub:join";
   async function joinView(code) {
-    const shell = body => { $("#app").innerHTML = `<p class="crumbs"><a href="#account">Account</a> / Join a class</p>${body}`; };
+    const shell = body => { $("#app").innerHTML = `<p class="crumbs"><a href="#account">Account</a> / Join a class</p>${/* html: callers pass markup built with esc() */ body}`; };
     if (!API) return shell(`<h1>Join a class</h1><div class="status">Accounts aren't available on this site, so classes aren't either.</div>`);
     if (!signedIn()) {
       try { sessionStorage.setItem(JOIN_KEY, code); } catch (e) {}
@@ -303,7 +325,7 @@
       shell(`<h1>Join ${esc(c.name)}</h1>
       <p class="meta">Teacher: <strong>${esc(c.teacherName)}</strong>${cert}${data.isMember ? ". You're already in this class; joining again updates your name and email choice." : ""}</p>
       <form id="join-form" class="panel" data-code="${esc(code)}" novalidate>
-        <p style="margin:0"><strong>If you join, ${esc(c.teacherName)} will see:</strong></p>
+        <p data-style="margin:0"><strong>If you join, ${esc(c.teacherName)} will see:</strong></p>
         ${SHARED}
         <label for="join-name"><strong>Your name, as your teacher will see it</strong></label>
         <input type="text" id="join-name" class="textin" maxlength="60" required autocomplete="name">
@@ -370,7 +392,9 @@
       if (f.id === "signin-form") {
         const msg = $("#signin-msg");
         msg.textContent = "Sending…";
-        const { data } = await api("POST", "/v1/auth/magic-link", { email: $("#signin-email").value });
+        if (TS_KEY && !tsToken) { msg.textContent = "Complete the check that you're not a bot first."; return; }
+        const { data } = await api("POST", "/v1/auth/magic-link", TS_KEY ? { email: $("#signin-email").value, turnstile: tsToken } : { email: $("#signin-email").value });
+        turnstileReset();
         msg.textContent = data.message;
         if (data.devLink) msg.innerHTML = `${esc(data.message)} <a href="${esc(data.devLink)}">Development sign-in link</a>`;
       } else if (f.id === "org-form") {
@@ -399,7 +423,7 @@
         await api("POST", `/v1/orgs/${f.dataset.org}/cohorts`, { name: $("#cohort-name").value, certId: $("#cohort-cert").value });
         orgPanel(f.dataset.org);
       }
-    } catch (err) { ui.toast(err.message); if (f.id === "signin-form") $("#signin-msg").textContent = err.message; }
+    } catch (err) { ui.toast(err.message); if (f.id === "signin-form") { $("#signin-msg").textContent = err.message; turnstileReset(); } }
   });
 
   document.addEventListener("click", async e => {
@@ -485,7 +509,7 @@
   }
 
   CertHub.accountViews = {
-    account: () => { setTimeout(() => { renderStatus(); if (signedIn()) classPanel(); }, 0); return accountView(); },
+    account: () => { setTimeout(() => { renderStatus(); if (signedIn()) classPanel(); else turnstile(); }, 0); return accountView(); },
     cohort: cohortView,
     join: joinView,
     classRoster: classView

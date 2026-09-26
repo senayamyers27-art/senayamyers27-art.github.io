@@ -1,6 +1,18 @@
 /* What's new: learner-facing release notes, newest first. Add an entry when something visible ships.
    Each entry: { date: "YYYY-MM-DD", title, items: [ ... ], es: { title, items } } (es: the Spanish version). Shown at #whats-new and on the home page. */
 CertHub.news = [
+  { date: "2026-09-27", title: "Stronger security for the site",
+    items: [
+      "Your browser now checks every script and stylesheet against a fingerprint before using it, so a changed file is refused.",
+      "Stricter browser protections block injected code and styles.",
+      "The live site is compared with its published source code every six hours.",
+      "The Security page describes each protection."
+    ],
+    es: { title: "Más seguridad para el sitio", items: [
+      "Tu navegador ahora comprueba cada script y hoja de estilos con una huella digital antes de usarlos, así que rechaza cualquier archivo modificado.",
+      "Protecciones más estrictas del navegador bloquean código y estilos inyectados.",
+      "El sitio en vivo se compara con su código fuente publicado cada seis horas.",
+      "La página de Seguridad describe cada protección."] } },
   { date: "2026-09-27", title: "Complete practice VMs: networking, graded labs and an exam",
     items: [
       "The practice VMs are now full Ubuntu 24.04 servers with systemd, SSH, iptables, LVM, cron and two empty disks, and they start in seconds.",

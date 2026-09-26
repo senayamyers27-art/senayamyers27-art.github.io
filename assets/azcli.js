@@ -164,7 +164,7 @@
   const C = {};
   const def = (k, d, a, f, t) => { C[k] = { d, a, f, t }; };
   const newRes = (S, o, col, type, extra = {}) => { need(o, "resource-group", "name"); const g = G(S, o), n = V(o, "name"), loc = o.location ? region(V(o, "location")) : g.location, tags = tagsOf(A(o, "tags")); guard(S, g, "write"); policy(S, g, { name: n, type, loc, tags, ...extra }); return { name: n, group: g.name, location: loc, tags }; };
-  def("login", "Log in to Azure.", "", S => `You are already signed in to Azure Cloud Shell as ${ME}.\nCurrent subscription: ${SUBS[S.sub].name} (${SUBS[S.sub].id}).\nTo switch subscriptions, run: az account set --subscription "<name or id>"`);
+  def("login", "Log in to Azure.", "", S => `You are already signed in to Azure Cloud Shell as ${ME}.\nCurrent subscription: ${/* safe: terminal text, not HTML */ SUBS[S.sub].name} (${/* safe: terminal text, not HTML */ SUBS[S.sub].id}).\nTo switch subscriptions, run: az account set --subscription "<name or id>"`);
   def("version", "Show the versions of Azure CLI modules and extensions.", "", () => ({ "azure-cli": "2.77.0", "azure-cli-core": "2.77.0", "azure-cli-telemetry": "1.1.0", extensions: {} }));
   def("account show", "Get the details of a subscription.", "", S => acctOut(S, S.sub));
   def("account list", "Get a list of subscriptions for the logged in account.", "[--all]", S => SUBS.map((_, i) => acctOut(S, i)), x => ({ Name: x.name, CloudName: "AzureCloud", SubscriptionId: x.id, TenantId: x.tenantId, State: x.state, IsDefault: x.isDefault }));

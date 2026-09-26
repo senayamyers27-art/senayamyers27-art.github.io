@@ -10,6 +10,7 @@ CertHub.site = {
     "yearly": "$49"
   },
   "apiUrl": "",
+  "turnstileSiteKey": "",
   "analytics": "",
   "newsletter": {
     "url": "",

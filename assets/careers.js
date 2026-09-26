@@ -22,7 +22,7 @@
     <h2>Certification path</h2>
     <ol class="steps-list plain">${c.path.map(p => { const cert = CertHub.certs[p.cert]; return `<li><strong>${cert ? `<a href="#${esc(p.cert)}">${esc(cert.short)} ${esc(cert.exam)}</a>` : esc(p.cert)}</strong><br>${esc(p.why)}</li>`; }).join("")}</ol>
     <h2>Jobs</h2>
-    <div class="panel">${c.jobs.map(j => `<div class="row"><div class="grow"><strong>${esc(j.title)}</strong> <span class="chip" style="--c:var(--d1)">${esc(j.level)}</span><br><span class="note">${esc(j.does)}</span></div></div>`).join("")}</div>
+    <div class="panel">${c.jobs.map(j => `<div class="row"><div class="grow"><strong>${esc(j.title)}</strong> <span class="chip" data-style="--c:var(--d1)">${esc(j.level)}</span><br><span class="note">${esc(j.does)}</span></div></div>`).join("")}</div>
     <h2>Skills employers ask for</h2>
     <div class="panel"><ul class="clean">${c.skills.map(s => `<li>${esc(s)}</li>`).join("")}</ul></div>
     <h2>Your next 30 days</h2>

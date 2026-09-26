@@ -15,12 +15,12 @@
 
   function card(lab, tag) {
     const st = labStatus(lab);
-    return `<a class="labcard" href="#${esc(lab.id)}" style="--c:${trackColor(lab.track)}">
-      <span class="labtop"><span class="chip" style="--c:${trackColor(lab.track)}">${esc(lab.track)}</span>${tag ? `<span class="note">${esc(tag)}</span>` : ""}</span>
+    return `<a class="labcard" href="#${esc(lab.id)}" data-style="--c:${trackColor(lab.track)}">
+      <span class="labtop"><span class="chip" data-style="--c:${trackColor(lab.track)}">${esc(lab.track)}</span>${tag ? `<span class="note">${esc(tag)}</span>` : ""}</span>
       <strong>${esc(lab.title)}</strong>
       <span class="note">${esc(lab.level)} · ${hours(lab.minutes)} · ${esc(lab.cost)}</span>
-      <span class="labprog" aria-hidden="true"><i style="width:${st.pct}%"></i></span>
-      <span class="labstate ${st.state}">${STATE[st.state]}${st.state === "doing" ? ` · ${st.pct}% of steps` : ""}</span>
+      <span class="labprog" aria-hidden="true"><i data-style="width:${esc(st.pct)}%"></i></span>
+      <span class="labstate ${esc(st.state)}">${esc(STATE[st.state])}${st.state === "doing" ? ` · ${esc(st.pct)}% of steps` : ""}</span>
     </a>`;
   }
   CertHub.labCard = card;
@@ -48,14 +48,14 @@
     const first = labs["lab-home-lab"];
     return `<h1>Hands-on labs</h1>
     <p class="meta">${all().length} labs built from what security, network and GRC teams actually do day to day. Each has step-by-step instructions with exact commands, checks that prove it worked, a place for your notes, and a write-up and resume bullet for your portfolio.</p>
-    <div class="figs3"><div class="fig"><b>${counts.done}</b><span>done</span></div><div class="fig"><b>${counts.doing}</b><span>in progress</span></div><div class="fig"><b>${counts.new}</b><span>not started</span></div></div>
+    <div class="figs3"><div class="fig"><b>${esc(counts.done)}</b><span>done</span></div><div class="fig"><b>${esc(counts.doing)}</b><span>in progress</span></div><div class="fig"><b>${esc(counts.new)}</b><span>not started</span></div></div>
     <div class="panel installcard vmcard"><div class="grow"><strong>Practice VMs</strong><br><span class="note">Real Linux servers in your browser: free practice, two networked machines, graded labs checked inside the VM, and a timed exam. Nothing to install.</span></div><a class="btn sm" href="#vm">Open the practice VMs</a></div>
     ${first && labStatus(first, lp).state !== "done" ? `<div class="status notice"><strong>Start here:</strong> most labs run in the home lab you build in <a href="#lab-home-lab">${esc(first.title)}</a>.</div>` : ""}
     <div class="filters">
       <label>Track <select id="f-track"><option value="">All tracks</option>${TRACKS.map(t => `<option ${filters.track === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
       <label>Certification <select id="f-cert"><option value="">All</option>${Object.values(CertHub.certs).map(c => `<option value="${esc(c.id)}" ${filters.cert === c.id ? "selected" : ""}>${esc(c.short)}</option>`).join("")}</select></label>
       <label>Job role <select id="f-role"><option value="">Any role</option>${nice().roles.map(r => `<option value="${esc(r.id)}" ${filters.role === r.id ? "selected" : ""}>${esc(r.name)}</option>`).join("")}</select></label>
-      <label>Status <select id="f-state"><option value="">Any</option>${Object.entries(STATE).map(([k, v]) => `<option value="${k}" ${filters.state === k ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+      <label>Status <select id="f-state"><option value="">Any</option>${Object.entries(STATE).map(([k, v]) => `<option value="${esc(k)}" ${filters.state === k ? "selected" : ""}>${esc(v)}</option>`).join("")}</select></label>
       <label class="grow">Search <input type="search" id="f-q" value="${esc(filters.q)}" placeholder="Wireshark, Splunk, VLAN…"></label>
     </div>
     <div id="lablist">${listHtml()}</div>
@@ -72,16 +72,16 @@
     const req = (lab.requires || []).map(id => labs[id]).filter(Boolean);
     return `<p class="crumbs"><a href="#labs">Labs</a> / ${esc(lab.track)}</p>
     <h1>${esc(lab.title)}</h1>
-    <p class="meta"><span class="chip" style="--c:${trackColor(lab.track)}">${esc(lab.track)}</span> ${esc(lab.level)} · about ${hours(lab.minutes)} · ${esc(lab.cost)}</p>
+    <p class="meta"><span class="chip" data-style="--c:${trackColor(lab.track)}">${esc(lab.track)}</span> ${esc(lab.level)} · about ${hours(lab.minutes)} · ${esc(lab.cost)}</p>
     <p class="lede">${esc(lab.summary)}</p>
-    <div class="panel realworld"><strong>On the job</strong><p>${esc(lab.realWorld)}</p>${nice().rolesFor(lab).length ? `<p class="note" style="margin:8px 0 0">Builds skills for these <a href="#frameworks">NICE work roles</a>: ${nice().rolesFor(lab).map(r => `<strong>${esc(r.name)}</strong> (${esc(r.titles)})`).join("; ")}</p>` : ""}</div>
+    <div class="panel realworld"><strong>On the job</strong><p>${esc(lab.realWorld)}</p>${nice().rolesFor(lab).length ? `<p class="note" data-style="margin:8px 0 0">Builds skills for these <a href="#frameworks">NICE work roles</a>: ${nice().rolesFor(lab).map(r => `<strong>${esc(r.name)}</strong> (${esc(r.titles)})`).join("; ")}</p>` : ""}</div>
     ${usesLinux(lab) ? `<div class="panel installcard vmcard"><div class="grow"><strong>Practice the Linux commands in your browser</strong><br><span class="note">The practice VMs are real Ubuntu servers with systemd, SSH, LVM and iptables, including a two-machine network, with nothing to install. Steps that need the internet or a desktop still need your home lab.</span></div><a class="btn sm" href="#vm">Open the practice VM</a></div>` : ""}
     ${lab.safety ? `<div class="status warn"><strong>Safety:</strong> ${esc(lab.safety)}</div>` : ""}
-    ${req.length ? `<p class="note">Do first: ${req.map(r => `<a href="#${esc(r.id)}">${esc(r.title)}</a> (${STATE[labStatus(r).state].toLowerCase()})`).join(", ")}</p>` : ""}
+    ${req.length ? `<p class="note">Do first: ${req.map(r => `<a href="#${esc(r.id)}">${esc(r.title)}</a> (${esc(STATE[labStatus(r).state].toLowerCase())})`).join(", ")}</p>` : ""}
     <h2>You'll need</h2>
     <div class="panel"><ul class="clean">${lab.youWillNeed.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>
-    <div class="flex" style="margin-top:28px"><h2 style="margin:0">Steps</h2><span class="note" id="stepcount">${Object.values(s.steps || {}).filter(Boolean).length} of ${lab.steps.length} done</span></div>
-    <div class="prog" style="--c:${trackColor(lab.track)};margin:10px 0 4px"><i id="stepbar" style="width:${st.state === "done" ? 100 : st.pct}%"></i></div>
+    <div class="flex" data-style="margin-top:28px"><h2 data-style="margin:0">Steps</h2><span class="note" id="stepcount">${Object.values(s.steps || {}).filter(Boolean).length} of ${lab.steps.length} done</span></div>
+    <div class="prog" data-style="--c:${trackColor(lab.track)};margin:10px 0 4px"><i id="stepbar" data-style="width:${st.state === "done" ? 100 : esc(st.pct)}%"></i></div>
     <ol class="steps-list">${lab.steps.map((x, i) => `<li class="${s.steps && s.steps[i] ? "checked" : ""}">
       <label class="stephead"><input type="checkbox" data-lstep="${i}" ${s.steps && s.steps[i] ? "checked" : ""}><span class="stepnum">${i + 1}</span><strong>${esc(x.title)}</strong></label>
       <div class="stepbody"><p>${esc(x.body)}</p>
@@ -97,11 +97,11 @@
     <div class="panel"><strong>Deliverable</strong><p>${esc(lab.deliverable)}</p>
       <strong>Resume bullet</strong><p class="resume">${esc(lab.resume)}</p>
       <div class="btns"><button type="button" class="btn ghost sm" data-lact="copyresume">Copy resume bullet</button><button type="button" class="btn ghost sm" data-lact="copywriteup">Copy write-up (Markdown)</button></div></div>
-    <div class="btns"><button type="button" class="btn" data-lact="done">${s.done ? "Mark as not done" : "Mark lab complete"}</button>${s.done ? `<span class="note" style="align-self:center">Finished ${new Date(s.done).toLocaleDateString()}</span>` : ""}</div>
+    <div class="btns"><button type="button" class="btn" data-lact="done">${s.done ? "Mark as not done" : "Mark lab complete"}</button>${s.done ? `<span class="note" data-style="align-self:center">Finished ${new Date(s.done).toLocaleDateString()}</span>` : ""}</div>
     ${lab.interview && lab.interview.length ? `<h2>Interview practice</h2><div class="panel">${lab.interview.map(q => { const [a, ...b] = q.split(" — "); return `<details class="sq"><summary>${esc(a)}</summary><p>${esc(b.join(" — ") || "")}</p></details>`; }).join("")}</div>` : ""}
     ${lab.cleanup && lab.cleanup.length ? `<h2>Clean up</h2><div class="panel"><ul class="clean">${lab.cleanup.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
     ${lab.links && lab.links.length ? `<h2>Official docs</h2><div class="panel"><ul class="clean">${lab.links.map(l => `<li><a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a></li>`).join("")}</ul></div>` : ""}
-    ${uses.length ? `<h2>Part of these study plans</h2><p class="note">${uses.map(u => `<a href="#${esc(u.cert.id)}">${esc(u.cert.short)}</a> week ${u.week}`).join(" · ")}</p>` : ""}`;
+    ${uses.length ? `<h2>Part of these study plans</h2><p class="note">${uses.map(u => `<a href="#${esc(u.cert.id)}">${esc(u.cert.short)}</a> week ${esc(u.week)}`).join(" · ")}</p>` : ""}`;
   }
 
   function writeup(lab) {
@@ -146,7 +146,7 @@ ${lab.deliverable}
     if (!list.length) return "";
     return `<h2>Job roles your labs build toward</h2>
     <p class="note">From the <a href="#frameworks">NICE Workforce Framework</a>. Use these role names and job titles in your resume summary and job searches.</p>
-    <div class="panel">${list.map(r => { const total = CertHub.nice.labsForRole(r.id).length; return `<div class="row"><div class="grow"><strong>${esc(r.name)}</strong><br><span class="note">${esc(r.titles)}</span></div><span class="note">${count[r.id]} of ${total} labs</span></div>`; }).join("")}</div>`;
+    <div class="panel">${list.map(r => { const total = CertHub.nice.labsForRole(r.id).length; return `<div class="row"><div class="grow"><strong>${esc(r.name)}</strong><br><span class="note">${esc(r.titles)}</span></div><span class="note">${esc(count[r.id])} of ${total} labs</span></div>`; }).join("")}</div>`;
   }
   function portfolioView() {
     const lp = loadLabProgress();
@@ -159,7 +159,7 @@ ${lab.deliverable}
     <div class="figs3"><div class="fig"><b>${done.length}</b><span>labs finished</span></div><div class="fig"><b>${hours(mins)}</b><span>hands-on time</span></div><div class="fig"><b>${new Set(done.map(l => l.track)).size}</b><span>of ${TRACKS.length} tracks</span></div></div>
     ${done.length ? `<div class="btns"><button type="button" class="btn" data-lact="copybullets">Copy all resume bullets</button><button type="button" class="btn ghost" data-lact="copyportfolio">Copy full portfolio (Markdown)</button></div>
     <h2>Finished labs</h2>
-    <div class="panel">${done.map(l => `<div class="row"><div class="grow"><a href="#${esc(l.id)}"><strong>${esc(l.title)}</strong></a><br><span class="note">${esc(l.track)} · finished ${new Date(lp[l.id].done).toLocaleDateString()}</span><p class="resume" style="margin:6px 0 0">${esc(l.resume)}</p></div></div>`).join("")}</div>`
+    <div class="panel">${done.map(l => `<div class="row"><div class="grow"><a href="#${esc(l.id)}"><strong>${esc(l.title)}</strong></a><br><span class="note">${esc(l.track)} · finished ${new Date(lp[l.id].done).toLocaleDateString()}</span><p class="resume" data-style="margin:6px 0 0">${esc(l.resume)}</p></div></div>`).join("")}</div>`
     : `<div class="status">No finished labs yet. Mark a lab complete and it shows up here with its resume bullet.</div>`}
     ${done.length ? rolesSummary(done) : ""}
     ${trackBadges(lp)}
@@ -179,7 +179,7 @@ ${lab.deliverable}
   function trackBadges(lp) {
     const rows = TRACKS.map(t => { const ls = all().filter(l => l.track === t); return { t, n: ls.length, d: ls.filter(l => labStatus(l, lp).state === "done").length }; }).filter(r => r.n);
     return `<h2>Track badges</h2><p class="note">Finish every lab in a track to earn a badge you can share.</p>
-    <div class="panel">${rows.map(r => `<div class="row"><div class="grow"><strong>${esc(r.t)}</strong><br><span class="note">${r.d} of ${r.n} labs</span></div>${r.d === r.n ? `<button type="button" class="btn sm" data-lact="trackbadge" data-track="${esc(r.t)}">Download badge</button>` : `<span class="note">${Math.round(100 * r.d / r.n)}%</span>`}</div>`).join("")}</div>`;
+    <div class="panel">${rows.map(r => `<div class="row"><div class="grow"><strong>${esc(r.t)}</strong><br><span class="note">${esc(r.d)} of ${esc(r.n)} labs</span></div>${r.d === r.n ? `<button type="button" class="btn sm" data-lact="trackbadge" data-track="${esc(r.t)}">Download badge</button>` : `<span class="note">${Math.round(100 * r.d / r.n)}%</span>`}</div>`).join("")}</div>`;
   }
   // Certifications with saved progress, for the resume: in progress, or plan complete.
   function studiedCerts() {
@@ -209,7 +209,7 @@ ${lab.deliverable}
       "## Summary", `Aspiring ${role.name.toLowerCase()} professional with hands-on home-lab experience in ${tracks.join(", ").toLowerCase() || "IT"}. Completed ${done.length} documented lab project${done.length === 1 ? "" : "s"}${certs.length ? ` and preparing for ${certs.map(x => x.c.short).join(", ")}` : ""}.`, "",
       certs.length ? "## Certifications" : "", ...certs.map(x => `- ${x.c.vendor ? x.c.vendor + " " : ""}${x.c.short} (${x.c.exam}) — in progress${x.examDate ? `, target ${x.examDate}` : ""}`), certs.length ? "" : "",
       "## Home lab and projects", ...done.map(l => `- ${l.resume}`), "",
-      role.titles ? `<!-- Job titles to search for: ${role.titles} -->` : ""].filter((x, i, a) => !(x === "" && a[i - 1] === "")).join("\n").trim() + "\n";
+      role.titles ? `<!-- Job titles to search for: ${esc(role.titles)} -->` : ""].filter((x, i, a) => !(x === "" && a[i - 1] === "")).join("\n").trim() + "\n";
   }
   function portfolioMarkdown() {
     const lp = loadLabProgress();

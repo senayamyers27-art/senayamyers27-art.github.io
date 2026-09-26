@@ -303,7 +303,7 @@
 
   const HANDLERS = {
     configure: {
-      list: C => `      Name                    Value             Type    Location\n      ----                    -----             ----    --------\n   profile                <not set>             None    None\naccess_key     ****************MPLE shared-credentials-file    \nsecret_key     ****************EKEY shared-credentials-file    \n    region                ${C.S.region.padStart(9)}      config-file    ~/.aws/config`,
+      list: C => `      Name                    Value             Type    Location\n      ----                    -----             ----    --------\n   profile                <not set>             None    None\naccess_key     ****************MPLE shared-credentials-file    \nsecret_key     ****************EKEY shared-credentials-file    \n    region                ${/* safe: terminal text, not HTML */ C.S.region.padStart(9)}      config-file    ~/.aws/config`,
       get: C => { const k = C.args[0]; return k === "region" ? C.S.region : k === "output" ? C.S.output : ""; },
       set: C => { const [k, v] = C.args; if (k === "region") C.S.region = v; else if (k === "output" && ["json", "text", "table"].includes(v)) C.S.output = v; return ""; }
     },

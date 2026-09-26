@@ -181,6 +181,8 @@
       pool.sort((a, b) => (want.indexOf(a.lv) < 0 ? 9 : want.indexOf(a.lv)) - (want.indexOf(b.lv) < 0 ? 9 : want.indexOf(b.lv)));
       pool.slice(0, k).forEach(q => { used.add(q.id); out.push(q); });
     });
+    // Rounding each domain's share can leave the set a question or two short: top it up.
+    if (out.length < n) out = out.concat(shuffle(Q.filter(q => !used.has(q.id))).slice(0, n - out.length));
     return shuffle(out).slice(0, n);
   }
   // Hard mode: an exam-length test from the hardest questions, weighted like the real exam.
@@ -256,7 +258,7 @@
   // The Pro tab only shows where Pro can be bought.
   const tabs = () => TABS.filter(([k]) => k !== "guide" || Pro().available);
   function renderTabs() {
-    $("#tabs").innerHTML = tabs().map(([k, l]) => `<button role="tab" aria-selected="${S.tab === k}" data-tab="${k}">${k === "plan" ? `${W.length}-week plan` : l}</button>`).join("");
+    $("#tabs").innerHTML = tabs().map(([k, l]) => `<button role="tab" aria-selected="${S.tab === k}" data-tab="${esc(k)}">${k === "plan" ? `${W.length}-week plan` : esc(l)}</button>`).join("");
     const days = Math.ceil((parseD(S.p.examDate) - today()) / DAY);
     $("#count").innerHTML = days >= 0 ? `<b>${days}</b> days<span class="wide"> to exam</span>` : "Exam passed";
   }
@@ -264,11 +266,11 @@
   const DOMAINS_SHORT = d => DOM[d].name;
   function routeMap(active) {
     const now = weekNow();
-    return `<div class="route" aria-label="${W.length}-week route"><div class="line" style="min-width:${Math.max(W.length * 40, 300)}px">${W.map(w => {
+    return `<div class="route" aria-label="${W.length}-week route"><div class="line" data-style="min-width:${Math.max(W.length * 40, 300)}px">${W.map(w => {
       const done = DAYS().every((_, i) => S.p.checks[`${w.n}-${i}`]) || (w.n < now && today() >= parseD(S.p.start));
-      return `<button class="stop ${done ? "done" : ""} ${w.n === active ? "now" : ""}" style="--c:${dc(w.dom)}" data-week="${w.n}" aria-label="Week ${w.n}: ${esc(w.title)}"><span class="dot">${w.n}</span><small>${fmt(weekStart(w.n))}</small></button>`;
+      return `<button class="stop ${done ? "done" : ""} ${w.n === active ? "now" : ""}" data-style="--c:${dc(w.dom)}" data-week="${esc(w.n)}" aria-label="Week ${esc(w.n)}: ${esc(w.title)}"><span class="dot">${esc(w.n)}</span><small>${fmt(weekStart(w.n))}</small></button>`;
     }).join("")}</div></div>
-    <div class="legend">${C.domains.map(d => `<span style="--c:${dc(d.id)}">D${d.id} ${esc(d.name)}</span>`).join("")}</div>`;
+    <div class="legend">${C.domains.map(d => `<span data-style="--c:${dc(d.id)}">D${esc(d.id)} ${esc(d.name)}</span>`).join("")}</div>`;
   }
   function checkBanner() {
     return C.status === "verified" ? "" : `<div class="status warn"><strong>Check before relying on this.</strong> ${esc(C.statusNote || "Domain weights haven't been confirmed against the current official outline.")}</div>`;
@@ -288,9 +290,9 @@
     const cp = PLAN.checkpoints.find(c => c.after === n);
     const pre = today() < parseD(S.p.start);
     return `${routeMap(n)}
-    <h1>Week ${n}: ${esc(w.title)}</h1>
+    <h1>Week ${esc(n)}: ${esc(w.title)}</h1>
     <p class="meta">${fmt(weekStart(n))} – ${fmt(U.addDays(weekStart(n), 6))}${pre && n === 1 ? " · starts " + fmtLong(weekStart(1)) : ""}</p>
-    <p style="margin:10px 0 0"><span class="chip" style="--c:${dc(w.dom)}">${w.dom ? `Domain ${w.dom} · ${DOM[w.dom].w}% of exam` : "All domains"}</span> <span class="note">${esc(w.obj)}</span></p>
+    <p data-style="margin:10px 0 0"><span class="chip" data-style="--c:${dc(w.dom)}">${w.dom ? `Domain ${esc(w.dom)} · ${esc(DOM[w.dom].w)}% of exam` : "All domains"}</span> <span class="note">${esc(w.obj)}</span></p>
     ${noticeHtml()}
     ${n === 1 ? checkBanner() : ""}
     ${!S.p.placement && !S.p.history.length ? `<div class="panel startcard"><div class="grow"><strong>New to ${esc(C.short)}?</strong><br><span class="note">Take a short placement test to find what you already know and which weeks to focus on.</span></div><button class="btn sm" data-act="placement">Take the placement test</button></div>` : ""}
@@ -298,19 +300,19 @@
     ${streakHtml()}
     ${w.light ? `<div class="status">Holiday week. Keep it to about 30 minutes a day.</div>` : ""}
     <div class="btns">
-      <button class="btn" data-act="weekly" data-w="${n}">Take week ${n} quiz</button>
+      <button class="btn" data-act="weekly" data-w="${esc(n)}">Take week ${esc(n)} quiz</button>
       ${due ? `<button class="btn ghost" data-act="review">Review ${due} due</button>` : ""}
-      ${cp ? `<button class="btn ghost" data-act="checkpoint" data-d="${cp.dom}">Checkpoint test: Domain ${cp.dom}</button>` : ""}
+      ${cp ? `<button class="btn ghost" data-act="checkpoint" data-d="${esc(cp.dom)}">Checkpoint test: Domain ${esc(cp.dom)}</button>` : ""}
       ${n === W.length ? `<button class="btn ghost" data-act="exam">Full practice exam</button>` : ""}
     </div>
     ${weekLessons(w)}
     <h2>Hands-on labs</h2>
     ${labs.length ? `<p class="note">Step-by-step, in your own home lab. Each one ends with a portfolio write-up and a resume bullet.</p>
     <div class="labgrid">${labs.map(l => CertHub.labCard(l)).join("")}</div>` : ""}
-    ${w.lab ? `<div class="panel"><strong>Quick exercise</strong><p style="margin:6px 0 0">${esc(w.lab)}</p></div>` : ""}
+    ${w.lab ? `<div class="panel"><strong>Quick exercise</strong><p data-style="margin:6px 0 0">${esc(w.lab)}</p></div>` : ""}
     ${w.notes && w.notes.length ? `<h2>${esc(C.notesLabel || "Reread")}</h2><div class="panel"><ul class="clean">${w.notes.map(t => `<li>${esc(t)}</li>`).join("")}</ul></div>` : ""}
     <h2>Daily plan</h2>
-    <div class="panel"><ul class="days">${DAYS().map(([d, t], i) => { const k = `${n}-${i}`; const c = !!S.p.checks[k]; const text = i === 3 ? "Hands-on: " + (labs.length ? labs.map(l => l.title).join("; ") : w.lab) : t; return `<li class="${c ? "checked" : ""}"><label><input type="checkbox" data-check="${k}" ${c ? "checked" : ""}><span class="d">${d}</span><span class="t">${esc(text)}</span></label></li>`; }).join("")}</ul></div>
+    <div class="panel"><ul class="days">${DAYS().map(([d, t], i) => { const k = `${n}-${i}`; const c = !!S.p.checks[k]; const text = i === 3 ? "Hands-on: " + (labs.length ? labs.map(l => l.title).join("; ") : w.lab) : t; return `<li class="${c ? "checked" : ""}"><label><input type="checkbox" data-check="${esc(k)}" ${c ? "checked" : ""}><span class="d">${esc(d)}</span><span class="t">${esc(text)}</span></label></li>`; }).join("")}</ul></div>
     ${w.study && w.study.length ? `<h2>Study questions</h2>
     <p class="note">Answer out loud first, then open to check.</p>
     <div class="panel">${w.study.map(([q, a]) => `<details class="sq"><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("")}</div>` : ""}`;
@@ -331,13 +333,13 @@
     const r = isRead(t);
     return `<li><details class="lesson" data-k="${lessonKey(t)}"${l.tt ? ` lang="es"` : ""}><summary><span class="grow">${esc(l.tt || t)}</span>${r ? `<span class="chip done">${tr("Read")}</span>` : ""}</summary>
       <div class="lbody">
-        <div class="btns" style="margin-top:0"><button type="button" class="btn ghost sm" data-act="video" data-k="${lessonKey(t)}">${tr("▶ Watch the overview")}</button></div>
+        <div class="btns" data-style="margin-top:0"><button type="button" class="btn ghost sm" data-act="video" data-k="${lessonKey(t)}">${tr("▶ Watch the overview")}</button></div>
         ${(l.body || []).map((x, i) => para(x) + (i === 0 ? diagramHtml(t) : "")).join("")}
         ${l.terms && l.terms.length ? `<h3>${tr("Key terms")}</h3><dl class="terms">${l.terms.map(([a, b]) => `<dt>${inline(a)}</dt><dd>${inline(b)}</dd>`).join("")}</dl>` : ""}
         ${l.example ? `<div class="panel ex"><strong>${tr("Real-world example")}</strong>${[].concat(l.example).map(para).join("")}</div>` : ""}
         ${l.tip ? `<div class="status notice"><strong>${tr("Exam tip:")}</strong> ${inline(l.tip)}</div>` : ""}
         ${l.check && l.check.length ? `<h3>${tr("Check yourself")}</h3><p class="note">${tr("Answer out loud first, then open to check.")}</p>${l.check.map(([q, a]) => `<details class="sq"><summary>${inline(q)}</summary><p>${inline(a)}</p></details>`).join("")}` : ""}
-        <div class="btns" data-ui>${readBtn(t)}${n ? `<button class="btn ghost sm" data-act="weekly" data-w="${n}">Quiz me on week ${n}</button>` : ""}</div>
+        <div class="btns" data-ui>${readBtn(t)}${n ? `<button class="btn ghost sm" data-act="weekly" data-w="${esc(n)}">Quiz me on week ${esc(n)}</button>` : ""}</div>
         ${rateHtml(t)}
         ${reportLink(`${C.short} lesson: ${t.slice(0, 80)}`, `Certification: ${C.name} (${C.exam})\nLesson: ${t}`)}
       </div></details></li>`;
@@ -377,20 +379,20 @@
   const lessonLink = q => { const t = lessonFor(q); return t ? `<button type="button" class="linkbtn" data-ui data-act="golesson" data-k="${lessonKey(t)}">Review the lesson: ${esc(t.length > 70 ? t.slice(0, 68) + "…" : t)}</button>` : ""; };
   const reportLink = (title, body) => { const u = CertHub.reportUrl(title, body); return u ? `<a class="report" data-ui href="${esc(u)}" target="_blank" rel="noopener">Report a mistake</a>` : ""; };
   const qReport = q => reportLink(`${C.short}: question ${q.id}`, `Certification: ${C.name} (${C.exam})\nQuestion ${q.id}: ${q.q}\nMarked answer: ${q.o[q.a]}`);
-  const diagramHtml = t => CertHub.diagramsFor(C.id, t).map(d => `<figure class="diagram">${d.svg.replace(/^<svg /, `<svg role="img" aria-label="${esc(d.alt)}" focusable="false" `)}<figcaption>${esc(d.title)}</figcaption></figure>`).join("");
+  const diagramHtml = t => CertHub.diagramsFor(C.id, t).map(d => `<figure class="diagram">${esc(d.svg.replace(/^<svg /, `<svg role="img" aria-label="${esc(d.alt)}" focusable="false" `))}<figcaption>${esc(d.title)}</figcaption></figure>`).join("");
   const lessonTopics = w => w.dom ? w.topics.filter(t => !/^Checkpoint test/i.test(t)) : [];
   function weekLessons(w) {
     const ts = lessonTopics(w);
     const head = `<h2>This week's lessons</h2>`;
-    if (LES === null && ts.length) return head + `<p class="note">Loading lessons…</p><div class="panel wk" style="--c:${dc(w.dom)}"><ul class="clean">${w.topics.map(t => `<li>${esc(t)}</li>`).join("")}</ul></div>`;
-    if (!LES || !ts.some(t => LES.has(t))) return `<h2>What you're covering</h2><div class="panel wk" style="--c:${dc(w.dom)}"><ul class="clean">${w.topics.map(t => `<li>${esc(t)}</li>`).join("")}</ul></div>`;
+    if (LES === null && ts.length) return head + `<p class="note">Loading lessons…</p><div class="panel wk" data-style="--c:${dc(w.dom)}"><ul class="clean">${w.topics.map(t => `<li>${esc(t)}</li>`).join("")}</ul></div>`;
+    if (!LES || !ts.some(t => LES.has(t))) return `<h2>What you're covering</h2><div class="panel wk" data-style="--c:${dc(w.dom)}"><ul class="clean">${w.topics.map(t => `<li>${esc(t)}</li>`).join("")}</ul></div>`;
     const done = ts.filter(t => LES.has(t) && isRead(t)).length, all = ts.filter(t => LES.has(t)).length;
     return head + `<p class="note">Open each topic to read its lesson: an explanation, key terms, a real-world example, an exam tip and questions to check yourself. ${done} of ${all} read.</p>
     ${playWeekBtn(w)}
-    <div class="panel wk" style="--c:${dc(w.dom)}"><ul class="clean lessons">${w.topics.map(t => lessonHtml(t, 0)).join("")}</ul></div>`;
+    <div class="panel wk" data-style="--c:${dc(w.dom)}"><ul class="clean lessons">${w.topics.map(t => lessonHtml(t, 0)).join("")}</ul></div>`;
   }
   // A playlist of a week's lesson overview videos.
-  const playWeekBtn = w => { const n = lessonTopics(w).filter(t => LES && LES.has(t)).length; return n ? `<div class="btns no-print" style="margin:6px 0"><button type="button" class="btn sm" data-act="playweek" data-w="${w.n}">▶ Watch this week's overview videos (${n})</button></div>` : ""; };
+  const playWeekBtn = w => { const n = lessonTopics(w).filter(t => LES && LES.has(t)).length; return n ? `<div class="btns no-print" data-style="margin:6px 0"><button type="button" class="btn sm" data-act="playweek" data-w="${esc(w.n)}">▶ Watch this week's overview videos (${n})</button></div>` : ""; };
   /* ---------- lesson overview video: narrated slides built from the lesson ---------- */
   const plain = x => String(x || "").replace(/`/g, "");
   const sentences = x => plain(x).split(/(?<=[.!?])\s+(?=[A-Z0-9"(])/).filter(Boolean);
@@ -399,16 +401,16 @@
     const l = lessonOf(t), d = DOM[(W.find(w => w.topics.includes(t)) || {}).dom] || null, es = !!l.tt;
     const K = es ? { idea: "La idea principal", how: "Cómo funciona", terms: "Términos clave", real: "En el mundo real", tip: "Consejo para el examen", check: "Comprueba lo que sabes", pause: "Pausa y responde en voz alta; luego lee la lección completa para comprobar.", ov: "Resumen", hi: "¡Hola! Vamos a ver", hiEnd: "en un minuto.", ideaSay: "Primero, la idea principal.", howSay: "Ahora, cómo funciona.", termsSay: "Estos son los términos que tienes que dominar.", realSay: "Veámoslo en el mundo real.", tipSay: "Y aquí va un consejo que te dará puntos en el examen.", checkSay: "¡Tu turno!", bye: "¡Buen trabajo! Sigue así." } : { idea: "The big idea", how: "How it works", terms: "Key terms", real: "In the real world", tip: "Exam tip", check: "Check yourself", pause: "Pause and answer out loud, then read the full lesson to check.", ov: "Overview", hi: "Hey there! Let's break down", hiEnd: "in about a minute.", ideaSay: "First, the big idea.", howSay: "Now, here's how it works.", termsSay: "Here are the key terms you'll want to nail.", realSay: "Let's see it in the real world.", tipSay: "And here's a tip that can earn you points on exam day.", checkSay: "Your turn!", bye: "Nice work! Keep that momentum going." };
     const prose = (l.body || []).filter(x => !/^```/.test(x));
-    const out = [{ h: `<p class="ov-kicker">${esc(C.short)}${d ? ` · Domain ${d.id}: ${esc(d.name)}` : ""}</p><h2 class="ov-title">${esc(l.tt || t)}</h2><p class="ov-sub">${K.ov}</p>`, say: `${K.hi} ${plain(l.tt || t)}, ${K.hiEnd}` }];
-    if (prose[0]) out.push({ h: `<p class="ov-kicker">${K.idea}</p><p class="ov-lead">${esc(first(prose[0], 2))}</p>`, say: K.ideaSay + " " + first(prose[0], 2) });
+    const out = [{ h: `<p class="ov-kicker">${esc(C.short)}${d ? ` · Domain ${esc(d.id)}: ${esc(d.name)}` : ""}</p><h2 class="ov-title">${esc(l.tt || t)}</h2><p class="ov-sub">${esc(K.ov)}</p>`, say: `${K.hi} ${plain(l.tt || t)}, ${K.hiEnd}` }];
+    if (prose[0]) out.push({ h: `<p class="ov-kicker">${esc(K.idea)}</p><p class="ov-lead">${esc(first(prose[0], 2))}</p>`, say: K.ideaSay + " " + first(prose[0], 2) });
     const how = prose.slice(1, 4).map(x => first(x, 1)).filter(Boolean);
-    if (how.length) out.push({ h: `<p class="ov-kicker">${K.how}</p><ul class="ov-list">${how.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`, say: K.howSay + " " + how.join(" ") });
-    CertHub.diagramsFor(C.id, t).slice(0, 1).forEach(g => out.push({ h: `<p class="ov-kicker">${esc(g.title)}</p><div class="ov-fig">${g.svg.replace(/^<svg /, `<svg role="img" aria-label="${esc(g.alt)}" focusable="false" `)}</div>`, say: g.alt }));
+    if (how.length) out.push({ h: `<p class="ov-kicker">${esc(K.how)}</p><ul class="ov-list">${how.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`, say: K.howSay + " " + how.join(" ") });
+    CertHub.diagramsFor(C.id, t).slice(0, 1).forEach(g => out.push({ h: `<p class="ov-kicker">${esc(g.title)}</p><div class="ov-fig">${esc(g.svg.replace(/^<svg /, `<svg role="img" aria-label="${esc(g.alt)}" focusable="false" `))}</div>`, say: g.alt }));
     const terms = (l.terms || []).slice(0, 4);
-    if (terms.length) out.push({ h: `<p class="ov-kicker">${K.terms}</p><dl class="ov-terms">${terms.map(([a, b]) => `<dt>${esc(plain(a))}</dt><dd>${esc(first(b, 1))}</dd>`).join("")}</dl>`, say: K.termsSay + " " + terms.map(([a, b]) => `${plain(a)}: ${first(b, 1)}`).join(" ") });
-    if (l.example) out.push({ h: `<p class="ov-kicker">${K.real}</p><p class="ov-lead">${esc(first(l.example, 2))}</p>`, say: K.realSay + " " + first(l.example, 2) });
-    if (l.tip) out.push({ h: `<p class="ov-kicker">${K.tip}</p><p class="ov-lead">${esc(plain(l.tip))}</p>`, say: K.tipSay + " " + plain(l.tip) });
-    if (l.check && l.check[0]) out.push({ h: `<p class="ov-kicker">${K.check}</p><p class="ov-lead">${esc(plain(l.check[0][0]))}</p><p class="ov-sub">${K.pause}</p>`, say: K.checkSay + " " + plain(l.check[0][0]) + " " + K.pause + " " + K.bye });
+    if (terms.length) out.push({ h: `<p class="ov-kicker">${esc(K.terms)}</p><dl class="ov-terms">${terms.map(([a, b]) => `<dt>${esc(plain(a))}</dt><dd>${esc(first(b, 1))}</dd>`).join("")}</dl>`, say: K.termsSay + " " + terms.map(([a, b]) => `${plain(a)}: ${first(b, 1)}`).join(" ") });
+    if (l.example) out.push({ h: `<p class="ov-kicker">${esc(K.real)}</p><p class="ov-lead">${esc(first(l.example, 2))}</p>`, say: K.realSay + " " + first(l.example, 2) });
+    if (l.tip) out.push({ h: `<p class="ov-kicker">${esc(K.tip)}</p><p class="ov-lead">${esc(plain(l.tip))}</p>`, say: K.tipSay + " " + plain(l.tip) });
+    if (l.check && l.check[0]) out.push({ h: `<p class="ov-kicker">${esc(K.check)}</p><p class="ov-lead">${esc(plain(l.check[0][0]))}</p><p class="ov-sub">${esc(K.pause)}</p>`, say: K.checkSay + " " + plain(l.check[0][0]) + " " + K.pause + " " + K.bye });
     out.lang = es ? "es-US" : "en-US";
     return out;
   }
@@ -440,7 +442,7 @@
     if (tts) { fillVoices(); speechSynthesis.addEventListener("voiceschanged", fillVoices); wrap.addEventListener("change", e => { const sel = e.target.closest("[data-ov-voice]"); if (sel) { CertHub.store.set("certhub:voice-" + slides.lang.slice(0, 2), sel.value); run(); } }); }
     const stop = () => { gen++; clearTimeout(timer); if (tts) speechSynthesis.cancel(); };
     const show = () => {
-      $o(".ov-stage").innerHTML = `<div class="ov-slide">${slides[i].h}</div>`;
+      $o(".ov-stage").innerHTML = `<div class="ov-slide">${esc(slides[i].h)}</div>`;
       $o(".ov-bar i").style.width = `${100 * (i + 1) / slides.length}%`;
       $o(".ov-n").textContent = `${i + 1} / ${slides.length}`;
       $o("[data-ov=play]").textContent = playing ? "❚❚ Pause" : "▶ Play";
@@ -490,11 +492,11 @@
     const items = [];
     unread.forEach(t => items.push(`<li>Read: <button type="button" class="linkbtn" data-act="golesson" data-k="${lessonKey(t)}">${esc(t.length > 80 ? t.slice(0, 78) + "…" : t)}</button></li>`));
     if (due) items.push(`<li><button type="button" class="linkbtn" data-act="review">Review ${due} question${due > 1 ? "s" : ""} due today</button></li>`);
-    if (di === 4) items.push(`<li><button type="button" class="linkbtn" data-act="weekly" data-w="${n}">Take the week ${n} quiz</button></li>`);
+    if (di === 4) items.push(`<li><button type="button" class="linkbtn" data-act="weekly" data-w="${esc(n)}">Take the week ${esc(n)} quiz</button></li>`);
     if (SIMS && SIMS.length && di === 3) { const next = SIMS.find(p => p.d === w.dom && !(S.p.sims || {})[p.id]); if (next) items.push(`<li>Try a simulation: <button type="button" class="linkbtn" data-act="gosim" data-id="${esc(next.id)}">${esc(next.title)}</button></li>`); }
-    return `<div class="panel today"><div class="flex"><h2 style="margin:0">Today · ${day}</h2><label class="note"><input type="checkbox" data-check="${k}" ${doneToday ? "checked" : ""}> Done</label></div>
-      <p style="margin:8px 0 6px">${esc(di === 3 ? "Hands-on: " + (weekLabs(w).map(l => l.title).join("; ") || w.lab) : text)}</p>
-      ${items.length ? `<ul class="clean">${items.join("")}</ul>` : `<p class="note" style="margin:0">Nothing else due today. Nice work.</p>`}</div>`;
+    return `<div class="panel today"><div class="flex"><h2 data-style="margin:0">Today · ${esc(day)}</h2><label class="note"><input type="checkbox" data-check="${esc(k)}" ${doneToday ? "checked" : ""}> Done</label></div>
+      <p data-style="margin:8px 0 6px">${esc(di === 3 ? "Hands-on: " + (weekLabs(w).map(l => l.title).join("; ") || w.lab) : text)}</p>
+      ${items.length ? `<ul class="clean">${esc(items.join(""))}</ul>` : `<p class="note" data-style="margin:0">Nothing else due today. Nice work.</p>`}</div>`;
   }
   // Exam readiness, 0-100: weighted domain accuracy (trusted as more questions are answered), lessons read,
   // the best recent practice exam, and a penalty for an overdue review queue.
@@ -519,10 +521,10 @@
   }
   function readinessHtml() {
     const r = readiness();
-    return `<div class="panel ready"><div class="flex"><div><strong>Exam readiness</strong><br><span class="chip" style="--c:${r.band[1]}">${r.band[0]}</span></div><div class="big" style="margin:0">${r.score}<small>/100</small></div></div>
-      <div class="track" aria-hidden="true"><i style="width:${r.score}%;background:${r.band[1]}"></i></div>
-      ${r.tips.length ? `<ul class="clean">${r.tips.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : `<p class="note" style="margin:8px 0 0">Everything points to ready. Book the exam while it's fresh.</p>`}
-      <p class="note" style="margin:8px 0 0">An estimate from your quiz accuracy by domain (weighted like the exam), lessons read, recent practice exams and review backlog. It isn't the real exam's scoring.</p></div>`;
+    return `<div class="panel ready"><div class="flex"><div><strong>Exam readiness</strong><br><span class="chip" data-style="--c:${esc(r.band[1])}">${esc(r.band[0])}</span></div><div class="big" data-style="margin:0">${esc(r.score)}<small>/100</small></div></div>
+      <div class="track" aria-hidden="true"><i data-style="width:${esc(r.score)}%;background:${esc(r.band[1])}"></i></div>
+      ${r.tips.length ? `<ul class="clean">${r.tips.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : `<p class="note" data-style="margin:8px 0 0">Everything points to ready. Book the exam while it's fresh.</p>`}
+      <p class="note" data-style="margin:8px 0 0">An estimate from your quiz accuracy by domain (weighted like the exam), lessons read, recent practice exams and review backlog. It isn't the real exam's scoring.</p></div>`;
   }
   // Plan badge: every lesson read and a practice exam at 80% or better.
   function badgeState() {
@@ -533,13 +535,13 @@
   }
   function badgeHtml() {
     const b = badgeState();
-    return `<div class="panel startcard"><div class="grow"><strong>${b.earned ? `${esc(C.short)} study plan complete` : "Earn your completion badge"}</strong><br><span class="note">${b.earned ? "Download a badge to share on LinkedIn or add to your portfolio." : `Read every lesson (${b.read} of ${b.total}) and score 80% or better on a practice exam (best: ${b.best || 0}%).`}</span></div>${b.earned ? `<button class="btn sm" data-act="certificate">View certificate</button><button class="btn ghost sm" data-act="badge">Download badge</button>` : ""}</div>`;
+    return `<div class="panel startcard"><div class="grow"><strong>${b.earned ? `${esc(C.short)} study plan complete` : "Earn your completion badge"}</strong><br><span class="note">${b.earned ? "Download a badge to share on LinkedIn or add to your portfolio." : `Read every lesson (${esc(b.read)} of ${esc(b.total)}) and score 80% or better on a practice exam (best: ${esc(b.best) || 0}%).`}</span></div>${b.earned ? `<button class="btn sm" data-act="certificate">View certificate</button><button class="btn ghost sm" data-act="badge">Download badge</button>` : ""}</div>`;
   }
   // Certificate of completion: a printable page and a LinkedIn "Add license or certification" link.
   function certificateView() {
     const b = badgeState(), h = S.p.handson || {}, sims = S.p.sims || {}, name = (CertHub.store.get("certhub:name") || "").trim();
     const hoN = HO ? HO.items.filter(x => h[x.id]).length : Object.keys(h).length, simN = Object.keys(sims).length;
-    if (!b.earned) return `<h1>Certificate of completion</h1><p class="meta">Finish the plan first: read every lesson (${b.read} of ${b.total}) and score 80% or better on a practice exam (best so far: ${b.best || 0}%).</p><button class="btn ghost" data-tab="progress">Back to progress</button>`;
+    if (!b.earned) return `<h1>Certificate of completion</h1><p class="meta">Finish the plan first: read every lesson (${esc(b.read)} of ${esc(b.total)}) and score 80% or better on a practice exam (best so far: ${esc(b.best) || 0}%).</p><button class="btn ghost" data-tab="progress">Back to progress</button>`;
     const li = `https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=${encodeURIComponent(`${C.short} ${C.exam} study plan (StudyToCert)`)}&organizationName=${encodeURIComponent("StudyToCert")}&issueYear=${today().getFullYear()}&issueMonth=${today().getMonth() + 1}`;
     return `<div class="no-print"><p class="crumbs"><button type="button" class="linkbtn" data-tab="progress">Progress</button> / Certificate</p>
       <div class="flex"><label class="grow">Name on the certificate <input type="text" id="certname" value="${esc(name)}" autocomplete="name"></label></div>
@@ -547,7 +549,7 @@
       <p class="note">This records that you completed a free study plan. It is not the vendor's certification; add the real one when you pass the exam.</p></div>
       <div class="certificate panel"><p class="note">StudyToCert · Certificate of completion</p>
       <h1>${esc(name || "Your name")}</h1><p>completed the free study plan for</p><h2>${esc(C.name)} (${esc(C.exam)})</h2>
-      <ul class="clean"><li>${b.total} lessons read</li><li>Best practice exam: ${b.best}%</li>${hoN ? `<li>${hoN} hands-on exercises completed</li>` : ""}${simN ? `<li>${simN} exam simulations completed</li>` : ""}</ul>
+      <ul class="clean"><li>${esc(b.total)} lessons read</li><li>Best practice exam: ${esc(b.best)}%</li>${hoN ? `<li>${hoN} hands-on exercises completed</li>` : ""}${simN ? `<li>${simN} exam simulations completed</li>` : ""}</ul>
       <p class="note">${esc(fmtLong(today()))}</p></div>`;
   }
   // Cheat sheet: every lesson's exam tip and key terms, grouped by domain, ready to print.
@@ -561,7 +563,7 @@
     ${C.domains.map(d => {
       const ts = W.filter(w => w.dom === d.id).flatMap(lessonTopics).filter(t => LES.has(t)); if (!ts.length) return "";
       const ls = ts.map(lessonOf);
-      return `<h2 style="--c:${dc(d.id)}">Domain ${d.id}: ${esc(d.name)} <small class="note">${d.w}%</small></h2>
+      return `<h2 data-style="--c:${dc(d.id)}">Domain ${esc(d.id)}: ${esc(d.name)} <small class="note">${esc(d.w)}%</small></h2>
       <div class="panel cheat"><h3>Exam tips</h3><ul class="clean">${ls.map(l => `<li>${inline(l.tip)}</li>`).join("")}</ul>
       <h3>Key terms</h3><dl class="terms">${ls.flatMap(l => l.terms || []).filter((x, i, a) => a.findIndex(y => y[0].toLowerCase() === x[0].toLowerCase()) === i).map(([a, b]) => `<dt>${inline(a)}</dt><dd>${inline(b)}</dd>`).join("")}</dl></div>`;
     }).join("")}${ports}`;
@@ -569,16 +571,16 @@
   function streakHtml() {
     const st = CertHub.activity.streak();
     if (!st.current && !st.best) return "";
-    return `<p class="streak note">${st.current ? `<strong>${st.current}-day study streak</strong>${st.today ? "" : ". Study today to keep it going"}` : "No study yet today"}${st.best > st.current ? ` · best ${st.best} days` : ""} · <button type="button" class="linkbtn" data-act="reminder">Set a daily reminder</button></p>`;
+    return `<p class="streak note">${st.current ? `<strong>${esc(st.current)}-day study streak</strong>${st.today ? "" : ". Study today to keep it going"}` : "No study yet today"}${st.best > st.current ? ` · best ${esc(st.best)} days` : ""} · <button type="button" class="linkbtn" data-act="reminder">Set a daily reminder</button></p>`;
   }
   function placementHtml() {
     const pl = S.p.placement; if (!pl) return "";
     const rows = C.domains.filter(d => pl.dom[d.id] != null).map(d => ({ d, pct: pl.dom[d.id], week: (W.find(w => w.dom === d.id) || {}).n })).sort((a, b) => a.pct - b.pct);
     const focus = rows.filter(r => r.pct < 70), strong = rows.filter(r => r.pct >= 85);
     return `<h2>Where to start</h2><div class="panel">
-      ${focus.length ? `<p style="margin:0 0 8px"><strong>Focus first on:</strong></p><ul class="clean">${focus.map(r => `<li>Domain ${r.d.id}: ${esc(r.d.name)} (${r.pct}%) ${r.week ? `<button type="button" class="linkbtn" data-open="${r.week}">Go to week ${r.week}</button>` : ""}</li>`).join("")}</ul>` : `<p style="margin:0">No weak domains. Follow the plan in order and aim for 85%+ on each checkpoint.</p>`}
-      ${strong.length ? `<p class="note" style="margin:10px 0 0">You already know a lot of ${strong.map(r => `Domain ${r.d.id}`).join(", ")}. Skim those lessons and spend the saved time on your focus areas.</p>` : ""}
-      <p class="note" style="margin:10px 0 0">A placement test is short, so treat this as a starting point. Retake it any time from Quizzes &amp; tests.</p></div>`;
+      ${focus.length ? `<p data-style="margin:0 0 8px"><strong>Focus first on:</strong></p><ul class="clean">${focus.map(r => `<li>Domain ${esc(r.d.id)}: ${esc(r.d.name)} (${esc(r.pct)}%) ${r.week ? `<button type="button" class="linkbtn" data-open="${esc(r.week)}">Go to week ${esc(r.week)}</button>` : ""}</li>`).join("")}</ul>` : `<p data-style="margin:0">No weak domains. Follow the plan in order and aim for 85%+ on each checkpoint.</p>`}
+      ${strong.length ? `<p class="note" data-style="margin:10px 0 0">You already know a lot of ${strong.map(r => `Domain ${r.d.id}`).join(", ")}. Skim those lessons and spend the saved time on your focus areas.</p>` : ""}
+      <p class="note" data-style="margin:10px 0 0">A placement test is short, so treat this as a starting point. Retake it any time from Quizzes &amp; tests.</p></div>`;
   }
   /* ---------- exam simulations (performance-based questions) ---------- */
   const SIM_TYPE = { match: "Matching", order: "Put in order", select: "Select all that apply", fill: "Fill in" };
@@ -588,7 +590,7 @@
     const res = S.p.sims || {};
     return `<h2>Exam simulations</h2>
     <p class="note">Hands-on items like the performance-based questions on the real exam: match, order, read logs and configs, and fill in values.</p>
-    <div class="panel">${SIMS.map(p => { const r = res[p.id]; return `<div class="row"><div class="grow"><h3>${esc(p.title)}</h3><span class="note">${SIM_TYPE[p.type] || ""} · Domain ${esc(p.d)}${r ? ` · best ${r.best}%` : ""}</span></div><button class="btn ${r ? "ghost" : ""}" data-act="simstart" data-id="${esc(p.id)}">${r ? "Retry" : "Start"}</button></div>`; }).join("")}</div>`;
+    <div class="panel">${SIMS.map(p => { const r = res[p.id]; return `<div class="row"><div class="grow"><h3>${esc(p.title)}</h3><span class="note">${esc(SIM_TYPE[p.type]) || ""} · Domain ${esc(p.d)}${r ? ` · best ${esc(r.best)}%` : ""}</span></div><button class="btn ${r ? "ghost" : ""}" data-act="simstart" data-id="${esc(p.id)}">${r ? "Retry" : "Start"}</button></div>`; }).join("")}</div>`;
   }
   function simStart(id) {
     const p = SIMS && SIMS.find(x => x.id === id); if (!p) return;
@@ -616,16 +618,16 @@
   function simView() {
     const st = S.sim, p = st.p, dis = st.done ? "disabled" : "";
     let body = "";
-    if (p.type === "match") body = `<div class="simgrid">${st.items.map(i => `<div class="simrow"><label for="sim-${i}">${esc(p.pairs[i][0])}</label><span class="grow"><select id="sim-${i}" data-simm="${i}" ${dis}><option value="">Choose…</option>${st.opts.map(o => `<option ${st.ans[i] === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>${mark(st, i)}${st.done && !st.marks[i] ? `<br><span class="note">Answer: ${esc(p.pairs[i][1])}</span>` : ""}</span></div>`).join("")}</div>`;
+    if (p.type === "match") body = `<div class="simgrid">${st.items.map(i => `<div class="simrow"><label for="sim-${esc(i)}">${esc(p.pairs[i][0])}</label><span class="grow"><select id="sim-${esc(i)}" data-simm="${esc(i)}" ${dis}><option value="">Choose…</option>${st.opts.map(o => `<option ${st.ans[i] === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>${mark(st, i)}${st.done && !st.marks[i] ? `<br><span class="note">Answer: ${esc(p.pairs[i][1])}</span>` : ""}</span></div>`).join("")}</div>`;
     if (p.type === "order") body = `<ol class="simorder">${st.order.map((v, k) => `<li><span class="grow">${esc(p.steps[v])} ${mark(st, k)}${st.done && !st.marks[k] ? `<br><span class="note">Step ${k + 1} should be: ${esc(p.steps[k])}</span>` : ""}</span>${st.done ? "" : `<span class="simbtns"><button type="button" class="btn ghost sm" data-simup="${k}" ${k ? "" : "disabled"} aria-label="Move up: ${esc(p.steps[v])}">↑</button><button type="button" class="btn ghost sm" data-simdown="${k}" ${k < st.order.length - 1 ? "" : "disabled"} aria-label="Move down: ${esc(p.steps[v])}">↓</button></span>`}</li>`).join("")}</ol>`;
     if (p.type === "select") body = `<fieldset class="simsel"><legend class="sr-only">${esc(p.prompt)}</legend>${p.options.map((o, i) => `<label class="simopt"><input type="checkbox" data-sims="${i}" ${st.ans.has(i) ? "checked" : ""} ${dis}><span class="grow">${esc(o)}</span>${mark(st, i)}</label>`).join("")}</fieldset>${st.done ? `<p class="note">Correct selection: ${p.answers.map(i => esc(p.options[i])).join("; ")}</p>` : ""}`;
     if (p.type === "fill") body = `<div class="simgrid">${p.fields.map((f, i) => `<div class="simrow"><label for="simf-${i}">${esc(f.label)}</label><span class="grow"><input type="text" id="simf-${i}" data-simf="${i}" value="${esc(st.ans[i])}" autocomplete="off" autocapitalize="off" spellcheck="false" ${dis}>${mark(st, i)}${st.done && !st.marks[i] ? `<br><span class="note">Answer: ${esc(f.answers[0])}</span>` : ""}</span></div>`).join("")}</div>`;
     return `<div class="qhead"><strong>${esc(p.title)}</strong><button class="btn ghost sm" data-act="simquit">Back</button></div>
-    <p class="note">${SIM_TYPE[p.type]} · Domain ${esc(p.d)}</p>
+    <p class="note">${esc(SIM_TYPE[p.type])} · Domain ${esc(p.d)}</p>
     <p class="q">${esc(p.prompt)}</p>
     ${p.context ? `<pre class="code ctx" tabindex="0">${esc(p.context)}</pre>` : ""}
     ${body}
-    ${st.done ? `<div class="expl" role="status" style="--c:${st.pct === 100 ? "var(--ok)" : "var(--bad)"}"><strong>${st.ok} of ${st.tot} correct (${st.pct}%).</strong> ${esc(p.explain)}</div>` : ""}
+    ${st.done ? `<div class="expl" role="status" data-style="--c:${st.pct === 100 ? "var(--ok)" : "var(--bad)"}"><strong>${esc(st.ok)} of ${esc(st.tot)} correct (${esc(st.pct)}%).</strong> ${esc(p.explain)}</div>` : ""}
     <div class="btns">${st.done ? `<button class="btn" data-act="simretry">Try again</button><button class="btn ghost" data-act="simquit">All simulations</button>` : `<button class="btn" data-act="simcheck">Check answers</button>`}</div>`;
   }
 
@@ -642,7 +644,7 @@
     const k = drillKinds(); if (!k.length) return "";
     const best = S.p.drills || {};
     return `<h2>Skill drills</h2><p class="note">60-second rounds. Answer as many as you can; wrong answers show the right one.</p>
-    <div class="panel">${k.map(([id, t, n]) => `<div class="row"><div class="grow"><h3>${t}</h3><span class="note">${n}${best[id] ? ` · best ${best[id]}` : ""}</span></div><button class="btn ghost" data-act="drillstart" data-kind="${id}">Start</button></div>`).join("")}</div>`;
+    <div class="panel">${k.map(([id, t, n]) => `<div class="row"><div class="grow"><h3>${esc(t)}</h3><span class="note">${esc(n)}${best[id] ? ` · best ${esc(best[id])}` : ""}</span></div><button class="btn ghost" data-act="drillstart" data-kind="${esc(id)}">Start</button></div>`).join("")}</div>`;
   }
   const pick = a => a[Math.floor(Math.random() * a.length)];
   const ip2s = n => [n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join(".");
@@ -692,10 +694,10 @@
   function drillView() {
     const d = S.drill, name = (drillKinds().find(k => k[0] === d.kind) || [])[1] || "Drill";
     if (d.done) return `<div class="qhead"><strong>${esc(name)}</strong><button class="btn ghost sm" data-act="drillquit">Done</button></div>
-      <div class="panel"><div class="big">${d.score}</div><p class="meta">correct in 60 seconds (${d.n} answered). Best: ${(S.p.drills || {})[d.kind] || d.score}.</p>
-      <div class="btns"><button class="btn" data-act="drillstart" data-kind="${d.kind}">Play again</button><button class="btn ghost" data-act="drillquit">Back</button></div></div>`;
+      <div class="panel"><div class="big">${esc(d.score)}</div><p class="meta">correct in 60 seconds (${esc(d.n)} answered). Best: ${esc((S.p.drills || {})[d.kind]) || esc(d.score)}.</p>
+      <div class="btns"><button class="btn" data-act="drillstart" data-kind="${esc(d.kind)}">Play again</button><button class="btn ghost" data-act="drillquit">Back</button></div></div>`;
     const q = d.cur;
-    return `<div class="qhead"><strong>${esc(name)}</strong><span><span class="timer" id="dtimer">${Math.ceil((d.end - Date.now()) / 1000)}s</span> · ${d.score} correct · <button class="btn ghost sm" data-act="drillquit">Stop</button></span></div>
+    return `<div class="qhead"><strong>${esc(name)}</strong><span><span class="timer" id="dtimer">${Math.ceil((d.end - Date.now()) / 1000)}s</span> · ${esc(d.score)} correct · <button class="btn ghost sm" data-act="drillquit">Stop</button></span></div>
     <p class="q">${esc(q.q)}</p>
     ${q.o.map(o => { let cls = ""; if (d.fb) { if (o === q.a) cls = "right"; else if (o === d.fb.v) cls = "wrong"; } return `<button class="opt ${cls}" data-drill="${esc(o)}">${esc(o)}</button>`; }).join("")}
     <p class="note" role="status">${d.fb ? (d.fb.ok ? "Correct" : `Answer: ${esc(q.a)}`) : ""}</p>`;
@@ -718,7 +720,7 @@
     const done = S.p.handson || {};
     return `<h2>Hands-on practice</h2>` + Object.keys(HO_KIND).map(k => {
       const list = HO.items.filter(x => x.kind === k); if (!list.length) return "";
-      return `<h3 class="hohead">${HO_KIND[k][0]} <span class="note">${list.filter(x => done[x.id]).length} of ${list.length} done</span></h3><p class="note">${HO_KIND[k][1]}</p>
+      return `<h3 class="hohead">${esc(HO_KIND[k][0])} <span class="note">${list.filter(x => done[x.id]).length} of ${list.length} done</span></h3><p class="note">${esc(HO_KIND[k][1])}</p>
       <div class="panel">${list.map(x => `<div class="row"><div class="grow"><h3>${esc(x.title)}${done[x.id] ? ` <span class="chip done">Done</span>` : ""}</h3><span class="note">Domain ${esc(x.d)}</span></div><button class="btn ${done[x.id] ? "ghost" : ""}" data-act="hostart" data-id="${esc(x.id)}">${done[x.id] ? "Again" : "Start"}</button></div>`).join("")}</div>`;
     }).join("");
   }
@@ -796,7 +798,7 @@
   function kqlTable(rows, max = 50) {
     if (!rows.length) return `<p class="note">No rows.</p>`;
     const cols = [...new Set(rows.flatMap(r => Object.keys(r)))], cell = v => v instanceof Date ? v.toISOString().replace(".000Z", "Z") : Array.isArray(v) ? JSON.stringify(v) : v == null ? "" : String(v);
-    return `<div class="tablewrap" tabindex="0"><table class="kqlt"><thead><tr>${cols.map(c => `<th scope="col">${esc(c)}</th>`).join("")}</tr></thead><tbody>${rows.slice(0, max).map(r => `<tr>${cols.map(c => `<td>${esc(cell(r[c]))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>${rows.length > max ? `<p class="note">Showing ${max} of ${rows.length} rows.</p>` : ""}`;
+    return `<div class="tablewrap" tabindex="0"><table class="kqlt"><thead><tr>${cols.map(c => `<th scope="col">${esc(c)}</th>`).join("")}</tr></thead><tbody>${rows.slice(0, max).map(r => `<tr>${cols.map(c => `<td>${esc(cell(r[c]))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>${rows.length > max ? `<p class="note">Showing ${esc(max)} of ${rows.length} rows.</p>` : ""}`;
   }
   // Packet capture: the packets for an item (inline or shared in HO.captures), filtered with the display filter.
   const capOf = x => x.packets || ((HO.captures || {})[x.capture]) || [];
@@ -831,12 +833,12 @@
   function handsonView() {
     const st = S.ho, x = st.x;
     const head = `<div class="qhead"><strong>${esc(x.title)}</strong><button class="btn ghost sm" data-act="hoquit">Back</button></div>
-    <p class="note">${HO_KIND[x.kind][0].replace(/s( \(KQL\))?$/, "$1")} · Domain ${esc(x.d)}${st.passed ? ` · <span class="chip done">Done</span>` : ""}</p>
+    <p class="note">${esc(HO_KIND[x.kind][0].replace(/s( \(KQL\))?$/, "$1"))} · Domain ${esc(x.d)}${st.passed ? ` · <span class="chip done">Done</span>` : ""}</p>
     <div class="hoprompt">${String(x.prompt).split("\n\n").map(p => `<p>${inline(p)}</p>`).join("")}</div>`;
-    const help = `<div class="btns"><button class="btn ghost sm" data-act="hohint" aria-expanded="${st.hint}">Hint</button><button class="btn ghost sm" data-act="hosol" aria-expanded="${st.sol}">${st.sol ? "Hide solution" : "Show solution"}</button><button class="btn ghost sm" data-act="horeset">Start over</button></div>
+    const help = `<div class="btns"><button class="btn ghost sm" data-act="hohint" aria-expanded="${esc(st.hint)}">Hint</button><button class="btn ghost sm" data-act="hosol" aria-expanded="${esc(st.sol)}">${st.sol ? "Hide solution" : "Show solution"}</button><button class="btn ghost sm" data-act="horeset">Start over</button></div>
     ${st.hint ? `<p class="note">${inline(x.hint)}</p>` : ""}
     ${st.sol ? `<pre class="code" id="hosolution" tabindex="0" aria-label="Solution">${esc(Array.isArray(x.solution) ? x.solution.join("\n") : x.solution)}</pre>` : ""}
-    ${st.passed || st.sol ? `<div class="expl" style="--c:var(--ok)">${inline(x.explain)}</div>` : ""}`;
+    ${st.passed || st.sol ? `<div class="expl" data-style="--c:var(--ok)">${inline(x.explain)}</div>` : ""}`;
     if (x.kind === "code") {
       const res = st.results;
       return head + `<label for="hocode" class="lbl">Your code <span class="note">(Tab indents 4 spaces; press Esc, then Tab, to leave the editor)</span></label>
@@ -865,8 +867,8 @@
       const pk = st.sel != null ? all.find(p => p.no === st.sel) : null;
       return head + `<form class="flex pcapbar" data-form="pcap"><label class="grow"><span class="sr-only">Display filter</span><input id="pcapf" type="text" value="${esc(st.filter)}" placeholder="Display filter, e.g. tcp.flags.syn == 1 && !tcp.flags.ack" autocomplete="off" autocapitalize="off" spellcheck="false" class="${ferr ? "bad" : st.filter ? "good" : ""}"></label><button class="btn sm" type="button" data-act="pcapf">Apply</button>${st.filter ? `<button class="btn ghost sm" type="button" data-act="pcapclear">Clear</button>` : ""}</form>
       <p class="note" role="status">${ferr ? `<span class="simbad">${esc(ferr)}</span>` : `Showing ${shown.length} of ${all.length} packets.`}</p>
-      <div class="tablewrap pcaplist" tabindex="0"><table class="kqlt"><thead><tr><th scope="col">No.</th><th scope="col">Time</th><th scope="col">Source</th><th scope="col">Destination</th><th scope="col">Protocol</th><th scope="col">Length</th><th scope="col">Info</th></tr></thead><tbody>${shown.map(p => `<tr class="${p.no === st.sel ? "sel" : ""}"><td><button type="button" class="linkbtn" data-act="pcapsel" data-no="${p.no}" aria-pressed="${p.no === st.sel}">${p.no}</button></td><td>${esc(Number(p.t).toFixed(6))}</td><td>${esc(p.src)}</td><td>${esc(p.dst)}</td><td>${esc(p.proto)}</td><td>${esc(p.len)}</td><td>${esc(p.info)}</td></tr>`).join("")}</tbody></table></div>
-      ${pk ? `<div class="panel pcapdetail" aria-label="Packet ${pk.no} details"><strong>Packet ${pk.no}</strong>${(pk.layers || []).map(l => `<details open><summary>${esc(l.name)}</summary><ul class="clean">${(l.fields || []).map(([k, v]) => `<li><code>${esc(k)}</code>: ${esc(v)}</li>`).join("")}</ul></details>`).join("")}</div>` : `<p class="note">Select a packet number to see its details.</p>`}
+      <div class="tablewrap pcaplist" tabindex="0"><table class="kqlt"><thead><tr><th scope="col">No.</th><th scope="col">Time</th><th scope="col">Source</th><th scope="col">Destination</th><th scope="col">Protocol</th><th scope="col">Length</th><th scope="col">Info</th></tr></thead><tbody>${shown.map(p => `<tr class="${p.no === st.sel ? "sel" : ""}"><td><button type="button" class="linkbtn" data-act="pcapsel" data-no="${esc(p.no)}" aria-pressed="${p.no === st.sel}">${esc(p.no)}</button></td><td>${esc(Number(p.t).toFixed(6))}</td><td>${esc(p.src)}</td><td>${esc(p.dst)}</td><td>${esc(p.proto)}</td><td>${esc(p.len)}</td><td>${esc(p.info)}</td></tr>`).join("")}</tbody></table></div>
+      ${pk ? `<div class="panel pcapdetail" aria-label="Packet ${esc(pk.no)} details"><strong>Packet ${esc(pk.no)}</strong>${(pk.layers || []).map(l => `<details open><summary>${esc(l.name)}</summary><ul class="clean">${(l.fields || []).map(([k, v]) => `<li><code>${esc(k)}</code>: ${esc(v)}</li>`).join("")}</ul></details>`).join("")}</div>` : `<p class="note">Select a packet number to see its details.</p>`}
       <h3>Questions</h3><div class="simgrid">${x.questions.map((q, i) => `<div class="simrow"><label for="pcapq-${i}">${inline(q.label)}</label><span class="grow"><input type="text" id="pcapq-${i}" data-pcapq="${i}" value="${esc(st.ans[i])}" autocomplete="off" autocapitalize="off" spellcheck="false">${st.marks ? (st.marks[i] ? `<span class="simok" aria-label="correct">✓</span>` : `<span class="simbad" aria-label="incorrect">✗</span>`) : ""}${st.sol ? `<br><span class="note">Answer: ${esc(q.answers[0])}</span>` : ""}</span></div>`).join("")}</div>
       <div class="btns"><button class="btn" data-act="pcapcheck">Check answers</button></div>
       <div id="horesult" tabindex="-1" role="status">${st.marks ? `<p><strong>${st.marks.filter(Boolean).length} of ${st.marks.length} correct.</strong></p>` : ""}</div>` + help;
@@ -875,7 +877,7 @@
       if (!CertHub.fw) return head + `<p class="note">Loading…</p>`;
       const set = x.setup || {};
       return head + `<p class="note">Zones: ${esc((set.zones || []).join(", "))}${set.addresses ? ` · Addresses: ${esc(Object.entries(set.addresses).map(([k, v]) => `${k} (${v})`).join(", "))}` : ""}${set.services ? ` · Services: ${esc(Object.entries(set.services).map(([k, v]) => `${k} (${v})`).join(", "))}` : ""}. Rules are checked top to bottom; the first match wins. List several values with commas, or use any.</p>
-      <div class="tablewrap" tabindex="0"><table class="kqlt fwt"><thead><tr><th scope="col">#</th>${FW_COLS.map(([, h]) => `<th scope="col">${h}</th>`).join("")}<th scope="col"><span class="sr-only">Move or delete</span></th></tr></thead><tbody>${st.rules.map((r, i) => `<tr><td>${i + 1}</td>${FW_COLS.map(([k, h]) => `<td>${k === "action" ? `<select data-fwr="${i}" data-fwk="action" aria-label="Rule ${i + 1} ${h}">${["allow", "deny"].map(a => `<option ${r.action === a ? "selected" : ""}>${a}</option>`).join("")}</select>` : `<input type="text" data-fwr="${i}" data-fwk="${k}" value="${esc(fwList(r[k] ?? (k === "name" ? "" : "any")))}" aria-label="Rule ${i + 1} ${h}" autocomplete="off" autocapitalize="off" spellcheck="false">`}</td>`).join("")}<td class="nowrap"><button type="button" class="btn ghost sm" data-act="fwup" data-i="${i}" ${i ? "" : "disabled"} aria-label="Move rule ${i + 1} up">↑</button><button type="button" class="btn ghost sm" data-act="fwdel" data-i="${i}" aria-label="Delete rule ${i + 1}">✕</button></td></tr>`).join("")}</tbody></table></div>
+      <div class="tablewrap" tabindex="0"><table class="kqlt fwt"><thead><tr><th scope="col">#</th>${FW_COLS.map(([, h]) => `<th scope="col">${esc(h)}</th>`).join("")}<th scope="col"><span class="sr-only">Move or delete</span></th></tr></thead><tbody>${st.rules.map((r, i) => `<tr><td>${i + 1}</td>${FW_COLS.map(([k, h]) => `<td>${k === "action" ? `<select data-fwr="${i}" data-fwk="action" aria-label="Rule ${i + 1} ${esc(h)}">${["allow", "deny"].map(a => `<option ${r.action === a ? "selected" : ""}>${esc(a)}</option>`).join("")}</select>` : `<input type="text" data-fwr="${i}" data-fwk="${esc(k)}" value="${esc(fwList(r[k] ?? (k === "name" ? "" : "any")))}" aria-label="Rule ${i + 1} ${esc(h)}" autocomplete="off" autocapitalize="off" spellcheck="false">`}</td>`).join("")}<td class="nowrap"><button type="button" class="btn ghost sm" data-act="fwup" data-i="${i}" ${i ? "" : "disabled"} aria-label="Move rule ${i + 1} up">↑</button><button type="button" class="btn ghost sm" data-act="fwdel" data-i="${i}" aria-label="Delete rule ${i + 1}">✕</button></td></tr>`).join("")}</tbody></table></div>
       <div class="btns"><button class="btn ghost sm" data-act="fwadd">Add rule</button><button class="btn" data-act="fwrun">Run test traffic</button></div>
       <div id="horesult" tabindex="-1" role="status">${st.results ? `<ul class="clean hochecks">${x.tests.map((t, i) => { const r = st.results[i]; return `<li>${r.ok ? `<span class="simok" aria-label="as expected">✓</span>` : `<span class="simbad" aria-label="not as expected">✗</span>`} ${inline(t.label)} <span class="note">→ ${esc(r.action)}${r.rule ? ` by ${esc(r.rule)}` : " (no rule matched)"}; expected ${esc(t.expect)}</span></li>`; }).join("")}</ul>${st.warnings && st.warnings.length ? `<div class="status notice"><strong>Check these names:</strong><ul class="clean">${st.warnings.map(w => `<li>${esc(w)}</li>`).join("")}</ul></div>` : ""}${st.passed ? `<p><strong>Every test behaves as required.</strong></p>` : ""}` : ""}</div>` + help;
     }
@@ -926,10 +928,10 @@
     if (!LES) return head + `<p class="meta">Lessons for ${esc(C.short)} are being written. Until then, use each week's topic list with a study guide or video course, then check yourself with the weekly quiz.</p>`;
     const all = W.flatMap(w => lessonTopics(w).filter(t => LES.has(t)));
     const done = all.filter(isRead).length;
-    return head + `<p class="meta">A short lesson for every topic in your ${W.length}-week plan, in plan order. Read a lesson, answer its check questions, then take that week's quiz. ${done} of ${all.length} read. <a href="/${C.id}/lessons/">Open as web pages to share</a></p>
+    return head + `<p class="meta">A short lesson for every topic in your ${W.length}-week plan, in plan order. Read a lesson, answer its check questions, then take that week's quiz. ${done} of ${all.length} read. <a href="/${esc(C.id)}/lessons/">Open as web pages to share</a></p>
     <div class="status notice no-print"><strong>▶ Overview videos:</strong> every lesson has a short narrated video. Press "Watch this week's overview videos" to play a week in a row, or open any lesson and press "▶ Watch the overview".</div>
-    <div class="panel bars"><div class="b"><div class="track"><i style="width:${all.length ? Math.round(100 * done / all.length) : 0}%"></i></div></div></div>
-    <div class="btns no-print" style="margin-top:6px">
+    <div class="panel bars"><div class="b"><div class="track"><i data-style="width:${all.length ? Math.round(100 * done / all.length) : 0}%"></i></div></div></div>
+    <div class="btns no-print" data-style="margin-top:6px">
       <button type="button" class="btn ghost sm" data-tab="cheat">Cheat sheet</button>
       ${C.hasLessonsEs ? `<button type="button" class="btn ghost sm" data-act="lang" aria-pressed="${LANG === "es"}">${LANG === "es" ? "Read in English" : "Leer en español"}</button>` : ""}
       ${"serviceWorker" in navigator ? `<button type="button" class="btn ghost sm" data-act="offline">Save for offline</button>` : ""}
@@ -942,10 +944,10 @@
       const ws = W.filter(w => w.dom === d.id && lessonTopics(w).some(t => LES.has(t)));
       if (!ws.length) return "";
       const n = ws.flatMap(lessonTopics).filter(t => LES.has(t));
-      return `<section class="learn-dom"><h2 style="--c:${dc(d.id)}">Domain ${d.id}: ${esc(d.name)}</h2>
-      <p class="note">${d.w}% of the exam · ${n.filter(isRead).length} of ${n.length} read</p>
-      ${ws.map(w => `<div class="learn-week"><h3>Week ${w.n}${ws.length > 1 || w.title !== d.name ? `: ${esc(w.title)}` : ""}</h3>${playWeekBtn(w)}
-      <div class="panel wk" style="--c:${dc(d.id)}"><ul class="clean lessons">${lessonTopics(w).map(t => lessonHtml(t, w.n)).join("")}</ul></div></div>`).join("")}</section>`;
+      return `<section class="learn-dom"><h2 data-style="--c:${dc(d.id)}">Domain ${esc(d.id)}: ${esc(d.name)}</h2>
+      <p class="note">${esc(d.w)}% of the exam · ${n.filter(isRead).length} of ${n.length} read</p>
+      ${ws.map(w => `<div class="learn-week"><h3>Week ${esc(w.n)}${ws.length > 1 || w.title !== d.name ? `: ${esc(w.title)}` : ""}</h3>${playWeekBtn(w)}
+      <div class="panel wk" data-style="--c:${dc(d.id)}"><ul class="clean lessons">${lessonTopics(w).map(t => lessonHtml(t, w.n)).join("")}</ul></div></div>`).join("")}</section>`;
     }).join("")}`;
   }
 
@@ -956,9 +958,9 @@
     <h1>${esc(C.short)} study planner</h1>
     <p class="meta">${esc(C.name)} · ${W.length} weeks, ${fmtLong(weekStart(1))} to the week of ${fmtLong(weekStart(W.length))}${S.p.examDate ? ` · exam ${fmtLong(parseD(S.p.examDate))}` : " · exam date: ____________"}</p>
     <p class="note">Tick a box for each day you study. Days: ${DAYS().map(([d], i) => `${d} ${short[i].toLowerCase()}`).join(" · ")}.</p>
-    ${W.map(w => `<section class="pweek" style="--c:${dc(w.dom)}"><div class="pwhead"><strong>Week ${w.n}: ${esc(w.title)}</strong><span class="note">${fmt(weekStart(w.n))} – ${fmt(U.addDays(weekStart(w.n), 6))}</span></div>
+    ${W.map(w => `<section class="pweek" data-style="--c:${dc(w.dom)}"><div class="pwhead"><strong>Week ${esc(w.n)}: ${esc(w.title)}</strong><span class="note">${fmt(weekStart(w.n))} – ${fmt(U.addDays(weekStart(w.n), 6))}</span></div>
       <p class="pwtopics">${w.topics.map(t => esc(t)).join(" · ")}</p>
-      <div class="pdays">${DAYS().map(([d], i) => `<span class="pday"><i class="box${S.p.checks[`${w.n}-${i}`] ? " on" : ""}" aria-hidden="true"></i>${d}</span>`).join("")}<span class="pnote">Quiz score: ______</span></div></section>`).join("")}
+      <div class="pdays">${DAYS().map(([d], i) => `<span class="pday"><i class="box${S.p.checks[`${w.n}-${i}`] ? " on" : ""}" aria-hidden="true"></i>${esc(d)}</span>`).join("")}<span class="pnote">Quiz score: ______</span></div></section>`).join("")}
     <p class="note">StudyToCert · free study plans for IT certifications</p></div>`;
   }
   function planView() {
@@ -970,10 +972,10 @@
     ${checkBanner()}
     <div class="btns no-print"><button type="button" class="btn ghost sm" data-act="planner">Printable study planner</button></div>
     ${routeMap(now)}
-    ${PLAN.phases.map(([a, b, t]) => `<h2>${esc(t)}</h2>` + W.slice(a - 1, b).map(w => `<details class="week" style="--c:${dc(w.dom)}" ${w.n === now ? "open" : ""}><summary><span class="num">W${w.n}</span><span class="grow"><strong>${esc(w.title)}</strong><br><span class="note">${fmt(weekStart(w.n))} · ${esc(w.obj)}</span></span></summary>
+    ${PLAN.phases.map(([a, b, t]) => `<h2>${esc(t)}</h2>` + W.slice(a - 1, b).map(w => `<details class="week" data-style="--c:${dc(w.dom)}" ${w.n === now ? "open" : ""}><summary><span class="num">W${esc(w.n)}</span><span class="grow"><strong>${esc(w.title)}</strong><br><span class="note">${fmt(weekStart(w.n))} · ${esc(w.obj)}</span></span></summary>
       <ul class="clean">${w.topics.map(t => `<li>${esc(t)}</li>`).join("")}</ul>
-      ${w.notes && w.notes.length ? `<p class="note" style="margin-top:8px">Reread: ${esc(w.notes.join(", "))}</p>` : ""}
-      <div class="btns"><button class="btn ghost sm" data-open="${w.n}">Open week</button><button class="btn ghost sm" data-act="weekly" data-w="${w.n}">Quiz</button></div></details>`).join("")).join("")}`;
+      ${w.notes && w.notes.length ? `<p class="note" data-style="margin-top:8px">Reread: ${esc(w.notes.join(", "))}</p>` : ""}
+      <div class="btns"><button class="btn ghost sm" data-open="${esc(w.n)}">Open week</button><button class="btn ghost sm" data-act="weekly" data-w="${esc(w.n)}">Quiz</button></div></details>`).join("")).join("")}`;
   }
   function practiceView() {
     if (S.quiz) return quizView();
@@ -990,10 +992,10 @@
     <h2>Quick practice</h2>
     <div class="panel">
       <div class="row"><div class="grow"><h3>Placement test</h3><span class="note">${S.p.placement ? `Last taken ${esc(fmt(new Date(S.p.placement.at)))}. Retake it to see where you stand now.` : "A few questions from every domain to find what you already know and where to start"}</span></div><button class="btn ${S.p.placement ? "ghost" : ""}" data-act="placement">${S.p.placement ? "Retake" : "Start"}</button></div>
-      <div class="row"><div class="grow"><h3>Weekly quiz</h3><span class="note">10 questions with instant feedback</span></div><select id="wsel" aria-label="Week">${W.map(w => `<option value="${w.n}" ${w.n === weekNow() ? "selected" : ""}>Week ${w.n}</option>`).join("")}</select><button class="btn" data-act="weekly-sel">Start</button></div>
+      <div class="row"><div class="grow"><h3>Weekly quiz</h3><span class="note">10 questions with instant feedback</span></div><select id="wsel" aria-label="Week">${W.map(w => `<option value="${esc(w.n)}" ${w.n === weekNow() ? "selected" : ""}>Week ${esc(w.n)}</option>`).join("")}</select><button class="btn" data-act="weekly-sel">Start</button></div>
       <div class="row"><div class="grow"><h3>Smart practice</h3><span class="note">15 questions picked for you: more from your weaker domains, harder where you're already strong</span></div><button class="btn" data-act="smart">Start</button></div>
       <div class="row"><div class="grow"><h3>Review queue</h3><span class="note">Questions you missed, spaced 1, 3, 7 and 14 days apart</span></div><button class="btn" data-act="review" ${due ? "" : "disabled"}>${due ? `Review ${due}` : "Nothing due"}</button></div>
-      <div class="row"><div class="grow"><h3>Domain drill</h3><span class="note">15 random questions</span></div><select id="dsel" aria-label="Domain">${C.domains.map(d => `<option value="${d.id}">D${d.id} (${cnt(d.id)})</option>`).join("")}</select>${Q.some(q => q.lv) ? `<select id="lvsel" aria-label="Difficulty"><option value="0">Any level</option>${[1, 2, 3].map(n => `<option value="${n}">${LEVELS[n]}</option>`).join("")}</select>` : ""}<button class="btn" data-act="drill">Start</button></div>
+      <div class="row"><div class="grow"><h3>Domain drill</h3><span class="note">15 random questions</span></div><select id="dsel" aria-label="Domain">${C.domains.map(d => `<option value="${esc(d.id)}">D${esc(d.id)} (${cnt(d.id)})</option>`).join("")}</select>${Q.some(q => q.lv) ? `<select id="lvsel" aria-label="Difficulty"><option value="0">Any level</option>${[1, 2, 3].map(n => `<option value="${esc(n)}">${esc(LEVELS[n])}</option>`).join("")}</select>` : ""}<button class="btn" data-act="drill">Start</button></div>
     </div>
     ${simsSection()}
     ${handsonSection()}
@@ -1001,9 +1003,9 @@
     ${termCardsSection()}
     <h2>Checkpoint tests</h2>
     <p class="note">Timed, up to 25 questions, answers shown at the end. Aim for 80% or better before moving on.</p>
-    <div class="panel">${PLAN.checkpoints.map(c => `<div class="row"><div class="grow"><h3>Domain ${c.dom}: ${esc(DOM[c.dom].name)}</h3><span class="note">End of week ${c.after} · ${Math.min(25, cnt(c.dom))} questions, ${Math.max(5, Math.round(30 * Math.min(25, cnt(c.dom)) / 25))} minutes</span></div><button class="btn ghost" data-act="checkpoint" data-d="${c.dom}">Start</button></div>`).join("")}</div>
+    <div class="panel">${PLAN.checkpoints.map(c => `<div class="row"><div class="grow"><h3>Domain ${esc(c.dom)}: ${esc(DOM[c.dom].name)}</h3><span class="note">End of week ${esc(c.after)} · ${Math.min(25, cnt(c.dom))} questions, ${Math.max(5, Math.round(30 * Math.min(25, cnt(c.dom)) / 25))} minutes</span></div><button class="btn ghost" data-act="checkpoint" data-d="${esc(c.dom)}">Start</button></div>`).join("")}</div>
     <h2>Full practice exam</h2>
-    <div class="panel"><div class="row"><div class="grow"><h3>Exam simulation</h3><span class="note">Weighted like the real exam. ${ex} questions available now${ex < C.examSim.questions ? ` (the real exam has ${C.examSim.questions})` : ""}, ${examMinutes(ex)} minutes at the real exam's pace.</span></div><button class="btn" data-act="exam">Start</button></div>
+    <div class="panel"><div class="row"><div class="grow"><h3>Exam simulation</h3><span class="note">Weighted like the real exam. ${ex} questions available now${ex < C.examSim.questions ? ` (the real exam has ${esc(C.examSim.questions)})` : ""}, ${examMinutes(ex)} minutes at the real exam's pace.</span></div><button class="btn" data-act="exam">Start</button></div>
     ${Q.some(q => q.lv === 3) ? `<div class="row"><div class="grow"><h3>Hard mode exam</h3><span class="note">Only medium and hard questions, weighted like the real exam. A good test in your last week.</span></div><button class="btn ghost" data-act="hardexam">Start</button></div>` : ""}
     ${fullExamRow()}</div>
     ${Pro().available && !Pro().active ? Pro().teaser(`Get about 300 more ${C.short} questions and full-length ${C.examSim.questions}-question exams with a pass estimate.`) : ""}`;
@@ -1012,7 +1014,7 @@
     if (!Pro().available) return "";
     const N = C.examSim.questions, M = C.examSim.minutes;
     const ready = Pro().active && PRO;
-    return `<div class="row"><div class="grow"><h3>Full-length exam <span class="chip pro">Pro</span></h3><span class="note">${N} questions in ${M} minutes, weighted like the real exam, with a pass estimate at the end.${Pro().active && !PRO ? " Loading the Pro question bank…" : ""}</span></div>${ready ? `<button class="btn" data-act="fullexam">Start</button>` : Pro().active ? "" : `<a class="btn ghost" href="#account">Unlock</a>`}</div>`;
+    return `<div class="row"><div class="grow"><h3>Full-length exam <span class="chip pro">Pro</span></h3><span class="note">${esc(N)} questions in ${esc(M)} minutes, weighted like the real exam, with a pass estimate at the end.${Pro().active && !PRO ? " Loading the Pro question bank…" : ""}</span></div>${ready ? `<button class="btn" data-act="fullexam">Start</button>` : Pro().active ? "" : `<a class="btn ghost" href="#account">Unlock</a>`}</div>`;
   }
   // A rough pass estimate from a full-length score. Real exams use scaled scores, so this is a guide.
   const passBand = pct => pct >= 85 ? ["Likely pass", "var(--ok)"] : pct >= 75 ? ["Borderline", "var(--warn)"] : ["Not yet", "var(--bad)"];
@@ -1022,11 +1024,11 @@
     if (z.done) {
       const pct = Math.round(100 * z.score / z.qs.length);
       return `<div class="qhead"><strong>${esc(z.title)}</strong><button class="btn ghost sm" data-act="quit">Done</button></div>
-      <div class="panel"><div class="big">${pct}%</div><p class="meta">${z.score} of ${z.qs.length} correct${z.mode === "test" ? (pct >= 85 ? ". Exam-ready range." : pct >= 75 ? ". Close. Review the misses below." : ". Revisit these topics before moving on.") : ""}</p>
-      ${z.kind === "full" ? `<p style="margin:8px 0 0"><span class="chip" style="--c:${passBand(pct)[1]}">${passBand(pct)[0]}</span> <span class="note">Pass estimate. Real exams use scaled scores, so treat 85%+ on full-length exams as your target.</span></p>
-      <div class="bars" style="margin-top:12px">${C.domains.map(d => { const qs = z.qs.map((q, i) => [q, i]).filter(([q]) => q.d === d.id); const c = qs.filter(([q, i]) => z.ans[i] === q.a).length; const p = qs.length ? Math.round(100 * c / qs.length) : 0; return `<div class="b" style="--c:${dc(d.id)}"><div class="flex"><span>D${d.id} ${esc(d.name)}</span><strong>${c}/${qs.length}</strong></div><div class="track"><i style="width:${p}%"></i></div></div>`; }).join("")}</div>` : ""}</div>
+      <div class="panel"><div class="big">${pct}%</div><p class="meta">${esc(z.score)} of ${z.qs.length} correct${z.mode === "test" ? (pct >= 85 ? ". Exam-ready range." : pct >= 75 ? ". Close. Review the misses below." : ". Revisit these topics before moving on.") : ""}</p>
+      ${z.kind === "full" ? `<p data-style="margin:8px 0 0"><span class="chip" data-style="--c:${esc(passBand(pct)[1])}">${esc(passBand(pct)[0])}</span> <span class="note">Pass estimate. Real exams use scaled scores, so treat 85%+ on full-length exams as your target.</span></p>
+      <div class="bars" data-style="margin-top:12px">${C.domains.map(d => { const qs = z.qs.map((q, i) => [q, i]).filter(([q]) => q.d === d.id); const c = qs.filter(([q, i]) => z.ans[i] === q.a).length; const p = qs.length ? Math.round(100 * c / qs.length) : 0; return `<div class="b" data-style="--c:${dc(d.id)}"><div class="flex"><span>D${esc(d.id)} ${esc(d.name)}</span><strong>${c}/${qs.length}</strong></div><div class="track"><i data-style="width:${p}%"></i></div></div>`; }).join("")}</div>` : ""}</div>
       ${z.kind === "placement" ? placementHtml() : ""}
-      <h2>Review</h2>${z.qs.map((q, i) => { const ok = z.ans[i] === q.a; return `<div class="panel" style="--c:${ok ? "var(--ok)" : "var(--bad)"}"><p style="margin:0 0 6px"><strong>${ok ? "Correct" : "Missed"}</strong> · <span class="note">${esc(domName(q.d))}</span></p><p class="qtext" style="margin:0 0 8px">${esc(q.q)}</p>${ok ? "" : `<p class="note" style="margin:0">Your answer: ${esc(z.ans[i] == null ? "none" : q.o[z.ans[i]])}</p>`}<p style="margin:4px 0 0"><strong>${esc(q.o[q.a])}</strong></p><div class="expl">${esc(q.e)}${whyHtml(q, z.ans[i])}${q.src ? `<br><small class="note">Source: ${esc(q.src)}</small>` : ""}${ok ? "" : `<br>${lessonLink(q)}`}<br>${qReport(q)}</div></div>`; }).join("")}`;
+      <h2>Review</h2>${z.qs.map((q, i) => { const ok = z.ans[i] === q.a; return `<div class="panel" data-style="--c:${ok ? "var(--ok)" : "var(--bad)"}"><p data-style="margin:0 0 6px"><strong>${ok ? "Correct" : "Missed"}</strong> · <span class="note">${esc(domName(q.d))}</span></p><p class="qtext" data-style="margin:0 0 8px">${esc(q.q)}</p>${ok ? "" : `<p class="note" data-style="margin:0">Your answer: ${esc(z.ans[i] == null ? "none" : q.o[z.ans[i]])}</p>`}<p data-style="margin:4px 0 0"><strong>${esc(q.o[q.a])}</strong></p><div class="expl">${esc(q.e)}${whyHtml(q, z.ans[i])}${q.src ? `<br><small class="note">Source: ${esc(q.src)}</small>` : ""}${ok ? "" : `<br>${lessonLink(q)}`}<br>${qReport(q)}</div></div>`; }).join("")}`;
     }
     const q = z.qs[z.i];
     const opts = q.o.map((o, k) => {
@@ -1035,10 +1037,10 @@
       return `<button class="opt ${cls}" data-opt="${k}" aria-pressed="${z.picked === k}">${esc(o)}</button>`;
     }).join("");
     return `<div class="qhead"><strong>${esc(z.title)}</strong><span>${z.end ? `<span class="timer" id="timer" aria-label="Time left"></span> · ` : ""}<button class="btn ghost sm" data-act="quit">Quit</button></span></div>
-    <div class="flex note"><span>Question ${z.i + 1} of ${z.qs.length}</span><span>Domain ${q.d}${q.lv ? ` · ${LEVELS[q.lv]}` : ""}</span></div>
-    <div class="prog" style="--c:${dc(q.d)}"><i style="width:${100 * (z.i + 1) / z.qs.length}%"></i></div>
+    <div class="flex note"><span>Question ${esc(z.i + 1)} of ${z.qs.length}</span><span>Domain ${esc(q.d)}${q.lv ? ` · ${esc(LEVELS[q.lv])}` : ""}</span></div>
+    <div class="prog" data-style="--c:${dc(q.d)}"><i data-style="width:${100 * (z.i + 1) / z.qs.length}%"></i></div>
     <p class="q">${esc(q.q)}</p>${opts}
-    ${z.revealed ? `<div class="expl" role="status" style="--c:${z.picked === q.a ? "var(--ok)" : "var(--bad)"}"><strong data-ui>${z.picked === q.a ? "Correct." : "Not quite."}</strong> ${esc(q.e)}${whyHtml(q, z.picked)}${q.src ? `<br><small class="note" data-ui>Source: ${esc(q.src)}</small>` : ""}${z.picked !== q.a ? `<br>${lessonLink(q)}` : ""}<br>${qReport(q)}</div>` : ""}
+    ${z.revealed ? `<div class="expl" role="status" data-style="--c:${z.picked === q.a ? "var(--ok)" : "var(--bad)"}"><strong data-ui>${z.picked === q.a ? "Correct." : "Not quite."}</strong> ${esc(q.e)}${whyHtml(q, z.picked)}${q.src ? `<br><small class="note" data-ui>Source: ${esc(q.src)}</small>` : ""}${z.picked !== q.a ? `<br>${lessonLink(q)}` : ""}<br>${qReport(q)}</div>` : ""}
     <div class="btns">${z.mode === "test" && z.i > 0 ? `<button class="btn ghost" data-act="prev">Back</button>` : ""}
     ${(z.mode === "learn" && z.revealed) || z.mode === "test" ? `<button class="btn" data-act="next">${z.i + 1 === z.qs.length ? "Finish" : "Next"}</button>` : ""}
     ${z.mode === "test" ? `<button class="btn ghost" data-act="finish">Submit test</button>` : ""}</div>`;
@@ -1067,21 +1069,21 @@
     <p class="meta">${doneDays} of ${W.length * 7} study days checked off · ${dueIds().length} questions due for review · ${Object.keys(S.p.review).length} in the review queue</p>
     ${readinessHtml()}
     ${badgeHtml()}
-    <div class="panel startcard"><div class="grow"><strong>Study streak: ${CertHub.activity.streak().current} day${CertHub.activity.streak().current === 1 ? "" : "s"}</strong><br><span class="note">Best: ${CertHub.activity.streak().best} days. A day counts when you answer a question, read a lesson or check off a study day.</span></div><button class="btn ghost sm" data-act="reminder">Set a daily reminder</button></div>
-    ${weak ? `<div class="status">Weakest so far: <strong>Domain ${weak.d}</strong> at ${weak.pct}%. <button class="btn ghost sm" style="margin-left:6px" data-act="drill-d" data-d="${weak.d}">Drill it</button></div>` : ""}
+    <div class="panel startcard"><div class="grow"><strong>Study streak: ${esc(CertHub.activity.streak().current)} day${CertHub.activity.streak().current === 1 ? "" : "s"}</strong><br><span class="note">Best: ${esc(CertHub.activity.streak().best)} days. A day counts when you answer a question, read a lesson or check off a study day.</span></div><button class="btn ghost sm" data-act="reminder">Set a daily reminder</button></div>
+    ${weak ? `<div class="status">Weakest so far: <strong>Domain ${esc(weak.d)}</strong> at ${esc(weak.pct)}%. <button class="btn ghost sm" data-style="margin-left:6px" data-act="drill-d" data-d="${esc(weak.d)}">Drill it</button></div>` : ""}
     <h2>Accuracy by domain</h2>
-    <div class="panel bars">${rows.map(r => `<div class="b" style="--c:${dc(r.d)}"><div class="flex"><span>D${r.d} ${esc(DOM[r.d].name)} <span class="note">(${DOM[r.d].w}%)</span></span><strong>${r.pct == null ? "–" : r.pct + "%"}</strong></div><div class="track"><i style="width:${r.pct || 0}%"></i></div><span class="note">${r.c}/${r.t} answered</span></div>`).join("")}</div>
+    <div class="panel bars">${rows.map(r => `<div class="b" data-style="--c:${dc(r.d)}"><div class="flex"><span>D${esc(r.d)} ${esc(DOM[r.d].name)} <span class="note">(${esc(DOM[r.d].w)}%)</span></span><strong>${r.pct == null ? "–" : esc(r.pct) + "%"}</strong></div><div class="track"><i data-style="width:${esc(r.pct) || 0}%"></i></div><span class="note">${esc(r.c)}/${esc(r.t)} answered</span></div>`).join("")}</div>
     ${Pro().available ? (Pro().active ? scoreReport(rows) : `<h2>Score report <span class="chip pro">Pro</span></h2>` + Pro().teaser("See your predicted score, weakest exam objectives, your trend over time and whether you're ready to book.")) : ""}
     <h2>Recent quizzes and tests</h2>
-    <div class="panel">${S.p.history.length ? S.p.history.slice(0, 15).map(h => `<div class="row"><div class="grow">${esc(h.title)}<br><span class="note">${new Date(h.at).toLocaleDateString()}</span></div><strong>${Math.round(100 * h.score / h.total)}%</strong></div>`).join("") : `<p class="note" style="margin:0">Take this week's quiz to start tracking.</p>`}</div>
+    <div class="panel">${S.p.history.length ? S.p.history.slice(0, 15).map(h => `<div class="row"><div class="grow">${esc(h.title)}<br><span class="note">${new Date(h.at).toLocaleDateString()}</span></div><strong>${Math.round(100 * h.score / h.total)}%</strong></div>`).join("") : `<p class="note" data-style="margin:0">Take this week's quiz to start tracking.</p>`}</div>
     <h2>Dates</h2>
     <div class="panel">
       <div class="row"><div class="grow"><label for="start">Plan start</label><br><span class="note">Week 1 begins on this day. Pick a Monday.</span></div><input type="date" id="start" value="${esc(S.p.start)}"></div>
       <div class="row"><div class="grow"><label for="exam">Your target test date</label><br><span class="note">${esc(C.short)} ${esc(C.exam)}</span></div><input type="date" id="exam" value="${esc(S.p.examDate)}"></div>
-      <div class="row"><div class="grow"><label for="pace">Study pace</label><br><span class="note">The ${W.length}-week plan takes about ${Math.round(W.length * pace())} weeks at this pace${C.hoursPerWeek ? `, at ${esc(C.hoursPerWeek)} hours per plan week` : ""}. <button type="button" class="linkbtn" data-act="fitpace">Fit the plan to my test date</button></span></div><select id="pace">${PACES.map(([f, l]) => `<option value="${f}" ${f === pace() ? "selected" : ""}>${l}</option>`).join("")}${PACES.some(([f]) => f === pace()) ? "" : `<option value="${pace()}" selected>Custom (${pace()}×)</option>`}</select></div>
+      <div class="row"><div class="grow"><label for="pace">Study pace</label><br><span class="note">The ${W.length}-week plan takes about ${Math.round(W.length * pace())} weeks at this pace${C.hoursPerWeek ? `, at ${esc(C.hoursPerWeek)} hours per plan week` : ""}. <button type="button" class="linkbtn" data-act="fitpace">Fit the plan to my test date</button></span></div><select id="pace">${PACES.map(([f, l]) => `<option value="${esc(f)}" ${f === pace() ? "selected" : ""}>${esc(l)}</option>`).join("")}${PACES.some(([f]) => f === pace()) ? "" : `<option value="${pace()}" selected>Custom (${pace()}×)</option>`}</select></div>
     </div>
     <h2>Your data</h2>
-    <div class="panel"><p class="note" style="margin:0">Progress is saved only in this browser. Back it up to move it to another device.</p>
+    <div class="panel"><p class="note" data-style="margin:0">Progress is saved only in this browser. Back it up to move it to another device.</p>
       <div class="btns"><button class="btn ghost sm no-framed" data-act="export">Download backup</button><button class="btn ghost sm" data-act="copybackup">Copy backup</button><label class="btn ghost sm" for="imp">Restore from file</label><input type="file" id="imp" accept="application/json" class="hide"><button class="btn ghost sm" data-act="pasterestore">Restore from text</button><button class="btn ghost sm" data-act="reset">Reset ${esc(C.short)} progress</button></div>
       <p class="note" id="datamsg" role="status"></p></div>`;
   }
@@ -1089,7 +1091,7 @@
   function scoreReport(rows) {
     const answered = rows.reduce((a, r) => a + r.t, 0);
     const head = `<h2>Score report <span class="chip pro">Pro</span></h2>`;
-    if (answered < 30) return head + `<div class="panel"><p class="note" style="margin:0">Answer at least 30 questions (${answered} so far) to get a predicted score. Weekly quizzes, drills and full-length exams all count.</p></div>`;
+    if (answered < 30) return head + `<div class="panel"><p class="note" data-style="margin:0">Answer at least 30 questions (${answered} so far) to get a predicted score. Weekly quizzes, drills and full-length exams all count.</p></div>`;
     // Predicted score: accuracy in each domain weighted by that domain's share of the exam.
     const seen = rows.filter(r => r.t >= 10);
     const wsum = seen.reduce((a, r) => a + DOM[r.d].w, 0);
@@ -1109,13 +1111,13 @@
     const objs = Object.entries(S.p.objs || {}).filter(([, o]) => o.t >= 3).map(([k, o]) => ({ k, pct: Math.round(100 * o.c / o.t), t: o.t })).sort((a, b) => a.pct - b.pct || b.t - a.t).slice(0, 6);
     return head + `<div class="panel">
       <div class="row"><div class="grow"><span class="note">Predicted score</span><div class="big">${predicted == null ? "–" : predicted + "%"}</div><span class="note">From ${answered} answers, weighted by exam domain${coverage < 100 ? `; covers ${coverage}% of the exam so far` : ""}.</span></div>
-      <div><span class="chip" style="--c:${color}">${verdict}</span></div></div>
-      <p style="margin:10px 0 0">${esc(advice)}</p>
-      ${lastFull != null ? `<p class="note" style="margin:6px 0 0">Latest full-length exam: ${lastFull}% (${fulls.length} taken).</p>` : ""}
+      <div><span class="chip" data-style="--c:${color}">${verdict}</span></div></div>
+      <p data-style="margin:10px 0 0">${esc(advice)}</p>
+      ${lastFull != null ? `<p class="note" data-style="margin:6px 0 0">Latest full-length exam: ${lastFull}% (${fulls.length} taken).</p>` : ""}
     </div>
-    ${recent.length >= 2 ? `<h3>Trend</h3><div class="panel"><div class="trend" role="img" aria-label="Last ${recent.length} scores">${recent.map(h => { const p = Math.round(100 * h.score / h.total); return `<span class="tbar" style="height:${Math.max(4, p)}%;--c:${p >= 85 ? "var(--ok)" : p >= 75 ? "var(--warn)" : "var(--bad)"}" title="${esc(h.title)}: ${p}%"></span>`; }).join("")}</div>
-      <p class="note" style="margin:8px 0 0">Last ${recent.length} quizzes and tests, oldest to newest.${last5 != null && prev5 != null ? ` Average ${last5}% for the latest 5, ${last5 >= prev5 ? "up" : "down"} ${Math.abs(last5 - prev5)} points on the 5 before.` : ""}</p></div>` : ""}
-    ${objs.length ? `<h3>Weakest objectives</h3><div class="panel">${objs.map(o => `<div class="row"><div class="grow">Objective ${esc(o.k)}<br><span class="note">${o.t} answered</span></div><strong>${o.pct}%</strong></div>`).join("")}<p class="note" style="margin:8px 0 0">Look these up in the official exam objectives and reread them before your next drill.</p></div>` : ""}`;
+    ${recent.length >= 2 ? `<h3>Trend</h3><div class="panel"><div class="trend" role="img" aria-label="Last ${recent.length} scores">${recent.map(h => { const p = Math.round(100 * h.score / h.total); return `<span class="tbar" data-style="height:${Math.max(4, p)}%;--c:${p >= 85 ? "var(--ok)" : p >= 75 ? "var(--warn)" : "var(--bad)"}" title="${esc(h.title)}: ${p}%"></span>`; }).join("")}</div>
+      <p class="note" data-style="margin:8px 0 0">Last ${recent.length} quizzes and tests, oldest to newest.${last5 != null && prev5 != null ? ` Average ${last5}% for the latest 5, ${last5 >= prev5 ? "up" : "down"} ${Math.abs(last5 - prev5)} points on the 5 before.` : ""}</p></div>` : ""}
+    ${objs.length ? `<h3>Weakest objectives</h3><div class="panel">${objs.map(o => `<div class="row"><div class="grow">Objective ${esc(o.k)}<br><span class="note">${esc(o.t)} answered</span></div><strong>${esc(o.pct)}%</strong></div>`).join("")}<p class="note" data-style="margin:8px 0 0">Look these up in the official exam objectives and reread them before your next drill.</p></div>` : ""}`;
   }
 
   /* ---------- free flashcards from lesson key terms ---------- */
@@ -1132,7 +1134,7 @@
     const doms = C.domains.filter(d => cards.some(f => f[0] === d.id));
     return `<h2>Key-term flashcards</h2><p class="note">${cards.length} terms from your lessons · ${learned} learned. Cards you know come back after 1, 3, 7 and 14 days; cards you miss come back tomorrow.</p>
     <p class="btns no-print"><button type="button" class="btn ghost sm" data-act="anki">Download key terms for Anki (CSV)</button><button type="button" class="btn ghost sm" data-act="anki" data-q="1">Download practice questions for Anki (CSV)</button></p>
-    <div class="panel"><div class="row"><div class="grow"><h3>Study terms</h3><span class="note">Up to 20 due cards at a time</span></div><select id="tcsel" aria-label="Domain"><option value="0">All domains (${cardDue(cards, 0).length} due)</option>${doms.map(d => `<option value="${d.id}">D${d.id} ${esc(d.name)} (${cardDue(cards, d.id).length})</option>`).join("")}</select><button class="btn" data-act="tcstart">Start</button></div></div>`;
+    <div class="panel"><div class="row"><div class="grow"><h3>Study terms</h3><span class="note">Up to 20 due cards at a time</span></div><select id="tcsel" aria-label="Domain"><option value="0">All domains (${cardDue(cards, 0).length} due)</option>${doms.map(d => `<option value="${esc(d.id)}">D${esc(d.id)} ${esc(d.name)} (${cardDue(cards, d.id).length})</option>`).join("")}</select><button class="btn" data-act="tcstart">Start</button></div></div>`;
   }
 
   /* ---------- Pro: flashcards and study guide ---------- */
@@ -1148,9 +1150,9 @@
     const learned = cards.filter(f => sched[cardKey(f)] && sched[cardKey(f)].box >= 2).length;
     const guide = C.domains.map(d => ({ d, g: PRO.guide.find(x => x && x.domain === d.id) })).filter(x => x.g);
     return intro + `<p class="meta">${cards.length} flashcards · ${learned} learned · ${dueN(0)} due today. Cards you know come back after 1, 3, 7 and 14 days; cards you miss come back tomorrow.</p>
-    ${S.fc ? flashcardHtml() : cards.length ? `<div class="panel no-print"><div class="row"><div class="grow"><h3>Study flashcards</h3><span class="note">Up to 20 due cards at a time</span></div><select id="fcsel" aria-label="Domain"><option value="0">All domains (${dueN(0)} due)</option>${C.domains.map(d => `<option value="${d.id}">D${d.id} ${esc(d.name)} (${dueN(d.id)})</option>`).join("")}</select><button class="btn" data-act="fcstart">Start</button></div></div>` : `<p class="note">No flashcards for ${esc(C.short)} yet.</p>`}
-    ${guide.length ? `<div class="flex no-print" style="margin-top:28px"><h2 style="margin:0">Study guide</h2><button class="btn ghost sm" data-act="printguide">Print or save as PDF</button></div>
-    <div class="guide">${guide.map(({ d, g }) => `<details class="week" style="--c:${dc(d.id)}"><summary><span class="num">D${d.id}</span><span class="grow"><strong>${esc(d.name)}</strong><br><span class="note">${d.w}% of the exam</span></span></summary>
+    ${S.fc ? flashcardHtml() : cards.length ? `<div class="panel no-print"><div class="row"><div class="grow"><h3>Study flashcards</h3><span class="note">Up to 20 due cards at a time</span></div><select id="fcsel" aria-label="Domain"><option value="0">All domains (${dueN(0)} due)</option>${C.domains.map(d => `<option value="${esc(d.id)}">D${esc(d.id)} ${esc(d.name)} (${dueN(d.id)})</option>`).join("")}</select><button class="btn" data-act="fcstart">Start</button></div></div>` : `<p class="note">No flashcards for ${esc(C.short)} yet.</p>`}
+    ${guide.length ? `<div class="flex no-print" data-style="margin-top:28px"><h2 data-style="margin:0">Study guide</h2><button class="btn ghost sm" data-act="printguide">Print or save as PDF</button></div>
+    <div class="guide">${guide.map(({ d, g }) => `<details class="week" data-style="--c:${dc(d.id)}"><summary><span class="num">D${esc(d.id)}</span><span class="grow"><strong>${esc(d.name)}</strong><br><span class="note">${esc(d.w)}% of the exam</span></span></summary>
       <p>${esc(g.summary || "")}</p>
       ${(Array.isArray(g.sections) ? g.sections : []).map(sec => `<h3>${esc(sec.title || "")}</h3><ul class="clean">${(Array.isArray(sec.points) ? sec.points : []).map(x => `<li>${esc(x)}</li>`).join("")}</ul>`).join("")}
       ${Array.isArray(g.examTips) && g.examTips.length ? `<div class="status notice"><strong>Exam tips</strong><ul class="clean">${g.examTips.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
@@ -1158,11 +1160,11 @@
   }
   function flashcardHtml() {
     const fc = S.fc;
-    if (fc.i >= fc.deck.length) return `<div class="panel"><div class="big">${fc.known}/${fc.seen}</div><p class="meta">cards known on the first try this session.</p><div class="btns"><button class="btn" data-act="fcdone">Done</button></div></div>`;
+    if (fc.i >= fc.deck.length) return `<div class="panel"><div class="big">${esc(fc.known)}/${esc(fc.seen)}</div><p class="meta">cards known on the first try this session.</p><div class="btns"><button class="btn" data-act="fcdone">Done</button></div></div>`;
     const f = fc.deck[fc.i];
-    return `<div class="qhead"><strong>Flashcards</strong><span class="note">${fc.i + 1} of ${fc.deck.length} · <button class="btn ghost sm" data-act="fcdone">Stop</button></span></div>
-    <div class="flashcard ${fc.flipped ? "flipped" : ""}" style="--c:${dc(f[0])}">
-      <span class="note">Domain ${f[0]}</span>
+    return `<div class="qhead"><strong>Flashcards</strong><span class="note">${esc(fc.i + 1)} of ${fc.deck.length} · <button class="btn ghost sm" data-act="fcdone">Stop</button></span></div>
+    <div class="flashcard ${fc.flipped ? "flipped" : ""}" data-style="--c:${dc(f[0])}">
+      <span class="note">Domain ${esc(f[0])}</span>
       <p class="q">${esc(f[1])}</p>
       ${fc.flipped ? `<div class="expl">${esc(f[2])}</div>` : ""}
     </div>
@@ -1194,7 +1196,7 @@
       ${x.extra ? `<div class="row"><span class="note">${esc(x.extra)}</span></div>` : ""}
     </div>
     <h2>Domains and weights</h2>
-    <div class="panel bars">${C.domains.map(d => `<div class="b" style="--c:${dc(d.id)}"><div class="flex"><span>D${d.id} ${esc(d.name)}</span><strong>${d.w}%</strong></div><div class="track"><i style="width:${d.w}%"></i></div></div>`).join("")}</div>
+    <div class="panel bars">${C.domains.map(d => `<div class="b" data-style="--c:${dc(d.id)}"><div class="flex"><span>D${esc(d.id)} ${esc(d.name)}</span><strong>${esc(d.w)}%</strong></div><div class="track"><i data-style="width:${esc(d.w)}%"></i></div></div>`).join("")}</div>
     <h2>Official sources</h2>
     <div class="panel"><ul class="clean">${(C.sources || []).map(s => `<li><a href="${esc(s.url)}" rel="noopener" target="_blank">${esc(s.label)}</a></li>`).join("")}</ul>
     <p class="note">Always check the vendor's current objectives before booking. Exams are revised every few years.</p></div>`;
@@ -1210,7 +1212,7 @@
       if (tt) setTimeout(() => playOverview(tt, { autoplay: false }), 0);
     }
     if (S.openLesson && S.tab === "learn") {
-      const det = document.querySelector(`#app details.lesson[data-k="${S.openLesson}"]`);
+      const det = document.querySelector(`#app details.lesson[data-k="${esc(S.openLesson)}"]`);
       if (det) { S.openLesson = null; det.open = true; det.scrollIntoView({ block: "start" }); det.querySelector("summary").focus({ preventScroll: true }); }
     }
     if (S.quiz && !S.quiz.done && S.quiz.end && S.tab === "practice") tick();
@@ -1346,7 +1348,7 @@
         save();
         // Update in place so the open lesson stays open.
         const det = t.closest("details.lesson"), r = !!rd[k];
-        t.outerHTML = `<button class="btn sm ${r ? "ghost" : ""}" data-act="read" data-k="${k}" aria-pressed="${r}">${r ? "Read ✓ (mark unread)" : "Mark as read"}</button>`;
+        t.outerHTML = `<button class="btn sm ${r ? "ghost" : ""}" data-act="read" data-k="${esc(k)}" aria-pressed="${r}">${r ? "Read ✓ (mark unread)" : "Mark as read"}</button>`;
         if (det) {
           const chip = det.querySelector(":scope > summary .chip");
           if (r && !chip) det.querySelector(":scope > summary").insertAdjacentHTML("beforeend", `<span class="chip done">Read</span>`);

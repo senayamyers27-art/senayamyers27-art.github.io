@@ -140,7 +140,7 @@
   }
 
   function security() {
-    const row = (what, how) => `<tr><td><strong>${what}</strong></td><td>${how}</td></tr>`;
+    const row = (what, how) => `<tr><td><strong>${U.esc(what)}</strong></td><td>${/* html: authored text with <code> tags, all calls are literals below */ how}</td></tr>`;
     return `<h1>Security</h1>
     <p class="meta">How ${SITE} protects visitors, and how to report a problem. Last reviewed ${EFFECTIVE}.</p>
     <div class="status notice">${accounts()
@@ -148,7 +148,7 @@
       : "The site stores nothing about you on a server: there are no accounts, no database and no cookies. That removes most of the risks a typical website has."}</div>
     <h2>In the browser</h2>
     <div class="scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)"><table class="sectable"><tbody>
-      ${row("Content Security Policy", "Scripts, styles, fonts and connections are allowed only from the site itself. No inline scripts, <code>eval</code> or third-party code. Plugins (<code>object-src</code>) are blocked.")}
+      ${row("Content Security Policy", "Scripts, styles, fonts and connections are allowed only from the site itself. No inline scripts, inline style attributes, <code>eval</code> or third-party code. Trusted Types check every piece of HTML the app writes into the page. Plugins (<code>object-src</code>) are blocked.")}
       ${row("No third parties", counts() ? "Fonts are self-hosted and there are no ads or CDNs. The only outside service is a cookie-free page counter (see the Privacy Policy). An automated check fails if any page loads code from another site." : "Fonts are self-hosted and there are no analytics, ads or CDNs, so no outside service sees your visits. An automated test fails if any page requests another site.")}
       ${row("Output escaping", "All content is escaped before it's placed on the page, which prevents injected HTML or script (XSS). A lint check blocks unescaped values.")}
       ${row("Clickjacking protection", "<code>frame-ancestors 'none'</code> and <code>X-Frame-Options: DENY</code> stop other sites from framing the pages.")}
@@ -158,7 +158,7 @@
     ${accounts() ? `<h2>Accounts</h2>
     <div class="scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)"><table class="sectable"><tbody>
       ${row("No passwords", "Sign-in uses one-time email links that expire in 15 minutes. Only a SHA-256 hash of each link and session token is stored, so a database leak can't be used to sign in.")}
-      ${row("Session cookie", "<code>__Host-</code> prefixed, <code>Secure</code>, <code>HttpOnly</code>, <code>SameSite=Lax</code>, 30-day sliding expiry; signing out deletes it on the server.")}
+      ${row("Session cookie", "<code>__Host-</code> prefixed, <code>Secure</code>, <code>HttpOnly</code>, <code>SameSite=Strict</code>, 30-day sliding expiry and a 90-day limit, at most 10 devices at once; signing out deletes it on the server.")}
       ${row("Request forgery", "Every change must come from the site's own origin; the API allows cross-origin requests only from the site.")}
       ${row("Abuse limits", "Sign-in links are rate-limited per IP address and per email, and request sizes are capped.")}
       ${row("Access control", "Every query is scoped to the signed-in user. Instructors see progress numbers for their own cohorts only, never lab notes. CSV exports are protected against spreadsheet formula injection.")}
@@ -196,7 +196,7 @@
       : I.prompt
       ? `<div class="btns"><button type="button" class="btn" data-gact="install">Install StudyToCert</button></div>`
       : "";
-    const step = (n, t) => `<li><strong>${n}</strong> ${t}</li>`;
+    const step = (n, t) => `<li><strong>${U.esc(n)}</strong> ${U.esc(t)}</li>`;
     return `<h1>Install the app</h1>
     <p class="meta">Add ${SITE} to your phone's home screen. It opens full screen like any app, works with no connection, and keeps your progress, lab notes and portfolio on the device.</p>
     ${state}

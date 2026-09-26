@@ -30,7 +30,7 @@
       if (!pro.available) return "";
       const signed = !!(me() && me().user);
       return `<div class="panel pro-teaser"><span class="chip pro">Pro</span> ${esc(what)}
-        <div class="btns"><a class="btn sm" href="#account">${signed ? "See Pro" : "Sign in to get Pro"}</a>${PRICE.monthly ? `<span class="note" style="align-self:center">${esc(PRICE.monthly)}/month or ${esc(PRICE.yearly)}/year</span>` : ""}</div></div>`;
+        <div class="btns"><a class="btn sm" href="#account">${signed ? "See Pro" : "Sign in to get Pro"}</a>${PRICE.monthly ? `<span class="note" data-style="align-self:center">${esc(PRICE.monthly)}/month or ${esc(PRICE.yearly)}/year</span>` : ""}</div></div>`;
     }
   };
 
@@ -62,7 +62,7 @@
     return intro + `<div class="labgrid">${capstones.map(l => CertHub.labCard(l, "Capstone")).join("")}</div>`;
   };
   pro.capstoneView = async function (id) {
-    const shell = body => { $("#app").innerHTML = `<p class="crumbs"><a href="#labs">Labs</a> / Capstone</p>${body}`; };
+    const shell = body => { $("#app").innerHTML = `<p class="crumbs"><a href="#labs">Labs</a> / Capstone</p>${/* html: callers pass markup built with esc() */ body}`; };
     if (!pro.available) { shell(`<h1>Capstone project</h1><p class="note">Capstone projects aren't available on this site.</p>`); return; }
     if (!pro.active) { shell(`<h1>Capstone project</h1>${pro.teaser("Capstone projects are part of Pro.")}`); return; }
     shell(`<h1>Capstone project</h1><p class="note">Loading…</p>`);

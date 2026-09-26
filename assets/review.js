@@ -73,17 +73,17 @@
       S.items.forEach((x, i) => { const b = by[x.c.id] || (by[x.c.id] = { c: x.c, ok: 0, n: 0 }); b.n++; if (S.ans[i] === x.q.a) b.ok++; });
       const ok = S.items.filter((x, i) => S.ans[i] === x.q.a).length;
       return `<h1>Daily review done</h1><div class="panel"><div class="big">${ok} of ${S.items.length}</div><p class="meta">Missed questions come back tomorrow. The ones you got right come back later, spaced further apart each time.</p>
-      <div class="bars">${Object.values(by).map(b => `<div class="b"><div class="flex"><span><a href="#${esc(b.c.id)}.week">${esc(b.c.short)}</a></span><strong>${b.ok}/${b.n}</strong></div></div>`).join("")}</div>
+      <div class="bars">${Object.values(by).map(b => `<div class="b"><div class="flex"><span><a href="#${esc(b.c.id)}.week">${esc(b.c.short)}</a></span><strong>${esc(b.ok)}/${esc(b.n)}</strong></div></div>`).join("")}</div>
       <div class="btns"><button type="button" class="btn" data-rv="again">Ten more</button><a class="btn ghost" href="#home">Home</a></div></div>`;
     }
     const x = S.items[S.i], q = x.q, picked = S.ans[S.i], shown = picked != null;
     const opts = q.o.map((o, k) => { let cls = ""; if (shown) { if (k === q.a) cls = "right"; else if (k === picked) cls = "wrong"; } return `<button type="button" class="opt ${cls}" data-rvopt="${k}" aria-pressed="${picked === k}"${shown ? " disabled" : ""}>${esc(o)}</button>`; }).join("");
     const why = shown && picked !== q.a && q.why && q.why[picked] ? `<br><span data-ui><strong>Why this answer is wrong:</strong></span> ${inline(q.why[picked])}` : "";
     return `<div class="qhead"><strong>Daily review</strong><a class="btn ghost sm" href="#home">Stop</a></div>
-    <div class="flex note"><span>Question ${S.i + 1} of ${S.items.length}</span><span>${esc(x.c.short)}${x.due ? " · review" : ""}</span></div>
-    <div class="prog"><i style="width:${100 * (S.i + 1) / S.items.length}%"></i></div>
+    <div class="flex note"><span>Question ${esc(S.i + 1)} of ${S.items.length}</span><span>${esc(x.c.short)}${x.due ? " · review" : ""}</span></div>
+    <div class="prog"><i data-style="width:${100 * (S.i + 1) / S.items.length}%"></i></div>
     <p class="q">${esc(q.q)}</p>${opts}
-    ${shown ? `<div class="expl" role="status" style="--c:${picked === q.a ? "var(--ok)" : "var(--bad)"}"><strong data-ui>${picked === q.a ? "Correct." : "Not quite."}</strong> ${inline(q.e)}${why}</div><div class="btns"><button type="button" class="btn" data-rv="next">${S.i + 1 === S.items.length ? "Finish" : "Next"}</button></div>` : ""}`;
+    ${shown ? `<div class="expl" role="status" data-style="--c:${picked === q.a ? "var(--ok)" : "var(--bad)"}"><strong data-ui>${picked === q.a ? "Correct." : "Not quite."}</strong> ${inline(q.e)}${why}</div><div class="btns"><button type="button" class="btn" data-rv="next">${S.i + 1 === S.items.length ? "Finish" : "Next"}</button></div>` : ""}`;
   }
   const draw = () => { const a = $("#app"); if (a && CertHub.reviewActive()) a.innerHTML = view(); };
 
