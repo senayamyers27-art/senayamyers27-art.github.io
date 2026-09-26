@@ -68,6 +68,15 @@
     lessons[lang][id] = new Map(list.filter(l => l && typeof l.t === "string").map(l => [l.t, l]));
     if (lang === "en") lessonMeta[id] = meta || {};
   }
+  // Spanish questions: data/questions-es/<id>.js maps question id -> [question, [4 options in the same order], explanation, why-notes or null].
+  const qEs = {};
+  function loadQuestionsEs(id) {
+    const c = certs[id];
+    if (!c || !c.hasQuestionsEs) return Promise.resolve(null);
+    if (qEs[id]) return Promise.resolve(qEs[id]);
+    return loadScript(`data/questions-es/${id}.js`).then(() => qEs[id] || null);
+  }
+  function addQuestionsEs(id, m) { if (m && typeof m === "object") qEs[id] = m; }
   // Exam simulations (performance-based questions): data/pbq/<id>.js.
   const pbqs = {};
   function loadPbqs(id) {
@@ -85,7 +94,7 @@
     if (handson[id]) return Promise.resolve(handson[id]);
     return loadScript(`data/handson/${id}.js`).then(() => handson[id] || null);
   }
-  function addHandson(id, h) { if (h && Array.isArray(h.items)) handson[id] = { items: h.items.filter(x => x && x.id && x.kind), tables: h.tables || {} }; }
+  function addHandson(id, h) { if (h && Array.isArray(h.items)) handson[id] = { items: h.items.filter(x => x && x.id && x.kind), tables: h.tables || {}, captures: h.captures || {} }; }
   // Career pages and interview practice: data/careers.js.
   const careers = { list: null, interview: {} };
   const loadCareers = () => loadScript("data/careers.js").then(() => careers);
@@ -205,6 +214,39 @@
     const root = document.documentElement;
     if (t === "light" || t === "dark") root.setAttribute("data-theme", t); else root.removeAttribute("data-theme");
   }
+  /* Spanish interface: data/ui-es.js is a dictionary of interface text (exact strings and a few patterns with
+     numbers). Text is translated as it's drawn; lesson, question and lab content is skipped (Spanish content comes
+     from its own files). */
+  const i18n = (() => {
+    let dict = null, pats = [], obs = null, busy = false;
+    const lang = () => store.get("certhub:lang") === "es" ? "es" : "en";
+    const SKIP = "script,style,pre,code,textarea,input,.lbody,.q,.opt,.expl,.hoprompt,.termout,.kqlt,.steps-list,[data-content],[lang='en']";
+    // Interface pieces inside content areas (lesson buttons, quiz feedback) are marked data-ui and still translated.
+    const skipped = el => { const s = el.closest(SKIP); if (!s) return false; const u = el.closest("[data-ui]"); return !(u && s.contains(u)); };
+    const tr = s => { const k = s.trim(); if (!k || !/[A-Za-z]/.test(k)) return null; const d = dict.get(k); if (d != null) return s.replace(k, d); for (const [re, to] of pats) if (re.test(k)) return s.replace(k, k.replace(re, to)); return null; };
+    function node(n) { const p = n.parentElement; if (!p || skipped(p)) return; const t = tr(n.nodeValue); if (t != null && t !== n.nodeValue) n.nodeValue = t; }
+    function walk(root) {
+      if (!dict || !root) return;
+      if (root.nodeType === 3) return node(root);
+      if (root.nodeType !== 1) return;
+      if (root.matches && root.matches("input,textarea")) { ["placeholder", "aria-label", "title"].forEach(a => { const v = root.getAttribute(a); if (v) { const t = tr(v); if (t != null) root.setAttribute(a, t); } }); return; }
+      // Content containers are still walked: marked interface pieces inside them (data-ui) get translated.
+      const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); let n; const list = []; while ((n = w.nextNode())) list.push(n); list.forEach(node);
+      [root, ...root.querySelectorAll("[placeholder],[aria-label],[title]")].forEach(el => { if (!el.getAttribute || (el !== root && skipped(el) && !el.matches("input,textarea,select"))) return; ["placeholder", "aria-label", "title"].forEach(a => { const v = el.getAttribute(a); if (v) { const t = tr(v); if (t != null) el.setAttribute(a, t); } }); });
+    }
+    function start() {
+      if (lang() !== "es" || obs) return Promise.resolve();
+      return loadScript("data/ui-es.js").then(() => {
+        if (!dict) return;
+        document.documentElement.lang = "es"; walk(document.body);
+        obs = new MutationObserver(ms => { if (busy) return; busy = true; try { ms.forEach(m => m.addedNodes.forEach(walk)); } finally { busy = false; } });
+        obs.observe(document.body, { childList: true, subtree: true });
+      });
+    }
+    function add(d) { dict = new Map(Object.entries(d.exact || {})); pats = (d.patterns || []).map(([re, to]) => [new RegExp(re), to]); }
+    function set(l) { store.set("certhub:lang", l); location.reload(); }
+    return { lang, start, add, set, walk };
+  })();
   function themeButton() {
     const b = document.getElementById("theme");
     if (!b) return;
@@ -451,10 +493,10 @@
   }
 
   window.CertHub = {
-    U, store, certs, buildPlan, loadProgress, saveProgress, freshProgress, applyTheme, themeButton, exportAll, importAll, activeNotices,
+    i18n, addUiEs: d => i18n.add(d), U, store, certs, buildPlan, loadProgress, saveProgress, freshProgress, applyTheme, themeButton, exportAll, importAll, activeNotices,
     backupText, restoreText, ui, install, labs, labOrder, loadLabProgress, saveLabProgress, labStatus,
     register(c) { certs[c.id] = c; if (Array.isArray(c.questions)) c.qCount = c.questions.length; },
-    loadQuestions, addQuestions, loadLessons, addLessons, lessonMeta, addDiagrams, diagramsFor, loadPbqs, addPbqs, loadHandson, addHandson, loadCareers, addCareers, addInterview, careers, loadScript, activity, reminderIcs, addReminder, reportUrl, downloadFile, makeBadge, BASE,
+    loadQuestions, addQuestions, loadLessons, addLessons, lessonMeta, addDiagrams, diagramsFor, loadPbqs, addPbqs, loadQuestionsEs, addQuestionsEs, loadHandson, addHandson, loadCareers, addCareers, addInterview, careers, loadScript, activity, reminderIcs, addReminder, reportUrl, downloadFile, makeBadge, BASE,
     registerLabs(list) { list.forEach(l => { if (!labs[l.id]) labOrder.push(l.id); labs[l.id] = l; }); }
   };
 })();

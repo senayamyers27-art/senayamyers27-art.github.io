@@ -180,6 +180,86 @@ CertHub.addHandson("sc-500", {
       hint: "Replace the `project` with a `summarize` holding `count()` and `make_set(CompromisedEntity)`, grouped by AlertName.",
       solution: "SecurityAlert\n| where ProductComponentName == \"AI\"\n| summarize Alerts = count(), Deployments = make_set(CompromisedEntity) by AlertName\n| sort by Alerts desc, AlertName asc",
       explain: "Repeated jailbreak alerts against the same deployments tell you Prompt Shields in Azure AI Content Safety is doing its job, but also that the app is being probed. The SC-500 controls around it: put models behind an API Management AI gateway that authenticates with managed identity and enforces token limits, keep prompt and response logging, and use Purview DSPM for AI to catch sensitive data leaking into responses."
+    },
+    {
+      id: "sc500-cli-storage-anon", kind: "az", d: 2,
+      title: "Close anonymous access on a storage account",
+      prompt: "The storage account `stfinance01` in `rg-data` still has legacy settings: plain HTTP is allowed, the minimum TLS version is 1.0, anonymous blob access is allowed, and the `reports` container is publicly readable.\n\nSet the `reports` container's public access to `off`, then update the account to require HTTPS, use a minimum of TLS 1.2 and disallow anonymous blob access. Show the three settings afterwards.",
+      hint: "az storage container set-permission changes a container's --public-access. az storage account update takes --https-only, --min-tls-version and --allow-blob-public-access.",
+      explain: "Anonymous (public) blob access lets anyone with the URL read data, which has caused many real data leaks. Disabling allowBlobPublicAccess at the account level overrides every container setting, and turning the container off as well keeps it safe if the account setting is ever relaxed. Requiring HTTPS and TLS 1.2 protects data in transit. The built-in policy 'Storage account public access should be disallowed' lets you audit or deny this across a subscription.",
+      setup: { groups: { "rg-data": { location: "eastus" } }, storage: { accounts: { stfinance01: { group: "rg-data", httpsOnly: false, minTls: "TLS1_0", publicAccess: true, containers: { reports: "blob", archive: "off" } } } } },
+      checks: [
+        { label: "The reports container is no longer public", type: "container", account: "stfinance01", name: "reports", publicAccess: "off" },
+        { label: "stfinance01 requires HTTPS and TLS 1.2", type: "storage", name: "stfinance01", httpsOnly: true, minTls: "TLS1_2" },
+        { label: "Anonymous blob access is disallowed", type: "storage", name: "stfinance01", publicAccess: false }
+      ],
+      solution: ["az storage container set-permission --account-name stfinance01 --name reports --public-access off", "az storage account update --name stfinance01 --resource-group rg-data --https-only true --min-tls-version TLS1_2 --allow-blob-public-access false", "az storage account show --name stfinance01 --query \"{https:enableHttpsTrafficOnly, tls:minimumTlsVersion, anonymous:allowBlobPublicAccess}\""]
+    },
+    {
+      id: "sc500-cli-nsg-rdp", kind: "az", d: 2,
+      title: "Stop exposing RDP to the internet",
+      prompt: "The NSG `nsg-mgmt` in `rg-mgmt` has a rule `allow-rdp-any` that allows RDP (TCP 3389) from any source at priority 100.\n\nDelete that rule and replace it with `allow-rdp-admins`: priority 100, inbound, allow, TCP 3389, only from the admin network `203.0.113.0/24`. List the rules as a table to check your work.",
+      hint: "az network nsg rule delete removes a rule. az network nsg rule create needs --nsg-name, --name and --priority, plus --protocol, --destination-port-ranges and --source-address-prefixes.",
+      explain: "RDP and SSH open to the internet are among the most attacked ports in the cloud, targeted by constant password spraying. Limit them to known admin ranges, or better, remove public exposure and use Azure Bastion or just-in-time VM access in Microsoft Defender for Cloud. Rule priority must be unique per direction in an NSG, which is why the old rule has to go before the new one can reuse priority 100.",
+      setup: { groups: { "rg-mgmt": { location: "eastus" } }, nsgs: { "nsg-mgmt": { group: "rg-mgmt", rules: [{ name: "allow-rdp-any", priority: 100, protocol: "Tcp", port: "3389", source: "*" }, { name: "allow-https", priority: 200, protocol: "Tcp", port: "443", source: "*" }] } } },
+      checks: [
+        { label: "No rule allows RDP from any source", type: "nsgRule", nsg: "nsg-mgmt", port: 3389, access: "Allow", source: "*", present: false },
+        { label: "allow-rdp-admins allows 3389 only from 203.0.113.0/24", type: "nsgRule", nsg: "nsg-mgmt", name: "allow-rdp-admins", port: 3389, access: "Allow", source: "203.0.113.0/24" }
+      ],
+      solution: ["az network nsg rule delete --resource-group rg-mgmt --nsg-name nsg-mgmt --name allow-rdp-any", "az network nsg rule create --resource-group rg-mgmt --nsg-name nsg-mgmt --name allow-rdp-admins --priority 100 --direction Inbound --access Allow --protocol Tcp --destination-port-ranges 3389 --source-address-prefixes 203.0.113.0/24", "az network nsg rule list --resource-group rg-mgmt --nsg-name nsg-mgmt -o table"]
+    },
+    {
+      id: "sc500-cli-db-subnet", kind: "az", d: 2,
+      title: "Segment a database subnet with an NSG",
+      prompt: "In `rg-app`, the virtual network `vnet-app` has a web subnet `snet-web` (10.0.1.0/24) and a database subnet `snet-db` (10.0.2.0/24) with no NSG.\n\nCreate an NSG `nsg-db` with two inbound rules:\n- `allow-sql-from-web`: priority 100, allow TCP 1433 from 10.0.1.0/24\n- `deny-other-vnet`: priority 4000, deny any protocol on any port from the `VirtualNetwork` service tag\n\nThen associate `nsg-db` with `snet-db`.",
+      hint: "Create the NSG, then its rules with az network nsg rule create (quote \"*\" for any port or protocol). az network vnet subnet update --network-security-group associates it.",
+      explain: "Every NSG has a default rule, AllowVnetInBound at priority 65000, that lets anything in the virtual network (including peered networks) reach everything else. Adding a lower-numbered deny for the VirtualNetwork service tag, after an explicit allow for the web tier, gives the database tier real micro-segmentation. Associating the NSG with the subnet applies it to every NIC in that subnet, including ones added later.",
+      setup: { groups: { "rg-app": { location: "eastus" } }, vnets: { "vnet-app": { group: "rg-app", addressPrefix: "10.0.0.0/16", subnets: { "snet-web": "10.0.1.0/24", "snet-db": "10.0.2.0/24" } } } },
+      checks: [
+        { label: "nsg-db allows TCP 1433 from the web subnet", type: "nsgRule", nsg: "nsg-db", name: "allow-sql-from-web", port: 1433, access: "Allow", source: "10.0.1.0/24" },
+        { label: "nsg-db denies other VirtualNetwork traffic", type: "nsgRule", nsg: "nsg-db", name: "deny-other-vnet", access: "Deny", source: "VirtualNetwork" },
+        { label: "snet-db is associated with nsg-db", type: "vnet", name: "vnet-app", subnet: "snet-db", nsg: "nsg-db" }
+      ],
+      solution: ["az network nsg create --resource-group rg-app --name nsg-db", "az network nsg rule create --resource-group rg-app --nsg-name nsg-db --name allow-sql-from-web --priority 100 --direction Inbound --access Allow --protocol Tcp --destination-port-ranges 1433 --source-address-prefixes 10.0.1.0/24", "az network nsg rule create --resource-group rg-app --nsg-name nsg-db --name deny-other-vnet --priority 4000 --direction Inbound --access Deny --protocol \"*\" --destination-port-ranges \"*\" --source-address-prefixes VirtualNetwork", "az network vnet subnet update --resource-group rg-app --vnet-name vnet-app --name snet-db --network-security-group nsg-db"]
+    },
+    {
+      id: "sc500-cli-keyvault", kind: "az", d: 1,
+      title: "Harden a key vault and grant least-privilege secret access",
+      prompt: "The key vault `kv-contoso-app` in `rg-sec` still uses legacy access policies and has no purge protection.\n\n1. Turn on purge protection and switch the vault to the Azure RBAC permission model.\n2. Give the developer Priya (`priya@contoso.onmicrosoft.com`) the `Key Vault Secrets User` role scoped to this vault only.\n3. List the role assignments on the vault. Don't print any secret values.",
+      hint: "az keyvault update takes --enable-purge-protection and --enable-rbac-authorization. For the role scope, store the vault ID with kvid=$(az keyvault show --name kv-contoso-app --query id -o tsv).",
+      explain: "Soft delete keeps deleted vaults and secrets recoverable, and purge protection stops anyone, even an admin or an attacker with admin rights, from permanently purging them during the retention period; once on, it can't be turned off. The Azure RBAC model manages data-plane access with role assignments that can be scoped to a single vault and reviewed like any other access. Key Vault Secrets User can read secret values but can't change or delete them.",
+      setup: { groups: { "rg-sec": { location: "eastus" } }, users: [{ upn: "priya@contoso.onmicrosoft.com", displayName: "Priya Patel", jobTitle: "Developer" }], keyvaults: { "kv-contoso-app": { group: "rg-sec", purgeProtection: false, rbac: false, secrets: { SqlConnection: "Server=sql-prod;User=app;Password=Example-Only-1" } } } },
+      checks: [
+        { label: "Purge protection and RBAC authorization are on", type: "keyvault", name: "kv-contoso-app", purgeProtection: true, rbac: true },
+        { label: "Priya has Key Vault Secrets User on this vault only", type: "role", assignee: "priya@contoso.onmicrosoft.com", role: "Key Vault Secrets User", scope: "/subscriptions/3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b/resourceGroups/rg-sec/providers/Microsoft.KeyVault/vaults/kv-contoso-app" }
+      ],
+      solution: ["az keyvault update --name kv-contoso-app --resource-group rg-sec --enable-purge-protection true --enable-rbac-authorization true", "kvid=$(az keyvault show --name kv-contoso-app --query id -o tsv)", "az role assignment create --assignee priya@contoso.onmicrosoft.com --role \"Key Vault Secrets User\" --scope $kvid", "az role assignment list --scope $kvid -o table"]
+    },
+    {
+      id: "sc500-cli-webapp", kind: "az", d: 3,
+      title: "Enforce HTTPS and modern TLS on an App Service app",
+      prompt: "The web app `app-portal` in `rg-web` still accepts plain HTTP, allows TLS 1.0 and has FTP deployment enabled.\n\nMake the app HTTPS-only, set its minimum TLS version to 1.2 and disable FTP and FTPS. Show the app's configuration afterwards.",
+      hint: "az webapp update --https-only true redirects HTTP to HTTPS. az webapp config set takes --min-tls-version and --ftps-state.",
+      explain: "HTTPS-only redirects every HTTP request to HTTPS so credentials and session cookies never cross the network in clear text. TLS 1.0 and 1.1 have known weaknesses, so 1.2 is the minimum baseline. Plain FTP sends deployment credentials unencrypted; disabling FTP and FTPS entirely and deploying from a pipeline or with a zip deploy removes that attack path. Defender for Cloud recommends all three.",
+      setup: { groups: { "rg-web": { location: "eastus" } }, appServices: { "app-portal": { group: "rg-web", httpsOnly: false, minTls: "1.0", ftps: "AllAllowed" } } },
+      checks: [
+        { label: "app-portal is HTTPS-only", type: "webapp", name: "app-portal", httpsOnly: true },
+        { label: "Minimum TLS is 1.2 and FTP/FTPS is disabled", type: "webapp", name: "app-portal", minTls: "1.2", ftps: "Disabled" }
+      ],
+      solution: ["az webapp update --resource-group rg-web --name app-portal --https-only true", "az webapp config set --resource-group rg-web --name app-portal --min-tls-version 1.2 --ftps-state Disabled", "az webapp config show --resource-group rg-web --name app-portal -o table"]
+    },
+    {
+      id: "sc500-cli-audit-policy", kind: "az", d: 4,
+      title: "Audit security posture with built-in policies",
+      prompt: "Security wants visibility across the whole Contoso Dev subscription. Assign two built-in audit policies at the subscription scope:\n- **Storage account public access should be disallowed**, named `audit-storage-public`\n- **App Service apps should only be accessible over HTTPS**, named `audit-app-https`\n\nFind each definition's name (a GUID) with `az policy definition list` and a `--query` filter, and get the subscription ID with `az account show`.",
+      hint: "az policy definition list --query \"[?contains(displayName, 'HTTPS')].{name:name, displayName:displayName}\" -o table narrows the list. A subscription scope is /subscriptions/<id>.",
+      explain: "Audit-effect policies don't block anything; they mark non-compliant resources so you can see and fix your security posture, and the results feed the regulatory compliance dashboard in Microsoft Defender for Cloud. Assigning at subscription scope covers every current and future resource group. When you are confident a policy won't break workloads, switch to a Deny effect, and use remediation tasks for DeployIfNotExists or Modify policies.",
+      setup: { groups: { "rg-web": { location: "eastus" } }, storage: { accounts: { stwebassets01: { group: "rg-web", publicAccess: true } } }, appServices: { "app-portal": { group: "rg-web" } } },
+      checks: [
+        { label: "audit-storage-public uses the storage public access policy", type: "policyAssignment", name: "audit-storage-public", policy: "Storage account public access should be disallowed" },
+        { label: "audit-app-https uses the App Service HTTPS policy", type: "policyAssignment", name: "audit-app-https", policy: "App Service apps should only be accessible over HTTPS" }
+      ],
+      solution: ["az account show --query id -o tsv", "az policy definition list --query \"[?contains(displayName, 'public access') || contains(displayName, 'HTTPS')].{name:name, displayName:displayName}\" -o table", "az policy assignment create --name audit-storage-public --policy 4fa4b6c0-31ca-4c0d-b10d-24b96f62a751 --scope /subscriptions/3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b", "az policy assignment create --name audit-app-https --policy a4af4a39-4135-47fb-b175-47fbdf85311d --scope /subscriptions/3f2a1b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b"]
     }
   ]
 });

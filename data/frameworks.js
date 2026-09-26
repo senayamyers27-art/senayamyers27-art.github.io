@@ -258,5 +258,17 @@ CertHub.labRoles = {
   "lab-qos-tc": ["netops", "sysadmin"],
   "lab-junos-cli": ["netops"],
   "lab-aws-vpc": ["infra", "netops", "entarch"],
-  "lab-wifi-survey": ["netops", "entarch"]
+  "lab-wifi-survey": ["netops", "entarch"],
+  "lab-data-sql-sqlite": ["dba"],
+  "lab-data-cleaning-pandas": ["dba", "privacy"],
+  "lab-data-stats-ab-test": ["dba", "testing"],
+  "lab-data-dashboard-governance": ["dba", "privacy", "policy"],
+  "lab-ai-responsible-assessment": ["privacy", "policy", "assess"],
+  "lab-ai-azure-language-vision": ["securedev", "entarch"],
+  "lab-ai-prompt-grounding": ["securedev", "testing"],
+  "lab-ai-rag-search": ["securedev", "entarch", "dba"],
+  "lab-ai-eval-safety": ["testing", "securedev", "assess"],
+  "lab-gcp-account-safety": ["sysadmin", "ssa", "arch"],
+  "lab-gcp-cloud-run-storage": ["sysadmin", "entarch"],
+  "lab-gcp-compute-vpc-monitoring": ["sysadmin", "netops", "infra"]
 };

@@ -228,5 +228,53 @@ CertHub.labMap = {
     2: ["lab-cloud-vpc-subnets", "lab-cloud-ec2-basics", "lab-cloud-iac-deploy", "lab-aws-vpc"],
     3: ["lab-cloud-ec2-basics", "lab-cloud-cloudwatch", "lab-cloud-s3-static-site", "lab-lambda-api"],
     4: ["lab-cloud-pricing-responsibility", "lab-cloud-aws-account-safety", "lab-cloud-cloudwatch", "lab-cloud-vpc-subnets"]
+  } },
+  "data-plus": { domains: {
+    1: ["lab-data-sql-sqlite", "lab-postgres-dba", "lab-data-cleaning-pandas"],
+    2: ["lab-data-cleaning-pandas", "lab-data-sql-sqlite", "lab-python-project"],
+    3: ["lab-data-stats-ab-test", "lab-data-sql-sqlite", "lab-data-cleaning-pandas"],
+    4: ["lab-data-dashboard-governance", "lab-data-stats-ab-test"],
+    5: ["lab-data-dashboard-governance", "lab-data-classification", "lab-policy-writing", "lab-data-cleaning-pandas"]
+  } },
+  "ai-900": { domains: {
+    1: ["lab-ai-responsible-assessment", "lab-ai-eval-safety"],
+    2: ["lab-data-cleaning-pandas", "lab-data-stats-ab-test", "lab-ai-responsible-assessment"],
+    3: ["lab-ai-azure-language-vision", "lab-ai-eval-safety"],
+    4: ["lab-ai-azure-language-vision", "lab-ai-prompt-grounding"],
+    5: ["lab-ai-prompt-grounding", "lab-ai-rag-search", "lab-ai-eval-safety", "lab-ai-responsible-assessment"]
+  } },
+  "ai-102": { domains: {
+    1: ["lab-ai-azure-language-vision", "lab-ai-responsible-assessment", "lab-ai-eval-safety", "lab-cloud-azure-governance"],
+    2: ["lab-ai-prompt-grounding", "lab-ai-rag-search", "lab-ai-eval-safety"],
+    3: ["lab-ai-prompt-grounding", "lab-ai-rag-search", "lab-rest-api"],
+    4: ["lab-ai-azure-language-vision", "lab-ai-eval-safety"],
+    5: ["lab-ai-azure-language-vision", "lab-ai-prompt-grounding"],
+    6: ["lab-ai-rag-search", "lab-ai-azure-language-vision"]
+  } },
+  "google-cdl": { domains: {
+    1: ["lab-cloud-pricing-responsibility", "lab-gcp-account-safety"],
+    2: ["lab-data-sql-sqlite", "lab-data-dashboard-governance", "lab-gcp-account-safety"],
+    3: ["lab-ai-responsible-assessment", "lab-ai-prompt-grounding"],
+    4: ["lab-gcp-cloud-run-storage", "lab-gcp-compute-vpc-monitoring", "lab-cloud-iac-deploy"],
+    5: ["lab-gcp-account-safety", "lab-cloud-pricing-responsibility", "lab-data-classification"],
+    6: ["lab-gcp-compute-vpc-monitoring", "lab-gcp-account-safety", "lab-cloud-pricing-responsibility"]
+  } },
+  "google-ace": { domains: {
+    1: ["lab-gcp-account-safety", "lab-cloud-pricing-responsibility"],
+    2: ["lab-gcp-cloud-run-storage", "lab-gcp-compute-vpc-monitoring", "lab-cloud-iac-deploy"],
+    3: ["lab-gcp-compute-vpc-monitoring", "lab-gcp-cloud-run-storage"],
+    4: ["lab-gcp-account-safety", "lab-gcp-compute-vpc-monitoring", "lab-gcp-cloud-run-storage"]
+  } },
+  "project-plus": { domains: {
+    1: ["lab-risk-register", "lab-bia-backup"],
+    2: ["lab-risk-register", "lab-vendor-risk", "lab-git-workflow"],
+    3: ["lab-risk-register", "lab-data-dashboard-governance", "lab-git-workflow"],
+    4: ["lab-policy-writing", "lab-controls-audit", "lab-data-classification"]
+  } },
+  "securityx": { domains: {
+    1: ["lab-risk-register", "lab-policy-writing", "lab-vendor-risk", "lab-controls-audit", "lab-ai-responsible-assessment"],
+    2: ["lab-threat-model", "lab-azure-security-baseline", "lab-iam-sso", "lab-cloud-posture"],
+    3: ["lab-pki-openssl", "lab-secure-sdlc", "lab-container-security", "lab-entra-conditional-access"],
+    4: ["lab-incident-response", "lab-sentinel-kql", "lab-threat-intel", "lab-sysmon-detection"]
   } }
 };

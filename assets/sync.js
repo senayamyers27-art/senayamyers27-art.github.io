@@ -203,6 +203,8 @@
       </details>
     </div>
     <div id="orgpanel"></div>
+    <h2>Classes</h2>
+    <div id="classpanel"><p class="note">Loading…</p></div>
     <h2>Your data</h2>
     <div class="panel">
       <div class="btns" style="margin-top:0"><button type="button" class="btn ghost sm" data-aact="export">Download my account data</button><button type="button" class="btn ghost sm" data-aact="delete">Delete my account</button></div>
@@ -246,6 +248,112 @@
     } catch (e) { $("#app").innerHTML += `<div class="status warn">${esc(e.message)}</div>`; }
   }
 
+  /* ---------- classes (free): teachers see a progress summary of students who agreed ---------- */
+  const CODE_RE = /^[a-km-np-z2-9]{10}$/;
+  const certLabel = id => { const c = id && CertHub.certs[id]; return c ? `${c.short} ${c.exam}` : id || ""; };
+  const joinLink = code => `${CertHub.BASE || location.origin + "/"}#join-${code}`;
+  const certOptions = (sel, blank) => (blank ? `<option value="">${esc(blank)}</option>` : "") + Object.values(CertHub.certs).map(c => `<option value="${esc(c.id)}"${c.id === sel ? " selected" : ""}>${esc(c.short)} ${esc(c.exam)}</option>`).join("");
+  const plural = (n, w) => `${+n} ${w}${n === 1 ? "" : "s"}`;
+  // What a student shares, shown before they agree (keep in step with api/src/classes.js).
+  const SHARED = `<ul class="clean"><li>The name you enter below (and your email only if you tick the box)</li>
+    <li>Which certifications you study, and for each: exam readiness, lessons read, best practice exam score, questions answered, hands-on exercises done and when you were last active</li>
+    <li>How many labs you've finished</li></ul>
+    <p class="note" style="margin:0">Not shared: your answers, review queue, lab notes or write-ups. You can leave the class at any time from the Account page, which stops sharing at once.</p>`;
+
+  async function classPanel() {
+    const el = document.getElementById("classpanel"); if (!el) return;
+    try {
+      const { data } = await api("GET", "/v1/classes");
+      el.innerHTML = `<div class="panel">
+        <p style="margin:0"><strong>Classes you're in</strong></p>
+        ${data.joined.length ? data.joined.map(j => `<div class="row"><div class="grow"><strong>${esc(j.name)}</strong><br><span class="note">Teacher: ${esc(j.teacherName)}${j.certId ? ` · ${esc(certLabel(j.certId))}` : ""} · you appear as ${esc(j.displayName)}${j.showEmail ? " (with your email)" : ""}</span></div><button type="button" class="btn ghost sm" data-aact="leaveclass" data-class="${esc(j.id)}" data-name="${esc(j.name)}">Leave</button></div>`).join("") : `<p class="note" style="margin:0">None. Your teacher shares a join link or code; your progress is shared only after you agree.</p>`}
+        <form id="classcode-form" class="row" novalidate>
+          <div class="grow"><label for="classcode-in">Class code</label><input type="text" id="classcode-in" class="textin" maxlength="16" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="e.g. k7m2qx9fab"></div>
+          <button type="submit" class="btn sm">Join a class</button>
+        </form>
+      </div>
+      <div class="panel">
+        <p style="margin:0"><strong>Classes you teach</strong> <span class="note">Free. Up to ${+data.limit}.</span></p>
+        ${data.teaching.length ? data.teaching.map(c => `<div class="row"><div class="grow"><strong>${esc(c.name)}</strong><br><span class="note">${c.certId ? `${esc(certLabel(c.certId))} · ` : ""}${plural(c.students, "student")} · code <code>${esc(c.code)}</code></span></div><a class="btn ghost sm" href="#class-${esc(c.id.replace(/^cls_/, ""))}">Roster</a><button type="button" class="btn ghost sm" data-aact="copyjoin" data-code="${esc(c.code)}">Copy join link</button></div>`).join("") : `<p class="note" style="margin:0">Create a class, then share its join link with your students. You'll see a progress summary for each student who agrees.</p>`}
+        ${data.teaching.length < data.limit ? `<details class="sq"><summary>Create a class</summary>
+          <form id="class-form">
+            <label for="class-name">Class name</label><input type="text" id="class-name" class="textin" maxlength="80" required placeholder="e.g. Period 3 Security+">
+            <label for="class-teacher">Your name, as students will see it</label><input type="text" id="class-teacher" class="textin" maxlength="60" required placeholder="e.g. Ms. Rivera" autocomplete="name">
+            <label for="class-cert">Certification (optional)</label><select id="class-cert" class="textin">${certOptions("", "Any certification")}</select>
+            <div class="btns"><button type="submit" class="btn sm">Create class</button></div>
+          </form></details>` : ""}
+      </div>`;
+    } catch (e) { el.innerHTML = `<div class="status warn">${esc(e.message)}</div>`; }
+  }
+
+  const JOIN_KEY = "certhub:join";
+  async function joinView(code) {
+    const shell = body => { $("#app").innerHTML = `<p class="crumbs"><a href="#account">Account</a> / Join a class</p>${body}`; };
+    if (!API) return shell(`<h1>Join a class</h1><div class="status">Accounts aren't available on this site, so classes aren't either.</div>`);
+    if (!signedIn()) {
+      try { sessionStorage.setItem(JOIN_KEY, code); } catch (e) {}
+      return shell(`<h1>Join a class</h1><p class="meta">Sign in first (it's free), then you'll come back here to see the class and decide whether to join.</p><div class="btns"><a class="btn" href="#account">Sign in</a></div>`);
+    }
+    shell(`<h1>Join a class</h1><p class="note">Loading…</p>`);
+    try {
+      const { data } = await api("GET", `/v1/classes/join/${code}`);
+      if (location.hash.replace("#", "") !== "join-" + code) return; // moved on while loading
+      const c = data.class, cert = c.certId ? ` · ${esc(certLabel(c.certId))}` : "";
+      if (data.isTeacher) return shell(`<h1>${esc(c.name)}</h1><p class="meta">You teach this class${cert}. Share this page's link with your students.</p><div class="btns"><a class="btn" href="#account">Back to Account</a></div>`);
+      shell(`<h1>Join ${esc(c.name)}</h1>
+      <p class="meta">Teacher: <strong>${esc(c.teacherName)}</strong>${cert}${data.isMember ? ". You're already in this class; joining again updates your name and email choice." : ""}</p>
+      <form id="join-form" class="panel" data-code="${esc(code)}" novalidate>
+        <p style="margin:0"><strong>If you join, ${esc(c.teacherName)} will see:</strong></p>
+        ${SHARED}
+        <label for="join-name"><strong>Your name, as your teacher will see it</strong></label>
+        <input type="text" id="join-name" class="textin" maxlength="60" required autocomplete="name">
+        <label class="simopt"><input type="checkbox" id="join-email"><span>Also show my email address (${esc(me.user.email)}) to the teacher</span></label>
+        <label class="simopt"><input type="checkbox" id="join-consent" required><span>I agree to share this progress summary with ${esc(c.teacherName)} until I leave the class.</span></label>
+        <div class="btns"><button type="submit" class="btn">Join class</button><a class="btn ghost" href="#account">Cancel</a></div>
+        <p class="note" id="join-msg" role="status"></p>
+      </form>`);
+    } catch (e) { shell(`<h1>Join a class</h1><div class="status warn">${esc(e.message)}</div><div class="btns"><a class="btn ghost" href="#account">Back to Account</a></div>`); }
+  }
+
+  const fmtDate = t => (t ? new Date(t).toLocaleDateString() : "–");
+  const pct = v => (v == null ? "–" : `${+v}%`);
+  async function classView(hexId) {
+    const id = "cls_" + hexId;
+    const crumbs = `<p class="crumbs"><a href="#account">Account</a> / Class</p>`;
+    $("#app").innerHTML = `${crumbs}<h1>Class roster</h1><p class="note">Loading…</p>`;
+    try {
+      const { data } = await api("GET", `/v1/classes/${id}/roster`);
+      if (location.hash.replace("#", "") !== "class-" + hexId) return;
+      const c = data.class, n = data.students.length;
+      const rows = data.students.map(s => {
+        const who = `<strong>${esc(s.displayName)}</strong>${s.email ? `<br><span class="note">${esc(s.email)}</span>` : ""}`;
+        const remove = `<button type="button" class="btn ghost sm" data-aact="removestudent" data-class="${esc(c.id)}" data-member="${esc(s.memberId)}" data-name="${esc(s.displayName)}" aria-label="Remove ${esc(s.displayName)} from the class">Remove</button>`;
+        const certs = s.certs.length ? s.certs : [null];
+        return certs.map((x, i) => `<tr>${i === 0 ? `<td rowspan="${certs.length}">${who}</td>` : ""}${x
+          ? `<td>${esc(certLabel(x.certId))}</td><td>${x.readiness == null ? "–" : `${+x.readiness}/100`}</td><td>${+x.lessonsRead}${x.lessonsTotal == null ? "" : ` / ${+x.lessonsTotal}`}</td><td>${pct(x.bestExam)}</td><td>${+x.answered}</td><td>${+x.handsOn}</td>`
+          : `<td colspan="6"><span class="note">No synced progress yet</span></td>`}${i === 0 ? `<td rowspan="${certs.length}">${+s.labsDone}</td><td rowspan="${certs.length}">${fmtDate(s.lastActive)}</td><td rowspan="${certs.length}">${remove}</td>` : ""}</tr>`).join("");
+      }).join("");
+      $("#app").innerHTML = `${crumbs}
+      <h1>${esc(c.name)}</h1>
+      <p class="meta">${c.certId ? `${esc(certLabel(c.certId))} · ` : ""}${plural(n, "student")} · you appear as ${esc(c.teacherName)}. Students share these numbers only after agreeing, and can leave at any time. Their answers and lab notes stay private.</p>
+      <div class="panel">
+        <div class="row"><div class="grow"><strong>Join code</strong><br><code>${esc(c.code)}</code></div><button type="button" class="btn sm" data-aact="copyjoin" data-code="${esc(c.code)}">Copy join link</button><button type="button" class="btn ghost sm" data-aact="rotatecode" data-class="${esc(c.id)}">New code</button></div>
+        <details class="sq"><summary>Rename or change the class</summary>
+          <form id="classedit-form" data-class="${esc(c.id)}">
+            <label for="classedit-name">Class name</label><input type="text" id="classedit-name" class="textin" maxlength="80" required value="${esc(c.name)}">
+            <label for="classedit-teacher">Your name, as students see it</label><input type="text" id="classedit-teacher" class="textin" maxlength="60" required value="${esc(c.teacherName)}">
+            <label for="classedit-cert">Certification</label><select id="classedit-cert" class="textin">${certOptions(c.certId, "Any certification")}</select>
+            <div class="btns"><button type="submit" class="btn sm">Save</button><button type="button" class="btn ghost sm" data-aact="deleteclass" data-class="${esc(c.id)}" data-name="${esc(c.name)}">Delete class</button></div>
+          </form>
+        </details>
+      </div>
+      <div class="btns"><button type="button" class="btn ghost sm" data-aact="classcsv" data-class="${esc(c.id)}">Download CSV</button></div>
+      <div class="scroll" tabindex="0" role="region" aria-label="Class roster (scrolls sideways on small screens)"><table class="sectable"><thead><tr><th scope="col">Student</th><th scope="col">Certification</th><th scope="col">Readiness</th><th scope="col">Lessons read</th><th scope="col">Best practice exam</th><th scope="col">Questions answered</th><th scope="col">Hands-on done</th><th scope="col">Labs done</th><th scope="col">Last active</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead><tbody>
+      ${rows || `<tr><td colspan="10">No students yet. Share the join link; students appear here after they agree to share.</td></tr>`}
+      </tbody></table></div>`;
+    } catch (e) { $("#app").innerHTML = `${crumbs}<h1>Class roster</h1><div class="status warn">${esc(e.message)}</div>`; }
+  }
+
   function download(name, text, type) {
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([text], { type }));
@@ -256,7 +364,7 @@
   /* ---------- events ---------- */
   document.addEventListener("submit", async e => {
     const f = e.target;
-    if (!["signin-form", "org-form", "cohort-form"].includes(f.id)) return;
+    if (!["signin-form", "org-form", "cohort-form", "class-form", "classcode-form", "join-form", "classedit-form"].includes(f.id)) return;
     e.preventDefault();
     try {
       if (f.id === "signin-form") {
@@ -268,6 +376,25 @@
       } else if (f.id === "org-form") {
         const { data } = await api("POST", "/v1/orgs", { name: $("#org-name").value });
         await refreshMe(); CertHub.rerender(); setTimeout(() => orgPanel(data.id), 50);
+      } else if (f.id === "class-form") {
+        const { data } = await api("POST", "/v1/classes", { name: $("#class-name").value, teacherName: $("#class-teacher").value, certId: $("#class-cert").value || null });
+        ui.toast(`Class created. Join code: ${data.code}`); classPanel();
+      } else if (f.id === "classcode-form") {
+        const code = $("#classcode-in").value.toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (!CODE_RE.test(code)) throw new Error("Class codes are 10 letters and numbers. Check it with your teacher.");
+        location.hash = "join-" + code;
+      } else if (f.id === "join-form") {
+        const msg = $("#join-msg");
+        if (!$("#join-name").value.trim()) { msg.textContent = "Enter your name."; $("#join-name").focus(); return; }
+        if (!$("#join-consent").checked) { msg.textContent = "Tick the box to agree to share your progress summary, or choose Cancel."; $("#join-consent").focus(); return; }
+        const code = f.dataset.code;
+        if (!CODE_RE.test(code)) return;
+        const { data } = await api("POST", `/v1/classes/join/${code}`, { displayName: $("#join-name").value, showEmail: $("#join-email").checked, consent: true });
+        ui.toast(`You joined ${data.class.name}.`);
+        syncAll(); location.hash = "account";
+      } else if (f.id === "classedit-form") {
+        await api("PUT", `/v1/classes/${f.dataset.class}`, { name: $("#classedit-name").value, teacherName: $("#classedit-teacher").value, certId: $("#classedit-cert").value || null });
+        ui.toast("Class saved."); classView(f.dataset.class.slice(4));
       } else {
         await api("POST", `/v1/orgs/${f.dataset.org}/cohorts`, { name: $("#cohort-name").value, certId: $("#cohort-cert").value });
         orgPanel(f.dataset.org);
@@ -294,6 +421,33 @@
         const res = await fetch(`${API}/v1/cohorts/${b.dataset.cohort}/summary.csv`, { credentials: "include" });
         if (!res.ok) throw new Error("Couldn't download the CSV.");
         download("cohort-progress.csv", await res.text(), "text/csv");
+      }
+      if (a === "copyjoin" && CODE_RE.test(b.dataset.code)) ui.copy(joinLink(b.dataset.code), "class join link");
+      if (a === "rotatecode") {
+        if (!(await ui.confirm("Make a new join code? The old code and link stop working. Students already in the class stay.", { ok: "New code", cancel: "Keep this one" }))) return;
+        await api("POST", `/v1/classes/${b.dataset.class}/code`, {});
+        ui.toast("New join code ready."); classView(b.dataset.class.slice(4));
+      }
+      if (a === "deleteclass") {
+        if (!(await ui.confirm(`Delete the class "${b.dataset.name}"? Students are removed and stop sharing. This can't be undone.`, { ok: "Delete class", cancel: "Keep it", danger: true }))) return;
+        await api("DELETE", `/v1/classes/${b.dataset.class}`);
+        ui.toast("Class deleted."); location.hash = "account";
+      }
+      if (a === "removestudent") {
+        if (!(await ui.confirm(`Remove ${b.dataset.name} from the class? They stop sharing their progress with you.`, { ok: "Remove", cancel: "Cancel", danger: true }))) return;
+        await api("DELETE", `/v1/classes/${b.dataset.class}/students/${b.dataset.member}`);
+        ui.toast("Student removed."); classView(b.dataset.class.slice(4));
+      }
+      if (a === "leaveclass") {
+        if (!(await ui.confirm(`Leave "${b.dataset.name}"? Your teacher will no longer see your progress.`, { ok: "Leave class", cancel: "Stay" }))) return;
+        await api("DELETE", `/v1/classes/${b.dataset.class}/membership`);
+        ui.toast("You left the class. Sharing has stopped."); classPanel();
+      }
+      if (a === "classcsv") {
+        const res = await fetch(`${API}/v1/classes/${b.dataset.class}/roster.csv`, { credentials: "include", cache: "no-store" });
+        if (!res.ok) throw new Error("Couldn't download the CSV.");
+        const text = await res.text();
+        if (document.documentElement.classList.contains("framed")) ui.showText(text, "Class roster (CSV)"); else download("class-roster.csv", text, "text/csv");
       }
       if (a === "export") {
         const { data } = await api("GET", "/v1/account/export");
@@ -331,14 +485,20 @@
   }
 
   CertHub.accountViews = {
-    account: () => { setTimeout(renderStatus, 0); return accountView(); },
-    cohort: cohortView
+    account: () => { setTimeout(() => { renderStatus(); if (signedIn()) classPanel(); }, 0); return accountView(); },
+    cohort: cohortView,
+    join: joinView,
+    classRoster: classView
   };
 
   if (API) document.addEventListener("DOMContentLoaded", async () => {
     await handleLanding();
     await refreshMe();
     await acceptPendingInvite();
+    // Opened a class join link before signing in: go back to it (joining still needs consent there).
+    let join = null;
+    try { join = sessionStorage.getItem(JOIN_KEY); if (join && signedIn()) sessionStorage.removeItem(JOIN_KEY); } catch (e) {}
+    if (join && signedIn() && CODE_RE.test(join) && !/^#?join-/.test(location.hash)) location.hash = "join-" + join;
     const onAccount = /^#?account/.test(location.hash);
     if (onAccount || signedIn()) CertHub.rerender();
     if (signedIn()) {

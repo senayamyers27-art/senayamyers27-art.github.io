@@ -246,6 +246,46 @@ CertHub.addCareers([
       "Book AWS Cloud Practitioner or AZ-900 and set a weekly study block, then plan for Cloud+ or Solutions Architect Associate"
     ],
     labs: ["lab-cloud-aws-account-safety", "lab-cloud-iam-least-privilege", "lab-cloud-s3-static-site", "lab-cloud-ec2-basics", "lab-cloud-vpc-subnets", "lab-cloud-cloudwatch", "lab-cloud-azure-governance", "lab-cloud-azure-storage-vm", "lab-cloud-iac-deploy", "lab-cloud-pricing-responsibility", "lab-cloud-iam", "lab-cloud-posture", "lab-aws-vpc", "lab-azure-admin", "lab-terraform-docker"]
+  },
+  {
+    track: "data-ai",
+    title: "Careers in data and AI",
+    intro: "Data and AI professionals turn raw data into decisions and build software that can read, see, summarize and answer questions. The work ranges from writing SQL and cleaning spreadsheets, through statistics and dashboards that leaders rely on, to engineering applications on cloud AI services: language and vision APIs, generative models grounded in company documents, search indexes, and the evaluations and safety filters that keep those systems accurate and trustworthy. Every industry now has data it wants to use and AI features it wants to ship, so these skills are in demand well beyond technology companies.\n\nIt suits people who are curious, like finding patterns and explaining them in plain words, and are comfortable with both numbers and code. Analysts need care with definitions and data quality more than advanced mathematics; AI engineers need solid programming, an understanding of how models fail, and the judgment to weigh fairness, privacy and cost alongside accuracy. Responsible AI is part of the job, not an extra: you will be asked who could be harmed, how you tested it and how you will know if it goes wrong.\n\nMany people start as data or reporting analysts, or move over from software development, IT support or a business role where they were already the person who built the spreadsheets. A fundamentals certification plus a portfolio of real projects, such as SQL analysis, a cleaned dataset with a quality log, a governed dashboard, an A/B test readout and a small grounded AI assistant with an evaluation set, is what gets you interviews. Associate-level certifications then prove you can build and run AI solutions on a cloud platform.",
+    path: [
+      { cert: "data-plus", why: "Start with data itself: data types and structures, acquisition and cleaning, SQL and statistics, visualization and data governance. Every AI system is only as good as its data, and this vendor-neutral exam gives you the analyst skills employers hire for at entry level." },
+      { cert: "ai-900", why: "Learn the AI vocabulary and the Azure services behind it: machine learning basics, computer vision, natural language processing, generative AI and the responsible AI principles. It is a gentle, conceptual exam that tells you which service fits which problem before you build anything." },
+      { cert: "ai-200", why: "Build the developer foundation that AI applications run on: containerized apps, Azure data services, connecting to and consuming Azure services, and securing, monitoring and troubleshooting them. It turns you from someone who knows the concepts into someone who can ship working code on Azure." },
+      { cert: "ai-102", why: "The Azure AI engineer credential: plan and secure Azure AI solutions, implement generative AI, agents, vision, language and knowledge mining, and apply responsible AI in practice. Take it once you have built grounded prompts, a search index and an evaluation harness yourself, because the scenarios reward hands-on experience." }
+    ],
+    jobs: [
+      { title: "Data Analyst / Reporting Analyst", level: "Entry", does: "Writes SQL to answer business questions, cleans and validates data, builds dashboards and reports, and explains trends and anomalies to non-technical stakeholders." },
+      { title: "Business Intelligence Developer", level: "Entry to Mid", does: "Designs data models, defines measures once for the whole organization, builds governed dashboards with row-level security and keeps refreshes and data quality checks running." },
+      { title: "Junior Data Scientist / Product Analyst", level: "Mid", does: "Designs and analyzes experiments such as A/B tests, builds simple predictive models, and turns statistical results into clear recommendations with their uncertainty." },
+      { title: "AI Engineer / Azure AI Engineer", level: "Mid", does: "Builds applications on AI services and models: language and vision APIs, grounded generative AI and retrieval-augmented generation, with authentication, monitoring, cost control and evaluation." },
+      { title: "Machine Learning / MLOps Engineer", level: "Mid to Senior", does: "Automates training, evaluation and deployment of models, monitors them for drift and quality regressions in production, and manages the pipelines and infrastructure they run on." },
+      { title: "Responsible AI / AI Governance Specialist", level: "Mid to Senior", does: "Runs AI impact assessments, defines fairness, safety and transparency requirements, reviews evaluations and content filters before release, and aligns AI use with regulation and company policy." }
+    ],
+    roles: ["dba", "securedev", "testing", "privacy", "entarch"],
+    skills: [
+      "SQL: joins, aggregation, common table expressions and window functions against unfamiliar schemas",
+      "Data cleaning and preparation in Python pandas or spreadsheets, with documented data quality decisions",
+      "Descriptive statistics, hypothesis testing, confidence intervals and experiment design",
+      "Dashboards and data visualization in Power BI or Looker Studio, with governance, data dictionaries and access control",
+      "Python programming and working with REST APIs and JSON",
+      "Azure AI services: language, vision, Azure OpenAI in Foundry and Azure AI Search, including keys, Entra ID authentication and cost control",
+      "Prompt engineering, grounding and retrieval-augmented generation with citations",
+      "Evaluating model quality and safety: labeled test sets, LLM-as-judge, content filters and prompt injection defenses",
+      "Responsible AI: fairness measurement, privacy, transparency, human oversight and impact assessments"
+    ],
+    firstSteps: [
+      "Install SQLite, download a public sample database and answer ten real business questions in SQL, saving every query with a comment",
+      "Clean a messy dataset in pandas or a spreadsheet and write a data quality log explaining each decision",
+      "Build a one-page dashboard from your cleaned data, reconcile two numbers with the source and write a data dictionary",
+      "Run a small open model locally with Ollama and build a grounded assistant that cites sources and says when it does not know",
+      "Write a responsible-AI assessment for one AI feature you use every day: who could be harmed, and how would you test for it",
+      "Book Data+ or AI-900 and set a weekly study block, then plan for AI-200 and AI-102 once your portfolio has an AI project"
+    ],
+    labs: ["lab-data-sql-sqlite", "lab-data-cleaning-pandas", "lab-data-stats-ab-test", "lab-data-dashboard-governance", "lab-ai-responsible-assessment", "lab-ai-azure-language-vision", "lab-ai-prompt-grounding", "lab-ai-rag-search", "lab-ai-eval-safety", "lab-python-project", "lab-postgres-dba", "lab-rest-api"]
   }
 ]);
 CertHub.addInterview({

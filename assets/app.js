@@ -79,7 +79,7 @@
     ${CertHub.install.installed() ? "" : `<div class="panel installcard"><div class="grow"><strong>Get the app on your phone</strong><br><span class="note">Install it from your browser: it opens full screen and works offline. No app store needed.</span></div><div class="btns" style="margin:0">${CertHub.install.prompt ? `<button type="button" class="btn sm" data-gact="install">Install</button>` : ""}<a class="btn ghost sm" href="#install">How to install</a></div></div>`}
     ${continueHtml()}
     <h2 id="tracks-h">Certifications by career track</h2>
-    <p class="note"><a href="#careers">Career paths</a>: which certification to take first, the jobs each track leads to, and interview practice.</p>
+    <p class="note"><a href="#careers">Career paths</a>: which certification to take first, the jobs each track leads to, and interview practice. <a href="#exam-day">Exam-day guides</a>: scoring, question types and what to expect on test day.</p>
     ${trackPicker()}
     <div id="trackcards">${trackCards()}</div>
     <h2>Your progress</h2>
@@ -156,9 +156,12 @@
       else if (own(labs, head)) { topNav("labs"); $("#app").innerHTML = CertHub.labViews.detail(labs[head]); title = labs[head].title; view = head; }
       else if (own(POLICY_TITLES, head)) { topNav(""); const pv = CertHub.policyViews; $("#app").innerHTML = head === "privacy" ? pv.privacy() : head === "terms" ? pv.terms() : head === "install" ? pv.install() : head === "support" ? pv.support() : pv.security(); title = POLICY_TITLES[head]; view = head; }
       else if (head === "account" && CertHub.accountViews) { topNav("account"); $("#app").innerHTML = CertHub.accountViews.account(); title = "Account"; view = "account"; }
+      else if (/^join-[a-km-np-z2-9]{10}$/.test(head) && CertHub.accountViews) { topNav("account"); CertHub.accountViews.join(head.slice(5)); title = "Join a Class"; view = head; }
+      else if (/^class-[0-9a-f]{24}$/.test(head) && CertHub.accountViews) { topNav("account"); CertHub.accountViews.classRoster(head.slice(6)); title = "Class Roster"; view = head; }
       else if (/^cohort-[0-9a-f]{24}$/.test(head) && CertHub.accountViews) { topNav("account"); CertHub.accountViews.cohort(head.slice(7)); title = "Cohort Progress"; view = head; }
       else if (/^cap-[a-z0-9-]{1,60}$/.test(head) && CertHub.pro) { topNav("labs"); CertHub.pro.capstoneView(head); title = "Capstone project"; view = head; }
       else if (head === "frameworks" && CertHub.frameworksView) { topNav("frameworks"); $("#app").innerHTML = CertHub.frameworksView(); title = "Frameworks"; view = "frameworks"; }
+      else if ((head === "exam-day" || /^exam-day-[a-z]{2,20}$/.test(head)) && CertHub.examDay) { topNav("careers"); CertHub.examDay.show(head); title = "Exam-Day Guides"; view = head; }
       else if ((head === "careers" || /^career-[a-z]{2,20}$/.test(head)) && CertHub.careerViews) { topNav("careers"); CertHub.careerViews.show(head); title = "Career Paths"; view = head; }
       else if (head === "portfolio") { topNav("portfolio"); $("#app").innerHTML = CertHub.labViews.portfolio(); title = "Lab Portfolio"; view = "portfolio"; }
       else { topNav("home"); $("#app").innerHTML = homeView(); view = "home"; }
@@ -193,5 +196,14 @@
     });
   });
   window.addEventListener("hashchange", route);
-  document.addEventListener("DOMContentLoaded", () => { CertHub.themeButton(); route(); });
+  // Language: English or Spanish (interface, lessons and questions where translated).
+  function langButton() {
+    const r = document.querySelector("header.top .right"); if (!r || document.getElementById("langbtn")) return;
+    const es = CertHub.i18n.lang() === "es", b = document.createElement("button");
+    b.type = "button"; b.id = "langbtn"; b.className = "theme"; b.lang = es ? "en" : "es";
+    b.textContent = es ? "English" : "Español"; b.setAttribute("aria-label", es ? "Switch to English" : "Cambiar a español");
+    b.addEventListener("click", () => CertHub.i18n.set(es ? "en" : "es"));
+    r.insertBefore(b, r.querySelector("#theme"));
+  }
+  document.addEventListener("DOMContentLoaded", () => { CertHub.themeButton(); langButton(); CertHub.i18n.start().then(route, route); });
 })();

@@ -2,7 +2,7 @@
    (and at /privacy/, /terms/, /security/ on the real site). Keep these accurate: they describe
    what the code actually does, so update them whenever storage, hosting or tracking changes. */
 (function () {
-  const EFFECTIVE = "September 24, 2026";
+  const EFFECTIVE = "September 26, 2026";
   const SITE = "Cyber Cert Study";
   const U = CertHub.U;
   const contact = () => `<a href="https://github.com/senayamyers27-art/Claude.ai-stuff/security/advisories/new" target="_blank" rel="noopener">GitHub private reporting</a>`;
@@ -20,6 +20,8 @@
       <li>One cookie, <code>__Host-cs_session</code>, that keeps you signed in for up to 30 days. It is secure, HTTP-only and not used for tracking. The site stores only a hash of it.</li>
       <li>If you buy Pro or a group plan: a Stripe customer ID and your plan status. Payment details are handled by Stripe; we never see card numbers.</li>
       <li>If you join an organization through an invite: your membership. Instructors of your cohort can see your email and progress numbers (questions answered, accuracy, days checked, labs finished, last test score and last activity). They cannot see your lab notes.</li>
+      <li>If you join a class with a teacher's join code: the name you choose for that class and, only if you tick the box, your email address. Nothing is shared until you read what the teacher will see and agree to it. From then on the teacher sees a progress summary computed from your synced progress: which certifications you study and, for each, exam readiness, lessons read, best practice exam score, questions answered, hands-on exercises done and when you were last active, plus how many labs you've finished. Teachers never see your answers, review queue, lab notes or write-ups. You can leave a class at any time on the Account page, which stops sharing immediately; a teacher can also remove you or delete the class.</li>
+      <li>If you teach a class: its name, the name you show students, its join code and who has joined.</li>
       <li>A security log of account events (sign-in, billing and organization changes) with the time and IP address, kept to investigate abuse.</li>
     </ul>
     <p>Sign-in emails are sent through our email provider (Resend). On the Account page you can download all your account data or delete your account at any time. Deleting it removes your server data and cancels any subscription; progress on your own device stays until you clear it.</p>`;
@@ -29,7 +31,7 @@
     return `<h1>Privacy Policy</h1>
     <p class="meta">Effective ${EFFECTIVE}</p>
     <div class="status notice"><strong>Short version:</strong> ${accounts()
-      ? `${SITE} has no ads and no tracking${counts() ? ", and counts page views without cookies or personal data" : " and no analytics"}. Without an account your study progress and lab notes stay in your own browser. Accounts are optional; if you create one, we store your email and a synced copy of your progress, and nothing else about you.`
+      ? `${SITE} has no ads and no tracking${counts() ? ", and counts page views without cookies or personal data" : " and no analytics"}. Without an account your study progress and lab notes stay in your own browser. Accounts are optional; if you create one, we store your email and a synced copy of your progress, and nothing else about you. If you join a teacher's class, the teacher sees a summary of your progress, only after you agree, until you leave.`
       : `${SITE} has no accounts, no cookies, no ads and no tracking${counts() ? ". It counts page views without cookies or personal data" : ", and no analytics"}. Your study progress and lab notes stay in your own browser. We never receive them.`}</div>
     <div class="prose">
     <h2>What this policy covers</h2>
@@ -54,7 +56,7 @@
     ${accounts() ? accountPrivacy() : ""}
     <h2>What we don't collect</h2>
     <ul>
-      ${accounts() ? `<li>No passwords, names or profiles; an email address only if you create an account</li>
+      ${accounts() ? `<li>No passwords or profiles; an email address only if you create an account, and a display name only for classes you join or teach</li>
       <li>No cookies except the sign-in cookie for people who create an account</li>` : `<li>No accounts, names, email addresses or passwords</li>
       <li>No cookies</li>`}
       <li>No advertising, social media or tracking scripts, and no fingerprinting${counts() ? "" : ", and no analytics"}</li>
