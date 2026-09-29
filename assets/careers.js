@@ -8,10 +8,31 @@
   function shell(body) { $("#app").innerHTML = body; }
   const roleName = id => ((CertHub.niceRoles || []).find(r => r.id === id) || { name: id }).name;
 
+  /* ---------- pay and job outlook (data/jobmarket.js, from the BLS Occupational Outlook Handbook) ---------- */
+  const money = n => "$" + Math.round(n).toLocaleString("en-US");
+  function outlookTable(rows) {
+    const J = CertHub.jobMarket, es = CertHub.i18n.lang() === "es", T = x => (es && J.es && J.es[x]) || x;
+    return `<div class="panel tablewrap"><table class="plain"><thead><tr><th scope="col">Occupation</th><th scope="col">Median pay (US)</th><th scope="col">Growth 2025–35</th><th scope="col">Openings a year</th></tr></thead><tbody>
+      ${rows.map(([name, pay, growth, open, , url]) => `<tr><td><a href="${esc(url)}" target="_blank" rel="noopener" data-content>${esc(T(name))}</a>${J.notes[name] ? `<br><small class="note" data-content>${esc(T(J.notes[name]))}</small>` : ""}</td><td>${esc(money(pay))}</td><td class="${growth >= 0 ? "up" : "down"}">${growth > 0 ? "+" : ""}${esc(growth)}%</td><td>${esc(open.toLocaleString("en-US"))}</td></tr>`).join("")}
+    </tbody></table></div>`;
+  }
+  function outlookView() {
+    const J = CertHub.jobMarket;
+    if (!J) return `<h1>Pay and job outlook</h1><p class="note">This page couldn't load. Check your connection and try again.</p>`;
+    return `<p class="crumbs"><a href="#careers">Career paths</a> / Pay and job outlook</p><h1>Pay and job outlook</h1>
+      <p class="meta">Median pay and projected growth in the United States for the jobs these career tracks lead to. Figures are national medians: pay varies a lot by location, experience and employer, and entry-level jobs usually pay less than the median.</p>
+      ${outlookTable(J.rows)}
+      <p class="note">Source: <a href="https://www.bls.gov/ooh/" target="_blank" rel="noopener">${esc(J.source)}</a> (${esc(J.asOf)}). Each occupation links to its page there. Growth is compared with 3.5 percent for all jobs; negative growth can still mean many openings, because people retire and change jobs.</p>`;
+  }
+  function trackOutlook(id) {
+    const J = CertHub.jobMarket; if (!J) return "";
+    const rows = J.rows.filter(r => r[4].includes(id)); if (!rows.length) return "";
+    return `<h2>Pay and job outlook</h2>${outlookTable(rows)}<p class="note">US figures from the Bureau of Labor Statistics (${esc(J.asOf)}). <a href="#job-outlook">All occupations and notes</a></p>`;
+  }
   function index(list) {
     const compare = ((CertHub.site || {}).compare || []).filter(p => CertHub.certs[p[0]] && CertHub.certs[p[1]]);
     return `<h1>Career paths</h1>
-    <p class="meta">Where each track leads: which certification to take first, the jobs it opens up, the skills employers ask for, and interview practice for each role.</p>
+    <p class="meta">Where each track leads: which certification to take first, the jobs it opens up, the skills employers ask for, and interview practice for each role. <a href="#job-outlook">Pay and job outlook</a> for each kind of job.</p>
     <div class="cards">${CertHub.tracks.map(t => { const c = list.find(x => x.track === t.id); return c ? `<a class="card" href="#career-${esc(t.id)}"><span class="trackico">${CertHub.fx.icon(t.id)}</span><strong>${esc(c.title)}</strong><span class="note">${esc(t.blurb || "")}</span><span class="note">${c.jobs.length} jobs · ${c.path.length}-step certification path</span></a>` : ""; }).join("")}</div>
     ${compare.length ? `<h2>Compare certifications</h2><p class="note">Not sure which one to take? Side-by-side comparisons of popular pairs.</p><div class="panel"><ul class="clean">${compare.map(([a, b]) => `<li><a href="/compare/${esc(a)}-vs-${esc(b)}/">${esc(CertHub.certs[a].short)} vs ${esc(CertHub.certs[b].short)}</a></li>`).join("")}</ul></div>` : ""}`;
   }
@@ -35,6 +56,7 @@
     <ol class="steps-list plain">${c.path.map(p => { const cert = CertHub.certs[p.cert]; return `<li><strong>${cert ? `<a href="#${esc(p.cert)}">${esc(cert.short)} ${esc(cert.exam)}</a>` : esc(p.cert)}</strong><br>${esc(p.why)}</li>`; }).join("")}</ol>
     <h2>Jobs</h2>
     <div class="panel">${c.jobs.map(j => `<div class="row"><div class="grow"><strong>${esc(j.title)}</strong> <span class="chip" data-style="--c:var(--d1)">${esc(j.level)}</span><br><span class="note">${esc(j.does)}</span></div></div>`).join("")}</div>
+    ${trackOutlook(c.track)}
     <h2>Skills employers ask for</h2>
     <div class="panel"><ul class="clean">${c.skills.map(s => `<li>${esc(s)}</li>`).join("")}</ul></div>
     <h2>Your next 30 days</h2>
@@ -48,11 +70,12 @@
   CertHub.careerViews = {
     async show(head) {
       shell(`<h1>Career paths</h1>${CertHub.fx.skeleton()}`);
-      const [d] = await Promise.all([load(), CertHub.dayInLife ? true : CertHub.loadScript("data/dayinlife.js")]);
+      const [d] = await Promise.all([load(), CertHub.dayInLife ? true : CertHub.loadScript("data/dayinlife.js"), CertHub.jobMarket ? true : CertHub.loadScript("data/jobmarket.js")]);
       const want = location.hash.replace(/^#/, "") || document.body.dataset.route;
       if (want !== head) return; // moved on while loading
       if (!d.list) { shell(`<h1>Career paths</h1><p class="note">Career pages couldn't load. Check your connection and try again.</p>`); return; }
       if (head === "careers") { shell(index(d.list)); document.title = "Career Paths · StudyToCert"; return; }
+      if (head === "job-outlook") { shell(outlookView()); document.title = "Pay and Job Outlook · StudyToCert"; return; }
       const c = d.list.find(x => "career-" + x.track === head);
       if (!c) { shell(index(d.list)); return; }
       shell(track(c)); document.title = `${c.title} · StudyToCert`;

@@ -70,7 +70,40 @@
       "198.51.100.8 POST /upload.php (file=avatar.php)  200",
       "198.51.100.8 GET /uploads/avatar.php?cmd=whoami  200",
       "192.0.2.19  GET /contact.html                   200"
-    ], 3, "A .php file was uploaded through the avatar upload, then requested with a cmd parameter and returned 200. That's a web shell: the attacker can now run commands on the server. Take the site offline or block the path, remove the file, and fix the upload to accept only images and never execute them."]
+    ], 3, "A .php file was uploaded through the avatar upload, then requested with a cmd parameter and returned 200. That's a web shell: the attacker can now run commands on the server. Take the site offline or block the path, remove the file, and fix the upload to accept only images and never execute them."],
+    ["s3-public", "Cloud storage policy", "AWS S3 bucket policy for the bucket holding payroll exports", [
+      "{ \"Version\": \"2012-10-17\",",
+      "  \"Statement\": [{",
+      "    \"Effect\": \"Allow\",",
+      "    \"Principal\": \"*\",",
+      "    \"Action\": \"s3:GetObject\",",
+      "    \"Resource\": \"arn:aws:s3:::payroll-exports/*\"",
+      "  }] }"
+    ], 3, "A principal of \"*\" means anyone on the internet: combined with s3:GetObject, every payroll file can be downloaded by anyone who guesses a name. Remove the statement, keep S3 Block Public Access on for the account, and grant access to specific roles instead."],
+    ["sg-ssh", "Cloud firewall rules", "Inbound rules of the security group on a web server", [
+      "Type HTTPS   Protocol TCP  Port 443   Source 0.0.0.0/0          (public website)",
+      "Type SSH     Protocol TCP  Port 22    Source 0.0.0.0/0          (admin access)",
+      "Type Custom  Protocol TCP  Port 5432  Source sg-0app1 (app tier) (database)",
+      "Type ICMP    Protocol ICMP Echo       Source 10.0.0.0/16        (internal ping)"
+    ], 1, "SSH open to 0.0.0.0/0 invites password guessing and exploit attempts from the whole internet. HTTPS being public is the point of a website; SSH isn't. Limit it to the admin network or a VPN, or remove it and use a managed session service (for example AWS Systems Manager Session Manager or Azure Bastion)."],
+    ["iam-star", "Cloud permissions", "IAM policy attached to the user account the build pipeline uses", [
+      "{ \"Version\": \"2012-10-17\",",
+      "  \"Statement\": [",
+      "    { \"Effect\": \"Allow\", \"Action\": [\"s3:PutObject\"], \"Resource\": \"arn:aws:s3:::build-artifacts/*\" },",
+      "    { \"Effect\": \"Allow\", \"Action\": \"*\", \"Resource\": \"*\" }",
+      "  ] }"
+    ], 3, "Action \"*\" on Resource \"*\" is full administrator access. If the pipeline's credentials leak, the attacker owns the account. Least privilege: keep only what the pipeline needs (the first statement), and give pipelines a role with short-lived credentials rather than a user with long-lived keys."],
+    ["k8s-privileged", "Container settings", "Kubernetes pod spec for a web container", [
+      "apiVersion: v1",
+      "kind: Pod",
+      "spec:",
+      "  containers:",
+      "  - name: web",
+      "    image: nginx:1.27",
+      "    securityContext:",
+      "      privileged: true",
+      "    ports: [{ containerPort: 8080 }]"
+    ], 7, "A privileged container has almost the same access to the node as root on the host: an attacker who gets into the web app can escape the container. A web server never needs it. Remove it, run as a non-root user, and enforce the Pod Security Standards (restricted) on the namespace."]
   ];
 
   /* ---------- tabletop exercises ---------- */
@@ -139,7 +172,7 @@
     const s = saved(), done = PUZZLES.filter(p => s["p:" + p[0]]).length;
     const i = P ? P.i : 0, p = PUZZLES[i], picked = P && P.picked;
     return `<p class="crumbs"><a href="#labs">Labs</a> / Log puzzles</p><h1>Log puzzles</h1>
-      <p class="meta">Short excerpts from real kinds of logs. Pick the line an analyst should act on, then read why. ${esc(done)} of ${PUZZLES.length} solved. All names and addresses are invented.</p>
+      <p class="meta">Short excerpts from real kinds of logs and cloud settings. Pick the line an analyst should act on, then read why. ${esc(done)} of ${PUZZLES.length} solved. All names and addresses are invented.</p>
       <div class="panel"><div class="flex"><strong>${esc(i + 1)}. ${esc(p[1])}</strong><span class="note">${esc(p[2])}</span></div>
         <ol class="loglines" start="1">${p[3].map((l, k) => `<li><button type="button" class="logline${picked != null ? (k === p[4] ? " right" : k === picked ? " wrong" : "") : ""}" data-logpick="${/* num */ k}"${picked != null ? " disabled" : ""}><code>${esc(l)}</code></button></li>`).join("")}</ol>
         ${picked != null ? `<div class="expl" role="status" data-style="--c:${picked === p[4] ? "var(--ok)" : "var(--bad)"}"><strong data-ui>${picked === p[4] ? "Right." : `Not quite: it's line ${esc(p[4] + 1)}.`}</strong> ${esc(p[5])}</div>` : `<p class="note">Select a line.</p>`}

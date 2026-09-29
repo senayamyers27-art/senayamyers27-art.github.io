@@ -350,7 +350,7 @@
     if (!/^[a-z0-9-]{1,64}$/.test(head || "")) head = "home";
     if (tab && !/^([a-z]{1,16}|video-l[a-z0-9]{1,14})$/.test(tab)) tab = "";
     // The home page and a few light pages only need the lab index; everything else waits for the full labs.
-    if ((!CertHub.labsLoaded() && !LIGHT.has(head) && !/^(vm|games?|log-puzzles|tabletop)(-|$)/.test(head)) || (own(certs, head) && certs[head].lite)) {
+    if ((!CertHub.labsLoaded() && !LIGHT.has(head) && !/^(vm|games?|log-puzzles|tabletop|net-design)(-|$)/.test(head)) || (own(certs, head) && certs[head].lite)) {
       $("#app").innerHTML = `${CertHub.fx.skeleton()}`;
       const want = location.hash;
       Promise.all([CertHub.loadLabs(), own(certs, head) ? CertHub.loadPlan(head) : true]).then(r => {
@@ -381,7 +381,7 @@
       else if (/^cap-[a-z0-9-]{1,60}$/.test(head) && CertHub.pro) { topNav("labs"); CertHub.pro.capstoneView(head); title = "Capstone project"; view = head; }
       else if (head === "frameworks" && CertHub.frameworksView) { topNav("frameworks"); $("#app").innerHTML = CertHub.frameworksView(); title = "Frameworks"; view = "frameworks"; }
       else if ((head === "exam-day" || /^exam-day-[a-z]{2,20}$/.test(head)) && CertHub.examDay) { topNav("careers"); CertHub.examDay.show(head); title = "Exam-Day Guides"; view = head; }
-      else if ((head === "careers" || /^career-[a-z]{2,20}$/.test(head)) && CertHub.careerViews) { topNav("careers"); CertHub.careerViews.show(head); title = "Career Paths"; view = head; }
+      else if ((head === "careers" || head === "job-outlook" || /^career-[a-z]{2,20}$/.test(head)) && CertHub.careerViews) { topNav("careers"); CertHub.careerViews.show(head); title = "Career Paths"; view = head; }
       else if (head === "vm" || /^vm-(net|exam|lab-[a-z0-9-]{1,40})$/.test(head)) {
         topNav("labs"); view = head;
         if (CertHub.vm) title = CertHub.vm.show(head);
@@ -395,6 +395,11 @@
         topNav("labs"); view = head;
         if (CertHub.games) title = CertHub.games.show(head);
         else { title = "Quick Games"; $("#app").innerHTML = `${CertHub.fx.skeleton()}`; CertHub.loadScript("assets/games.js").then(ok => { if (location.hash === "#" + head && CertHub.games) document.title = `${CertHub.games.show(head)} · StudyToCert`; else if (!ok) $("#app").innerHTML = `<p class="meta" role="status">This page couldn't load. Check your connection and try again.</p>`; }); }
+      }
+      else if (head === "net-design") {
+        topNav("labs"); view = head;
+        if (CertHub.netdesign) title = CertHub.netdesign.show();
+        else { title = "Network Design Puzzles"; $("#app").innerHTML = `${CertHub.fx.skeleton()}`; CertHub.loadScript("assets/netdesign.js").then(ok => { if (location.hash === "#" + head && CertHub.netdesign) document.title = `${CertHub.netdesign.show()} · StudyToCert`; else if (!ok) $("#app").innerHTML = `<p class="meta" role="status">This page couldn't load. Check your connection and try again.</p>`; }); }
       }
       else if (head === "log-puzzles" || head === "tabletop" || /^tabletop-[a-z-]{2,30}$/.test(head)) {
         topNav("labs"); view = head;

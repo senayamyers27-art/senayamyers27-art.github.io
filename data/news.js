@@ -1,6 +1,17 @@
 /* What's new: learner-facing release notes, newest first. Add an entry when something visible ships.
    Each entry: { date: "YYYY-MM-DD", title, items: [ ... ], es: { title, items } } (es: the Spanish version). Shown at #whats-new and on the home page. */
 CertHub.news = [
+  { date: "2026-09-29", title: "Pay and job outlook, network design and cloud puzzles",
+    items: [
+      "Pay and job outlook: US median pay and projected growth for the jobs each career track leads to, from the Bureau of Labor Statistics, with a link to every source.",
+      "Network design puzzles: put the router, firewall, switch, IPS, load balancer or VPN concentrator in the right place in five networks.",
+      "Four cloud puzzles join the log puzzles: a public S3 bucket, SSH open to the internet, an admin-level IAM policy and a privileged Kubernetes container."
+    ],
+    es: { title: "Salario y perspectivas laborales, diseño de redes y acertijos de nube", items: [
+      "Salario y perspectivas laborales: salario mediano en EE. UU. y crecimiento previsto de los trabajos a los que lleva cada trayectoria, de la Oficina de Estadísticas Laborales, con enlace a cada fuente.",
+      "Acertijos de diseño de redes: coloca el router, el firewall, el switch, el IPS, el balanceador de carga o el concentrador VPN en el lugar correcto de cinco redes.",
+      "Cuatro acertijos de nube se suman a los de registros: un bucket S3 público, SSH abierto a internet, una política de IAM de administrador y un contenedor de Kubernetes privilegiado."
+    ] } },
   { date: "2026-09-29", title: "Command match, exam changes, a day in the life and two new labs",
     items: [
       "A fifth quick game, Command match: Linux, Windows, PowerShell and Cisco IOS commands and what they do.",
