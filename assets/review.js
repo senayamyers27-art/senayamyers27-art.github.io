@@ -68,7 +68,7 @@
 
   function view() {
     if (!S) return `<h1>Daily review</h1><p class="meta">Loading your questions…</p>`;
-    if (!S.items.length) return `<h1>Daily review</h1><p class="meta">Start a study plan first. The daily review mixes questions from every certification you're studying.</p><div class="btns"><a class="btn" href="#home">Choose a certification</a></div>`;
+    if (!S.items.length) return `<h1>Daily review</h1><p class="meta">Start a study plan first. The daily review mixes questions from every certification you're studying.</p><div class="btns"><a class="btn" href="#certifications">Choose a certification</a></div>`;
     if (S.i >= S.items.length) {
       const by = {};
       S.items.forEach((x, i) => { const b = by[x.c.id] || (by[x.c.id] = { c: x.c, ok: 0, n: 0 }); b.n++; if (S.ans[i] === x.q.a) b.ok++; });

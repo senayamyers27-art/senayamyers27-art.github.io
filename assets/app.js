@@ -73,7 +73,7 @@
     const list = startedCerts(), st = CertHub.activity.streak();
     const lp = loadLabProgress(), doneLabs = labOrder.filter(id => labs[id] && labStatus(labs[id], lp).state === "done").length;
     if (!list.length) return `<h1>Your dashboard</h1><p class="meta">Every certification you study shows up here with its readiness, exam countdown and what's due.</p>
-      <div class="panel startcard"><div class="grow"><strong>Nothing started yet</strong><br><span class="note">Pick a certification and open its plan. It appears here as soon as you answer a question, read a lesson or check off a day.</span></div><a class="btn sm" href="#home">Pick a certification</a></div>`;
+      <div class="panel startcard"><div class="grow"><strong>Nothing started yet</strong><br><span class="note">Pick a certification and open its plan. It appears here as soon as you answer a question, read a lesson or check off a day.</span></div><a class="btn sm" href="#certifications">Pick a certification</a></div>`;
     const next = list.filter(x => x.days != null && x.days >= 0).sort((a, b) => a.days - b.days)[0];
     const due = list.reduce((n, x) => n + x.due, 0);
     const flame = st.current ? CertHub.fx.icon("flame", st.current >= 7 ? "flame l3" : st.current >= 3 ? "flame l2" : "flame") : "";
@@ -90,7 +90,7 @@
       <div class="dashgrid habits">${CertHub.habits ? CertHub.habits.recapHtml() + CertHub.habits.goalHtml() + CertHub.habits.focusHtml() : ""}</div>
       <h2>Certifications</h2>
       <div class="dashgrid">${list.map(dashCard).join("")}</div>
-      <p class="note">Readiness is an estimate from your quizzes, lessons and practice exams, updated when you open a certification. <a href="#home">Add another certification</a>.</p>`;
+      <p class="note">Readiness is an estimate from your quizzes, lessons and practice exams, updated when you open a certification. <a href="#certifications">Add another certification</a>.</p>`;
   }
   // Certifications with saved progress, newest activity first: jump back in.
   function continueHtml() {
@@ -325,7 +325,7 @@
       <p class="meta">StudyToCert is free to use in class: no accounts for students, no ads and no tracking. Everything runs in the browser, and students' progress stays on their own devices.</p>
       <h2>What you can use</h2>
       <div class="dashgrid">
-        ${item(`Week-by-week plans for ${n} certifications`, "Each plan has lessons, a quiz per week, timed checkpoints and a practice exam weighted like the real one. Point students at the week you're teaching.", "#home", "Browse certifications")}
+        ${item(`Week-by-week plans for ${n} certifications`, "Each plan has lessons, a quiz per week, timed checkpoints and a practice exam weighted like the real one. Point students at the week you're teaching.", "#certifications", "Browse certifications")}
         ${item("Printable materials", "Cheat sheets, key-term flashcards to cut out and a study planner, all ready to print or save as PDF.", "#security-plus.cheat", "See a cheat sheet")}
         ${item("Hands-on labs without installs", "Real Linux servers run in the browser for Linux+, Security+, CySA+ and Network+ practice, with graded labs checked inside the machine.", "#vm", "Open the practice VMs")}
         ${item("Blue-team exercises for class discussion", "Log puzzles and incident response tabletops work well projected on a screen: the class decides each step, then reads why.", "#tabletop", "Try a tabletop")}
@@ -382,43 +382,51 @@
       <text x="30" y="278" text-anchor="middle">Start</text><text x="360" y="58" text-anchor="middle">Certified</text>
     </svg></div>`;
   }
+  // The site's sections: the menu (header) lists all of them; the home page shows the main ones as tiles.
+  const SECTIONS = () => {
+    const n = CertHub.catalog.filter(id => certs[id]).length, acct = CertHub.sync && CertHub.sync.enabled, me = acct && CertHub.sync.me;
+    return [
+      ["Study", [["certifications", "Certifications", `Free week-by-week plans for ${n} certifications`, "cybersecurity"], ["dashboard", "Dashboard", "Readiness, exam countdowns and what's due", "chart"], ["review", "Daily review", "Five minutes of spaced review across your plans", "flame"], ["exam-day", "Exam-day guides", "Scoring, question types and test day", "check"], ["exam-changes", "Exam changes", "New exam versions and retirements", "news"]]],
+      ["Practice", [["labs", "Labs", `${labOrder.length} hands-on labs with step-by-step guides`, "lab"], ["vm", "Practice VM", "A Linux machine in your browser, with graded labs", "terminal"], ["games", "Quick games", "Sixty-second rounds: subnets, ports, acronyms", "game"], ["log-puzzles", "Blue-team practice", "Log puzzles and incident tabletops", "shield"], ["net-design", "Network design", "Put the right device in each part of a network", "network"]]],
+      ["Career", [["careers", "Career paths", "Which certification first, jobs and interview practice", "career"], ["job-outlook", "Pay and job outlook", "Median pay and projected growth", "chart"], ["portfolio", "Portfolio", "Your finished labs as write-ups and resume bullets", "portfolio"], ["frameworks", "Frameworks", "NIST, ISO, CIS and more, mapped to certifications", "book"], ["achievements", "Achievements", "Badges for streaks, scores and labs", "badge"]]],
+      ["You", [...(acct ? [me && me.user ? ["profile", "Your profile", "Your saved work and sign-in methods", "user"] : ["login", "Log in or sign up", "Save your work to a free profile", "user"]] : []), ["settings", "Settings", "Theme, text size, accessibility, backups", "settings"], ["help", "Help", "Answers to common questions", "help"]]],
+      ["About", [["whats-new", "What's new", "", ""], ["schools", "For teachers", "", ""], ["install", "Install the app", "", ""], ["support", "Support", "", ""], ["privacy", "Privacy Policy", "", ""], ["terms", "Terms of Use", "", ""], ["security", "Security", "", ""]]]
+    ];
+  };
+  const HOME_TILES = ["certifications", "dashboard", "labs", "vm", "games", "careers", "portfolio", "help"];
+  function tilesHtml() {
+    const all = Object.fromEntries(SECTIONS().flatMap(([, items]) => items).map(x => [x[0], x]));
+    return `<div class="tiles">${HOME_TILES.filter(k => all[k]).map(k => { const [id, name, blurb, icon] = all[k]; return `<a class="tile" href="#${esc(id)}">${icon ? CertHub.fx.icon(icon) : ""}<strong>${esc(name)}</strong><span class="note">${esc(blurb)}</span></a>`; }).join("")}</div>`;
+  }
   function homeView() {
-    const lp = loadLabProgress();
-    const labList = labOrder.map(id => labs[id]);
-    const doneLabs = labList.filter(l => labStatus(l, lp).state === "done").length;
-    const start = labs["lab-home-lab"];
     const nCerts = CertHub.catalog.filter(id => certs[id]).length;
     return `<section class="hero withart"><div>
       <h1>Study to certify: free plans for ${nCerts} IT, cloud and cybersecurity certifications</h1>
-      <p class="meta">Pick a certification and get a week-by-week plan: short lessons, hands-on labs, quizzes, timed checkpoints, a practice exam weighted like the real one and spaced review. No sign-up and no ads. Your progress stays in your browser.</p>
+      <p class="meta">Pick a certification and get a week-by-week plan: short lessons, hands-on labs, quizzes, timed checkpoints, a practice exam weighted like the real one and spaced review. No sign-up and no ads.</p>
       ${newsCard()}
-      <div class="btns"><button type="button" class="btn" data-jump="pick">Pick your first certification</button><button type="button" class="btn ghost" data-jump="tracks-h">See all ${nCerts} certifications</button><a class="btn ghost" href="#labs">Browse ${labList.length} labs</a>${doneLabs ? `<a class="btn ghost" href="#portfolio">Your portfolio (${doneLabs})</a>` : ""}</div>
+      <div class="btns"><a class="btn" href="#certifications">Find your certification</a><a class="btn ghost" href="#labs">Browse ${labOrder.length} labs</a></div>
     </div>
       ${heroArt()}
     </section>
-    ${CertHub.install.installed() ? "" : `<div class="panel installcard"><div class="grow"><strong>Get the app on your phone</strong><br><span class="note">Install it from your browser: it opens full screen and works offline. No app store needed.</span></div><div class="btns" data-style="margin:0">${CertHub.install.prompt ? `<button type="button" class="btn sm" data-gact="install">Install</button>` : ""}<a class="btn ghost sm" href="#install">How to install</a></div></div>`}
-    ${CertHub.review ? CertHub.review.homeCard() : ""}
-    <div class="panel installcard gamescard"><div class="grow"><strong>Quick games</strong><br><span class="note">Sixty-second rounds on subnetting, ports, acronyms, OSI layers and commands.</span></div><a class="btn ghost sm" href="#games">Play</a></div>
     ${continueHtml()}
-    <h2 id="help-h">Questions? Ask here</h2>
-    <div class="panel helpcard" id="homehelp">${CertHub.fx.skeleton()}</div>
-    <p class="note"><a href="#help">Open the Help page</a> for every answer.</p>
+    ${CertHub.review ? CertHub.review.homeCard() : ""}
+    <h2>Explore</h2>
+    ${/* html: tiles built with esc() */ tilesHtml()}
+    <p class="note">Everything else is in the <button type="button" class="linkbtn" data-menu="open">Menu</button> at the top of every page.</p>
+    ${CertHub.install.installed() ? "" : `<div class="panel installcard"><div class="grow"><strong>Get the app on your phone</strong><br><span class="note">Install it from your browser: it opens full screen and works offline. No app store needed.</span></div><a class="btn ghost sm" href="#install">Install</a></div>`}
+    ${newsHtml()}`;
+  }
+  // Every certification: help choosing, then the full list by career track.
+  function certificationsView() {
+    const nCerts = CertHub.catalog.filter(id => certs[id]).length;
+    return `<h1>Certifications</h1>
+    <p class="meta">Free week-by-week study plans for ${nCerts} IT, cloud and cybersecurity certifications. Not sure where to start? Answer a few questions below.</p>
+    <div class="btns"><button type="button" class="btn ghost sm" data-jump="pick">Help me choose</button><button type="button" class="btn ghost sm" data-jump="tracks-h">Browse by career track</button><a class="btn ghost sm" href="#careers">Career paths</a></div>
     ${pickerHtml()}
     <h2 id="tracks-h">Certifications by career track</h2>
     <p class="note"><a href="#careers">Career paths</a>: which certification to take first, the jobs each track leads to, and interview practice. <a href="#exam-day">Exam-day guides</a>: scoring, question types and what to expect on test day. <a href="#exam-changes">Exam changes</a>: new versions and retirements.</p>
     ${trackPicker()}
-    <div id="trackcards">${trackCards()}</div>
-    <h2>Your progress</h2>
-    <p class="note"><a href="#dashboard">Your dashboard</a>: readiness, exam countdowns and reviews for every certification you're studying, on one page. <a href="#achievements">Achievements</a>: badges for streaks, scores, labs and games.</p>
-    ${(() => { const st = CertHub.activity.streak(); return `<div class="panel startcard"><div class="grow"><strong>${st.current ? `${CertHub.fx.icon("flame", st.current >= 7 ? "flame l3" : st.current >= 3 ? "flame l2" : "flame")} ${esc(st.current)}-day study streak` : "Start a study streak"}</strong><br><span class="note">${st.current ? (st.today ? "You studied today. " : "Study today to keep it going. ") : "Answer a question or read a lesson each day. "}${st.best ? `Best: ${esc(st.best)} days.` : ""}</span></div><button type="button" class="btn ghost sm" data-gact="reminder">Set a daily reminder</button></div>`; })()}
-    <div class="panel">
-      ${/* html: fixed markup with esc() */ CertHub.sync ? CertHub.sync.savePrompt() : ""}
-      <p class="note" data-style="margin:0">${CertHub.sync && CertHub.sync.me && CertHub.sync.me.user ? "Your work is saved to your profile and in this browser. You can also download a backup." : "Progress, lab notes and checkmarks are saved in this browser only. Nothing is sent anywhere unless you save them to a profile. Back up to move them to another device."}</p>
-      <div class="btns"><button type="button" class="btn ghost sm no-framed" data-gact="download">Download backup</button><button type="button" class="btn ghost sm" data-gact="copybackup">Copy backup</button><label class="btn ghost sm" for="imp">Restore from file</label><input type="file" id="imp" accept="application/json" class="hide"><button type="button" class="btn ghost sm" data-gact="pasterestore">Restore from text</button></div>
-    </div>
-    ${newsHtml()}
-    <div class="panel installcard"><div class="grow"><strong>Settings</strong><br><span class="note">Theme, accent color, text size, language, weekly goal, sounds and backups.</span></div><a class="btn ghost sm" href="#settings">Open settings</a></div>
-`;
+    <div id="trackcards">${trackCards()}</div>`;
   }
 
   /* ---------- restore from pasted text ---------- */
@@ -437,7 +445,7 @@
   };
 
   /* ---------- router ---------- */
-  const NAV = [["home", "Certifications"], ["labs", "Labs"], ["portfolio", "Portfolio"], ["careers", "Careers"], ["frameworks", "Frameworks"]];
+  const NAV = [["home", "Home"], ["certifications", "Certifications"], ["dashboard", "Dashboard"], ["labs", "Labs"], ["careers", "Careers"]];
   // The Account tab only appears when the site has an accounts API configured.
   const navItems = () => CertHub.sync && CertHub.sync.enabled ? NAV.concat([["account", "Account"]]) : NAV;
   function topNav(cur) {
@@ -465,7 +473,7 @@
     const q = new URLSearchParams({ p: name, t: title || name, e: "true", rnd: Math.random().toString(36).slice(2) });
     try { fetch(`${gc}/count?${q}`, { mode: "no-cors", credentials: "omit", keepalive: true, referrerPolicy: "no-referrer" }).catch(() => {}); } catch (e) {}
   };
-  const LIGHT = new Set(["home", "dashboard", "achievements", "exam-changes", "schools", "whats-new", "review", "privacy", "terms", "security", "install", "support", "exam-day", "account", "login", "signup", "profile", "settings", "help"]);
+  const LIGHT = new Set(["home", "dashboard", "achievements", "exam-changes", "schools", "whats-new", "review", "privacy", "terms", "security", "install", "support", "exam-day", "account", "login", "signup", "profile", "settings", "help", "certifications"]);
   function route() {
     let raw = "";
     try { raw = decodeURIComponent(location.hash.replace(/^#/, "")); } catch (e) { raw = ""; }
@@ -516,7 +524,8 @@
       else if (head === "achievements" && CertHub.achievements) { topNav("home"); $("#app").innerHTML = CertHub.achievements.view(); title = "Achievements"; view = head; }
       else if (head === "schools") { topNav(""); $("#app").innerHTML = schoolsView(); title = "For Teachers and Schools"; view = head; }
       else if (head === "exam-changes") { topNav("home"); $("#app").innerHTML = examChangesView(); title = "Exam Changes"; view = head; }
-      else if (head === "dashboard") { topNav("home"); $("#app").innerHTML = dashboardView(); title = "Your Dashboard"; view = head; }
+      else if (head === "certifications") { topNav("certifications"); $("#app").innerHTML = certificationsView(); title = "Certifications"; view = head; }
+      else if (head === "dashboard") { topNav("dashboard"); $("#app").innerHTML = dashboardView(); title = "Your Dashboard"; view = head; }
       else if (head === "games" || /^game-[a-z]{2,20}$/.test(head)) {
         topNav("labs"); view = head;
         if (CertHub.games) title = CertHub.games.show(head);
@@ -537,11 +546,15 @@
       else if (head === "review" && CertHub.review) { topNav("home"); $("#app").innerHTML = CertHub.review.show(); title = "Daily Review"; view = "review"; }
       else if (head === "portfolio") { topNav("portfolio"); $("#app").innerHTML = CertHub.labViews.portfolio(); title = "Lab Portfolio"; view = "portfolio"; }
       else if (head === "help") { topNav(""); $("#app").innerHTML = helpView(); title = "Help"; view = head; embedHelp("helppage", "psup", { all: true }); }
-      else { topNav("home"); $("#app").innerHTML = homeView(); view = "home"; embedHelp("homehelp", "hsup"); }
+      else { topNav("home"); $("#app").innerHTML = homeView(); view = "home"; }
     }
     const bn = $("#brandname span");
     if (brand === "StudyToCert") bn.innerHTML = "Study<b>To</b>Cert"; else bn.textContent = brand;
-    $("#back").hidden = view === "home";
+    // Back arrow: from a certification to the list of certifications, from anywhere else to the home page.
+    const back = $("#back"), onCert = view.startsWith("cert:");
+    back.hidden = view === "home"; back.href = onCert ? "#certifications" : "#home";
+    back.textContent = onCert ? "← All" : "← Home"; back.setAttribute("aria-label", onCert ? "All certifications" : "Home");
+    menuCurrent();
     document.title = title === "StudyToCert" ? title : `${title} · StudyToCert`;
     countView();
     window.scrollTo(0, 0);
@@ -603,6 +616,61 @@
     new MutationObserver(fix).observe(el, { childList: true, characterData: true, subtree: true }); fix();
   }
   CertHub.titleCase = titleCase;
+  /* ---------- site menu: every page, grouped (the Menu button in the header) ---------- */
+  function menuButton() {
+    const r = document.querySelector("header.top .right"); if (!r || document.getElementById("menubtn")) return;
+    const b = document.createElement("button");
+    b.type = "button"; b.id = "menubtn"; b.className = "menubtn"; b.dataset.menu = "toggle";
+    b.setAttribute("aria-expanded", "false"); b.setAttribute("aria-controls", "sitemenu"); b.setAttribute("aria-label", "Menu"); // the word is hidden on phones
+    b.innerHTML = `<span class="burger" aria-hidden="true"><i></i><i></i><i></i></span><span class="mlabel">Menu</span>`;
+    r.appendChild(b);
+  }
+  function menuHtml() {
+    return `<div class="menuhead"><strong id="menutitle">Menu</strong><button type="button" class="suphide" data-menu="close" aria-label="Close menu">✕</button></div>
+      <div class="menubody">${SECTIONS().map(([group, items]) => `<section><h2 class="menugroup">${esc(group)}</h2><ul class="clean">${items.map(([id, name]) => `<li><a href="#${esc(id)}" data-menulink="${esc(id)}">${esc(name)}</a></li>`).join("")}</ul></section>`).join("")}</div>`;
+  }
+  let menuOpener = null;
+  function menuOpen() {
+    let m = document.getElementById("sitemenu");
+    if (!m) {
+      m = document.createElement("nav"); m.id = "sitemenu"; m.className = "sitemenu"; m.setAttribute("aria-labelledby", "menutitle");
+      const shade = document.createElement("div"); shade.id = "menushade"; shade.className = "menushade"; shade.dataset.menu = "close";
+      document.body.appendChild(shade); document.body.appendChild(m);
+    }
+    menuOpener = document.activeElement;
+    m.innerHTML = menuHtml(); m.hidden = false; document.getElementById("menushade").hidden = false;
+    document.documentElement.classList.add("menu-open");
+    const b = document.getElementById("menubtn"); if (b) b.setAttribute("aria-expanded", "true");
+    menuCurrent();
+    const cur = m.querySelector('[aria-current="page"]') || m.querySelector("a"); if (cur) cur.focus();
+  }
+  function menuClose(refocus = true) {
+    const m = document.getElementById("sitemenu"); if (!m || m.hidden) return;
+    m.hidden = true; document.getElementById("menushade").hidden = true;
+    document.documentElement.classList.remove("menu-open");
+    const b = document.getElementById("menubtn"); if (b) b.setAttribute("aria-expanded", "false");
+    if (refocus) (menuOpener && document.contains(menuOpener) && menuOpener !== document.body ? menuOpener : b || document.body).focus();
+  }
+  // Mark the page you're on in the menu.
+  function menuCurrent() {
+    const head = (location.hash.replace(/^#/, "").split(".")[0]) || "home";
+    document.querySelectorAll("#sitemenu [data-menulink]").forEach(a => { if (a.dataset.menulink === head) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+  }
+  document.addEventListener("click", e => {
+    const t = e.target.closest("[data-menu]");
+    if (t) { const a = t.dataset.menu; if (a === "close") menuClose(); else if (a === "open") menuOpen(); else { const m = document.getElementById("sitemenu"); if (m && !m.hidden) menuClose(); else menuOpen(); } return; }
+    if (e.target.closest("#sitemenu a")) menuClose(false);
+  });
+  document.addEventListener("keydown", e => {
+    const m = document.getElementById("sitemenu"); if (!m || m.hidden) return;
+    if (e.key === "Escape") { e.preventDefault(); menuClose(); return; }
+    if (e.key === "Tab") { // keep focus inside the open menu
+      const f = [...m.querySelectorAll("a, button")]; if (!f.length) return;
+      if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
+      else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
+    }
+  });
+
   // Help answers and the assistant (assets/support.js + data/help.js), loaded when first needed.
   const loadHelp = () => Promise.all([CertHub.loadScript("data/help.js"), CertHub.loadScript("assets/support.js")]).then(r => r.every(Boolean) && !!CertHub.support);
   // Fill a help box on the page (the home page card, the Help page) once the widget has loaded.
@@ -641,5 +709,5 @@
     });
     document.body.appendChild(b);
   }
-  document.addEventListener("DOMContentLoaded", () => { CertHub.themeButton(); langButton(); tabBar(); titleCaseTitles(); helpButton(); CertHub.i18n.start().then(route, route); });
+  document.addEventListener("DOMContentLoaded", () => { CertHub.themeButton(); langButton(); tabBar(); titleCaseTitles(); helpButton(); menuButton(); CertHub.i18n.start().then(route, route); });
 })();
