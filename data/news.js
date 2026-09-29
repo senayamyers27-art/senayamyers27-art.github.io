@@ -1,6 +1,23 @@
 /* What's new: learner-facing release notes, newest first. Add an entry when something visible ships.
    Each entry: { date: "YYYY-MM-DD", title, items: [ ... ], es: { title, items } } (es: the Spanish version). Shown at #whats-new and on the home page. */
 CertHub.news = [
+  { date: "2026-09-29", title: "Games, exam mode, achievements and more",
+    items: [
+      "Quick games: 60-second rounds on subnetting, ports, acronyms and OSI layers, with best scores.",
+      "Practice exams now work like the real test: flag questions for review, cross out options, jump between questions and check a review screen before you submit.",
+      "A knowledge map on the Progress tab shows every question in the bank colored by your last answer.",
+      "Achievements: 20 badges for streaks, scores, labs, the practice VMs and games.",
+      "Share your score or readiness as an image, straight to your phone's share sheet.",
+      "Keyboard shortcuts in quizzes (A to D, N, B, F), reading settings (text size, easy-read spacing, high contrast) and optional sounds."
+    ],
+    es: { title: "Juegos, modo examen, logros y más", items: [
+      "Juegos rápidos: rondas de 60 segundos sobre subredes, puertos, siglas y capas OSI, con récords.",
+      "Los exámenes de práctica ahora funcionan como el examen real: marca preguntas para revisar, tacha opciones, salta entre preguntas y revisa todo antes de enviar.",
+      "Un mapa de conocimiento en la pestaña Progreso muestra cada pregunta del banco coloreada según tu última respuesta.",
+      "Logros: 20 insignias por rachas, puntuaciones, laboratorios, las máquinas virtuales de práctica y los juegos.",
+      "Comparte tu puntuación o tu preparación como imagen, directo al menú de compartir de tu teléfono.",
+      "Atajos de teclado en los cuestionarios (A a D, N, B, F), ajustes de lectura (tamaño del texto, espaciado de lectura fácil, alto contraste) y sonidos opcionales."
+    ] } },
   { date: "2026-09-29", title: "Your dashboard",
     items: [
       "A new dashboard shows every certification you're studying on one page: exam readiness, days to the exam, where you are in the plan, accuracy and reviews due.",

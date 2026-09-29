@@ -304,7 +304,9 @@
     }
     function add(d) { dict = new Map(Object.entries(d.exact || {})); pats = (d.patterns || []).map(([re, to]) => [new RegExp(re), to]); }
     function set(l) { store.set("certhub:lang", l); location.reload(); }
-    return { lang, start, add, set, walk };
+    // Translate one string outside the page (for example text drawn on a canvas).
+    const t = s => { if (lang() !== "es") return s; const r = tr(String(s)); return r == null ? s : r; };
+    return { lang, start, add, set, walk, t };
   })();
   function themeButton() {
     const b = document.getElementById("theme");

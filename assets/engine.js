@@ -69,7 +69,7 @@
     CertHub.loadLessons(id).then(m => {
       if (!C || C.id !== id) return;
       LES = m || false;
-      if (active && !(S.quiz && !S.quiz.done) && (S.tab === "week" || S.tab === "learn")) render();
+      if (active && !(S.quiz && !S.quiz.done) && ["week", "learn", "cheat", "progress", "certificate"].includes(S.tab)) render();
     });
     const p = loadProgress(C.id);
     // Some lesson titles were capitalized (September 2026); keep "read" marks and ratings saved under the old title.
@@ -127,6 +127,8 @@
     CertHub.activity.mark();
     const st = S.p.stats[q.d] || (S.p.stats[q.d] = { c: 0, t: 0 });
     st.t++; if (ok) st.c++;
+    // Last result for each question, for the knowledge map (1 right, 0 wrong).
+    (S.p.seen || (S.p.seen = {}))[q.id] = ok ? 1 : 0;
     // Objective-level accuracy for the score report, when the question names its objective.
     const obj = String(q.src || "").match(/^(\d{1,2}\.\d{1,2})\b/);
     if (obj) { const objs = S.p.objs || (S.p.objs = {}); const o = objs[obj[1]] || (objs[obj[1]] = { c: 0, t: 0 }); o.t++; if (ok) o.c++; }
@@ -203,7 +205,7 @@
     if (!o.qs.length) { CertHub.ui.toast("No questions available yet for this set."); return; }
     // Shuffle answer options every time so position never gives the answer away.
     o.qs = o.qs.map(q => { const idx = shuffle(q.o.map((_, i) => i)); return { ...q, o: idx.map(i => q.o[i]), a: idx.indexOf(q.a), why: q.why ? idx.map(i => q.why[i]) : null }; });
-    S.quiz = { ...o, i: 0, ans: [], picked: null, revealed: false, end: o.minutes ? Date.now() + o.minutes * 60000 : null, done: false };
+    S.quiz = { ...o, i: 0, ans: [], picked: null, revealed: false, end: o.minutes ? Date.now() + o.minutes * 60000 : null, done: false, flags: {}, struck: {}, reviewing: false };
     S.tab = "practice"; render(); window.scrollTo(0, 0);
   }
   let tickT;
@@ -219,17 +221,36 @@
   function choose(k) {
     const z = S.quiz; if (z.revealed) return;
     z.picked = k;
-    if (z.mode === "learn") { z.revealed = true; const q = z.qs[z.i]; z.ans[z.i] = k; record(q, k === q.a, z.review); save(); }
+    if (z.mode === "learn") { z.revealed = true; const q = z.qs[z.i]; z.ans[z.i] = k; record(q, k === q.a, z.review); save(); CertHub.fx.sound(k === q.a ? "right" : "wrong"); }
     render();
   }
   function next() {
     const z = S.quiz;
     if (z.mode === "test") z.ans[z.i] = z.picked;
+    // Timed tests end on a review screen, like the real exam; untimed ones (the placement test) just finish.
+    if (z.mode === "test" && z.end && z.i + 1 >= z.qs.length) { z.reviewing = true; render(); window.scrollTo(0, 0); return; }
     z.i++; z.picked = z.mode === "test" ? (z.ans[z.i] ?? null) : null; z.revealed = false;
     if (z.i >= z.qs.length) return finishQuiz();
     render(); window.scrollTo(0, 0);
   }
   function prev() { const z = S.quiz; z.ans[z.i] = z.picked; z.i = Math.max(0, z.i - 1); z.picked = z.ans[z.i] ?? null; render(); }
+  // Exam-style navigation for tests: jump to any question, flag it for review, cross out options.
+  function gotoQ(i) { const z = S.quiz; if (!z.reviewing) z.ans[z.i] = z.picked; z.reviewing = false; z.i = Math.max(0, Math.min(z.qs.length - 1, i)); z.picked = z.ans[z.i] ?? null; render(); window.scrollTo(0, 0); }
+  function toggleFlag() { const z = S.quiz; z.flags[z.i] = !z.flags[z.i]; render(); }
+  function toggleStrike(k) { const z = S.quiz, s = z.struck[z.i] || (z.struck[z.i] = {}); s[k] = !s[k]; if (s[k] && z.picked === k) z.picked = null; render(); }
+  function qGrid(z) {
+    return `<div class="qgrid" role="group" aria-label="Questions">${z.qs.map((_, i) => { const a = i === z.i && !z.reviewing ? z.picked != null : z.ans[i] != null; return `<button type="button" class="qcell${a ? " done" : ""}${z.flags[i] ? " flag" : ""}${i === z.i && !z.reviewing ? " now" : ""}" data-goto="${i}" aria-label="Question ${i + 1}${a ? ", answered" : ", not answered"}${z.flags[i] ? ", flagged" : ""}">${i + 1}</button>`; }).join("")}</div>`;
+  }
+  // The screen before submitting a test: what's answered, flagged and still open.
+  function reviewScreen(z) {
+    const answered = z.qs.filter((_, i) => z.ans[i] != null).length, flagged = z.qs.map((_, i) => i).filter(i => z.flags[i]), open = z.qs.map((_, i) => i).filter(i => z.ans[i] == null);
+    const list = (ids, label) => ids.length ? `<p><strong>${esc(label)}:</strong> ${ids.map(i => `<button type="button" class="linkbtn" data-goto="${/* num */ i}">${/* num */ i + 1}</button>`).join(", ")}</p>` : "";
+    return `<div class="qhead"><strong>${esc(z.title)}</strong><span>${z.end ? `<span class="timer" id="timer" aria-label="Time left"></span> · ` : ""}<button class="btn ghost sm" data-act="quit">Quit</button></span></div>
+    <h2>Review your answers</h2>
+    <div class="panel"><p class="meta">${esc(answered)} of ${z.qs.length} answered${flagged.length ? ` · ${esc(flagged.length)} flagged` : ""}. Pick a number to go back to it.</p>
+      ${qGrid(z)}${list(flagged, "Flagged for review")}${list(open, "Not answered")}
+      <div class="btns"><button class="btn" data-act="finish">Submit test</button><button class="btn ghost" data-goto="0">Back to question 1</button></div></div>`;
+  }
   function finishQuiz() {
     const z = S.quiz; if (!z || z.done) return;
     if (z.mode === "test") { if (z.i < z.qs.length) z.ans[z.i] = z.picked; z.qs.forEach((q, i) => record(q, z.ans[i] === q.a, false)); }
@@ -574,6 +595,7 @@
     return `<div class="panel ready"><div class="flex"><div><strong>Exam readiness</strong><br><span class="chip" data-style="--c:${esc(r.band[1])}">${esc(r.band[0])}</span></div>${CertHub.fx.ring(r.score, r.band[1], `<span data-count="${esc(r.score)}">${esc(r.score)}</span><small>/100</small>`)}</div>
       <div class="track" aria-hidden="true"><i data-style="width:${esc(r.score)}%;background:${esc(r.band[1])}"></i></div>
       ${r.tips.length ? `<ul class="clean">${r.tips.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : `<p class="note" data-style="margin:8px 0 0">Everything points to ready. Book the exam while it's fresh.</p>`}
+      <div class="btns"><button type="button" class="btn ghost sm" data-act="shareready">Share my readiness</button></div>
       <p class="note" data-style="margin:8px 0 0">An estimate from your quiz accuracy by domain (weighted like the exam), lessons read, recent practice exams and review backlog. It isn't the real exam's scoring.</p></div>`;
   }
   // Plan badge: every lesson read and a practice exam at 80% or better.
@@ -1080,26 +1102,31 @@
       const pct = Math.round(100 * z.score / z.qs.length);
       return `<div class="qhead"><strong>${esc(z.title)}</strong><button class="btn ghost sm" data-act="quit">Done</button></div>
       <div class="panel"><div class="ringrow">${CertHub.fx.ring(pct, pct >= 85 ? "var(--ok)" : pct >= 75 ? "var(--warn)" : "var(--bad)", `<span class="big" data-style="margin:0;font-size:inherit"><span data-count="${pct}">${pct}</span>%</span>`)}<p class="meta">${esc(z.score)} of ${z.qs.length} correct${z.mode === "test" ? (pct >= 85 ? ". Exam-ready range." : pct >= 75 ? ". Close. Review the misses below." : ". Revisit these topics before moving on.") : ""}</p></div>
+      <div class="btns"><button type="button" class="btn ghost sm" data-act="sharescore">Share my score</button></div>
       ${z.kind === "full" ? `<p data-style="margin:8px 0 0"><span class="chip" data-style="--c:${esc(passBand(pct)[1])}">${esc(passBand(pct)[0])}</span> <span class="note">Pass estimate. Real exams use scaled scores, so treat 85%+ on full-length exams as your target.</span></p>
       <div class="bars" data-style="margin-top:12px">${C.domains.map(d => { const qs = z.qs.map((q, i) => [q, i]).filter(([q]) => q.d === d.id); const c = qs.filter(([q, i]) => z.ans[i] === q.a).length; const p = qs.length ? Math.round(100 * c / qs.length) : 0; return `<div class="b" data-style="--c:${dc(d.id)}"><div class="flex"><span>D${esc(d.id)} ${esc(d.name)}</span><strong>${c}/${qs.length}</strong></div><div class="track"><i data-style="width:${p}%"></i></div></div>`; }).join("")}</div>` : ""}</div>
       ${z.kind === "placement" ? placementHtml() : ""}
       ${z.fix ? fixHtml(S.p.fix === z.fix ? S.p.fix : z.fix, "result") : ""}
       <h2>Review</h2>${z.qs.map((q, i) => { const ok = z.ans[i] === q.a; return `<div class="panel" data-style="--c:${ok ? "var(--ok)" : "var(--bad)"}"><p data-style="margin:0 0 6px"><strong>${ok ? "Correct" : "Missed"}</strong> · <span class="note">${esc(domName(q.d))}</span></p><p class="qtext" data-style="margin:0 0 8px">${esc(q.q)}</p>${ok ? "" : `<p class="note" data-style="margin:0">Your answer: ${esc(z.ans[i] == null ? "none" : q.o[z.ans[i]])}</p>`}<p data-style="margin:4px 0 0"><strong>${esc(q.o[q.a])}</strong></p><div class="expl">${esc(q.e)}${whyHtml(q, z.ans[i])}${q.src ? `<br><small class="note">Source: ${esc(q.src)}</small>` : ""}${ok ? "" : `<br>${lessonLink(q)}`}<br>${qReport(q)}</div></div>`; }).join("")}`;
     }
-    const q = z.qs[z.i];
+    if (z.mode === "test" && z.reviewing) return reviewScreen(z);
+    const q = z.qs[z.i], test = z.mode === "test", struck = (test && z.struck[z.i]) || {};
     const opts = q.o.map((o, k) => {
       let cls = "";
       if (z.revealed) { if (k === q.a) cls = "right"; else if (k === z.picked) cls = "wrong"; }
-      return `<button class="opt ${cls}" data-opt="${k}" aria-pressed="${z.picked === k}">${esc(o)}</button>`;
+      const btn = `<button class="opt ${cls}${struck[k] ? " struck" : ""}" data-opt="${k}" aria-pressed="${z.picked === k}"><span class="key" aria-hidden="true">${/* safe: a letter A-D or a number */ "ABCD"[k] || k + 1}</span> ${esc(o)}</button>`;
+      return test ? `<div class="optrow">${btn}<button type="button" class="strike" data-strike="${k}" aria-pressed="${!!struck[k]}" aria-label="Cross out option ${/* safe: a letter A-D or a number */ "ABCD"[k] || k + 1}" title="Cross out">✕</button></div>` : btn;
     }).join("");
     return `<div class="qhead"><strong>${esc(z.title)}</strong><span>${z.end ? `<span class="timer" id="timer" aria-label="Time left"></span> · ` : ""}<button class="btn ghost sm" data-act="quit">Quit</button></span></div>
     <div class="flex note"><span>Question ${esc(z.i + 1)} of ${z.qs.length}</span><span>Domain ${esc(q.d)}${q.lv ? ` · ${esc(LEVELS[q.lv])}` : ""}</span></div>
     <div class="prog" data-style="--c:${dc(q.d)}"><i data-style="width:${100 * (z.i + 1) / z.qs.length}%"></i></div>
+    ${test ? `<details class="qnav"><summary>All questions</summary>${qGrid(z)}</details>` : ""}
     <p class="q">${esc(q.q)}</p>${opts}
     ${z.revealed ? `<div class="expl" role="status" data-style="--c:${z.picked === q.a ? "var(--ok)" : "var(--bad)"}"><strong data-ui>${z.picked === q.a ? "Correct." : "Not quite."}</strong> ${esc(q.e)}${whyHtml(q, z.picked)}${q.src ? `<br><small class="note" data-ui>Source: ${esc(q.src)}</small>` : ""}${z.picked !== q.a ? `<br>${lessonLink(q)}` : ""}<br>${qReport(q)}</div>` : ""}
     <div class="btns">${z.mode === "test" && z.i > 0 ? `<button class="btn ghost" data-act="prev">Back</button>` : ""}
-    ${(z.mode === "learn" && z.revealed) || z.mode === "test" ? `<button class="btn" data-act="next">${z.i + 1 === z.qs.length ? "Finish" : "Next"}</button>` : ""}
-    ${z.mode === "test" ? `<button class="btn ghost" data-act="finish">Submit test</button>` : ""}</div>`;
+    ${(z.mode === "learn" && z.revealed) || z.mode === "test" ? `<button class="btn" data-act="next">${z.i + 1 === z.qs.length ? (z.mode === "test" && z.end ? "Review answers" : "Finish") : "Next"}</button>` : ""}
+    ${test ? `<button class="btn ghost" data-act="flag" aria-pressed="${!!z.flags[z.i]}">${z.flags[z.i] ? "⚑ Flagged" : "⚐ Flag for review"}</button><button class="btn ghost" data-act="reviewall">Review all</button><button class="btn ghost" data-act="finish">Submit test</button>` : ""}</div>
+    ${test ? `<p class="note keys">Keys: A to D to answer, N next, B back, F flag.</p>` : `<p class="note keys">Keys: A to D to answer, N or Enter for the next question.</p>`}`;
   }
   // Certifications whose objectives the practice VMs' graded labs cover (see data/vmlabs.js).
   const VM_CERTS = new Set(["linux-plus", "rhcsa", "a-plus-core2", "server-plus", "security-plus", "network-plus", "cysa-plus", "sscp", "isc2-cc", "securityx"]);
@@ -1115,6 +1142,22 @@
       return here.length ? `<h2>${esc(t)}</h2><div class="labgrid">${here.map(x => CertHub.labCard(x.lab, `Week ${x.week.n}`)).join("")}</div>` : "";
     }).join("") : `<p class="note">No labs are linked to this plan yet.</p>`}`;
   }
+  // Every question in the bank as a tile, by domain: not seen yet, missed, relearning (in the review queue after
+  // a miss, now answered right) or known. Tiles don't reveal questions; each domain has a drill button.
+  function knowledgeMap() {
+    if (!Q.length) return "";
+    const seen = S.p.seen || {}, rev = S.p.review || {};
+    // Progress saved before the map existed has no "seen" record, but a question in the review queue was missed.
+    const state = q => seen[q.id] == null ? (rev[q.id] ? "miss" : "new") : seen[q.id] === 0 ? "miss" : rev[q.id] ? "learn" : "known";
+    const rows = C.domains.map(d => { const qs = Q.filter(q => q.d === d.id); const cells = qs.map(state); const n = s => cells.filter(x => x === s).length; return { d, cells, known: n("known"), miss: n("miss"), learn: n("learn"), total: qs.length }; }).filter(r => r.total);
+    const all = rows.reduce((a, r) => a + r.total, 0), known = rows.reduce((a, r) => a + r.known, 0);
+    return `<h2>Knowledge map</h2>
+    <div class="panel kmap"><p class="note" data-style="margin:0 0 10px">Each square is one question in the ${esc(C.short)} bank, colored by your last answer. ${esc(known)} of ${esc(all)} known.</p>
+      ${rows.map(r => `<div class="kmrow" data-style="--c:${dc(r.d.id)}"><div class="flex"><span>D${esc(r.d.id)} ${esc(r.d.name)}</span><span class="note">${esc(r.known)}/${esc(r.total)} known${r.miss ? ` · ${esc(r.miss)} missed` : ""}</span></div>
+        <div class="kmcells" aria-hidden="true">${r.cells.map(s => `<i class="${/* safe: one of new, miss, learn, known */ s}"></i>`).join("")}</div>
+        <button type="button" class="btn ghost sm" data-act="drill-d" data-d="${esc(r.d.id)}">Drill D${esc(r.d.id)}</button></div>`).join("")}
+      <p class="kmkey note"><span><i class="new"></i> Not seen</span><span><i class="miss"></i> Missed</span><span><i class="learn"></i> Relearning</span><span><i class="known"></i> Known</span></p></div>`;
+  }
   function progressView() {
     const st = S.p.stats;
     const rows = C.domains.map(d => { const s = st[d.id] || { c: 0, t: 0 }; return { d: d.id, pct: s.t ? Math.round(100 * s.c / s.t) : null, ...s }; });
@@ -1126,6 +1169,7 @@
     ${readinessHtml()}
     ${badgeHtml()}
     <div class="panel startcard"><div class="grow"><strong>Study streak: ${esc(CertHub.activity.streak().current)} day${CertHub.activity.streak().current === 1 ? "" : "s"}</strong><br><span class="note">Best: ${esc(CertHub.activity.streak().best)} days. A day counts when you answer a question, read a lesson or check off a study day.</span></div><button class="btn ghost sm" data-act="reminder">Set a daily reminder</button></div>
+    ${knowledgeMap()}
     ${weak ? `<div class="status">Weakest so far: <strong>Domain ${esc(weak.d)}</strong> at ${esc(weak.pct)}%. <button class="btn ghost sm" data-style="margin-left:6px" data-act="drill-d" data-d="${esc(weak.d)}">Drill it</button></div>` : ""}
     <h2>Accuracy by domain</h2>
     <div class="panel bars">${rows.map(r => `<div class="b" data-style="--c:${dc(r.d)}"><div class="flex"><span>D${esc(r.d)} ${esc(DOM[r.d].name)} <span class="note">(${esc(DOM[r.d].w)}%)</span></span><strong>${r.pct == null ? "–" : esc(r.pct) + "%"}</strong></div><div class="track"><i data-style="width:${esc(r.pct) || 0}%"></i></div><span class="note">${esc(r.c)}/${esc(r.t)} answered</span></div>`).join("")}</div>
@@ -1284,6 +1328,8 @@
     if (t.dataset.week) { S.viewWeek = +t.dataset.week; S.tab = "week"; render(); return; }
     if (t.dataset.open) { S.viewWeek = +t.dataset.open; S.tab = "week"; history.replaceState(null, "", `#${C.id}.week`); render(); window.scrollTo(0, 0); return; }
     if (t.dataset.opt != null) return choose(+t.dataset.opt);
+    if (t.dataset.strike != null && S.quiz) return toggleStrike(+t.dataset.strike);
+    if (t.dataset.goto != null && S.quiz) return gotoQ(+t.dataset.goto);
     if (t.dataset.drill != null) return drillAnswer(t.dataset.drill);
     if (t.dataset.simup != null || t.dataset.simdown != null) {
       const o = S.sim.order, k = +(t.dataset.simup ?? t.dataset.simdown), j = t.dataset.simup != null ? k - 1 : k + 1;
@@ -1372,6 +1418,17 @@
         ch.port1.onmessage = e => CertHub.ui.toast(e.data && e.data.ok ? `${C.short} lessons, questions and simulations are saved for offline study.` : "Couldn't save for offline. Check your connection and try again.");
         ctl.postMessage({ type: "cache-urls", urls }, [ch.port2]);
       },
+      sharescore: () => {
+        const z = S.quiz; if (!z || !z.done) return;
+        const pct = Math.round(100 * z.score / z.qs.length);
+        CertHub.fx.shareCard({ kicker: `${C.short} ${C.exam}`, title: z.title, pct, ringColor: pct >= 85 ? "var(--ok)" : pct >= 75 ? "var(--warn)" : "var(--bad)", big: `${pct}%`,
+          line1: `${z.score} of ${z.qs.length} correct`, line2: "Free study plans at StudyToCert", file: `${C.id}-score-${pct}`, text: `I scored ${pct}% on a ${C.short} practice quiz with StudyToCert.` });
+      },
+      shareready: () => {
+        const r = readiness();
+        CertHub.fx.shareCard({ kicker: `${C.short} ${C.exam}`, title: "Exam readiness", pct: r.score, ringColor: r.band[1], big: String(r.score),
+          line1: `${r.band[0]} · out of 100`, line2: "Free study plans at StudyToCert", file: `${C.id}-readiness-${r.score}`, text: `My ${C.short} exam readiness is ${r.score}/100 on StudyToCert.` });
+      },
       badge: () => { const b = badgeState(); CertHub.makeBadge({ title: `${C.short} ${C.exam}`, line1: "Study plan complete", line2: `${b.total} lessons · best practice exam ${b.best}%`, file: `${C.id}-study-plan-badge.png` }); },
       simcheck: simCheck,
       simretry: () => simStart(S.sim.p.id),
@@ -1422,7 +1479,7 @@
         }
       },
       printguide: () => { document.querySelectorAll(".guide details").forEach(d => { d.open = true; }); window.print(); },
-      next, prev, quit: quitQuiz,
+      next, prev, quit: quitQuiz, flag: toggleFlag, reviewall: () => { const z = S.quiz; z.ans[z.i] = z.picked; z.reviewing = true; render(); window.scrollTo(0, 0); },
       finish: async () => {
         const unanswered = S.quiz.qs.length - S.quiz.ans.filter((x, i) => x != null || (i === S.quiz.i && S.quiz.picked != null)).length;
         if (await CertHub.ui.confirm(unanswered > 0 ? `Submit now? ${unanswered} question${unanswered > 1 ? "s are" : " is"} unanswered and will count as wrong.` : "Submit the test now?", { ok: "Submit test", cancel: "Keep working" })) {
@@ -1448,6 +1505,19 @@
   });
   // Hands-on: the terminal prompt (Enter runs, arrows walk history) and Tab to indent in code editors.
   let hoEsc = false;
+  // Quiz keyboard shortcuts: A-D (or 1-4) answer, N/Enter next, B back, F flag.
+  document.addEventListener("keydown", e => {
+    const z = active && S && S.quiz;
+    if (!z || z.done || z.reviewing || S.tab !== "practice" || e.altKey || e.ctrlKey || e.metaKey) return;
+    const el = e.target;
+    if (el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable || document.querySelector(".modal-wrap"))) return;
+    const k = e.key.toLowerCase(), q = z.qs[z.i];
+    let opt = "abcd".indexOf(k); if (opt < 0) opt = "1234".indexOf(k);
+    if (opt >= 0 && opt < q.o.length && !z.revealed) { e.preventDefault(); return choose(opt); }
+    if ((k === "n" || (k === "enter" && !(el && el.closest && el.closest("button, a")))) && (z.mode === "test" || z.revealed)) { e.preventDefault(); return next(); }
+    if (k === "b" && z.mode === "test" && z.i > 0) { e.preventDefault(); return prev(); }
+    if (k === "f" && z.mode === "test") { e.preventDefault(); return toggleFlag(); }
+  });
   document.addEventListener("keydown", e => {
     if (!active || !S || !S.ho) return;
     const el = e.target, st = S.ho;

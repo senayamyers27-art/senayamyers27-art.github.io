@@ -82,6 +82,7 @@
         <div class="panel"><span class="note">Study streak</span><strong class="dashnum">${flame}<span data-count="${esc(st.current)}">${esc(st.current)}</span> day${st.current === 1 ? "" : "s"}</strong><span class="note">${st.today ? "Studied today." : "Study today to keep it going."}</span></div>
         <div class="panel"><span class="note">Next exam</span><strong class="dashnum">${next ? `<span data-count="${esc(next.days)}">${esc(next.days)}</span> day${next.days === 1 ? "" : "s"}` : "–"}</strong><span class="note">${next ? esc(`${next.c.short} ${next.c.exam}`) : "No upcoming exam date"}</span></div>
         <div class="panel"><span class="note">Reviews due</span><strong class="dashnum"><span data-count="${esc(due)}">${esc(due)}</span></strong><span class="note">${due ? `<a href="#review">Start the daily review</a>` : "All caught up"}</span></div>
+        <div class="panel"><span class="note">Badges</span><strong class="dashnum">${CertHub.fx.icon("medal")}<span data-count="${esc(CertHub.achievements ? CertHub.achievements.earned().length : 0)}">${esc(CertHub.achievements ? CertHub.achievements.earned().length : 0)}</span></strong><span class="note"><a href="#achievements">See achievements</a></span></div>
         <div class="panel"><span class="note">Labs finished</span><strong class="dashnum"><span data-count="${esc(doneLabs)}">${esc(doneLabs)}</span></strong><span class="note"><a href="#${doneLabs ? "portfolio" : "labs"}">${doneLabs ? "See your portfolio" : "Browse labs"}</a></span></div>
       </div>
       <h2>Certifications</h2>
@@ -162,6 +163,23 @@
     if (!t.hasAttribute("tabindex")) t.setAttribute("tabindex", "-1");
     t.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); t.focus({ preventScroll: true });
   });
+  // Reading and sound settings (Appearance): each button sets one saved preference and an attribute on <html>.
+  const PREFS = { size: ["certhub:size", "data-size", ["md", "lg", "xl"]], read: ["certhub:easyread", "data-read", ["off", "on"]], contrast: ["certhub:contrast", "data-contrast", ["normal", "more"]], sound: ["certhub:sound", null, ["off", "on"]] };
+  const pref = k => { const [key, , vals] = PREFS[k], v = CertHub.store.get(key); return vals.includes(v) ? v : vals[0]; };
+  document.addEventListener("click", e => {
+    const b = e.target.closest("button[data-pref]"); if (!b) return;
+    const [k, v] = b.dataset.pref.split(":"), p = PREFS[k]; if (!p || !p[2].includes(v)) return;
+    CertHub.store.set(p[0], v);
+    const root = document.documentElement;
+    if (p[1]) { const attr = k === "read" ? (v === "on" ? "easy" : "") : v === p[2][0] ? "" : v; if (attr) root.setAttribute(p[1], attr); else root.removeAttribute(p[1]); }
+    document.querySelectorAll(`[data-pref^="${k}:"]`).forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    if (k === "sound" && v === "on") CertHub.fx.sound("right");
+  });
+  function readingHtml() {
+    const chips = (k, label, opts) => `<p class="pickq">${esc(label)}</p><div class="trackpick" role="group" aria-label="${esc(label)}">${opts.map(([v, l]) => `<button type="button" class="chipbtn" data-pref="${esc(k)}:${esc(v)}" aria-pressed="${pref(k) === v}">${esc(l)}</button>`).join("")}</div>`;
+    return `<div class="panel">${chips("size", "Text size", [["md", "Normal"], ["lg", "Large"], ["xl", "Larger"]])}${chips("read", "Easy-read spacing", [["off", "Off"], ["on", "On"]])}${chips("contrast", "Contrast", [["normal", "Normal"], ["more", "High"]])}${chips("sound", "Sounds", [["off", "Off"], ["on", "On"]])}
+      <p class="note" data-style="margin:8px 0 0">Easy-read uses a plainer font with wider letter and line spacing, which many readers with dyslexia find easier. Sounds stay off when your device asks for reduced motion.</p></div>`;
+  }
   document.addEventListener("click", e => {
     const b = e.target.closest("button[data-accent]"); if (!b) return;
     CertHub.setAccent(b.dataset.accent);
@@ -218,6 +236,7 @@
     </section>
     ${CertHub.install.installed() ? "" : `<div class="panel installcard"><div class="grow"><strong>Get the app on your phone</strong><br><span class="note">Install it from your browser: it opens full screen and works offline. No app store needed.</span></div><div class="btns" data-style="margin:0">${CertHub.install.prompt ? `<button type="button" class="btn sm" data-gact="install">Install</button>` : ""}<a class="btn ghost sm" href="#install">How to install</a></div></div>`}
     ${CertHub.review ? CertHub.review.homeCard() : ""}
+    <div class="panel installcard gamescard"><div class="grow"><strong>Quick games</strong><br><span class="note">Sixty-second rounds on subnetting, ports, acronyms and OSI layers.</span></div><a class="btn ghost sm" href="#games">Play</a></div>
     ${continueHtml()}
     ${pickerHtml()}
     <h2 id="tracks-h">Certifications by career track</h2>
@@ -225,7 +244,7 @@
     ${trackPicker()}
     <div id="trackcards">${trackCards()}</div>
     <h2>Your progress</h2>
-    <p class="note"><a href="#dashboard">Your dashboard</a>: readiness, exam countdowns and reviews for every certification you're studying, on one page.</p>
+    <p class="note"><a href="#dashboard">Your dashboard</a>: readiness, exam countdowns and reviews for every certification you're studying, on one page. <a href="#achievements">Achievements</a>: badges for streaks, scores, labs and games.</p>
     ${(() => { const st = CertHub.activity.streak(); return `<div class="panel startcard"><div class="grow"><strong>${st.current ? `${CertHub.fx.icon("flame", st.current >= 7 ? "flame l3" : st.current >= 3 ? "flame l2" : "flame")} ${esc(st.current)}-day study streak` : "Start a study streak"}</strong><br><span class="note">${st.current ? (st.today ? "You studied today. " : "Study today to keep it going. ") : "Answer a question or read a lesson each day. "}${st.best ? `Best: ${esc(st.best)} days.` : ""}</span></div><button type="button" class="btn ghost sm" data-gact="reminder">Set a daily reminder</button></div>`; })()}
     <div class="panel">
       <p class="note" data-style="margin:0">Progress, lab notes and checkmarks are saved in this browser only. Nothing is sent anywhere. Back up to move them to another device.</p>
@@ -235,6 +254,8 @@
     <h2>Appearance</h2>
     <div class="panel"><p class="note" data-style="margin:0">Accent color for buttons and highlights. Use the button at the top right to switch between light, dark and your device's setting.</p>
       <div class="swatches" role="group" aria-label="Accent color">${CertHub.ACCENTS.map(([k, l, c]) => `<button type="button" class="chipbtn swatch" data-accent="${esc(k)}" aria-pressed="${CertHub.accent() === k}" data-style="--sw:${esc(c)}"><i aria-hidden="true"></i>${esc(l)}</button>`).join("")}</div></div>
+    <h3 id="reading">Reading and sound</h3>
+    ${readingHtml()}
     <div class="panel installcard supportcard"><div class="grow"><strong>Keep it free</strong><br><span class="note">No ads and no tracking. Share it, report a mistake${CertHub.site && CertHub.site.support && CertHub.site.support.url ? " or chip in" : ""} to help.</span></div><a class="btn ghost sm" href="#support">Support this site</a></div>`;
   }
 
@@ -282,7 +303,7 @@
     const q = new URLSearchParams({ p: name, t: title || name, e: "true", rnd: Math.random().toString(36).slice(2) });
     try { fetch(`${gc}/count?${q}`, { mode: "no-cors", credentials: "omit", keepalive: true, referrerPolicy: "no-referrer" }).catch(() => {}); } catch (e) {}
   };
-  const LIGHT = new Set(["home", "dashboard", "whats-new", "review", "privacy", "terms", "security", "install", "support", "exam-day", "account"]);
+  const LIGHT = new Set(["home", "dashboard", "achievements", "whats-new", "review", "privacy", "terms", "security", "install", "support", "exam-day", "account"]);
   function route() {
     let raw = "";
     try { raw = decodeURIComponent(location.hash.replace(/^#/, "")); } catch (e) { raw = ""; }
@@ -291,7 +312,7 @@
     if (!/^[a-z0-9-]{1,64}$/.test(head || "")) head = "home";
     if (tab && !/^([a-z]{1,16}|video-l[a-z0-9]{1,14})$/.test(tab)) tab = "";
     // The home page and a few light pages only need the lab index; everything else waits for the full labs.
-    if ((!CertHub.labsLoaded() && !LIGHT.has(head) && !/^vm(-|$)/.test(head)) || (own(certs, head) && certs[head].lite)) {
+    if ((!CertHub.labsLoaded() && !LIGHT.has(head) && !/^(vm|games?)(-|$)/.test(head)) || (own(certs, head) && certs[head].lite)) {
       $("#app").innerHTML = `${CertHub.fx.skeleton()}`;
       const want = location.hash;
       Promise.all([CertHub.loadLabs(), own(certs, head) ? CertHub.loadPlan(head) : true]).then(r => {
@@ -303,6 +324,7 @@
     const prev = view;
     if (prev.startsWith("lab-") || prev.startsWith("cap-")) CertHub.labViews.leave();
     if (/^vm(-|$)/.test(prev) && CertHub.vm) CertHub.vm.leave();
+    if (/^games?(-|$)/.test(prev) && CertHub.games) CertHub.games.leave();
     let title = "StudyToCert", brand = "StudyToCert";
     if (own(certs, head)) {
       CertHub.certView.open(head, tab || "week");
@@ -327,7 +349,13 @@
         if (CertHub.vm) title = CertHub.vm.show(head);
         else { title = "Practice VMs"; $("#app").innerHTML = `${CertHub.fx.skeleton()}`; CertHub.loadScript("assets/vm.js").then(ok => { if (location.hash === "#" + head && CertHub.vm) document.title = `${CertHub.vm.show(head)} · StudyToCert`; else if (!ok) $("#app").innerHTML = `<p class="meta" role="status">This page couldn't load. Check your connection and try again.</p>`; }); }
       }
+      else if (head === "achievements" && CertHub.achievements) { topNav("home"); $("#app").innerHTML = CertHub.achievements.view(); title = "Achievements"; view = head; }
       else if (head === "dashboard") { topNav("home"); $("#app").innerHTML = dashboardView(); title = "Your Dashboard"; view = head; }
+      else if (head === "games" || /^game-[a-z]{2,20}$/.test(head)) {
+        topNav("labs"); view = head;
+        if (CertHub.games) title = CertHub.games.show(head);
+        else { title = "Quick Games"; $("#app").innerHTML = `${CertHub.fx.skeleton()}`; CertHub.loadScript("assets/games.js").then(ok => { if (location.hash === "#" + head && CertHub.games) document.title = `${CertHub.games.show(head)} · StudyToCert`; else if (!ok) $("#app").innerHTML = `<p class="meta" role="status">This page couldn't load. Check your connection and try again.</p>`; }); }
+      }
       else if (head === "whats-new") { topNav(""); $("#app").innerHTML = newsView(); title = "What's New"; view = head; }
       else if (head === "review" && CertHub.review) { topNav("home"); $("#app").innerHTML = CertHub.review.show(); title = "Daily Review"; view = "review"; }
       else if (head === "portfolio") { topNav("portfolio"); $("#app").innerHTML = CertHub.labViews.portfolio(); title = "Lab Portfolio"; view = "portfolio"; }
@@ -339,6 +367,7 @@
     document.title = title === "StudyToCert" ? title : `${title} · StudyToCert`;
     countView();
     window.scrollTo(0, 0);
+    if (CertHub.achievements) setTimeout(() => { try { CertHub.achievements.checkNew(); } catch (e) {} }, 600);
   }
   // Re-render the current view in place (after marking a lab done, for example).
   CertHub.reviewActive = () => view === "review";

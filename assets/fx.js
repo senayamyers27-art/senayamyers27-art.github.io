@@ -35,7 +35,7 @@
   }
   // A medal that pops in with a title and a line of detail, announced to screen readers, then fades.
   function celebrate({ title, sub = "" }) {
-    confetti();
+    confetti(); sound("win");
     document.querySelectorAll(".fx-pop").forEach(x => x.remove());
     const box = document.createElement("div");
     box.className = "fx-pop"; box.setAttribute("role", "status");
@@ -91,5 +91,69 @@
   };
   const icon = (name, cls = "") => `<svg class="ico ${esc(cls)}" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${/* html: fixed SVG shapes defined above */ ICONS[name] || ICONS.all}</svg>`;
 
-  CertHub.fx = { celebrate, confetti, ring, skeleton, icon, calm };
+  /* ---------- share cards: a square image of a score, for social posts ---------- */
+  // Resolves "var(--ok)" and similar to the color the page is using right now.
+  const color = c => { const m = /^var\((--[\w-]+)\)$/.exec(c || ""); return (m ? css(m[1]) : c) || "#2D5BD0"; };
+  function drawCard({ kicker, title, pct, ringColor, big, line1, line2 }) {
+    const T = s => (CertHub.i18n && CertHub.i18n.t ? CertHub.i18n.t(s) : s);
+    [title, line1, line2] = [title, line1, line2].map(T);
+    const S = 1080, cv = document.createElement("canvas"); cv.width = cv.height = S;
+    const g = cv.getContext("2d"); if (!g) return null;
+    const grad = g.createLinearGradient(0, 0, S, S); grad.addColorStop(0, "#131B26"); grad.addColorStop(1, "#24407F");
+    g.fillStyle = grad; g.fillRect(0, 0, S, S);
+    const font = (w, px) => `${w} ${px}px "Public Sans", system-ui, sans-serif`;
+    const fit = (text, w, px, max) => { let t = String(text || ""); g.font = font(w, px); while (t.length > 1 && g.measureText(t).width > max) t = t.slice(0, -2) + "…"; return t; };
+    g.fillStyle = "#fff"; g.textAlign = "center"; g.textBaseline = "alphabetic";
+    g.font = font(700, 40); g.fillText("StudyToCert", S / 2, 110);
+    g.fillStyle = "rgba(255,255,255,.75)"; g.fillText(fit(kicker, 600, 38, S - 160), S / 2, 180);
+    // The ring: a faint full circle and the score's arc, starting at the top.
+    const cx = S / 2, cy = 470, r = 200;
+    g.lineWidth = 36; g.lineCap = "round";
+    g.strokeStyle = "rgba(255,255,255,.14)"; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+    const p = Math.max(0, Math.min(100, +pct || 0));
+    if (p > 0) { g.strokeStyle = color(ringColor); g.beginPath(); g.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p / 100); g.stroke(); }
+    g.fillStyle = "#fff"; g.textBaseline = "middle"; g.font = font(800, 130); g.fillText(String(big), cx, cy + 6);
+    g.textBaseline = "alphabetic";
+    g.fillText(fit(title, 800, 66, S - 140), S / 2, 800);
+    g.fillStyle = "rgba(255,255,255,.85)"; g.fillText(fit(line1, 500, 40, S - 160), S / 2, 870);
+    g.fillStyle = "rgba(255,255,255,.6)"; g.fillText(fit(line2, 400, 32, S - 160), S / 2, 1000);
+    return cv;
+  }
+  // Opens the phone's share sheet with the image, or downloads it where sharing files isn't supported.
+  function shareCard(opts) {
+    const cv = drawCard(opts); if (!cv) return;
+    const name = (opts.file || "studytocert-score") + ".png";
+    cv.toBlob(async b => {
+      if (!b) return;
+      const file = typeof File === "function" ? new File([b], name, { type: "image/png" }) : null;
+      const data = { files: file ? [file] : [], title: "StudyToCert", text: opts.text || "" };
+      if (file && navigator.canShare && navigator.canShare(data)) {
+        try { await navigator.share(data); return; } catch (e) { if (e && e.name === "AbortError") return; }
+      }
+      const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = name;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      if (CertHub.ui && CertHub.ui.toast) CertHub.ui.toast("Image saved. Add it to your post.");
+    }, "image/png");
+  }
+
+  /* ---------- sounds (off unless turned on in Appearance; silent when reduce motion is on) ---------- */
+  let actx = null;
+  const soundOn = () => CertHub.store.get("certhub:sound") === "on" && !calm();
+  // Short tones made in the browser: no audio files to download.
+  function sound(kind) {
+    if (!soundOn()) return;
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      const notes = { right: [[660, 0], [880, .08]], wrong: [[220, 0], [180, .09]], win: [[523, 0], [659, .1], [784, .2], [1047, .3]], tick: [[1200, 0]] }[kind] || [];
+      const t0 = actx.currentTime + .01;
+      notes.forEach(([f, at]) => {
+        const o = actx.createOscillator(), g = actx.createGain();
+        o.type = kind === "wrong" ? "triangle" : "sine"; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t0 + at); g.gain.exponentialRampToValueAtTime(kind === "tick" ? .04 : .12, t0 + at + .015); g.gain.exponentialRampToValueAtTime(0.0001, t0 + at + (kind === "win" ? .35 : .18));
+        o.connect(g).connect(actx.destination); o.start(t0 + at); o.stop(t0 + at + .4);
+      });
+    } catch (e) {}
+  }
+
+  CertHub.fx = { celebrate, confetti, ring, skeleton, icon, calm, shareCard, drawCard, sound, soundOn };
 })();

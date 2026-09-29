@@ -50,6 +50,7 @@
     <p class="meta">${all().length} labs built from what security, network and GRC teams actually do day to day. Each has step-by-step instructions with exact commands, checks that prove it worked, a place for your notes, and a write-up and resume bullet for your portfolio.</p>
     <div class="figs3"><div class="fig"><b>${esc(counts.done)}</b><span>done</span></div><div class="fig"><b>${esc(counts.doing)}</b><span>in progress</span></div><div class="fig"><b>${esc(counts.new)}</b><span>not started</span></div></div>
     <div class="panel installcard vmcard"><div class="grow"><strong>Practice VMs</strong><br><span class="note">Real Linux servers in your browser: free practice, two networked machines, graded labs checked inside the VM, and a timed exam. Nothing to install.</span></div><a class="btn sm" href="#vm">Open the practice VMs</a></div>
+    <div class="panel installcard gamescard"><div class="grow"><strong>Quick games</strong><br><span class="note">Sixty-second rounds on subnetting, ports, acronyms and OSI layers.</span></div><a class="btn ghost sm" href="#games">Play</a></div>
     ${first && labStatus(first, lp).state !== "done" ? `<div class="status notice"><strong>Start here:</strong> most labs run in the home lab you build in <a href="#lab-home-lab">${esc(first.title)}</a>.</div>` : ""}
     <div class="filters">
       <label>Track <select id="f-track"><option value="">All tracks</option>${TRACKS.map(t => `<option ${filters.track === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>

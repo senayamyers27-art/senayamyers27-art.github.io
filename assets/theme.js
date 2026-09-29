@@ -6,7 +6,8 @@
    2. The CSP blocks inline style attributes (style-src-attr 'none'), so the app's markup uses data-style attributes instead,
       and an observer applies it through the CSSOM, which the CSP allows. It runs before the page is painted.
    3. A saved light/dark or accent choice is applied before paint, so it never flashes.
-   4. A ?lang=es or ?lang=en link (from the Spanish lesson pages) sets the interface language, then the parameter is removed. */
+   4. Reading settings (text size, easy-read spacing, high contrast) are applied before paint too.
+   5. A ?lang=es or ?lang=en link (from the Spanish lesson pages) sets the interface language, then the parameter is removed. */
 try {
   if (window.trustedTypes && trustedTypes.createPolicy && !trustedTypes.defaultPolicy) {
     var DANGER = /<\s*\/?\s*(script|style|iframe|frame|frameset|object|embed|base|meta|link)\b|<[a-z][^>]*\son[a-z]+\s*=|<[a-z][^>]*\s(href|src|action|formaction|xlink:href)\s*=\s*["']?\s*(javascript|vbscript|data:text\/html)/i;
@@ -41,4 +42,7 @@ try {
   if (q) { localStorage.setItem("certhub:lang", q[1]); history.replaceState(null, "", location.pathname + location.search.replace(/([?&])lang=(es|en)\b&?/, "$1").replace(/[?&]$/, "") + location.hash); }
   var t = localStorage.getItem("certhub:theme"); if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
   var a = localStorage.getItem("certhub:accent"); if (/^(green|purple|rose|amber|classic)$/.test(a || "")) document.documentElement.setAttribute("data-accent", a);
+  var r = localStorage.getItem("certhub:size"); if (r === "lg" || r === "xl") document.documentElement.setAttribute("data-size", r);
+  if (localStorage.getItem("certhub:easyread") === "on") document.documentElement.setAttribute("data-read", "easy");
+  if (localStorage.getItem("certhub:contrast") === "more") document.documentElement.setAttribute("data-contrast", "more");
 } catch (e) {}
