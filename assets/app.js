@@ -453,5 +453,19 @@
     b.addEventListener("click", () => CertHub.i18n.set(es ? "en" : "es"));
     r.insertBefore(b, r.querySelector("#theme"));
   }
-  document.addEventListener("DOMContentLoaded", () => { CertHub.themeButton(); langButton(); CertHub.i18n.start().then(route, route); });
+  // Tab bars scroll sideways on phones: keep the selected tab in view and fade the edges that have more tabs past them.
+  function tabBar() {
+    const nav = document.getElementById("tabs"); if (!nav) return;
+    const fade = () => { const max = nav.scrollWidth - nav.clientWidth; nav.classList.toggle("fl", nav.scrollLeft > 4); nav.classList.toggle("fr", max > 4 && nav.scrollLeft < max - 4); };
+    const show = () => {
+      const t = nav.querySelector('[aria-selected="true"]');
+      if (t && nav.scrollWidth > nav.clientWidth) nav.scrollLeft = t.offsetLeft - nav.offsetLeft - (nav.clientWidth - t.offsetWidth) / 2;
+      fade();
+    };
+    nav.addEventListener("scroll", fade, { passive: true });
+    window.addEventListener("resize", fade);
+    new MutationObserver(show).observe(nav, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-selected"] });
+    show();
+  }
+  document.addEventListener("DOMContentLoaded", () => { CertHub.themeButton(); langButton(); tabBar(); CertHub.i18n.start().then(route, route); });
 })();

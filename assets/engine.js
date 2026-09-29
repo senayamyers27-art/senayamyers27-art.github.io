@@ -375,13 +375,18 @@
     const r = isRead(t);
     return `<button class="btn sm ${r ? "ghost" : ""}" data-act="read" data-k="${lessonKey(t)}" aria-pressed="${r}">${r ? tr("Read ✓ (mark unread)") : tr("Mark as read")}</button>`;
   }
+  // A YouTube video for this lesson (data/videos.js), as a plain link: no embedded player, no third-party cookies.
+  function ytLink(t) {
+    const id = ((CertHub.videos || {})[C.id] || {})[t];
+    return typeof id === "string" && /^[A-Za-z0-9_-]{11}$/.test(id) ? `<a class="btn ghost sm" href="https://www.youtube.com/watch?v=${esc(id)}" target="_blank" rel="noopener">${tr("▶ Watch on YouTube")}</a>` : "";
+  }
   function lessonHtml(t, n) {
     const l = lessonOf(t);
     if (!l) return `<li class="lesson-none">${esc(t)}</li>`;
     const r = isRead(t);
     return `<li><details class="lesson" data-k="${lessonKey(t)}"${l.tt ? ` lang="es"` : ""}><summary><span class="grow">${esc(l.tt || t)}</span>${r ? `<span class="chip done">${tr("Read")}</span>` : ""}</summary>
       <div class="lbody">
-        <div class="btns" data-style="margin-top:0"><button type="button" class="btn ghost sm" data-act="video" data-k="${lessonKey(t)}">${tr("▶ Watch the overview")}</button>${"speechSynthesis" in window ? `<button type="button" class="btn ghost sm" data-act="listen" data-k="${lessonKey(t)}" aria-pressed="false">${tr("🔊 Listen")}</button>` : ""}</div>
+        <div class="btns" data-style="margin-top:0"><button type="button" class="btn ghost sm" data-act="video" data-k="${lessonKey(t)}">${tr("▶ Watch the overview")}</button>${ytLink(t)}${"speechSynthesis" in window ? `<button type="button" class="btn ghost sm" data-act="listen" data-k="${lessonKey(t)}" aria-pressed="false">${tr("🔊 Listen")}</button>` : ""}</div>
         ${(l.body || []).map((x, i) => para(x) + (i === 0 ? diagramHtml(t) : "")).join("")}
         ${l.terms && l.terms.length ? `<h3>${tr("Key terms")}</h3><dl class="terms">${l.terms.map(([a, b]) => `<dt>${inline(a)}</dt><dd>${inline(b)}</dd>`).join("")}</dl>` : ""}
         ${l.example ? `<div class="panel ex"><strong>${tr("Real-world example")}</strong>${[].concat(l.example).map(para).join("")}</div>` : ""}
@@ -1659,6 +1664,9 @@
 
   CertHub.certView = {
     open, close,
+    // For tools/videos/make-videos.js: the open certification's lesson topics (in plan order) and a lesson's overview slides.
+    lessonTopics: () => (C && LES ? W.flatMap(w => lessonTopics(w).filter(t => LES.has(t))) : []),
+    slides: t => overviewSlides(t),
     get active() { return active; },
     // A quiz or test in progress holds unsaved state; sync waits until it's finished.
     get busy() { return !!(active && S && ((S.quiz && !S.quiz.done) || S.fc || S.ho || (S.sim && !S.sim.done) || (S.drill && !S.drill.done))); },

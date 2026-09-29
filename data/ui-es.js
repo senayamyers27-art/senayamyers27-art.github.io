@@ -1,6 +1,7 @@
 /* Spanish interface text. Keys are the exact English strings shown by the app. */
 CertHub.addUiEs({
   exact: {
+    "▶ Watch on YouTube": "▶ Ver en YouTube",
     "Log and cloud puzzles: spot the line that matters in real kinds of logs and cloud settings. Tabletop exercises: talk through a ransomware, phishing or lost-laptop incident step by step. Network design: put the right device in each part of a network.": "Acertijos de registros y nube: encuentra la línea importante en registros y configuraciones de nube reales. Simulacros de mesa: recorre paso a paso un incidente de ransomware, phishing o un portátil perdido. Diseño de redes: pon el dispositivo correcto en cada parte de una red.",
     "Short excerpts from real kinds of logs and cloud settings. Pick the line an analyst should act on, then read why.": "Fragmentos breves de registros y configuraciones de nube reales. Elige la línea sobre la que debe actuar un analista y lee por qué.",
     "Network design": "Diseño de redes",

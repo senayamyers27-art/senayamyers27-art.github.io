@@ -1,6 +1,15 @@
 /* What's new: learner-facing release notes, newest first. Add an entry when something visible ships.
    Each entry: { date: "YYYY-MM-DD", title, items: [ ... ], es: { title, items } } (es: the Spanish version). Shown at #whats-new and on the home page. */
 CertHub.news = [
+  { date: "2026-09-29", title: "Better on phones, and deeper Security+ and Network+ lessons",
+    items: [
+      "Phones: a compact header so the certification name fits, tab bars that show when there are more tabs and keep your tab in view, and buttons and controls that stack neatly.",
+      "Every Security+ and Network+ lesson is now two to three times longer, with a step-by-step explanation, a worked example, common mistakes, the clue words exam questions use and four self-check questions."
+    ],
+    es: { title: "Mejor en el teléfono y lecciones más completas de Security+ y Network+", items: [
+      "Teléfonos: un encabezado compacto para que se vea el nombre de la certificación, pestañas que indican cuando hay más y mantienen visible la tuya, y botones y controles que se ordenan mejor.",
+      "Cada lección de Security+ y Network+ ahora es de dos a tres veces más larga (en inglés), con una explicación paso a paso, un ejemplo resuelto, errores comunes, las palabras clave de las preguntas y cuatro preguntas de repaso."
+    ] } },
   { date: "2026-09-29", title: "Four new certifications: CISM, CISA, CCSP and AWS Security",
     items: [
       "ISACA CISM (security management) and CISA (IS audit), ISC2 CCSP (cloud security) and AWS Certified Security – Specialty (SCS-C03).",
