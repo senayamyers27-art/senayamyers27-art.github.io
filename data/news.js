@@ -1,6 +1,25 @@
 /* What's new: learner-facing release notes, newest first. Add an entry when something visible ships.
    Each entry: { date: "YYYY-MM-DD", title, items: [ ... ], es: { title, items } } (es: the Spanish version). Shown at #whats-new and on the home page. */
 CertHub.news = [
+  { date: "2026-09-29", title: "Study habits: goals, focus timer and a final-week plan",
+    items: [
+      "Set a weekly study goal and see a weekly recap on your dashboard: days studied, questions answered, focus minutes and readiness changes. Share it as an image.",
+      "A focus timer (15, 25 or 45 minutes) that counts toward your streak and keeps running when you change pages.",
+      "Streak freeze: one missed day a week no longer breaks your streak.",
+      "Build your own quiz: pick domains, number of questions, difficulty, unseen or missed questions, and instant feedback or a timed test.",
+      "Mark an answer as a guess: if you got it right, it still comes back for review.",
+      "Readiness over time on the Progress tab, and a day-by-day plan for the last week before your exam.",
+      "Listen to lessons read aloud, and print key-term flashcards to cut out."
+    ],
+    es: { title: "Hábitos de estudio: metas, temporizador y plan de la última semana", items: [
+      "Fija una meta semanal y mira el resumen de la semana en tu panel: días de estudio, preguntas respondidas, minutos de concentración y cambios en tu preparación. Compártelo como imagen.",
+      "Un temporizador de concentración (15, 25 o 45 minutos) que cuenta para tu racha y sigue funcionando aunque cambies de página.",
+      "Protección de racha: faltar un día a la semana ya no rompe tu racha.",
+      "Crea tu propio cuestionario: elige dominios, número de preguntas, dificultad, preguntas no vistas o falladas, y respuesta inmediata o examen con tiempo.",
+      "Marca una respuesta como adivinada: si acertaste, igual vuelve para repasar.",
+      "Tu preparación a lo largo del tiempo en la pestaña Progreso, y un plan día a día para la última semana antes del examen.",
+      "Escucha las lecciones en voz alta e imprime tarjetas de términos clave para recortar."
+    ] } },
   { date: "2026-09-29", title: "Games, exam mode, achievements and more",
     items: [
       "Quick games: 60-second rounds on subnetting, ports, acronyms and OSI layers, with best scores.",

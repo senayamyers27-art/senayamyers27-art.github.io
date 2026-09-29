@@ -152,7 +152,7 @@
     const g = G.g, score = G.score, asked = G.asked, misses = G.misses;
     stop();
     const best = saveScore(g.id, score);
-    if (asked) CertHub.activity.mark();
+    if (asked) { CertHub.activity.mark(); CertHub.activity.q(asked); }
     if (best) CertHub.fx.celebrate({ title: "New best score!", sub: `${score} on ${g.name}` });
     const box = $("#gamebox"); if (!box) return;
     box.innerHTML = `<div class="panel"><div class="ringrow">${CertHub.fx.ring(asked ? Math.round(100 * score / asked) : 0, "var(--accent)", `<span data-count="${esc(score)}">${esc(score)}</span><small>correct</small>`)}<p class="meta">${esc(score)} of ${esc(asked)} answered correctly.${best ? " A new personal best." : ""}</p></div>

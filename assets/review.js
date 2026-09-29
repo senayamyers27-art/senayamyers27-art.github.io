@@ -54,10 +54,11 @@
   }
 
   function record(item, ok) {
-    CertHub.activity.mark();
+    CertHub.activity.mark(); CertHub.activity.q();
     const p = loadProgress(item.c.id), q = item.q;
     p.stats = p.stats || {}; p.review = p.review || {};
     const st = p.stats[q.d] || (p.stats[q.d] = { c: 0, t: 0 });
+    (p.seen || (p.seen = {}))[q.id] = ok ? 1 : 0;
     st.t++; if (ok) st.c++;
     const r = p.review[q.id], t = U.today().getTime();
     if (!ok) p.review[q.id] = { box: 0, due: t + DAY };

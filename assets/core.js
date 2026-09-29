@@ -494,15 +494,39 @@
     days() { try { const d = JSON.parse(store.get(ACT) || "[]"); return Array.isArray(d) ? d.filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x)) : []; } catch (e) { return []; } },
     // Call on real study: an answered question, a lesson read, a study day checked.
     mark() { const t = U.iso(new Date()), d = activity.days(); if (!d.includes(t)) { d.push(t); store.set(ACT, JSON.stringify(d.sort().slice(-400))); } },
-    // Consecutive days ending today (or yesterday, so the streak survives until tonight), and the best run.
+    // Questions answered per day (for the weekly recap), kept for 60 days.
+    q(n = 1) {
+      let log = {}; try { log = JSON.parse(store.get("certhub:qlog") || "{}") || {}; } catch (e) {}
+      const t = U.iso(new Date()), cut = U.iso(U.addDays(U.today(), -60));
+      log[t] = (log[t] || 0) + n;
+      Object.keys(log).forEach(k => { if (k < cut) delete log[k]; });
+      store.set("certhub:qlog", JSON.stringify(log));
+    },
+    qlog() { try { return JSON.parse(store.get("certhub:qlog") || "{}") || {}; } catch (e) { return {}; } },
+    // Study days in a row, ending today (or yesterday, so the streak survives until tonight), and the best run.
+    // Streak freeze: a single missed day doesn't break a streak, at most once in any 7 days. The count is of
+    // days actually studied; frozen days are listed separately.
     streak() {
-      const set = new Set(activity.days());
-      const day = n => U.iso(U.addDays(U.today(), -n));
-      let start = set.has(day(0)) ? 0 : set.has(day(1)) ? 1 : -1, cur = 0;
-      if (start >= 0) while (set.has(day(start + cur))) cur++;
-      let best = 0, run = 0, prev = null;
-      [...set].sort().forEach(x => { const d = U.parseD(x); run = prev && Math.round((d - prev) / DAY) === 1 ? run + 1 : 1; best = Math.max(best, run); prev = d; });
-      return { current: cur, best: Math.max(best, cur), today: set.has(day(0)) };
+      const nums = [...new Set(activity.days())].map(x => Math.round(U.parseD(x) / DAY)).sort((a, b) => a - b);
+      const has = new Set(nums), today = Math.round(U.today() / DAY);
+      let cur = 0, frozen = [];
+      const start = has.has(today) ? today : has.has(today - 1) ? today - 1 : null;
+      if (start != null) {
+        let d = start, lastBridge = null; cur = 1;
+        for (;;) {
+          if (has.has(d - 1)) { d--; cur++; continue; }
+          if (has.has(d - 2) && (lastBridge == null || lastBridge - (d - 1) >= 7)) { lastBridge = d - 1; frozen.push(U.iso(U.addDays(U.today(), d - 1 - today))); d -= 2; cur++; continue; }
+          break;
+        }
+      }
+      let best = 0, run = 0, prev = null, bridge = null;
+      nums.forEach(n => {
+        if (prev != null && n - prev === 1) run++;
+        else if (prev != null && n - prev === 2 && (bridge == null || n - 1 - bridge >= 7)) { run++; bridge = n - 1; }
+        else { run = 1; bridge = null; }
+        best = Math.max(best, run); prev = n;
+      });
+      return { current: cur, best: Math.max(best, cur), today: has.has(today), frozen };
     }
   };
 

@@ -85,6 +85,7 @@
         <div class="panel"><span class="note">Badges</span><strong class="dashnum">${CertHub.fx.icon("medal")}<span data-count="${esc(CertHub.achievements ? CertHub.achievements.earned().length : 0)}">${esc(CertHub.achievements ? CertHub.achievements.earned().length : 0)}</span></strong><span class="note"><a href="#achievements">See achievements</a></span></div>
         <div class="panel"><span class="note">Labs finished</span><strong class="dashnum"><span data-count="${esc(doneLabs)}">${esc(doneLabs)}</span></strong><span class="note"><a href="#${doneLabs ? "portfolio" : "labs"}">${doneLabs ? "See your portfolio" : "Browse labs"}</a></span></div>
       </div>
+      <div class="dashgrid habits">${CertHub.habits ? CertHub.habits.recapHtml() + CertHub.habits.goalHtml() + CertHub.habits.focusHtml() : ""}</div>
       <h2>Certifications</h2>
       <div class="dashgrid">${list.map(dashCard).join("")}</div>
       <p class="note">Readiness is an estimate from your quizzes, lessons and practice exams, updated when you open a certification. <a href="#home">Add another certification</a>.</p>`;
@@ -367,7 +368,7 @@
     document.title = title === "StudyToCert" ? title : `${title} · StudyToCert`;
     countView();
     window.scrollTo(0, 0);
-    if (CertHub.achievements) setTimeout(() => { try { CertHub.achievements.checkNew(); } catch (e) {} }, 600);
+    if (CertHub.achievements) setTimeout(() => { try { CertHub.achievements.checkNew(); if (CertHub.habits) CertHub.habits.check(); } catch (e) {} }, 600);
   }
   // Re-render the current view in place (after marking a lab done, for example).
   CertHub.reviewActive = () => view === "review";

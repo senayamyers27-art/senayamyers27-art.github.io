@@ -17,7 +17,7 @@
   // The lesson to show for a topic: the Spanish translation when chosen and available.
   const lessonOf = t => (LANG === "es" && LES_ES && LES_ES.get(t)) || (LES && LES.get(t)); // lessons for this certification: a Map by topic text, false when there are none yet, null while loading
   let active = false;
-  const TAB_IDS = ["week", "learn", "plan", "practice", "labs", "progress", "guide", "about", "cheat", "certificate"];
+  const TAB_IDS = ["week", "learn", "plan", "practice", "labs", "progress", "guide", "about", "cheat", "certificate", "cards"];
   const Pro = () => CertHub.pro || { available: false, active: false };
   const toQ = ([id, w, d, q, o, a, e, src, why, lv]) => ({ id, w, d, q, o, a, e, src, why: Array.isArray(why) && why.length === 4 ? why : null, lv: [1, 2, 3].includes(lv) ? lv : 0 });
   const LEVELS = ["", "Easy", "Medium", "Hard"];
@@ -69,7 +69,7 @@
     CertHub.loadLessons(id).then(m => {
       if (!C || C.id !== id) return;
       LES = m || false;
-      if (active && !(S.quiz && !S.quiz.done) && ["week", "learn", "cheat", "progress", "certificate"].includes(S.tab)) render();
+      if (active && !(S.quiz && !S.quiz.done) && ["week", "learn", "cheat", "progress", "certificate", "cards"].includes(S.tab)) render();
     });
     const p = loadProgress(C.id);
     // Some lesson titles were capitalized (September 2026); keep "read" marks and ratings saved under the old title.
@@ -124,7 +124,7 @@
 
   /* ---------- stats & spaced review ---------- */
   function record(q, ok, fromReview) {
-    CertHub.activity.mark();
+    CertHub.activity.mark(); CertHub.activity.q();
     const st = S.p.stats[q.d] || (S.p.stats[q.d] = { c: 0, t: 0 });
     st.t++; if (ok) st.c++;
     // Last result for each question, for the knowledge map (1 right, 0 wrong).
@@ -205,7 +205,7 @@
     if (!o.qs.length) { CertHub.ui.toast("No questions available yet for this set."); return; }
     // Shuffle answer options every time so position never gives the answer away.
     o.qs = o.qs.map(q => { const idx = shuffle(q.o.map((_, i) => i)); return { ...q, o: idx.map(i => q.o[i]), a: idx.indexOf(q.a), why: q.why ? idx.map(i => q.why[i]) : null }; });
-    S.quiz = { ...o, i: 0, ans: [], picked: null, revealed: false, end: o.minutes ? Date.now() + o.minutes * 60000 : null, done: false, flags: {}, struck: {}, reviewing: false };
+    S.quiz = { ...o, i: 0, ans: [], picked: null, revealed: false, end: o.minutes ? Date.now() + o.minutes * 60000 : null, done: false, flags: {}, struck: {}, reviewing: false, guess: {} };
     S.tab = "practice"; render(); window.scrollTo(0, 0);
   }
   let tickT;
@@ -218,10 +218,12 @@
     if (left <= 0) return finishQuiz();
     tickT = setTimeout(tick, 1000);
   }
+  // A right answer you were guessing at still comes back for review tomorrow.
+  function reviewSoon(q) { S.p.review[q.id] = { box: 0, due: today().getTime() + DAY }; }
   function choose(k) {
     const z = S.quiz; if (z.revealed) return;
     z.picked = k;
-    if (z.mode === "learn") { z.revealed = true; const q = z.qs[z.i]; z.ans[z.i] = k; record(q, k === q.a, z.review); save(); CertHub.fx.sound(k === q.a ? "right" : "wrong"); }
+    if (z.mode === "learn") { z.revealed = true; const q = z.qs[z.i]; z.ans[z.i] = k; record(q, k === q.a, z.review); if (k === q.a && z.guess[z.i]) reviewSoon(q); save(); CertHub.fx.sound(k === q.a ? "right" : "wrong"); }
     render();
   }
   function next() {
@@ -253,7 +255,7 @@
   }
   function finishQuiz() {
     const z = S.quiz; if (!z || z.done) return;
-    if (z.mode === "test") { if (z.i < z.qs.length) z.ans[z.i] = z.picked; z.qs.forEach((q, i) => record(q, z.ans[i] === q.a, false)); }
+    if (z.mode === "test") { if (z.i < z.qs.length) z.ans[z.i] = z.picked; z.qs.forEach((q, i) => { record(q, z.ans[i] === q.a, false); if (z.ans[i] === q.a && z.guess[i]) reviewSoon(q); }); }
     z.done = true; clearTimeout(tickT);
     z.score = z.qs.filter((q, i) => z.ans[i] === q.a).length;
     if (z.kind === "placement") {
@@ -308,6 +310,25 @@
     W.forEach(w => weekLabs(w).forEach(l => { if (!seen.has(l.id)) seen.set(l.id, { lab: l, week: w }); }));
     return [...seen.values()];
   }
+  // The last seven days before the exam date: one focused task a day, whatever week of the plan you're in.
+  function finalWeekHtml() {
+    const left = Math.ceil((parseD(S.p.examDate) - today()) / DAY);
+    if (!(left >= 0 && left <= 7)) return "";
+    const tab = t => `<button type="button" class="btn ghost sm" data-tab="${/* safe: a fixed tab name */ t}">`;
+    const steps = [
+      [7, "Take a full practice exam under timed conditions.", `<button type="button" class="btn ghost sm" data-act="exam">Start the practice exam</button>`],
+      [6, "Go through every question you missed and reread the linked lessons.", `${tab("progress")}See your weakest domains</button>`],
+      [5, "Drill your weakest domain until you score 80% or better.", `${tab("practice")}Open drills</button>`],
+      [4, "Take a second practice exam, or the hard mode exam, and compare scores.", `${tab("practice")}Practice tests</button>`],
+      [3, "Read the cheat sheet and run through your flashcards.", `${tab("cheat")}Open the cheat sheet</button>`],
+      [2, "Light review: clear the review queue, play a quick game and check the exam-day logistics.", `<a class="btn ghost sm" href="#exam-day">Exam-day guide</a>`],
+      [1, "Rest. Skim the cheat sheet once, get your ID and confirmation ready, and sleep early. No new material.", ""],
+      [0, "Exam day. Eat, arrive early (or test your webcam for an online exam), read every question twice and flag anything slow.", `<a class="btn ghost sm" href="#exam-day">Exam-day checklist</a>`]
+    ];
+    return `<div class="panel finalweek"><strong>${left === 0 ? "Exam day" : `${esc(left)} day${left === 1 ? "" : "s"} to your exam: final-week plan`}</strong>
+      <ol class="fw">${steps.map(([d, text, btn]) => `<li class="${d === left ? "now" : d > left ? "past" : ""}"><span class="fwd">${/* html: fixed text with a number */ d === 0 ? "Exam" : `${/* num */ d} day${d === 1 ? "" : "s"} out`}</span><span class="grow">${esc(text)}${d === left && btn ? `<br>${/* html: fixed buttons above */ btn}` : ""}</span></li>`).join("")}</ol>
+      <p class="note" data-style="margin:0">Change the date on the <button type="button" class="linkbtn" data-tab="progress">Progress</button> tab if your exam moves.</p></div>`;
+  }
   function weekView() {
     const n = S.viewWeek || weekNow(); const w = W[n - 1];
     const labs = weekLabs(w);
@@ -319,6 +340,7 @@
     <p class="meta">${fmt(weekStart(n))} – ${fmt(U.addDays(weekStart(n), 6))}${pre && n === 1 ? " · starts " + fmtLong(weekStart(1)) : ""}</p>
     <p data-style="margin:10px 0 0"><span class="chip" data-style="--c:${dc(w.dom)}">${w.dom ? `Domain ${esc(w.dom)} · ${esc(DOM[w.dom].w)}% of exam` : "All domains"}</span> <span class="note">${esc(w.obj)}</span></p>
     ${noticeHtml()}
+    ${finalWeekHtml()}
     ${n === 1 ? checkBanner() : ""}
     ${!S.p.placement && !S.p.history.length ? `<div class="panel startcard"><div class="grow"><strong>New to ${esc(C.short)}?</strong><br><span class="note">Take a short placement test to find what you already know and which weeks to focus on.</span></div><button class="btn sm" data-act="placement">Take the placement test</button></div>` : ""}
     ${n === weekNow() && !pre ? todayHtml(w, n) : ""}
@@ -359,7 +381,7 @@
     const r = isRead(t);
     return `<li><details class="lesson" data-k="${lessonKey(t)}"${l.tt ? ` lang="es"` : ""}><summary><span class="grow">${esc(l.tt || t)}</span>${r ? `<span class="chip done">${tr("Read")}</span>` : ""}</summary>
       <div class="lbody">
-        <div class="btns" data-style="margin-top:0"><button type="button" class="btn ghost sm" data-act="video" data-k="${lessonKey(t)}">${tr("▶ Watch the overview")}</button></div>
+        <div class="btns" data-style="margin-top:0"><button type="button" class="btn ghost sm" data-act="video" data-k="${lessonKey(t)}">${tr("▶ Watch the overview")}</button>${"speechSynthesis" in window ? `<button type="button" class="btn ghost sm" data-act="listen" data-k="${lessonKey(t)}" aria-pressed="false">${tr("🔊 Listen")}</button>` : ""}</div>
         ${(l.body || []).map((x, i) => para(x) + (i === 0 ? diagramHtml(t) : "")).join("")}
         ${l.terms && l.terms.length ? `<h3>${tr("Key terms")}</h3><dl class="terms">${l.terms.map(([a, b]) => `<dt>${inline(a)}</dt><dd>${inline(b)}</dd>`).join("")}</dl>` : ""}
         ${l.example ? `<div class="panel ex"><strong>${tr("Real-world example")}</strong>${[].concat(l.example).map(para).join("")}</div>` : ""}
@@ -588,13 +610,30 @@
       const all = JSON.parse(CertHub.store.get("certhub:ready") || "{}"), score = readiness().score, old = all[C.id];
       if (old && old.score === score && old.at > Date.now() - 36e5) return;
       all[C.id] = { score, at: Date.now() }; CertHub.store.set("certhub:ready", JSON.stringify(all));
+      // One point a day for the readiness chart (the last 120 days).
+      const h = JSON.parse(CertHub.store.get("certhub:readyhist") || "{}"), pts = (h[C.id] || []).filter(p => Array.isArray(p) && p[0] !== U.iso(today()));
+      pts.push([U.iso(today()), score]); h[C.id] = pts.slice(-120); CertHub.store.set("certhub:readyhist", JSON.stringify(h));
     } catch (e) {}
+  }
+  // Readiness over time: one point a day (kept when the certification is opened), as a small line chart.
+  function readinessChart() {
+    let pts = []; try { pts = (JSON.parse(CertHub.store.get("certhub:readyhist") || "{}")[C.id] || []).filter(p => Array.isArray(p) && isFinite(p[1])); } catch (e) {}
+    if (pts.length < 2) return `<p class="note" data-style="margin:8px 0 0">Come back on another day to see your readiness over time.</p>`;
+    const W_ = 600, H_ = 140, P = 24, t0 = parseD(pts[0][0]).getTime(), t1 = Math.max(t0 + DAY, parseD(pts[pts.length - 1][0]).getTime());
+    const x = d => P + (W_ - 2 * P) * (parseD(d).getTime() - t0) / (t1 - t0), y = v => H_ - P - (H_ - 2 * P) * v / 100;
+    const line = pts.map(p => `${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join(" ");
+    const last = pts[pts.length - 1], first = pts[0], delta = last[1] - first[1];
+    return `<figure class="rchart"><svg viewBox="0 0 ${W_} ${H_}" role="img" aria-label="Readiness went from ${esc(first[1])} on ${esc(fmt(parseD(first[0])))} to ${esc(last[1])} today">
+      ${[60, 80].map(v => `<line class="band" x1="${P}" x2="${W_ - P}" y1="${y(v)}" y2="${y(v)}"/><text x="${W_ - P + 4}" y="${y(v) + 4}">${/* num */ v}</text>`).join("")}
+      <polyline points="${/* num: coordinates computed above */ line}"/>${pts.map(p => `<circle cx="${x(p[0]).toFixed(1)}" cy="${y(p[1]).toFixed(1)}" r="3"/>`).join("")}
+    </svg><figcaption class="note">Readiness over ${esc(pts.length)} days${delta ? `: ${delta > 0 ? "up" : "down"} ${esc(Math.abs(delta))} since ${esc(fmt(parseD(first[0])))}` : ""}.</figcaption></figure>`;
   }
   function readinessHtml() {
     const r = readiness();
     return `<div class="panel ready"><div class="flex"><div><strong>Exam readiness</strong><br><span class="chip" data-style="--c:${esc(r.band[1])}">${esc(r.band[0])}</span></div>${CertHub.fx.ring(r.score, r.band[1], `<span data-count="${esc(r.score)}">${esc(r.score)}</span><small>/100</small>`)}</div>
       <div class="track" aria-hidden="true"><i data-style="width:${esc(r.score)}%;background:${esc(r.band[1])}"></i></div>
       ${r.tips.length ? `<ul class="clean">${r.tips.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : `<p class="note" data-style="margin:8px 0 0">Everything points to ready. Book the exam while it's fresh.</p>`}
+      ${readinessChart()}
       <div class="btns"><button type="button" class="btn ghost sm" data-act="shareready">Share my readiness</button></div>
       <p class="note" data-style="margin:8px 0 0">An estimate from your quiz accuracy by domain (weighted like the exam), lessons read, recent practice exams and review backlog. It isn't the real exam's scoring.</p></div>`;
   }
@@ -1073,6 +1112,13 @@
       <div class="row"><div class="grow"><h3>Smart practice</h3><span class="note">15 questions picked for you: more from your weaker domains, harder where you're already strong</span></div><button class="btn" data-act="smart">Start</button></div>
       <div class="row"><div class="grow"><h3>Review queue</h3><span class="note">Questions you missed, spaced 1, 3, 7 and 14 days apart</span></div><button class="btn" data-act="review" ${due ? "" : "disabled"}>${due ? `Review ${due}` : "Nothing due"}</button></div>
       <div class="row"><div class="grow"><h3>Domain drill</h3><span class="note">15 random questions</span></div><select id="dsel" aria-label="Domain">${C.domains.map(d => `<option value="${esc(d.id)}">D${esc(d.id)} (${cnt(d.id)})</option>`).join("")}</select>${Q.some(q => q.lv) ? `<select id="lvsel" aria-label="Difficulty"><option value="0">Any level</option>${[1, 2, 3].map(n => `<option value="${esc(n)}">${esc(LEVELS[n])}</option>`).join("")}</select>` : ""}<button class="btn" data-act="drill">Start</button></div>
+      <details class="builder"><summary><h3>Build your own quiz</h3></summary>
+        <fieldset><legend>Domains</legend><div class="trackpick">${C.domains.map(d => `<label class="chipbtn"><input type="checkbox" name="bdom" value="${esc(d.id)}" checked> D${esc(d.id)} ${esc(d.name)}</label>`).join("")}</div></fieldset>
+        <div class="flex bopts"><label>Questions <select id="bcount">${[10, 20, 30, 50].map(n => `<option value="${/* num */ n}"${n === 20 ? " selected" : ""}>${/* num */ n}</option>`).join("")}</select></label>
+          ${Q.some(q => q.lv) ? `<label>Difficulty <select id="blv"><option value="0">Any</option>${[1, 2, 3].map(n => `<option value="${esc(n)}">${esc(LEVELS[n])}</option>`).join("")}</select></label>` : ""}
+          <label>Questions to use <select id="bsrc"><option value="all">Any</option><option value="new">Not seen yet</option><option value="missed">Missed before</option></select></label>
+          <label>Mode <select id="bmode"><option value="learn">Instant feedback</option><option value="test">Timed test</option></select></label></div>
+        <div class="btns"><button class="btn" data-act="custom">Start my quiz</button></div></details>
     </div>
     ${simsSection()}
     ${handsonSection()}
@@ -1122,6 +1168,7 @@
     <div class="prog" data-style="--c:${dc(q.d)}"><i data-style="width:${100 * (z.i + 1) / z.qs.length}%"></i></div>
     ${test ? `<details class="qnav"><summary>All questions</summary>${qGrid(z)}</details>` : ""}
     <p class="q">${esc(q.q)}</p>${opts}
+    ${z.revealed ? (z.guess[z.i] && z.picked === q.a ? `<p class="note" data-ui>Right, but you marked it as a guess, so it comes back for review tomorrow.</p>` : "") : `<p class="guessrow"><button type="button" class="chipbtn" data-act="guess" aria-pressed="${!!z.guess[z.i]}">🤔 I'm guessing</button> <span class="note">Right answers you guessed come back for review.</span></p>`}
     ${z.revealed ? `<div class="expl" role="status" data-style="--c:${z.picked === q.a ? "var(--ok)" : "var(--bad)"}"><strong data-ui>${z.picked === q.a ? "Correct." : "Not quite."}</strong> ${esc(q.e)}${whyHtml(q, z.picked)}${q.src ? `<br><small class="note" data-ui>Source: ${esc(q.src)}</small>` : ""}${z.picked !== q.a ? `<br>${lessonLink(q)}` : ""}<br>${qReport(q)}</div>` : ""}
     <div class="btns">${z.mode === "test" && z.i > 0 ? `<button class="btn ghost" data-act="prev">Back</button>` : ""}
     ${(z.mode === "learn" && z.revealed) || z.mode === "test" ? `<button class="btn" data-act="next">${z.i + 1 === z.qs.length ? (z.mode === "test" && z.end ? "Review answers" : "Finish") : "Next"}</button>` : ""}
@@ -1220,6 +1267,37 @@
     ${objs.length ? `<h3>Weakest objectives</h3><div class="panel">${objs.map(o => `<div class="row"><div class="grow">Objective ${esc(o.k)}<br><span class="note">${esc(o.t)} answered</span></div><strong>${esc(o.pct)}%</strong></div>`).join("")}<p class="note" data-style="margin:8px 0 0">Look these up in the official exam objectives and reread them before your next drill.</p></div>` : ""}`;
   }
 
+  /* ---------- listen mode: the browser reads a lesson aloud ---------- */
+  function listen(k, btn) {
+    const ss = window.speechSynthesis; if (!ss) return;
+    const on = btn.getAttribute("aria-pressed") === "true";
+    ss.cancel();
+    document.querySelectorAll('[data-act="listen"][aria-pressed="true"]').forEach(b => { b.setAttribute("aria-pressed", "false"); b.textContent = tr("🔊 Listen"); });
+    if (on) return;
+    const t = LES && [...LES.keys()].find(x => lessonKey(x) === k), l = t && lessonOf(t); if (!l) return;
+    const strip = x => plain(Array.isArray(x) ? x.join(" ") : x).replace(/\*\*|__|#/g, "");
+    const parts = [l.tt || t, ...(l.body || []).map(strip), l.example ? strip([].concat(l.example)) : "", l.tip ? `${tr("Exam tip:")} ${strip(l.tip)}` : ""].filter(Boolean);
+    const lang = l.tt ? "es" : "en"; // the lesson's own language, whatever the interface language
+    btn.setAttribute("aria-pressed", "true"); btn.textContent = tr("⏹ Stop reading");
+    // One utterance per paragraph: long single utterances get cut off in some browsers.
+    parts.forEach((p, i) => {
+      const u = new SpeechSynthesisUtterance(p);
+      u.lang = lang === "es" ? "es-ES" : "en-US"; u.rate = 1;
+      if (i === parts.length - 1) u.onend = () => { if (btn.isConnected) { btn.setAttribute("aria-pressed", "false"); btn.textContent = tr("🔊 Listen"); } };
+      ss.speak(u);
+    });
+    CertHub.activity.mark();
+  }
+  /* ---------- printable cut-out flashcards (#<cert>.cards) ---------- */
+  function cardsPrintView() {
+    const back = `<p class="crumbs no-print"><button type="button" class="linkbtn" data-tab="learn">Lessons</button> / Printable flashcards</p>`;
+    if (LES === null) return back + `<h1>${esc(C.short)} flashcards</h1>${CertHub.fx.skeleton()}`;
+    const cards = termCards();
+    if (!cards.length) return back + `<h1>${esc(C.short)} flashcards</h1><p class="note">These cards are made from the lessons' key terms, which aren't ready for this certification yet.</p>`;
+    return `${back}<h1>${esc(C.short)} flashcards</h1>
+      <p class="meta no-print">${cards.length} key terms from the lessons. Print on card stock, fold each sheet along the middle line and cut along the dashed lines: the term is on the front and the definition on the back. <button type="button" class="btn ghost sm" data-act="printcheat">Print</button></p>
+      <div class="printcards">${cards.map(([d, a, b]) => `<div class="pcard" data-style="--c:${dc(d)}"><div class="front"><small>D${esc(d)} · ${esc(C.short)}</small><strong>${esc(a)}</strong></div><div class="back">${esc(b)}</div></div>`).join("")}</div>`;
+  }
   /* ---------- free flashcards from lesson key terms ---------- */
   function termCards() {
     if (!LES) return [];
@@ -1233,7 +1311,7 @@
     const sched = S.p.cards || {}, learned = cards.filter(f => sched[cardKey(f)] && sched[cardKey(f)].box >= 2).length;
     const doms = C.domains.filter(d => cards.some(f => f[0] === d.id));
     return `<h2>Key-term flashcards</h2><p class="note">${cards.length} terms from your lessons · ${learned} learned. Cards you know come back after 1, 3, 7 and 14 days; cards you miss come back tomorrow.</p>
-    <p class="btns no-print"><button type="button" class="btn ghost sm" data-act="anki">Download key terms for Anki (CSV)</button><button type="button" class="btn ghost sm" data-act="anki" data-q="1">Download practice questions for Anki (CSV)</button></p>
+    <p class="btns no-print"><button type="button" class="btn ghost sm" data-tab="cards">Print cut-out flashcards</button><button type="button" class="btn ghost sm" data-act="anki">Download key terms for Anki (CSV)</button><button type="button" class="btn ghost sm" data-act="anki" data-q="1">Download practice questions for Anki (CSV)</button></p>
     <div class="panel"><div class="row"><div class="grow"><h3>Study terms</h3><span class="note">Up to 20 due cards at a time</span></div><select id="tcsel" aria-label="Domain"><option value="0">All domains (${cardDue(cards, 0).length} due)</option>${doms.map(d => `<option value="${esc(d.id)}">D${esc(d.id)} ${esc(d.name)} (${cardDue(cards, d.id).length})</option>`).join("")}</select><button class="btn" data-act="tcstart">Start</button></div></div>`;
   }
 
@@ -1305,7 +1383,8 @@
   function render() {
     renderTabs();
     if (S.tab === "guide" && !Pro().available) S.tab = "week";
-    const v = { certificate: certificateView, cheat: cheatView, week: weekView, learn: learnView, plan: planView, practice: practiceView, labs: labsView, progress: progressView, guide: guideView, about: aboutView }[S.tab];
+    if (S.tab !== "learn" && window.speechSynthesis) speechSynthesis.cancel();
+    const v = { cards: cardsPrintView, certificate: certificateView, cheat: cheatView, week: weekView, learn: learnView, plan: planView, practice: practiceView, labs: labsView, progress: progressView, guide: guideView, about: aboutView }[S.tab];
     $("#app").innerHTML = v();
     if (LES !== null) cacheReadiness();
     if (pendingVideo && LES && S.tab === "learn") {
@@ -1346,6 +1425,15 @@
       startQuiz({ title: `Domain ${dom} drill${lv ? ` (${LEVELS[lv].toLowerCase()})` : ""}`, qs, mode: "learn" });
     };
     const acts = {
+      custom: () => {
+        const doms = new Set([...document.querySelectorAll('input[name="bdom"]:checked')].map(x => +x.value || x.value));
+        const n = +($("#bcount") || {}).value || 20, lv = +(($("#blv") || {}).value || 0), src = ($("#bsrc") || {}).value || "all", mode = ($("#bmode") || {}).value === "test" ? "test" : "learn";
+        const seen = S.p.seen || {}, rev = S.p.review || {};
+        const qs = pickFor(q => doms.has(q.d) && (!lv || q.lv === lv) && (src === "all" || (src === "new" ? seen[q.id] == null && !rev[q.id] : seen[q.id] === 0 || !!rev[q.id])), n);
+        if (!doms.size || !qs.length) { CertHub.ui.toast(!doms.size ? "Pick at least one domain." : "No questions match those choices yet."); return; }
+        startQuiz({ title: `My quiz (${qs.length} questions)`, qs, mode, ...(mode === "test" ? { minutes: examMinutes(qs.length) } : {}) });
+      },
+      guess: () => { const z = S.quiz; if (!z || z.revealed) return; z.guess[z.i] = !z.guess[z.i]; render(); },
       weekly: () => startQuiz({ title: `Week ${t.dataset.w} quiz`, qs: weeklyQs(+t.dataset.w), mode: "learn" }),
       "weekly-sel": () => { const n = +$("#wsel").value; startQuiz({ title: `Week ${n} quiz`, qs: weeklyQs(n), mode: "learn" }); },
       review: () => { const ids = dueIds(); startQuiz({ title: "Review queue", qs: shuffle(Q.filter(q => ids.includes(q.id))).slice(0, 20), mode: "learn", review: true }); },
@@ -1402,6 +1490,7 @@
       simstart: () => simStart(t.dataset.id),
       gosim: () => { S.tab = "practice"; history.replaceState(null, "", `#${C.id}.practice`); simStart(t.dataset.id); },
       printcheat: () => window.print(),
+      listen: () => listen(t.dataset.k, t),
       planner: () => { S.planner = true; render(); window.scrollTo(0, 0); },
       plannerclose: () => { S.planner = false; render(); },
       printplanner: () => window.print(),
@@ -1517,6 +1606,7 @@
     if ((k === "n" || (k === "enter" && !(el && el.closest && el.closest("button, a")))) && (z.mode === "test" || z.revealed)) { e.preventDefault(); return next(); }
     if (k === "b" && z.mode === "test" && z.i > 0) { e.preventDefault(); return prev(); }
     if (k === "f" && z.mode === "test") { e.preventDefault(); return toggleFlag(); }
+    if (k === "g" && !z.revealed) { e.preventDefault(); z.guess[z.i] = !z.guess[z.i]; return render(); }
   });
   document.addEventListener("keydown", e => {
     if (!active || !S || !S.ho) return;
