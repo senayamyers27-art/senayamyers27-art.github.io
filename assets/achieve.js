@@ -43,7 +43,7 @@
     ["ten-labs", "Lab regular", "Finish 10 labs.", "sysadmin", f => f.labsDone >= 10, f => [f.labsDone, 10]],
     ["vm-lab", "Root access", "Pass a graded lab in the practice VM.", "network", f => f.vmLabs >= 1, f => [f.vmLabs, 1]],
     ["vm-exam", "Performance based", "Pass the practice VM exam.", "network", f => f.vmExam >= ((CertHub.vmLabs && CertHub.vmLabs.exam && CertHub.vmLabs.exam.pass) || 70), f => [f.vmExam, 70]],
-    ["gamer", "Game on", "Play all four quick games.", "data-ai", f => f.gamesPlayed >= 4, f => [f.gamesPlayed, 4]],
+    ["gamer", "Game on", "Play all five quick games.", "data-ai", f => f.gamesPlayed >= 5, f => [f.gamesPlayed, 5]],
     ["game-20", "Speed round", "Get 20 or more in one quick game.", "data-ai", f => f.gameBest >= 20, f => [f.gameBest, 20]]
   ];
 

@@ -15,12 +15,22 @@
     <div class="cards">${CertHub.tracks.map(t => { const c = list.find(x => x.track === t.id); return c ? `<a class="card" href="#career-${esc(t.id)}"><span class="trackico">${CertHub.fx.icon(t.id)}</span><strong>${esc(c.title)}</strong><span class="note">${esc(t.blurb || "")}</span><span class="note">${c.jobs.length} jobs · ${c.path.length}-step certification path</span></a>` : ""; }).join("")}</div>
     ${compare.length ? `<h2>Compare certifications</h2><p class="note">Not sure which one to take? Side-by-side comparisons of popular pairs.</p><div class="panel"><ul class="clean">${compare.map(([a, b]) => `<li><a href="/compare/${esc(a)}-vs-${esc(b)}/">${esc(CertHub.certs[a].short)} vs ${esc(CertHub.certs[b].short)}</a></li>`).join("")}</ul></div>` : ""}`;
   }
+  // A typical day in one common role for the track (data/dayinlife.js), in the interface language.
+  function dayHtml(id) {
+    const d = CertHub.dayInLife && CertHub.dayInLife[id]; if (!d) return "";
+    const t = (CertHub.i18n.lang() === "es" && d.es) || d.en;
+    return `<h2>A day in the life</h2><p class="note"><strong data-content>${esc(t.role)}</strong><br>A typical day; real days vary by employer.</p>
+      <ol class="dayline" data-content>${t.day.map(([h, x]) => `<li><span class="dlh">${esc(h)}</span><span>${esc(x)}</span></li>`).join("")}</ol>`;
+  }
+  document.addEventListener("click", e => { if (e.target.closest("[data-print]")) window.print(); });
   function track(c) {
     const t = CertHub.tracks.find(x => x.id === c.track);
     const iv = CertHub.careers.interview || {};
     return `<p class="crumbs"><a href="#careers">Career paths</a> / ${esc(t.name)}</p>
     <h1>${esc(c.title)}</h1>
     <div class="prose">${paras(c.intro)}</div>
+    <p class="no-print"><button type="button" class="btn ghost sm" data-print="1">Print this career path</button></p>
+    ${dayHtml(c.track)}
     <h2>Certification path</h2>
     <ol class="steps-list plain">${c.path.map(p => { const cert = CertHub.certs[p.cert]; return `<li><strong>${cert ? `<a href="#${esc(p.cert)}">${esc(cert.short)} ${esc(cert.exam)}</a>` : esc(p.cert)}</strong><br>${esc(p.why)}</li>`; }).join("")}</ol>
     <h2>Jobs</h2>
@@ -38,7 +48,7 @@
   CertHub.careerViews = {
     async show(head) {
       shell(`<h1>Career paths</h1>${CertHub.fx.skeleton()}`);
-      const d = await load();
+      const [d] = await Promise.all([load(), CertHub.dayInLife ? true : CertHub.loadScript("data/dayinlife.js")]);
       const want = location.hash.replace(/^#/, "") || document.body.dataset.route;
       if (want !== head) return; // moved on while loading
       if (!d.list) { shell(`<h1>Career paths</h1><p class="note">Career pages couldn't load. Check your connection and try again.</p>`); return; }

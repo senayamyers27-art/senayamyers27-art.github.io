@@ -87,10 +87,37 @@
     return { q: `Which OSI layer? ${thing}`, a: LAYERS[n - 1], o: options(LAYERS[n - 1], LAYERS) };
   }
 
+  /* ---------- commands: what each one does (Linux, Windows PowerShell and cmd, Cisco IOS) ---------- */
+  const COMMANDS = [
+    ["ls -la", "List all files, including hidden ones, with details (Linux)"], ["chmod 640 file", "Set permissions to owner read/write, group read (Linux)"],
+    ["chown alice:devs file", "Change a file's owner and group (Linux)"], ["ps aux", "List every running process (Linux)"],
+    ["ss -ltnp", "Show listening TCP ports and the programs using them (Linux)"], ["journalctl -u ssh", "Show the log for one systemd service (Linux)"],
+    ["systemctl enable --now nginx", "Start a service and make it start at boot (Linux)"], ["grep -r error /var/log", "Search files under a folder for text (Linux)"],
+    ["tail -f /var/log/syslog", "Follow a log file as new lines arrive (Linux)"], ["df -h", "Show free disk space in readable units (Linux)"],
+    ["sudo -l", "List the commands you may run with sudo (Linux)"], ["dig example.com MX", "Look up a domain's mail server records (Linux)"],
+    ["ipconfig /all", "Show full IP settings for every adapter (Windows)"], ["ipconfig /flushdns", "Clear the local DNS cache (Windows)"],
+    ["netstat -ano", "Show connections and listening ports with process IDs (Windows)"], ["tracert 8.8.8.8", "Show each router on the path to an address (Windows)"],
+    ["gpupdate /force", "Reapply Group Policy now (Windows)"], ["sfc /scannow", "Check and repair protected system files (Windows)"],
+    ["Get-Service", "List services and their status (PowerShell)"], ["Get-Process", "List running processes (PowerShell)"],
+    ["Get-LocalUser", "List local user accounts (PowerShell)"], ["Get-WinEvent -LogName Security", "Read events from the Security log (PowerShell)"],
+    ["Test-NetConnection host -Port 443", "Check whether a TCP port on a host answers (PowerShell)"], ["Get-ExecutionPolicy", "Show whether scripts are allowed to run (PowerShell)"],
+    ["show ip interface brief", "List interfaces with their IP address and up/down status (Cisco IOS)"], ["show running-config", "Show the configuration in use now (Cisco IOS)"],
+    ["copy running-config startup-config", "Save the current configuration so it survives a reboot (Cisco IOS)"], ["show vlan brief", "List VLANs and the ports in each (Cisco IOS)"],
+    ["show ip route", "Show the routing table (Cisco IOS)"], ["show mac address-table", "Show which MAC addresses were learned on which ports (Cisco IOS)"],
+    ["switchport mode access", "Make a switch port carry a single VLAN (Cisco IOS)"], ["show cdp neighbors", "List directly connected Cisco devices (Cisco IOS)"]
+  ];
+  function commandQ() {
+    const [cmd, what] = pick(COMMANDS);
+    return Math.random() < .5
+      ? { q: `What does \`${cmd}\` do?`, a: what, o: options(what, COMMANDS.map(c => c[1])) }
+      : { q: `Which command does this? ${what}`, a: cmd, o: options(cmd, COMMANDS.map(c => c[0])) };
+  }
+
   const GAMES = [
     { id: "subnet", name: "Subnet sprint", blurb: "Usable hosts, masks, network and broadcast addresses.", icon: "network", make: subnetQ, certs: "Network+, CCNA, Security+" },
     { id: "ports", name: "Port match", blurb: "Well-known ports and the services that use them.", icon: "sysadmin", make: portQ, certs: "Network+, Security+, A+" },
     { id: "acronyms", name: "Acronym rush", blurb: "Security and networking acronyms, both ways.", icon: "cybersecurity", make: acronymQ, certs: "Security+, CySA+, ISC2 CC" },
+    { id: "commands", name: "Command match", blurb: "Linux, Windows, PowerShell and Cisco IOS commands and what they do.", icon: "software", make: commandQ, certs: "Linux+, A+, CCNA, Security+" },
     { id: "osi", name: "OSI stack", blurb: "Which layer each device, protocol and unit belongs to.", icon: "data-ai", make: osiQ, certs: "Network+, A+, CCST" }
   ];
   const byId = id => GAMES.find(g => g.id === id);
@@ -184,5 +211,5 @@
     $("#app").innerHTML = `<div id="gamebox" data-gid="${esc(g.id)}">${intro(g)}</div>`;
     return g.name;
   }
-  CertHub.games = { show, leave: stop, list: GAMES.map(g => ({ id: g.id, name: g.name })), scores, _q: { subnetQ, portQ, acronymQ, osiQ } };
+  CertHub.games = { show, leave: stop, list: GAMES.map(g => ({ id: g.id, name: g.name })), scores, _q: { subnetQ, portQ, acronymQ, osiQ, commandQ } };
 })();

@@ -142,7 +142,7 @@
       <p class="meta">Short excerpts from real kinds of logs. Pick the line an analyst should act on, then read why. ${esc(done)} of ${PUZZLES.length} solved. All names and addresses are invented.</p>
       <div class="panel"><div class="flex"><strong>${esc(i + 1)}. ${esc(p[1])}</strong><span class="note">${esc(p[2])}</span></div>
         <ol class="loglines" start="1">${p[3].map((l, k) => `<li><button type="button" class="logline${picked != null ? (k === p[4] ? " right" : k === picked ? " wrong" : "") : ""}" data-logpick="${/* num */ k}"${picked != null ? " disabled" : ""}><code>${esc(l)}</code></button></li>`).join("")}</ol>
-        ${picked != null ? `<div class="expl" role="status" data-style="--c:${picked === p[4] ? "var(--ok)" : "var(--bad)"}"><strong>${picked === p[4] ? "Right." : `Not quite: it's line ${esc(p[4] + 1)}.`}</strong> ${esc(p[5])}</div>` : `<p class="note">Select a line.</p>`}
+        ${picked != null ? `<div class="expl" role="status" data-style="--c:${picked === p[4] ? "var(--ok)" : "var(--bad)"}"><strong data-ui>${picked === p[4] ? "Right." : `Not quite: it's line ${esc(p[4] + 1)}.`}</strong> ${esc(p[5])}</div>` : `<p class="note">Select a line.</p>`}
         <div class="btns">${i > 0 ? `<button type="button" class="btn ghost" data-bt="pprev">Previous</button>` : ""}${i < PUZZLES.length - 1 ? `<button type="button" class="btn" data-bt="pnext">Next puzzle</button>` : `<a class="btn" href="#tabletop">Try a tabletop exercise</a>`}</div></div>`;
   }
   function tabletopHub() {
@@ -156,7 +156,7 @@
     const n = t.nodes[T.node];
     // Show the choices in a random order, so the best one isn't always in the same place.
     const order = n.choices ? (T.order[T.node] || (T.order[T.node] = n.choices.map((_, k) => k).sort(() => Math.random() - .5))) : [];
-    const history = T.log.map(h => `<div class="ttstep"><span class="note">${esc(h.phase)}</span><p>${esc(h.text)}</p><p><strong>You chose:</strong> ${esc(h.label)}</p><div class="expl" data-style="--c:${h.pts === 2 ? "var(--ok)" : h.pts === 1 ? "var(--warn)" : "var(--bad)"}">${esc(h.why)}</div></div>`).join("");
+    const history = T.log.map(h => `<div class="ttstep"><span class="note">${esc(h.phase)}</span><p>${esc(h.text)}</p><p><strong data-ui>You chose:</strong> ${esc(h.label)}</p><div class="expl" data-style="--c:${h.pts === 2 ? "var(--ok)" : h.pts === 1 ? "var(--warn)" : "var(--bad)"}">${esc(h.why)}</div></div>`).join("");
     if (n.end) {
       const pct = T.max ? Math.round(100 * T.got / T.max) : 0;
       return `<p class="crumbs"><a href="#labs">Labs</a> / <a href="#tabletop">Tabletops</a> / ${esc(t.title)}</p><h1>${esc(t.title)}</h1>${history}
@@ -197,8 +197,29 @@
     }
   });
 
+  // Spanish mode: swap in the Spanish text (data/blueteam-es.js) once it has loaded. Log lines stay as they are.
+  let esApplied = false, esTried = false;
+  function applyEs() {
+    const es = CertHub.blueteamEs; if (esApplied || !es) return; esApplied = true;
+    PUZZLES.forEach(p => { const t = es.puzzles && es.puzzles[p[0]]; if (t) { p[1] = t[0]; p[2] = t[1]; p[5] = t[2]; } });
+    TABLETOPS.forEach(tt => {
+      const t = es.tabletops && es.tabletops[tt.id]; if (!t) return;
+      tt.title = t.title || tt.title; tt.blurb = t.blurb || tt.blurb;
+      Object.entries(tt.nodes).forEach(([k, n]) => {
+        const e = t.nodes && t.nodes[k]; if (!e) return;
+        n.text = e.text || n.text;
+        if (n.choices && e.choices) n.choices.forEach((c, i) => { if (e.choices[i]) { c[0] = e.choices[i][0]; c[3] = e.choices[i][1]; } });
+        if (es.phases && es.phases[n.phase]) n.phase = es.phases[n.phase];
+      });
+    });
+  }
   // Returns the page title. head: "log-puzzles", "tabletop" or "tabletop-<id>".
   function show(head) {
+    if (CertHub.i18n.lang() === "es" && !CertHub.blueteamEs && !esTried) {
+      esTried = true; // one try: offline, the English text is shown
+      CertHub.loadScript("data/blueteam-es.js").then(ok => { if (ok && location.hash === "#" + head) document.title = `${show(head)} · StudyToCert`; });
+    }
+    applyEs();
     if (head === "log-puzzles") { P = { i: 0 }; $("#app").innerHTML = `<div id="btbox">${puzzlesView()}</div>`; return "Log Puzzles"; }
     const t = head.startsWith("tabletop-") && tByid(head.slice(9));
     if (t) { T = null; $("#app").innerHTML = `<div id="btbox">${tabletopView(t)}</div>`; return t.title; }

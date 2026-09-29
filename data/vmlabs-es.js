@@ -454,5 +454,41 @@ CertHub.vmLabsEs = {
       "Las reglas están guardadas con la política DROP",
       "SSH sigue en ejecución"
     ]
+  },
+  "name-resolution": {
+    title: "Arregla un nombre que resuelve a la dirección equivocada",
+    intro: "Los usuarios dicen que \"fileserver.lab\" no funciona desde esta máquina. El servidor de archivos ahora está en 10.10.0.30. Averigua por qué el nombre resuelve a la dirección equivocada, corrige la entrada de hosts y asegúrate de que el archivo hosts local se consulte antes que el DNS, como debe ser en esta red.",
+    steps: [
+      "Mira a qué resuelve el nombre, igual que lo hacen los programas: `getent hosts fileserver.lab`",
+      "Revisa el orden de búsqueda: `grep ^hosts /etc/nsswitch.conf`. `files` significa /etc/hosts; `dns` significa los servidores DNS de /etc/resolv.conf. Gana la primera fuente que responde.",
+      "Mira el archivo hosts: `cat /etc/hosts`. Una entrada antigua todavía apunta el nombre al servidor retirado.",
+      "Corrige la entrada: `sudo sed -i 's/^10.10.0.99 .*fileserver.*/10.10.0.30  fileserver.lab fileserver/' /etc/hosts` (o edítalo con `sudo vi /etc/hosts`)",
+      "Pon files primero: `sudo sed -i 's/^hosts:.*/hosts:          files dns/' /etc/nsswitch.conf`",
+      "Vuelve a comprobar con `getent hosts fileserver.lab`. En un equipo de escritorio quizá también tengas que vaciar una caché de DNS (por ejemplo `resolvectl flush-caches`, o `ipconfig /flushdns` en Windows)."
+    ],
+    checks: [
+      "fileserver.lab resuelve a 10.10.0.30",
+      "Ninguna entrada lo apunta a la dirección antigua",
+      "El archivo hosts se consulta antes que el DNS",
+      "localhost sigue resolviendo"
+    ]
+  },
+  "restore-backup": {
+    title: "Restaura un archivo borrado desde una copia de seguridad",
+    intro: "Alguien borró /srv/data/config.yml y la aplicación no arranca. Hay una copia semanal en /var/backups/data-weekly.tar.gz. Restaura solo ese archivo, con su propietario y permisos originales, sin sobrescribir nada más, y luego haz una copia nueva de /srv/data en /var/backups/data-new.tar.gz.",
+    steps: [
+      "Lista el contenido de la copia sin extraerla: `tar -tzvf /var/backups/data-weekly.tar.gz` (las rutas se guardan sin la / inicial)",
+      "Restaura solo ese archivo, conservando permisos y propietario: `sudo tar -xzpf /var/backups/data-weekly.tar.gz -C / srv/data/config.yml`",
+      "Compruébalo: `ls -l /srv/data/config.yml` debe mostrar el propietario app y los permisos -rw-r-----",
+      "Haz una copia nueva: `sudo tar -czpf /var/backups/data-new.tar.gz -C / srv/data`",
+      "Prueba la copia nueva listándola: `tar -tzf /var/backups/data-new.tar.gz`. Una copia que no has probado a restaurar es solo una esperanza.",
+      "En producción también guardarías copias fuera del servidor (la regla 3-2-1: 3 copias, 2 tipos de soporte, 1 fuera de las instalaciones)."
+    ],
+    checks: [
+      "config.yml vuelve a estar con su contenido original",
+      "Tiene su propietario original (app) y permisos (640)",
+      "Existe una copia nueva que contiene config.yml",
+      "La copia semanal está intacta"
+    ]
   }
 };

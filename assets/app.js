@@ -193,6 +193,43 @@
     return `<div class="panel installcard newscard"><div class="grow"><strong>Get study tips by email</strong><br><span class="note">${esc(n.blurb || "New labs, exam changes and a study tip now and then. Unsubscribe any time.")}</span></div><a class="btn sm" href="${esc(n.url)}" target="_blank" rel="noopener">Sign up</a></div>`;
   }
 
+  /* ---------- for teachers, schools and bootcamps ---------- */
+  function schoolsView() {
+    const n = CertHub.catalog.filter(id => certs[id]).length, fb = CertHub.reportUrl("Using StudyToCert in a class", "School or program:\nCertifications you teach:\nWhat would help:");
+    const item = (h, t, href, link) => `<div class="panel"><strong>${esc(h)}</strong><p class="note" data-style="margin:4px 0 0">${esc(t)}${href ? ` <a href="${esc(href)}">${esc(link)}</a>` : ""}</p></div>`;
+    return `<h1>For teachers, schools and bootcamps</h1>
+      <p class="meta">StudyToCert is free to use in class: no accounts for students, no ads and no tracking. Everything runs in the browser, and students' progress stays on their own devices.</p>
+      <h2>What you can use</h2>
+      <div class="dashgrid">
+        ${item(`Week-by-week plans for ${n} certifications`, "Each plan has lessons, a quiz per week, timed checkpoints and a practice exam weighted like the real one. Point students at the week you're teaching.", "#home", "Browse certifications")}
+        ${item("Printable materials", "Cheat sheets, key-term flashcards to cut out and a study planner, all ready to print or save as PDF.", "#security-plus.cheat", "See a cheat sheet")}
+        ${item("Hands-on labs without installs", "Real Linux servers run in the browser for Linux+, Security+, CySA+ and Network+ practice, with graded labs checked inside the machine.", "#vm", "Open the practice VMs")}
+        ${item("Blue-team exercises for class discussion", "Log puzzles and incident response tabletops work well projected on a screen: the class decides each step, then reads why.", "#tabletop", "Try a tabletop")}
+        ${item("Quick games for warm-ups", "Sixty-second rounds on subnetting, ports, acronyms, OSI layers and commands.", "#games", "Play a game")}
+        ${item("Works offline and on phones", "Students can install it like an app and keep studying without a connection.", "#install", "How to install")}
+      </div>
+      <h2>Good to know</h2>
+      <div class="panel"><ul class="clean">
+        <li>Students can back up their progress to a file and restore it on another device.</li>
+        <li>Practice questions are written from the official exam objectives, not copied from real exams.</li>
+        <li>This site isn't affiliated with any certification vendor, and it isn't an official training partner.</li>
+      </ul></div>
+      ${fb ? `<p><a class="btn" href="${esc(fb)}" target="_blank" rel="noopener">Tell us how you use it</a></p>` : ""}`;
+  }
+  /* ---------- exam changes: every certification's current notices and when it was last checked ---------- */
+  function examChangesView() {
+    const list = CertHub.catalog.map(id => certs[id]).filter(Boolean);
+    const withNotes = list.map(c => ({ c, notes: CertHub.activeNotices(c) })).filter(x => x.notes.length);
+    const fmt = d => { try { return U.parseD(d).toLocaleDateString(CertHub.i18n.lang() === "es" ? "es" : "en", { year: "numeric", month: "short", day: "numeric" }); } catch (e) { return d; } };
+    return `<h1>Exam changes</h1><p class="meta">New exam versions, retirements and other changes that affect what you study, for every certification on this site. Always confirm dates with the vendor before you book.</p>
+      <h2>Current notices</h2>
+      ${withNotes.length ? withNotes.map(x => `<div class="panel"><div class="flex"><a href="#${esc(x.c.id)}.about"><strong>${esc(x.c.short || x.c.name)} ${esc(x.c.exam)}</strong></a><span class="note">${esc(x.c.vendor)}</span></div>${x.notes.map(n => `<p data-style="margin:6px 0 0">${esc(n.text)}</p>`).join("")}</div>`).join("") : `<p class="note">No current notices.</p>`}
+      <h2>When each certification was last checked</h2>
+      <div class="panel tablewrap"><table class="plain"><thead><tr><th scope="col">Certification</th><th scope="col">Exam</th><th scope="col">Last checked</th><th scope="col">Domain weights</th></tr></thead><tbody>
+        ${list.map(c => `<tr><td><a href="#${esc(c.id)}">${esc(c.short || c.name)}</a></td><td>${esc(c.exam)}</td><td>${c.lastVerified ? esc(fmt(c.lastVerified)) : "–"}</td><td>${c.status === "verified" ? "Verified" : "To confirm"}</td></tr>`).join("")}
+      </tbody></table></div>
+      <p class="note">Spotted a change we missed? Use "Report a mistake" on any lesson or question.</p>`;
+  }
   /* ---------- what's new (data/news.js) ---------- */
   const NEWS = () => (Array.isArray(CertHub.news) ? CertHub.news : []).filter(n => n && /^\d{4}-\d{2}-\d{2}$/.test(n.date) && n.title && Array.isArray(n.items));
   const newsDate = d => { try { return new Date(d + "T12:00:00").toLocaleDateString(CertHub.i18n.lang() === "es" ? "es" : "en", { year: "numeric", month: "long", day: "numeric" }); } catch (e) { return d; } };
@@ -237,11 +274,11 @@
     </section>
     ${CertHub.install.installed() ? "" : `<div class="panel installcard"><div class="grow"><strong>Get the app on your phone</strong><br><span class="note">Install it from your browser: it opens full screen and works offline. No app store needed.</span></div><div class="btns" data-style="margin:0">${CertHub.install.prompt ? `<button type="button" class="btn sm" data-gact="install">Install</button>` : ""}<a class="btn ghost sm" href="#install">How to install</a></div></div>`}
     ${CertHub.review ? CertHub.review.homeCard() : ""}
-    <div class="panel installcard gamescard"><div class="grow"><strong>Quick games</strong><br><span class="note">Sixty-second rounds on subnetting, ports, acronyms and OSI layers.</span></div><a class="btn ghost sm" href="#games">Play</a></div>
+    <div class="panel installcard gamescard"><div class="grow"><strong>Quick games</strong><br><span class="note">Sixty-second rounds on subnetting, ports, acronyms, OSI layers and commands.</span></div><a class="btn ghost sm" href="#games">Play</a></div>
     ${continueHtml()}
     ${pickerHtml()}
     <h2 id="tracks-h">Certifications by career track</h2>
-    <p class="note"><a href="#careers">Career paths</a>: which certification to take first, the jobs each track leads to, and interview practice. <a href="#exam-day">Exam-day guides</a>: scoring, question types and what to expect on test day.</p>
+    <p class="note"><a href="#careers">Career paths</a>: which certification to take first, the jobs each track leads to, and interview practice. <a href="#exam-day">Exam-day guides</a>: scoring, question types and what to expect on test day. <a href="#exam-changes">Exam changes</a>: new versions and retirements.</p>
     ${trackPicker()}
     <div id="trackcards">${trackCards()}</div>
     <h2>Your progress</h2>
@@ -304,7 +341,7 @@
     const q = new URLSearchParams({ p: name, t: title || name, e: "true", rnd: Math.random().toString(36).slice(2) });
     try { fetch(`${gc}/count?${q}`, { mode: "no-cors", credentials: "omit", keepalive: true, referrerPolicy: "no-referrer" }).catch(() => {}); } catch (e) {}
   };
-  const LIGHT = new Set(["home", "dashboard", "achievements", "whats-new", "review", "privacy", "terms", "security", "install", "support", "exam-day", "account"]);
+  const LIGHT = new Set(["home", "dashboard", "achievements", "exam-changes", "schools", "whats-new", "review", "privacy", "terms", "security", "install", "support", "exam-day", "account"]);
   function route() {
     let raw = "";
     try { raw = decodeURIComponent(location.hash.replace(/^#/, "")); } catch (e) { raw = ""; }
@@ -351,6 +388,8 @@
         else { title = "Practice VMs"; $("#app").innerHTML = `${CertHub.fx.skeleton()}`; CertHub.loadScript("assets/vm.js").then(ok => { if (location.hash === "#" + head && CertHub.vm) document.title = `${CertHub.vm.show(head)} · StudyToCert`; else if (!ok) $("#app").innerHTML = `<p class="meta" role="status">This page couldn't load. Check your connection and try again.</p>`; }); }
       }
       else if (head === "achievements" && CertHub.achievements) { topNav("home"); $("#app").innerHTML = CertHub.achievements.view(); title = "Achievements"; view = head; }
+      else if (head === "schools") { topNav(""); $("#app").innerHTML = schoolsView(); title = "For Teachers and Schools"; view = head; }
+      else if (head === "exam-changes") { topNav("home"); $("#app").innerHTML = examChangesView(); title = "Exam Changes"; view = head; }
       else if (head === "dashboard") { topNav("home"); $("#app").innerHTML = dashboardView(); title = "Your Dashboard"; view = head; }
       else if (head === "games" || /^game-[a-z]{2,20}$/.test(head)) {
         topNav("labs"); view = head;

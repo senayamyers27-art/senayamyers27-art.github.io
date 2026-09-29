@@ -189,6 +189,40 @@ CertHub.vmLabs = {
         { label: "SSH (TCP 22) is allowed", cmd: "iptables -S INPUT | grep -Eq -- '-p tcp .*--dport 22 .*-j ACCEPT'" },
         { label: "The rules are saved to /etc/iptables/rules.v4", cmd: "grep -q '^:INPUT DROP' /etc/iptables/rules.v4 && grep -q -- '--dport 22' /etc/iptables/rules.v4" }
       ] },
+    { id: "name-resolution", title: "Fix a name that resolves to the wrong address", mode: "single", minutes: 15, level: "Beginner", certs: ["linux-plus", "network-plus", "a-plus-core2", "server-plus", "rhcsa"],
+      setup: "cp -n /etc/nsswitch.conf /root/nsswitch.conf.orig; sed -i 's/^hosts:.*/hosts:          dns files/' /etc/nsswitch.conf; sed -i '/fileserver/d' /etc/hosts; printf '10.10.0.99  fileserver.lab fileserver   # old server, retired\n' >> /etc/hosts",
+      intro: "Users say \"fileserver.lab\" doesn't work from this machine. The file server now lives at 10.10.0.30. Find out why the name resolves to the wrong address, fix the hosts entry, and make sure the local hosts file is checked before DNS, as it should be on this network.",
+      steps: [
+        "See what the name resolves to, the same way programs do: `getent hosts fileserver.lab`",
+        "Check the order of lookups: `grep ^hosts /etc/nsswitch.conf`. `files` means /etc/hosts; `dns` means the DNS servers in /etc/resolv.conf. The first source that answers wins.",
+        "Look at the hosts file: `cat /etc/hosts`. An old entry still points the name at the retired server.",
+        "Fix the entry: `sudo sed -i 's/^10.10.0.99 .*fileserver.*/10.10.0.30  fileserver.lab fileserver/' /etc/hosts` (or edit it with `sudo vi /etc/hosts`)",
+        "Put files first: `sudo sed -i 's/^hosts:.*/hosts:          files dns/' /etc/nsswitch.conf`",
+        "Check again with `getent hosts fileserver.lab`. On a desktop you might also need to flush a DNS cache (for example `resolvectl flush-caches`, or `ipconfig /flushdns` on Windows)."
+      ],
+      checks: [
+        { label: "fileserver.lab resolves to 10.10.0.30", cmd: "getent hosts fileserver.lab | awk '{print $1}' | grep -qx 10.10.0.30" },
+        { label: "No entry points it at the old address", cmd: "! grep -Eq '^[[:space:]]*10\\.10\\.0\\.99[[:space:]].*fileserver' /etc/hosts" },
+        { label: "The hosts file is checked before DNS", cmd: "grep -Eq '^hosts:[[:space:]]+files([[:space:]]|$)' /etc/nsswitch.conf" },
+        { keep: true, label: "localhost still resolves", cmd: "getent hosts localhost >/dev/null" }
+      ] },
+    { id: "restore-backup", title: "Restore a deleted file from a backup", mode: "single", minutes: 15, level: "Beginner", certs: ["linux-plus", "a-plus-core2", "server-plus", "security-plus", "rhcsa"],
+      setup: "id app >/dev/null 2>&1 || useradd -r -M -s /usr/sbin/nologin app; mkdir -p /srv/data /var/backups; printf 'db_host: 10.10.0.10\\ndb_port: 5432\\nlog_level: info\\n' > /srv/data/config.yml; printf 'report\\n' > /srv/data/report.csv; chown -R app:app /srv/data; chmod 640 /srv/data/config.yml; sha256sum /srv/data/config.yml | cut -d' ' -f1 > /root/.config.sha; tar -czpf /var/backups/data-weekly.tar.gz -C / srv/data; rm /srv/data/config.yml; rm -f /var/backups/data-new.tar.gz",
+      intro: "Someone deleted /srv/data/config.yml and the app won't start. There's a weekly backup at /var/backups/data-weekly.tar.gz. Restore just that one file, with its original owner and permissions, without overwriting anything else, then take a fresh backup of /srv/data to /var/backups/data-new.tar.gz.",
+      steps: [
+        "List what's in the backup without extracting it: `tar -tzvf /var/backups/data-weekly.tar.gz` (paths are stored without the leading /)",
+        "Restore only that file, keeping its permissions and owner: `sudo tar -xzpf /var/backups/data-weekly.tar.gz -C / srv/data/config.yml`",
+        "Check it: `ls -l /srv/data/config.yml` should show owner app and permissions -rw-r-----",
+        "Take a fresh backup: `sudo tar -czpf /var/backups/data-new.tar.gz -C / srv/data`",
+        "Test the new backup by listing it: `tar -tzf /var/backups/data-new.tar.gz`. A backup you haven't tested restoring from is only a hope.",
+        "In production you'd also keep backups off the server (the 3-2-1 rule: 3 copies, 2 kinds of media, 1 offsite)."
+      ],
+      checks: [
+        { label: "config.yml is back with its original contents", cmd: "[ \"$(sha256sum /srv/data/config.yml | cut -d' ' -f1)\" = \"$(cat /root/.config.sha)\" ]" },
+        { label: "It has its original owner (app) and permissions (640)", cmd: "[ \"$(stat -c '%U %a' /srv/data/config.yml)\" = 'app 640' ]" },
+        { label: "A fresh backup exists and contains config.yml", cmd: "tar -tzf /var/backups/data-new.tar.gz | grep -q 'srv/data/config.yml'" },
+        { keep: true, label: "The weekly backup is untouched", cmd: "tar -tzf /var/backups/data-weekly.tar.gz | grep -q 'srv/data/config.yml'" }
+      ] },
     { id: "ssh-keys", title: "Log in with SSH keys and turn off passwords", mode: "network", minutes: 20, level: "Intermediate", certs: ["linux-plus", "rhcsa", "security-plus", "server-plus"],
       intro: "Two machines share a network: client (10.10.0.20) and server (10.10.0.10). Set up key-based login from client to server, then stop the server accepting passwords.",
       steps: [

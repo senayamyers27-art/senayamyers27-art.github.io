@@ -1,6 +1,21 @@
 /* What's new: learner-facing release notes, newest first. Add an entry when something visible ships.
    Each entry: { date: "YYYY-MM-DD", title, items: [ ... ], es: { title, items } } (es: the Spanish version). Shown at #whats-new and on the home page. */
 CertHub.news = [
+  { date: "2026-09-29", title: "Command match, exam changes, a day in the life and two new labs",
+    items: [
+      "A fifth quick game, Command match: Linux, Windows, PowerShell and Cisco IOS commands and what they do.",
+      "Exam changes: every certification's current notices (new versions, retirements) and when each was last checked, on one page.",
+      "Career pages now show a day in the life of a common role in each track.",
+      "Two new practice VM labs: fix a name that resolves to the wrong address, and restore a deleted file from a backup.",
+      "A page for teachers, schools and bootcamps on using the site in class, and the log puzzles and tabletops are now in Spanish."
+    ],
+    es: { title: "Empareja comandos, cambios en los exámenes, un día típico y dos laboratorios nuevos", items: [
+      "Un quinto juego rápido, Empareja comandos: comandos de Linux, Windows, PowerShell y Cisco IOS y lo que hacen.",
+      "Cambios en los exámenes: los avisos actuales de cada certificación (nuevas versiones, retiros) y cuándo se revisó cada una, en una sola página.",
+      "Las páginas de carreras ahora muestran un día típico de un puesto habitual en cada área.",
+      "Dos laboratorios nuevos en la máquina virtual de práctica: arregla un nombre que resuelve a la dirección equivocada y restaura un archivo borrado desde una copia de seguridad.",
+      "Una página para docentes, escuelas y bootcamps sobre cómo usar el sitio en clase, y los acertijos de registros y los simulacros ya están en español."
+    ] } },
   { date: "2026-09-29", title: "More blue-team practice",
     items: [
       "Four new graded labs in the practice VM: find an unauthorized cron job, spot a web attack in an access log, remove a backdoor account and unknown SSH key, and set up a default-deny firewall.",
