@@ -17,6 +17,7 @@
     <ul>
       <li>Your email address, used to send sign-in links and nothing else (no newsletters unless you ask)</li>
       <li>If you sign in with Google, Facebook or LinkedIn: your account ID at that provider, your name and your email address, which the provider shares with your permission. We ask only for basic profile and email access. We never get your password, contacts or posts, we never post anything, and we don't keep the provider's access token after sign-in. You can disconnect a provider on your profile at any time.</li>
+      <li>If you use the AI assistant in the Help panel: your questions and the conversation so far are sent through our server to Anthropic, which provides the AI model, to get an answer. We don't store the conversation; it stays in your browser tab until you close it. Don't include personal details.</li>
       <li>Your profile, only if you fill it in: a display name, a short “About me”, the certification you're working toward and study hours a week. Only you can see it.</li>
       <li>A copy of your study progress and lab progress, including lab notes, so it can sync between your devices, plus the rest of your saved work: study days and streak, readiness history, VM lab and puzzle results, game scores, badges, your weekly goal and the name for your certificates</li>
       <li>One cookie, <code>__Host-cs_session</code>, that keeps you signed in for up to 30 days without use and never more than 90 days. It is secure, HTTP-only and not used for tracking. The site stores only a hash of it.</li>

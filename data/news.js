@@ -1,6 +1,9 @@
 /* What's new: learner-facing release notes, newest first. Add an entry when something visible ships.
    Each entry: { date: "YYYY-MM-DD", title, items: [ ... ], es: { title, items } } (es: the Spanish version). Shown at #whats-new and on the home page. */
 CertHub.news = [
+  { date: "2026-09-29", title: "Help on every page",
+    items: ["A Help button at the bottom right of every page searches answers to common questions, offline too. Once it's switched on, an AI assistant can also answer questions about the site and explain exam topics. Chats aren't saved."],
+    es: { title: "Ayuda en cada página", items: ["Un botón de Ayuda abajo a la derecha de cada página busca respuestas a preguntas frecuentes, también sin conexión. Cuando se active, un asistente de IA también podrá responder preguntas sobre el sitio y explicar temas del examen. Las conversaciones no se guardan."] } },
   { date: "2026-09-29", title: "Save your work to your profile",
     items: ["Signed in, all your work saves to your profile automatically: study plans, lab notes and write-ups, VM labs, puzzles, game scores, streak, badges and goals. Your profile lists what's saved and has a Save now button."],
     es: { title: "Guarda tu trabajo en tu perfil", items: ["Con la sesión iniciada, todo tu trabajo se guarda automáticamente en tu perfil: planes de estudio, notas e informes de laboratorio, laboratorios de VM, acertijos, puntuaciones de juegos, racha, insignias y metas. Tu perfil muestra lo guardado y tiene un botón Guardar ahora."] } },

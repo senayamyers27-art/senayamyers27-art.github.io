@@ -599,5 +599,22 @@
     new MutationObserver(fix).observe(el, { childList: true, characterData: true, subtree: true }); fix();
   }
   CertHub.titleCase = titleCase;
-  document.addEventListener("DOMContentLoaded", () => { CertHub.themeButton(); langButton(); tabBar(); titleCaseTitles(); CertHub.i18n.start().then(route, route); });
+  // Help button (bottom right of every page): loads the help widget on first use (assets/support.js).
+  function helpButton() {
+    if (document.getElementById("helpbtn")) return;
+    const b = document.createElement("button");
+    b.type = "button"; b.id = "helpbtn"; b.className = "helpbtn no-print"; b.setAttribute("aria-expanded", "false"); b.setAttribute("aria-controls", "supportpanel");
+    b.innerHTML = `<span aria-hidden="true">?</span> Help`;
+    b.addEventListener("click", async () => {
+      const p = document.getElementById("supportpanel");
+      if (p && !p.hidden && CertHub.support) return CertHub.support.close();
+      if (b.getAttribute("aria-busy") === "true") return; // still loading from the first click
+      b.setAttribute("aria-busy", "true");
+      const ok = (await Promise.all([CertHub.loadScript("data/help.js"), CertHub.loadScript("assets/support.js")])).every(Boolean);
+      b.removeAttribute("aria-busy");
+      if (ok && CertHub.support) CertHub.support.open(); else ui.toast("Help couldn't load. Check your connection and try again.");
+    });
+    document.body.appendChild(b);
+  }
+  document.addEventListener("DOMContentLoaded", () => { CertHub.themeButton(); langButton(); tabBar(); titleCaseTitles(); helpButton(); CertHub.i18n.start().then(route, route); });
 })();
