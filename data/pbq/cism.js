@@ -1,0 +1,120 @@
+CertHub.addPbqs("cism", [
+  { id: "governance-roles-match", d: 1, type: "match", title: "Who does what in security governance",
+    prompt: "A mid-size insurer is documenting its security governance roles. Match each responsibility to the role that should hold it.",
+    pairs: [
+      ["Approves risk appetite and is ultimately accountable for protecting information assets", "Board and executive management"],
+      ["Brings business unit, IT, legal and risk leaders together to prioritize security initiatives", "Security steering committee"],
+      ["Designs and runs the security program and reports risk to leadership", "Information security manager (CISO)"],
+      ["Decides the classification of claims data and approves who may access it", "Data owner"],
+      ["Applies the approved access settings and runs backups for the claims database", "Data custodian"],
+      ["Gives the board independent assurance that controls are working", "Internal audit"]
+    ],
+    extra: ["External penetration tester", "Help desk supervisor"],
+    explain: "Accountability sits with the board and executives, who also set risk appetite. The steering committee coordinates across the business, the CISO is responsible for running the program, data owners (business managers) classify data and approve access, and custodians implement those decisions. Internal audit must stay independent of the controls it reviews, so it provides assurance rather than running controls. A common mistake is making the CISO or IT the owner of business data." },
+  { id: "strategy-steps-order", d: 1, type: "order", title: "Building an information security strategy",
+    prompt: "A new CISO has been asked to produce a three-year security strategy. Put the steps in the order they should happen.",
+    steps: [
+      "Understand business objectives, risk appetite and legal obligations",
+      "Assess the current state of security capabilities and risk",
+      "Define the desired state needed to support the business",
+      "Analyze the gaps between current and desired state",
+      "Prioritize gaps into a resourced roadmap with metrics",
+      "Obtain senior management approval and funding"
+    ],
+    explain: "Strategy starts with the business: objectives, appetite and obligations determine what 'good' looks like. The current state is then assessed and the desired state defined, so the gap between them can be analyzed. Gaps are prioritized by business risk into a roadmap with costs and metrics, which senior management approves. Choosing a framework or tools before understanding the business is the classic trap." },
+  { id: "control-value-fill", d: 2, type: "fill", title: "Is the control worth the money?",
+    prompt: "Use the risk register entry below to calculate each value. Enter whole dollar amounts as plain numbers (for example 5000).",
+    context: "Risk register entry R-07 - Online store outage from DDoS attack\nLoss per outage (SLE):             $90,000\nExpected outages per year (ARO):   0.5\n\nProposed control: DDoS protection service\nAnnual cost:                       $18,000\nExpected ARO after control:        0.1 (SLE unchanged)",
+    fields: [
+      { label: "Annualized loss expectancy (ALE) before the control", answers: ["45000", "$45,000", "45,000", "$45000"] },
+      { label: "ALE after the control", answers: ["9000", "$9,000", "9,000", "$9000"] },
+      { label: "Net annual value of the control (ALE before - ALE after - annual cost)", answers: ["18000", "$18,000", "18,000", "$18000"] }
+    ],
+    explain: "ALE = SLE x ARO, so before the control it is 90,000 x 0.5 = 45,000 and after it is 90,000 x 0.1 = 9,000. The control cuts expected loss by 36,000 a year and costs 18,000, leaving a net value of 18,000, so it is financially justified. A common error is comparing the control's cost with the SLE instead of with the reduction in ALE." },
+  { id: "kri-select", d: 2, type: "select", title: "Pick the key risk indicators",
+    prompt: "The risk committee wants early warning signals for its top risks. Select the THREE metrics that work best as key risk indicators (KRIs).",
+    options: [
+      "Percentage of critical servers with patches overdue by more than 30 days",
+      "Number of security awareness modules published this year",
+      "Number of privileged accounts not reviewed in the last 90 days",
+      "Total number of firewall rules in the data center",
+      "Percentage of critical vendors whose security assessment has expired",
+      "Number of security staff who attended a conference"
+    ],
+    answers: [0, 2, 4],
+    explain: "A KRI signals that risk exposure is rising before a loss occurs. Overdue patches on critical servers, unreviewed privileged accounts and expired vendor assessments each point directly to a growing chance of compromise and can have thresholds that trigger action. Modules published, firewall rule counts and conference attendance measure activity or size, not changing exposure." },
+  { id: "risk-ownership-select", d: 2, type: "select", title: "Spot the ownership mistakes",
+    prompt: "Review the extract from a risk register. Select the TWO entries where the named risk owner is inappropriate.",
+    context: "ID   Risk                                                      Owner\nR-01 Fraudulent refunds through the customer service portal     Head of customer service\nR-02 Payroll data exposed through a misconfigured HR system      Information security manager\nR-03 Plant shutdown from ransomware on production systems       Chief operating officer\nR-04 Loss of sales data if the CRM vendor fails                  Database administrator\nR-05 Regulatory fine for late breach notification               General counsel",
+    options: ["R-01", "R-02", "R-03", "R-04", "R-05"],
+    answers: [1, 3],
+    explain: "Risk owners should be the managers accountable for the affected business process, with authority to fund and accept treatment. R-02 names the security manager, who advises on the risk but does not own the HR process; the HR director should own it. R-04 names a database administrator, a custodian who may own controls but cannot make business decisions about CRM vendor risk; the sales leader should own it. The other owners are accountable for their processes." },
+  { id: "doc-hierarchy-match", d: 3, type: "match", title: "Which governance document is it?",
+    prompt: "Each statement comes from a different document in a company's remote access document set. Match each statement to its document type.",
+    pairs: [
+      ["\"Remote access to company systems must be authorized and protected in line with data classification.\"", "Policy"],
+      ["\"Remote access requires the corporate VPN with phishing-resistant MFA on a managed device.\"", "Standard"],
+      ["\"1. Open the MFA portal. 2. Scan the QR code. 3. Enter the six-digit code. 4. Close the ticket.\"", "Procedure"],
+      ["\"Where possible, avoid working on confidential files over public Wi-Fi.\"", "Guideline"]
+    ],
+    extra: ["Risk register", "Service level agreement"],
+    explain: "The policy is management's high-level mandatory intent. The standard sets a specific mandatory requirement (VPN, MFA, managed device). The procedure gives the step-by-step instructions for a task. The guideline is optional advice, so it uses words like 'where possible'. Specific technologies belong in standards so that the policy stays stable as technology changes." },
+  { id: "vendor-clauses-select", d: 3, type: "select", title: "Contract clauses for a SaaS provider",
+    prompt: "A company will outsource customer support to a SaaS provider that will store customer personal data. Select the THREE contract clauses that do the most to manage the security risk.",
+    options: [
+      "Right to audit, or annual delivery of an independent assurance report such as SOC 2 Type II",
+      "Notification of security incidents affecting company data within a defined number of hours",
+      "The provider's logo must appear on all support emails",
+      "Disclosure of subcontractors, with equivalent security obligations flowed down to them",
+      "A guarantee that the provider will never suffer a security incident",
+      "The provider will use the same brand of laptops as the company"
+    ],
+    answers: [0, 1, 3],
+    explain: "Assurance rights let the company verify controls over time, timely incident notification lets it meet its own legal duties, and subcontractor disclosure with flow-down obligations addresses fourth-party risk. A promise of zero incidents cannot be kept and gives no practical protection, while logos and laptop brands have no security value." },
+  { id: "ir-phase-match", d: 4, type: "match", title: "Match actions to incident response phases",
+    prompt: "These actions were taken during a ransomware incident. Match each action to the incident response phase it belongs to.",
+    pairs: [
+      ["Running a tabletop exercise and pre-authorizing responders to isolate hosts", "Preparation"],
+      ["Validating a SIEM alert and confirming that files are being encrypted", "Identification"],
+      ["Moving the affected servers to an isolated network segment", "Containment"],
+      ["Removing the attacker's persistence and patching the exploited VPN appliance", "Eradication"],
+      ["Restoring files from clean, immutable backups and monitoring for reinfection", "Recovery"],
+      ["Holding a blameless review and assigning improvement actions with owners", "Lessons learned"]
+    ],
+    extra: ["Risk acceptance", "Procurement"],
+    explain: "Preparation happens before the incident. Identification confirms that an incident is real. Containment limits spread, eradication removes the cause and the weakness that let it in, and recovery restores clean operations with close monitoring. Lessons learned turns the experience into improvements. Restoring before containment and eradication is the most common ordering mistake, because it invites reinfection." },
+  { id: "bcp-program-order", d: 4, type: "order", title: "Building a business continuity program",
+    prompt: "A company has no business continuity capability. Put the steps for building one in the correct order.",
+    steps: [
+      "Obtain senior management sponsorship and approve the continuity policy and scope",
+      "Perform the business impact analysis to set MTD, RTO and RPO",
+      "Assess risks to critical processes and identify preventive controls",
+      "Select continuity and recovery strategies",
+      "Write the business continuity and disaster recovery plans",
+      "Train staff and test the plans with exercises",
+      "Maintain and update the plans after changes and test results"
+    ],
+    explain: "Management sponsorship gives the program authority and resources. The BIA identifies critical processes and sets recovery targets, the risk assessment identifies threats and preventive controls, and those results drive the choice of strategies. Only then are plans written, tested and maintained. Choosing a recovery site before the BIA is a classic error, because you do not yet know the RTOs the site must meet." },
+  { id: "recovery-targets-fill", d: 4, type: "fill", title: "Recovery targets from the BIA",
+    prompt: "Use the BIA results below to answer each question. Enter numbers of hours as plain numbers (for example 12), or yes or no.",
+    context: "BIA - Order fulfilment process\nMaximum tolerable downtime (MTD):        24 hours\nWork recovery time after systems return:  6 hours (checking and re-entering orders)\nMaximum acceptable data loss:             4 hours\n\nCurrent backup schedule: every 6 hours (00:00, 06:00, 12:00, 18:00)",
+    fields: [
+      { label: "Longest RTO (hours) for the fulfilment system that still keeps total downtime within the MTD", answers: ["18", "18 hours", "18h"] },
+      { label: "RPO for the process (hours)", answers: ["4", "4 hours", "4h"] },
+      { label: "Worst-case data loss (hours) with the current backup schedule", answers: ["6", "6 hours", "6h"] },
+      { label: "Does the current backup schedule meet the RPO? (yes or no)", answers: ["no", "No", "NO"] }
+    ],
+    explain: "The system must be back early enough to leave time for work recovery, so RTO = MTD - work recovery time = 24 - 6 = 18 hours. The RPO is the maximum acceptable data loss, 4 hours. Backups every 6 hours mean a failure just before the next backup loses up to 6 hours of data, which exceeds the 4-hour RPO, so the schedule must change (for example, backups every 4 hours or replication)." },
+  { id: "evidence-handling-select", d: 4, type: "select", title: "Preserve the evidence",
+    prompt: "A file server is suspected of being used to steal customer data, and legal action is likely. Select the THREE actions that best preserve evidence.",
+    options: [
+      "Capture memory and active network connections before shutting the server down",
+      "Log in to the server and browse folders to look for the stolen files",
+      "Create a forensic image of the disk and record its cryptographic hash",
+      "Run a full antivirus scan on the original disk to remove malware",
+      "Record every person who handles the evidence, when and where it is stored",
+      "Reinstall the operating system so the server can return to service quickly"
+    ],
+    answers: [0, 2, 4],
+    explain: "Volatile data such as memory is lost at shutdown, so it is collected first (order of volatility). A forensic image with a recorded hash lets analysts work on a verified copy while the original stays untouched, and chain-of-custody records show the evidence was not altered. Browsing, scanning or reinstalling on the original changes or destroys evidence and would weaken any legal case." }
+]);

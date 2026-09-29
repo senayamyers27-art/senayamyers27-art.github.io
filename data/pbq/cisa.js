@@ -1,0 +1,131 @@
+CertHub.addPbqs("cisa", [
+  { id: "sampling-deviation-rate", d: 1, type: "fill", title: "Attribute sampling: can you rely on the control?",
+    prompt: "Use the sampling worksheet below to fill in each value. Enter numbers only for the first two fields and yes or no for the last.",
+    context: "Control tested: every production change has approval before deployment\nPopulation: 2,000 change tickets for the year\nSelection method: systematic, random start, every 40th ticket\nTolerable deviation rate: 5%\n\nResults: 3 sampled changes had no approval before deployment",
+    fields: [
+      { label: "Number of items in the sample (2,000 / 40)", answers: ["50"] },
+      { label: "Sample deviation rate in percent", answers: ["6", "6%", "6.0", "6.0%"] },
+      { label: "Does the deviation rate exceed the tolerable rate? (yes or no)", answers: ["yes", "Yes", "YES", "y"] }
+    ],
+    explain: "A sampling interval of 40 across 2,000 items gives a sample of 50. Three deviations in 50 is a 6% deviation rate, which exceeds the 5% tolerable rate, so the auditor cannot rely on the approval control as designed. The next step is to evaluate the causes of the deviations and expand substantive testing of the changes themselves. Replacing the failed items with new ones, or calling the control effective because most items passed, would both be wrong." },
+  { id: "finding-elements", d: 1, type: "match", title: "Build an audit finding",
+    prompt: "An auditor is writing up a finding about user access. Match each sentence to the element of the finding it represents.",
+    pairs: [
+      ["\"Fourteen accounts belonging to staff who left more than 30 days ago were still enabled.\"", "Condition"],
+      ["\"The access control standard requires accounts to be disabled within one business day of termination.\"", "Criteria"],
+      ["\"HR notifies IT of leavers by email, and there is no reconciliation of leavers to active accounts.\"", "Cause"],
+      ["\"Former staff could still access customer data, and two accounts were used after the owner left.\"", "Effect"],
+      ["\"Link HR termination events to automated deprovisioning and reconcile leavers to accounts monthly.\"", "Recommendation"]
+    ],
+    extra: ["Scope", "Audit opinion"],
+    explain: "The condition is what the auditor observed, and the criteria are what should be, here the access standard. The cause explains why the gap exists (a manual, unreconciled leaver process), and the effect is the risk or impact. The recommendation addresses the cause, not just the symptom. Scope and opinion belong to the report as a whole, not to an individual finding." },
+  { id: "audit-engagement-flow", d: 1, type: "order", title: "Run an IS audit engagement",
+    prompt: "Put these steps of a risk-based IS audit engagement in the correct order.",
+    steps: [
+      "Gain an understanding of the business process, systems and key risks",
+      "Set audit objectives and scope and identify key controls",
+      "Develop the audit program of test procedures",
+      "Perform fieldwork and document evidence in workpapers",
+      "Discuss findings with management at the exit meeting",
+      "Issue the report with management responses",
+      "Perform follow-up on agreed corrective actions"
+    ],
+    explain: "A risk-based engagement starts with understanding the business and its risks, which then drive objectives, scope and the controls to test. The audit program is written before fieldwork so testing is planned rather than improvised. Findings are discussed with management to confirm facts and obtain responses before the report is issued, and follow-up verifies that agreed actions were actually taken. Choosing tests or tools before understanding the risks is a common exam trap." },
+  { id: "sod-conflicts", d: 2, type: "select", title: "Find the segregation-of-duties conflicts",
+    prompt: "The access matrix below shows duties assigned to staff in a mid-size IT department. Select every assignment that is an incompatible combination the auditor should report.",
+    context: "Staff member   Duties assigned\nAna            Develops application code; moves code into production\nBen            Security administrator; approves his own access requests\nCarla          Help desk; resets passwords after identity verification\nDavid          Database administrator; reviews logs of his own DBA activity\nElena          Change manager; approves change requests raised by others\nFarid          Accounts payable clerk; enters invoices and approves payments",
+    options: [
+      "Ana: develops code and moves it into production",
+      "Ben: security administrator who approves his own access requests",
+      "Carla: help desk password resets after identity verification",
+      "David: reviews the logs of his own DBA activity",
+      "Elena: approves change requests raised by others",
+      "Farid: enters invoices and approves the payments"
+    ],
+    answers: [0, 1, 3, 5],
+    explain: "Ana can put untested or unauthorized code into production without anyone else involved. Ben can grant himself any access. David reviewing his own activity is not an independent review, so it cannot compensate for his powerful access. Farid can create and approve a fraudulent payment alone. Carla's password resets with identity verification and Elena approving other people's changes are normal duties that do not combine incompatible functions." },
+  { id: "soc-report-match", d: 2, type: "match", title: "Choose the right assurance report",
+    prompt: "An organization relies on several service providers. Match each assurance need to the report that best meets it.",
+    pairs: [
+      ["The external financial auditor needs assurance over a payroll processor's controls affecting the financial statements", "SOC 1 Type 2"],
+      ["Procurement wants to see whether a SaaS vendor's security controls are suitably designed as of one date", "SOC 2 Type 1"],
+      ["The security team needs tested evidence that a cloud host's security and availability controls operated over twelve months", "SOC 2 Type 2"],
+      ["Marketing wants a general-use summary of a vendor's controls that can be shared publicly", "SOC 3"],
+      ["The latest SOC report ended in June and the auditor needs the vendor's statement about controls since then", "Bridge letter"]
+    ],
+    extra: ["Penetration test report", "ISO 9001 certificate"],
+    explain: "SOC 1 covers controls relevant to customers' financial reporting, and Type 2 includes testing of operating effectiveness over a period. SOC 2 covers the trust services criteria such as security and availability; Type 1 addresses design at a point in time while Type 2 adds operating effectiveness over a period. SOC 3 is a general-use summary without detailed test results. A bridge (gap) letter is a management statement covering the period between the end of the last report and the present; it is not independently tested." },
+  { id: "earned-value-status", d: 3, type: "fill", title: "Earned value: what is the real project status?",
+    prompt: "The project status report below claims the project is on track. Calculate each value. Enter plain numbers; use a minus sign for negative values and two decimal places for the indexes.",
+    context: "Project: customer portal replacement (status at month 6)\nPlanned value (PV):   $500,000\nEarned value (EV):    $400,000\nActual cost (AC):     $450,000",
+    fields: [
+      { label: "Cost variance (EV - AC)", answers: ["-50000", "-50,000", "-$50,000", "-$50000"] },
+      { label: "Schedule variance (EV - PV)", answers: ["-100000", "-100,000", "-$100,000", "-$100000"] },
+      { label: "Cost performance index (EV / AC)", answers: ["0.89", ".89"] },
+      { label: "Schedule performance index (EV / PV)", answers: ["0.80", "0.8", ".8", ".80"] }
+    ],
+    explain: "Cost variance is 400,000 - 450,000 = -50,000, so the project is over budget. Schedule variance is 400,000 - 500,000 = -100,000, so it is behind schedule. CPI is 400,000 / 450,000 = 0.89 and SPI is 400,000 / 500,000 = 0.80; both below 1 mean the project is getting less than a dollar of planned work per dollar spent and is progressing slower than planned. The auditor should report that the 'on track' status is not supported and that the steering committee needs a revised forecast and a review of the business case." },
+  { id: "data-conversion-steps", d: 3, type: "order", title: "Plan a controlled data conversion",
+    prompt: "A company is migrating its customer records to a new system. Put the data conversion steps in the correct order.",
+    steps: [
+      "Identify source data and assign data owners",
+      "Cleanse the source data and define field mapping and conversion rules",
+      "Run a trial conversion in a test environment",
+      "Reconcile record counts, control totals and hash totals, and resolve exceptions",
+      "Obtain data owner sign-off on the reconciled results",
+      "Perform the final conversion at cutover and reconcile again",
+      "Keep the old data read-only until the new system is verified"
+    ],
+    explain: "Owners must be known first because they decide what is correct and sign off at the end. Cleansing and mapping come before any conversion run, and trial runs in a test environment find mapping errors safely. Reconciliation with counts and totals is the key control, and owner sign-off confirms the results before the final conversion. The final run is reconciled again, and the old data is kept until the new system is verified so errors can be corrected or the change rolled back." },
+  { id: "change-evidence-review", d: 4, type: "select", title: "Review change-management evidence",
+    prompt: "You traced a sample of production deployments from the pipeline log to their change tickets. Select every change that is an exception the auditor should report.",
+    context: "Change  Developer  Approver   Approved       Deployed       Tested  Deployed by\nCH-101  Lee        Morgan     03-02 10:00    03-04 22:00    Yes     Release team\nCH-102  Patel      Patel      03-05 09:00    03-06 21:00    Yes     Release team\nCH-103  Wong       Morgan     03-09 16:00    03-08 23:00    Yes     Release team\nCH-104  Silva      Morgan     03-11 11:00    03-12 22:00    No      Release team\nCH-105  Okafor     Reyes      03-14 10:00    03-15 22:00    Yes     Okafor\nCH-106  Lee        Reyes      03-18 09:00    03-19 21:00    Yes     Release team",
+    options: [
+      "CH-101",
+      "CH-102",
+      "CH-103",
+      "CH-104",
+      "CH-105",
+      "CH-106"
+    ],
+    answers: [1, 2, 3, 4],
+    explain: "CH-102 was approved by the same person who developed it, so the approval is not independent. CH-103 was deployed on 03-08, before its approval on 03-09, which means it was effectively unauthorized. CH-104 reached production without testing evidence. CH-105 was deployed by its own developer, breaking the separation between development and production migration. CH-101 and CH-106 have independent approval before deployment, test evidence and deployment by the release team." },
+  { id: "resilience-terms", d: 4, type: "match", title: "Recovery objectives and sites",
+    prompt: "Match each statement from a business impact analysis workshop to the term it describes.",
+    pairs: [
+      ["\"We can lose at most 15 minutes of orders.\"", "Recovery point objective (RPO)"],
+      ["\"The order system must be running again within 4 hours.\"", "Recovery time objective (RTO)"],
+      ["\"After 24 hours down, the damage to the business becomes unacceptable.\"", "Maximum tolerable downtime (MTD)"],
+      ["\"During recovery we can accept processing 60% of normal order volume.\"", "Service delivery objective (SDO)"],
+      ["\"A standby facility with equipment and current data that can take over within hours.\"", "Hot site"],
+      ["\"A facility with power, cooling and space only; equipment must be brought in.\"", "Cold site"]
+    ],
+    extra: ["Mean time between failures (MTBF)", "Reciprocal agreement"],
+    explain: "RPO limits data loss and drives backup or replication frequency; RTO is the target time to restore; MTD is the point beyond which the impact is unacceptable, so the RTO must be shorter than the MTD. The SDO is the reduced level of service acceptable while running in recovery mode. A hot site can take over within hours because it has equipment and current data, while a cold site has only the basic facility and takes weeks to bring into service." },
+  { id: "access-review-exceptions", d: 5, type: "select", title: "User access review",
+    prompt: "You are testing access to the finance application. Compare the account list with the HR data and select every account the auditor should report as an exception.",
+    context: "HR data: M. Grant left 05-15; T. Novak moved from Accounts Payable to Marketing on 06-01\nPolicy: disable within 1 business day of leaving; dormant accounts (no login for 90+ days) must be reviewed\nReview date: 09-30\n\nAccount     Owner      Role in app          Last login  Status\nagrant      M. Grant   AP clerk             06-02       Enabled\ntnovak      T. Novak   AP clerk             09-28       Enabled\nsvc_batch   (none)     Service - posting    09-30       Enabled\nlchen       L. Chen    AP supervisor        09-29       Enabled\nadmin       shared     Application admin    09-27       Enabled\nrdiaz       R. Diaz    GL analyst           03-11       Enabled",
+    options: [
+      "agrant",
+      "tnovak",
+      "svc_batch",
+      "lchen",
+      "admin",
+      "rdiaz"
+    ],
+    answers: [0, 1, 2, 4, 5],
+    explain: "agrant belongs to someone who left in May and was used after departure, which is a serious leaver failure. tnovak still has accounts payable access after moving to marketing, a case of privilege creep. svc_batch has no named owner, so nobody is accountable for its access. The shared admin account prevents actions being traced to an individual. rdiaz has not logged in for more than 90 days and needs review as a dormant account. lchen is a current AP supervisor with recent activity, so the access is consistent with the role." },
+  { id: "firewall-rule-review", d: 5, type: "select", title: "Firewall rule set review",
+    prompt: "The perimeter firewall processes rules from top to bottom. The policy requires deny by default, a business owner for every rule, and logging on rules that allow inbound traffic. Select every rule the auditor should report.",
+    context: "#  Source         Destination     Port   Action  Owner        Log\n1  Internet       Web DMZ         443    Allow   E-commerce   Yes\n2  Any            Any             Any    Allow   (none)       No\n3  Internet       Mail gateway    25     Allow   IT messaging Yes\n4  Internet       DB server       1433   Allow   (none)       No\n5  Admin subnet   Web DMZ         22     Allow   IT ops       Yes\n6  Any            Any             Any    Deny    Security     Yes",
+    options: [
+      "Rule 1",
+      "Rule 2",
+      "Rule 3",
+      "Rule 4",
+      "Rule 5",
+      "Rule 6"
+    ],
+    answers: [1, 3],
+    explain: "Rule 2 allows any traffic in any direction near the top of the list, so every restrictive rule below it, including the final deny, is effectively bypassed; it also has no owner and no logging. Rule 4 exposes a database server directly to the internet, has no owner and is not logged. Rules 1 and 3 allow specific internet-facing services with owners and logging, rule 5 restricts administration to an admin subnet, and rule 6 is the required default deny." }
+]);

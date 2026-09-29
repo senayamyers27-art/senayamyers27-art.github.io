@@ -1,6 +1,17 @@
 /* What's new: learner-facing release notes, newest first. Add an entry when something visible ships.
    Each entry: { date: "YYYY-MM-DD", title, items: [ ... ], es: { title, items } } (es: the Spanish version). Shown at #whats-new and on the home page. */
 CertHub.news = [
+  { date: "2026-09-29", title: "Four new certifications: CISM, CISA, CCSP and AWS Security",
+    items: [
+      "ISACA CISM (security management) and CISA (IS audit), ISC2 CCSP (cloud security) and AWS Certified Security – Specialty (SCS-C03).",
+      "Each has a week-by-week plan, a lesson for every topic, 90 practice questions with wrong-answer notes, exam simulations and flashcards, in English and Spanish.",
+      "CISM's plan already follows the exam outline that takes effect November 3, 2026, and CCSP's follows the outline revised on August 1, 2026."
+    ],
+    es: { title: "Cuatro certificaciones nuevas: CISM, CISA, CCSP y AWS Security", items: [
+      "ISACA CISM (gestión de la seguridad) y CISA (auditoría de sistemas), ISC2 CCSP (seguridad en la nube) y AWS Certified Security – Specialty (SCS-C03).",
+      "Cada una tiene un plan semana a semana, una lección por tema, 90 preguntas de práctica con explicaciones de las respuestas incorrectas, simulaciones de examen y tarjetas, en inglés y en español.",
+      "El plan de CISM ya sigue el temario que entra en vigor el 3 de noviembre de 2026, y el de CCSP sigue el temario revisado el 1 de agosto de 2026."
+    ] } },
   { date: "2026-09-29", title: "Pay and job outlook, network design and cloud puzzles",
     items: [
       "Pay and job outlook: US median pay and projected growth for the jobs each career track leads to, from the Bureau of Labor Statistics, with a link to every source.",
