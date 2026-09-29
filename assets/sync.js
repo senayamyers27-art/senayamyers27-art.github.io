@@ -61,7 +61,40 @@
     }
     return out;
   }
-  const mergeDoc = (docKey, local, server) => docKey === "labs" ? mergeLabs(local, server) : mergePlan(local, server);
+  // Everything else students do (the "work" document): one entry per saved key, each merged by its own rule so
+  // nothing done on either device is lost.
+  const WORK = {
+    "certhub:activity": "days", "certhub:qlog": "max", "certhub:focus": "max", "certhub:readyhist": "hist",
+    "certhub:vmlabs": "union", "certhub:vmexam": "exam", "certhub:blueteam": "max", "certhub:netdesign": "max",
+    "certhub:games": "games", "certhub:achievements": "set", "certhub:goal": "text", "certhub:name": "text"
+  };
+  function mergeWork(local, server) {
+    const a = isObj(local) ? local : {}, b = isObj(server) ? server : {}, out = {};
+    const maxMap = (x, y) => { const o = { ...(isObj(y) ? y : {}) }; for (const [k, v] of Object.entries(isObj(x) ? x : {})) o[k] = typeof v === "number" && typeof o[k] === "number" ? Math.max(v, o[k]) : v; return o; };
+    for (const [key, rule] of Object.entries(WORK)) {
+      const x = a[key], y = b[key];
+      if (x === undefined && y === undefined) continue;
+      if (x === undefined || y === undefined) { out[key] = x === undefined ? y : x; continue; }
+      if (rule === "days" || rule === "set") out[key] = [...new Set([...(Array.isArray(y) ? y : []), ...(Array.isArray(x) ? x : [])])].sort().slice(rule === "days" ? -400 : 0);
+      else if (rule === "max") out[key] = maxMap(x, y);
+      else if (rule === "union") out[key] = { ...(isObj(y) ? y : {}), ...(isObj(x) ? x : {}) };
+      else if (rule === "hist") {
+        const o = {};
+        for (const c of new Set([...Object.keys(isObj(x) ? x : {}), ...Object.keys(isObj(y) ? y : {})])) {
+          const m = new Map(); [...((y || {})[c] || []), ...((x || {})[c] || [])].forEach(p => { if (Array.isArray(p)) m.set(p[0], p); });
+          o[c] = [...m.values()].sort((p, q) => (p[0] < q[0] ? -1 : 1)).slice(-120);
+        }
+        out[key] = o;
+      } else if (rule === "exam") out[key] = { best: Math.max((x && x.best) || 0, (y && y.best) || 0), last: ((x && x.last && x.last.when) || 0) >= ((y && y.last && y.last.when) || 0) ? x && x.last : y && y.last };
+      else if (rule === "games") {
+        const o = { ...(isObj(y) ? y : {}) };
+        for (const [g, v] of Object.entries(isObj(x) ? x : {})) { const w = o[g] || {}; o[g] = { best: Math.max(v.best || 0, w.best || 0), plays: Math.max(v.plays || 0, w.plays || 0), last: Math.max(v.last || 0, w.last || 0) }; }
+        out[key] = o;
+      } else out[key] = x || y; // text: this device's value, else the saved one
+    }
+    return out;
+  }
+  const mergeDoc = (docKey, local, server) => docKey === "labs" ? mergeLabs(local, server) : docKey === "work" ? mergeWork(local, server) : mergePlan(local, server);
 
   /* ---------- optional Turnstile bot check on sign-in (site.config.json turnstileSiteKey) ---------- */
   const TS_KEY = (CertHub.site && CertHub.site.turnstileSiteKey) || "";
@@ -101,10 +134,26 @@
   const STATE_KEY = "certhub:sync";
   const state = () => { try { return JSON.parse(store.get(STATE_KEY) || "{}"); } catch (e) { return {}; } };
   const saveState = s => store.set(STATE_KEY, JSON.stringify(s));
-  const docKeyFor = storageKey => storageKey === "certhub:v1:labs" ? "labs" : storageKey.replace(/^certhub:v1:/, "cert:");
-  const storageKeyFor = docKey => docKey === "labs" ? "certhub:v1:labs" : "certhub:v1:" + docKey.slice(5);
-  const localDocs = () => store.keys().filter(k => /^certhub:v1:[a-z0-9-]{1,40}$/.test(k));
-  const readLocal = k => { try { return JSON.parse(store.get(k) || "null"); } catch (e) { return null; } };
+  const WORK_DOC = "certhub:work"; // not a real storage key: stands for all the WORK keys together
+  const docKeyFor = storageKey => storageKey === WORK_DOC ? "work" : storageKey === "certhub:v1:labs" ? "labs" : storageKey.replace(/^certhub:v1:/, "cert:");
+  const storageKeyFor = docKey => docKey === "work" ? WORK_DOC : docKey === "labs" ? "certhub:v1:labs" : "certhub:v1:" + docKey.slice(5);
+  const readWork = () => {
+    const o = {};
+    for (const [k, rule] of Object.entries(WORK)) {
+      const raw = store.get(k); if (raw == null) continue;
+      if (rule === "text") o[k] = raw; else try { const v = JSON.parse(raw); if (v != null) o[k] = v; } catch (e) {}
+    }
+    return Object.keys(o).length ? o : null;
+  };
+  let writingWork = false;
+  const writeLocal = (k, v) => {
+    if (k !== WORK_DOC) return store.set(k, JSON.stringify(v));
+    writingWork = true;
+    try { for (const [key, rule] of Object.entries(WORK)) if (v && v[key] !== undefined) store.set(key, rule === "text" ? String(v[key]) : JSON.stringify(v[key])); }
+    finally { writingWork = false; }
+  };
+  const localDocs = () => store.keys().filter(k => /^certhub:v1:[a-z0-9-]{1,40}$/.test(k)).concat(readWork() ? [WORK_DOC] : []);
+  const readLocal = k => { if (k === WORK_DOC) return readWork(); try { return JSON.parse(store.get(k) || "null"); } catch (e) { return null; } };
 
   let known = false; // set once the first /v1/me answer is in, so pages don't redirect on a guess
   let me = null, syncing = false, pushTimer = null, lastError = "";
@@ -124,7 +173,7 @@
     const r = await api("PUT", `/v1/progress/${docKey}`, { baseVersion, body });
     if (r.status === 409 && tries > 0) {
       const merged = mergeDoc(docKey, body, r.data.body);
-      store.set(storageKeyFor(docKey), JSON.stringify(merged));
+      writeLocal(storageKeyFor(docKey), merged);
       return put(docKey, merged, r.data.version, tries - 1);
     }
     if (r.status === 409) throw new Error("Progress kept changing on another device. It will sync on the next try.");
@@ -143,9 +192,9 @@
       for (const k of keys) {
         const sk = storageKeyFor(k), local = readLocal(sk), s = server[k];
         if (!s) { if (local) st.versions[k] = await put(k, local, 0); continue; }
-        if (!local) { store.set(sk, JSON.stringify(s.body)); st.versions[k] = s.version; changedLocally = true; continue; }
+        if (!local) { writeLocal(sk, s.body); st.versions[k] = s.version; changedLocally = true; continue; }
         const merged = mergeDoc(k, local, s.body);
-        if (JSON.stringify(merged) !== JSON.stringify(local)) { store.set(sk, JSON.stringify(merged)); changedLocally = true; }
+        if (JSON.stringify(merged) !== JSON.stringify(local)) { writeLocal(sk, merged); changedLocally = true; }
         st.versions[k] = JSON.stringify(merged) !== JSON.stringify(s.body) ? await put(k, merged, s.version) : s.version;
       }
       st.lastSync = Date.now(); st.email = me.user.email;
@@ -170,13 +219,15 @@
   }
 
   CertHub.sync = {
-    mergePlan, mergeLabs, mergeDoc,
+    mergePlan, mergeLabs, mergeWork, mergeDoc,
     changed(storageKey) {
-      if (!API || !signedIn() || !/^certhub:v1:/.test(storageKey)) return;
+      if (!API || !signedIn() || writingWork) return;
+      if (WORK[storageKey]) storageKey = WORK_DOC;
+      else if (!/^certhub:v1:/.test(storageKey)) return;
       pending.add(storageKey);
       clearTimeout(pushTimer); pushTimer = setTimeout(pushPending, 2500);
     },
-    syncAll, refreshMe, get me() { return me; }, get enabled() { return !!API; }
+    syncAll, refreshMe, savePrompt, get me() { return me; }, get enabled() { return !!API; }
   };
 
   /* ---------- account page ---------- */
@@ -202,7 +253,7 @@
     const orgs = me.orgs || [];
     return `<h1>Account</h1>
     <div class="panel">
-      <div class="row"><div class="grow"><strong>${esc(u.email)}</strong><br><span class="note">Plan: ${esc(PLAN[plan] || plan)}</span></div><button type="button" class="btn ghost sm" data-aact="signout">Sign out</button></div>
+      <div class="row"><div class="grow"><strong class="nocap">${esc(u.email)}</strong><br><span class="note">Plan: ${esc(PLAN[plan] || plan)}</span></div><button type="button" class="btn ghost sm" data-aact="signout">Sign out</button></div>
       <div class="row"><div class="grow"><strong>Sync</strong><br><span class="note" id="syncstatus"></span></div><button type="button" class="btn sm" data-aact="sync">Sync now</button></div>
     </div>
     ${plan === "org" ? `<h2>Pro</h2><div class="panel"><p data-style="margin:0">Your organization's plan includes every Pro feature.</p></div>` : me.billing ? `<h2>Pro</h2><div class="panel">${plan === "pro"
@@ -492,6 +543,13 @@
     try {
       if (a === "signout") { await api("POST", "/v1/auth/logout", {}); setMe((await api("GET", "/v1/me").catch(() => ({ data: null }))).data); ui.toast("Signed out. Your progress stays on this device."); if (location.hash === "#profile") location.hash = "login"; else CertHub.rerender(); }
       if (a === "sync") await syncAll();
+      if (a === "savework") {
+        b.disabled = true; b.textContent = "Saving…";
+        await syncAll();
+        if (lastError) throw new Error(lastError);
+        ui.toast("Your work is saved to your profile.");
+        if (location.hash === "#profile") profileView();
+      }
       if (a === "unlink" && PNAME[b.dataset.provider]) {
         const n = PNAME[b.dataset.provider];
         if (!(await ui.confirm(`Disconnect ${n}? You won't be able to sign in with ${n} until you connect it again. Your email link always works.`, { ok: "Disconnect", cancel: "Keep it" }))) return;
@@ -598,6 +656,35 @@
     catch (e) { ui.toast(e.message); }
   }
 
+  /* ---------- saving work to the profile ---------- */
+  // Signed out: a card inviting students to keep their work in a free profile. Signed in: a one-line status.
+  function savePrompt() {
+    if (!API || !known) return "";
+    if (signedIn()) {
+      const st = state();
+      return `<p class="note savedline">✓ Saved to <a href="#profile">your profile</a>${st.lastSync ? ` · last saved ${esc(new Date(st.lastSync).toLocaleString())}` : ""}</p>`;
+    }
+    return `<div class="panel installcard savecard"><div class="grow"><strong>Save your work to a free profile</strong><br><span class="note">Your progress, lab notes, write-ups and scores are only in this browser right now. Save them to a profile to keep them safe and pick up on any device.</span></div><span class="btns" data-style="margin:0"><a class="btn sm" href="#signup">Create free profile</a><a class="btn ghost sm" href="#login">Log in</a></span></div>`;
+  }
+  function savedWorkHtml() {
+    const certs = Object.values(CertHub.certs || {}).map(c => ({ c, p: CertHub.loadProgress(c.id) })).filter(x => x.p.start && ((x.p.history || []).length || Object.keys(x.p.read || {}).length || Object.keys(x.p.stats || {}).length));
+    const lp = CertHub.loadLabProgress(), labIds = Object.keys(lp).filter(id => CertHub.labs[id]);
+    const labsDone = labIds.filter(id => CertHub.labStatus(CertHub.labs[id], lp).state === "done").length, notes = labIds.filter(id => (lp[id].notes || "").trim()).length;
+    const w = readWork() || {}, n = o => Object.keys(isObj(o) ? o : {}).length;
+    const bt = w["certhub:blueteam"] || {}, puzzles = Object.keys(bt).filter(k => /^p:/.test(k)).length + Object.keys(bt).filter(k => /^t:/.test(k)).length + n(w["certhub:netdesign"]);
+    const days = (w["certhub:activity"] || []).length, vm = n(w["certhub:vmlabs"]), vmBest = (w["certhub:vmexam"] || {}).best, games = n(w["certhub:games"]);
+    const answered = certs.reduce((a, x) => a + Object.values(x.p.stats || {}).reduce((b, y) => b + (y.t || 0), 0), 0);
+    const row = (label, value, href) => `<div class="row"><div class="grow"><strong>${esc(label)}</strong><br><span class="note">${esc(value)}</span></div>${href ? `<a class="btn ghost sm" href="${esc(href)}">Open</a>` : ""}</div>`;
+    const st = state();
+    return `<div class="panel">
+      ${row("Study plans", certs.length ? `${certs.map(x => x.c.short).slice(0, 5).join(", ")}${certs.length > 5 ? ` and ${certs.length - 5} more` : ""} · ${answered} questions answered` : "None started yet", "#dashboard")}
+      ${row("Labs and write-ups", `${labsDone} lab${labsDone === 1 ? "" : "s"} finished · notes on ${notes}`, "#portfolio")}
+      ${row("Hands-on practice", `${vm} VM lab${vm === 1 ? "" : "s"} passed${vmBest ? ` · VM exam best ${vmBest}%` : ""} · ${puzzles} puzzle${puzzles === 1 ? "" : "s"} and exercises · ${games} game${games === 1 ? "" : "s"} played`, "#labs")}
+      ${row("Study history", `${days} study day${days === 1 ? "" : "s"}, streak, readiness history, badges and weekly goal`, "#achievements")}
+      <div class="row"><div class="grow"><strong id="savedstatus">${st.lastSync ? `Saved ${esc(new Date(st.lastSync).toLocaleString())}` : "Not saved yet"}</strong><br><span class="note">Your work saves automatically a few seconds after each change while you're signed in, and comes back on any device you sign in on.</span></div><button type="button" class="btn sm" data-aact="savework">Save now</button></div>
+    </div>`;
+  }
+
   /* ---------- sign in or sign up (#login, #signup) and the profile page (#profile) ---------- */
   // Brand marks for the provider buttons (the providers' own logos, as their guidelines ask for sign-in buttons).
   const LOGO = {
@@ -701,7 +788,9 @@
       ${pr.bio ? `<p class="bio">${esc(pr.bio)}</p>` : ""}
       <h2>Your study snapshot</h2>
       ${snapshot()}
-      <p class="note">From the progress saved on this device${me && me.user ? " and synced to your account" : ""}.</p>
+      <p class="note">From the progress saved on this device and in your profile.</p>
+      <h2>Your saved work</h2>
+      ${/* html: built with esc() */ savedWorkHtml()}
       <h2>Edit profile</h2>
       <form id="profile-form" class="panel" novalidate>
         <label for="pf-name"><strong>Display name</strong></label>
@@ -726,6 +815,7 @@
       <h2>Account</h2>
       <div class="panel">
         <div class="row"><div class="grow"><strong>Account settings</strong><br><span class="note">Sync, Pro, classes, signed-in devices, download or delete your data.</span></div><a class="btn ghost sm" href="#account">Open</a></div>
+        <div class="row"><div class="grow"><strong>Site settings</strong><br><span class="note">Theme, text size, language, weekly goal and backups on this device.</span></div><a class="btn ghost sm" href="#settings">Open</a></div>
         <div class="row"><div class="grow"><strong>Sign out</strong><br><span class="note">Your progress stays on this device.</span></div><button type="button" class="btn ghost sm" data-aact="signout">Sign out</button></div>
       </div>`;
   }
@@ -760,7 +850,7 @@
     let join = null;
     try { join = sessionStorage.getItem(JOIN_KEY); if (join && signedIn()) sessionStorage.removeItem(JOIN_KEY); } catch (e) {}
     if (join && signedIn() && CODE_RE.test(join) && !/^#?join-/.test(location.hash)) location.hash = "join-" + join;
-    const onAccount = /^#?(account|login|signup|profile)/.test(location.hash);
+    const onAccount = /^#?(account|login|signup|profile|dashboard|portfolio|home)?$|^#?(account|login|signup|profile)/.test(location.hash);
     if (onAccount || signedIn()) CertHub.rerender();
     if (signedIn()) {
       syncAll();

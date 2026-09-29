@@ -158,6 +158,7 @@ ${lab.deliverable}
     const nextUp = all().filter(l => labStatus(l, lp).state === "new" && (l.requires || []).every(r => !labs[r] || labStatus(labs[r], lp).state === "done")).slice(0, 4);
     return `<h1>Your portfolio</h1>
     <p class="meta">Finished labs become proof of hands-on experience. Copy the write-ups into a GitHub repository and the bullets into your resume.</p>
+    ${/* html: fixed markup with esc() */ CertHub.sync ? CertHub.sync.savePrompt() : ""}
     <div class="figs3"><div class="fig"><b>${done.length}</b><span>labs finished</span></div><div class="fig"><b>${hours(mins)}</b><span>hands-on time</span></div><div class="fig"><b>${new Set(done.map(l => l.track)).size}</b><span>of ${TRACKS.length} tracks</span></div></div>
     ${done.length ? `<div class="btns"><button type="button" class="btn" data-lact="copybullets">Copy all resume bullets</button><button type="button" class="btn ghost" data-lact="copyportfolio">Copy full portfolio (Markdown)</button></div>
     <h2>Finished labs</h2>

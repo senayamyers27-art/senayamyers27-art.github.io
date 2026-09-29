@@ -45,4 +45,7 @@ try {
   var r = localStorage.getItem("certhub:size"); if (r === "lg" || r === "xl") document.documentElement.setAttribute("data-size", r);
   if (localStorage.getItem("certhub:easyread") === "on") document.documentElement.setAttribute("data-read", "easy");
   if (localStorage.getItem("certhub:contrast") === "more") document.documentElement.setAttribute("data-contrast", "more");
+  if (localStorage.getItem("certhub:motion") === "reduce") document.documentElement.setAttribute("data-motion", "reduce");
+  if (localStorage.getItem("certhub:links") === "on") document.documentElement.setAttribute("data-links", "on");
+  if (localStorage.getItem("certhub:focusring") === "strong") document.documentElement.setAttribute("data-focusring", "strong");
 } catch (e) {}

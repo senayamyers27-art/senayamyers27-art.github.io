@@ -77,7 +77,9 @@
     const next = list.filter(x => x.days != null && x.days >= 0).sort((a, b) => a.days - b.days)[0];
     const due = list.reduce((n, x) => n + x.due, 0);
     const flame = st.current ? CertHub.fx.icon("flame", st.current >= 7 ? "flame l3" : st.current >= 3 ? "flame l2" : "flame") : "";
-    return `<h1>Your dashboard</h1><p class="meta">${list.length} certification${list.length === 1 ? "" : "s"} in progress. Saved in this browser only.</p>
+    const saved = CertHub.sync && CertHub.sync.me && CertHub.sync.me.user;
+    return `<h1>Your dashboard</h1><p class="meta">${list.length} certification${list.length === 1 ? "" : "s"} in progress. ${saved ? "Saved to your profile." : "Saved in this browser only."}</p>
+      ${/* html: fixed markup with esc() */ CertHub.sync ? CertHub.sync.savePrompt() : ""}
       <div class="dashsum">
         <div class="panel"><span class="note">Study streak</span><strong class="dashnum">${flame}<span data-count="${esc(st.current)}">${esc(st.current)}</span> day${st.current === 1 ? "" : "s"}</strong><span class="note">${st.today ? "Studied today." : "Study today to keep it going."}</span></div>
         <div class="panel"><span class="note">Next exam</span><strong class="dashnum">${next ? `<span data-count="${esc(next.days)}">${esc(next.days)}</span> day${next.days === 1 ? "" : "s"}` : "–"}</strong><span class="note">${next ? esc(`${next.c.short} ${next.c.exam}`) : "No upcoming exam date"}</span></div>
@@ -162,10 +164,12 @@
     const b = e.target.closest("[data-jump]"); if (!b) return;
     const t = document.getElementById(b.dataset.jump); if (!t) return;
     if (!t.hasAttribute("tabindex")) t.setAttribute("tabindex", "-1");
-    t.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); t.focus({ preventScroll: true });
+    t.scrollIntoView({ behavior: CertHub.fx.calm() ? "auto" : "smooth" }); t.focus({ preventScroll: true });
   });
   // Reading and sound settings (Appearance): each button sets one saved preference and an attribute on <html>.
-  const PREFS = { size: ["certhub:size", "data-size", ["md", "lg", "xl"]], read: ["certhub:easyread", "data-read", ["off", "on"]], contrast: ["certhub:contrast", "data-contrast", ["normal", "more"]], sound: ["certhub:sound", null, ["off", "on"]] };
+  const PREFS = { size: ["certhub:size", "data-size", ["md", "lg", "xl"]], read: ["certhub:easyread", "data-read", ["off", "on"]], contrast: ["certhub:contrast", "data-contrast", ["normal", "more"]], sound: ["certhub:sound", null, ["off", "on"]],
+    motion: ["certhub:motion", "data-motion", ["auto", "reduce"]], links: ["certhub:links", "data-links", ["off", "on"]], focusring: ["certhub:focusring", "data-focusring", ["normal", "strong"]],
+    keys: ["certhub:keys", null, ["on", "off"]], time: ["certhub:extratime", null, ["1", "1.5", "2"]] };
   const pref = k => { const [key, , vals] = PREFS[k], v = CertHub.store.get(key); return vals.includes(v) ? v : vals[0]; };
   document.addEventListener("click", e => {
     const b = e.target.closest("button[data-pref]"); if (!b) return;
@@ -176,11 +180,6 @@
     document.querySelectorAll(`[data-pref^="${k}:"]`).forEach(x => x.setAttribute("aria-pressed", String(x === b)));
     if (k === "sound" && v === "on") CertHub.fx.sound("right");
   });
-  function readingHtml() {
-    const chips = (k, label, opts) => `<p class="pickq">${esc(label)}</p><div class="trackpick" role="group" aria-label="${esc(label)}">${opts.map(([v, l]) => `<button type="button" class="chipbtn" data-pref="${esc(k)}:${esc(v)}" aria-pressed="${pref(k) === v}">${esc(l)}</button>`).join("")}</div>`;
-    return `<div class="panel">${chips("size", "Text size", [["md", "Normal"], ["lg", "Large"], ["xl", "Larger"]])}${chips("read", "Easy-read spacing", [["off", "Off"], ["on", "On"]])}${chips("contrast", "Contrast", [["normal", "Normal"], ["more", "High"]])}${chips("sound", "Sounds", [["off", "Off"], ["on", "On"]])}
-      <p class="note" data-style="margin:8px 0 0">Easy-read uses a plainer font with wider letter and line spacing, which many readers with dyslexia find easier. Sounds stay off when your device asks for reduced motion.</p></div>`;
-  }
   document.addEventListener("click", e => {
     const b = e.target.closest("button[data-accent]"); if (!b) return;
     CertHub.setAccent(b.dataset.accent);
@@ -192,6 +191,131 @@
     if (!n || !n.url) return "";
     return `<div class="panel installcard newscard"><div class="grow"><strong>Get study tips by email</strong><br><span class="note">${esc(n.blurb || "New labs, exam changes and a study tip now and then. Unsubscribe any time.")}</span></div><a class="btn sm" href="${esc(n.url)}" target="_blank" rel="noopener">Sign up</a></div>`;
   }
+
+  /* ---------- settings (#settings): every preference in one place, all saved in this browser ---------- */
+  const THEME_LABEL = { auto: "Auto", light: "Light", dark: "Dark" };
+  const curTheme = () => { const t = CertHub.store.get("certhub:theme"); return THEME_LABEL[t] ? t : "auto"; };
+  function storageSummary() {
+    const keys = CertHub.store.keys().filter(k => k.startsWith("certhub:"));
+    const bytes = keys.reduce((a, k) => a + k.length + (CertHub.store.get(k) || "").length, 0) * 2;
+    return { keys: keys.length, kb: Math.max(1, Math.round(bytes / 1024)) };
+  }
+  const SET_TABS = [["general", "General"], ["accessibility", "Accessibility"], ["study", "Study"], ["data", "Your data"], ["account", "Account"], ["about", "About"]];
+  function settingsView(tab) {
+    const acct = CertHub.sync && CertHub.sync.enabled, me = acct && CertHub.sync.me, signed = !!(me && me.user);
+    const tabs = SET_TABS.filter(([k]) => k !== "account" || acct);
+    if (!tabs.some(([k]) => k === tab)) tab = "general";
+    const chips = (group, label, cur, opts) => `<div class="trackpick" role="group" aria-label="${esc(label)}">${opts.map(([v, l]) => `<button type="button" class="chipbtn" data-set="${esc(group)}:${esc(v)}" aria-pressed="${cur === v}">${esc(l)}</button>`).join("")}</div>`;
+    const prefChips = (k, label, opts, note) => `<p class="pickq">${esc(label)}</p><div class="trackpick" role="group" aria-label="${esc(label)}">${opts.map(([v, l]) => `<button type="button" class="chipbtn" data-pref="${esc(k)}:${esc(v)}" aria-pressed="${pref(k) === v}">${esc(l)}</button>`).join("")}</div>${note ? `<p class="note" data-style="margin:4px 0 0">${esc(note)}</p>` : ""}`;
+    const head = `<h1>Settings</h1>
+    <p class="meta">Saved in this browser${signed ? " (your study progress also syncs to your account)" : ""}. Changes apply right away.</p>
+    <nav class="settabs" aria-label="Settings sections">${tabs.map(([k, l]) => `<a href="#settings.${esc(k)}"${k === tab ? ' aria-current="page"' : ""}>${esc(l)}</a>`).join("")}</nav>`;
+    let body = "";
+    if (tab === "general") {
+      body = `<h2>Appearance</h2>
+      <div class="panel">
+        <p class="pickq">Theme</p>
+        ${chips("theme", "Theme", curTheme(), [["auto", "Match my device"], ["light", "Light"], ["dark", "Dark"]])}
+        <p class="pickq">Accent color</p>
+        <div class="swatches" role="group" aria-label="Accent color">${CertHub.ACCENTS.map(([k, l, c]) => `<button type="button" class="chipbtn swatch" data-accent="${esc(k)}" aria-pressed="${CertHub.accent() === k}" data-style="--sw:${esc(c)}"><i aria-hidden="true"></i>${esc(l)}</button>`).join("")}</div>
+        <p class="note" data-style="margin:8px 0 0">Text size, contrast, motion and more are on the <a href="#settings.accessibility">Accessibility</a> tab.</p>
+      </div>
+      <h2>Language</h2>
+      <div class="panel">
+        ${chips("lang", "Language", CertHub.i18n.lang(), [["en", "English"], ["es", "Español"]])}
+        <p class="note" data-style="margin:8px 0 0">Spanish covers the interface and, where translated, lessons, questions and labs. The page reloads to switch.</p>
+      </div>`;
+    } else if (tab === "accessibility") {
+      body = `<h2>Seeing and reading</h2>
+      <div class="panel">
+        ${prefChips("size", "Text size", [["md", "Normal"], ["lg", "Large"], ["xl", "Larger"]], "Browser zoom also works, up to 400 percent, and the layout reflows to fit.")}
+        ${prefChips("read", "Easy-read spacing", [["off", "Off"], ["on", "On"]], "A plainer font with wider letter, word and line spacing, which many readers with dyslexia find easier.")}
+        ${prefChips("contrast", "Contrast", [["normal", "Normal"], ["more", "High"]], "Darker text, stronger borders and no faint gray text.")}
+        ${prefChips("links", "Underline links", [["off", "Off"], ["on", "On"]], "So links don't rely on color alone.")}
+        ${prefChips("focusring", "Keyboard focus outline", [["normal", "Standard"], ["strong", "Extra visible"]], "A thicker, two-color outline around whatever has keyboard focus.")}
+      </div>
+      <h2>Motion and sound</h2>
+      <div class="panel">
+        ${prefChips("motion", "Animation", [["auto", "Match my device"], ["reduce", "Reduce motion"]], "Reduce motion turns off confetti, fades, count-ups, moving progress bars and smooth scrolling, whatever your device is set to.")}
+        ${prefChips("sound", "Sound effects", [["off", "Off"], ["on", "On"]], "Short sounds for right and wrong answers. They stay off while motion is reduced.")}
+      </div>
+      <h2>Keyboard</h2>
+      <div class="panel">
+        ${prefChips("keys", "Single-key shortcuts in quizzes", [["on", "On"], ["off", "Off"]], "Turn these off if you use speech input or a screen reader and keys trigger answers by accident. Tab, Enter and Space still work everywhere.")}
+        <dl class="terms keys">
+          <dt><kbd>A</kbd>–<kbd>D</kbd> or <kbd>1</kbd>–<kbd>4</kbd></dt><dd>Choose an answer</dd>
+          <dt><kbd>Enter</kbd> or <kbd>N</kbd></dt><dd>Next question</dd>
+          <dt><kbd>B</kbd></dt><dd>Previous question (tests)</dd>
+          <dt><kbd>F</kbd></dt><dd>Flag a question for review (tests)</dd>
+          <dt><kbd>G</kbd></dt><dd>Mark an answer as a guess</dd>
+        </dl>
+      </div>
+      <h2>Timed tests</h2>
+      <div class="panel">
+        ${prefChips("time", "Extra time", [["1", "Standard"], ["1.5", "Time and a half"], ["2", "Double time"]], "Applies to checkpoints, practice exams and the placement test. If you need extra time on the real exam, ask the exam provider for testing accommodations well before you book: CompTIA, ISC2, Cisco, Microsoft, AWS and the others all have a request process.")}
+      </div>
+      <h2>Also built in</h2>
+      <div class="panel"><ul class="clean">
+        <li>Works with screen readers (VoiceOver, NVDA, JAWS, TalkBack) and keyboard only. Every page has a "Skip to content" link.</li>
+        <li>Listen mode reads lessons aloud, and overview videos can be played with the device's voice.</li>
+        <li>Light and dark themes, and colors checked for contrast in both.</li>
+        <li>Charts and colored domain labels always have text as well.</li>
+      </ul>
+      <p class="note" data-style="margin:0">Something hard to use? <a href="${esc(CertHub.reportUrl("Accessibility problem", "Page:\\nWhat you use (screen reader, zoom, keyboard, voice…):\\nWhat went wrong:"))}" target="_blank" rel="noopener">Report an accessibility problem</a>.</p></div>`;
+    } else if (tab === "study") {
+      const name = CertHub.store.get("certhub:name") || "";
+      body = `<h2>Weekly goal</h2>
+      ${CertHub.habits ? CertHub.habits.goalHtml() : ""}
+      <h2>Reminders and certificates</h2>
+      <div class="panel">
+        <div class="row"><div class="grow"><strong>Daily reminder</strong><br><span class="note">Adds a repeating event to your calendar app. Nothing is sent to us.</span></div><button type="button" class="btn ghost sm" data-gact="reminder">Add to calendar</button></div>
+        <div class="row"><div class="grow"><label for="set-name"><strong>Name on certificates of completion</strong></label><br><span class="note">Shown on the certificates you can print when you finish a plan.</span>
+          <input type="text" id="set-name" class="textin" maxlength="60" autocomplete="name" value="${esc(name)}" placeholder="Your name"></div></div>
+      </div>`;
+    } else if (tab === "data") {
+      const st = storageSummary();
+      body = `<h2>Backups</h2>
+      <div class="panel">
+        <p class="note" data-style="margin:0">This browser holds ${/* num */ st.keys} saved item${st.keys === 1 ? "" : "s"} (about ${/* num */ st.kb} KB): progress, lab notes, badges and settings. Back up to move them to another device or browser.</p>
+        <div class="btns"><button type="button" class="btn ghost sm no-framed" data-gact="download">Download backup</button><button type="button" class="btn ghost sm" data-gact="copybackup">Copy backup</button><label class="btn ghost sm" for="imp">Restore from file</label><input type="file" id="imp" accept="application/json" class="hide"><button type="button" class="btn ghost sm" data-gact="pasterestore">Restore from text</button></div>
+      </div>
+      <h2>Erase</h2>
+      <div class="panel"><div class="row dangerrow"><div class="grow"><strong>Erase everything on this device</strong><br><span class="note">Removes all progress, notes, badges and settings from this browser. ${signed ? "Your account keeps its copy, and it syncs back here the next time you sign in on this browser." : "This can't be undone, so download a backup first."}</span></div><button type="button" class="btn ghost sm danger" data-set="erase:all">Erase</button></div></div>`;
+    } else if (tab === "account") {
+      body = `<h2>Account</h2><div class="panel">${signed
+        ? `<div class="row"><div class="grow"><strong class="nocap">${esc(me.user.displayName || me.user.email)}</strong><br><span class="note">${esc(me.user.email)}</span></div><a class="btn ghost sm" href="#profile">Profile</a></div>
+           <div class="row"><div class="grow"><strong>Sign-in, devices, sync and Pro</strong><br><span class="note">Passkeys, connected Google, Facebook or LinkedIn, signed-in devices, download or delete account data.</span></div><a class="btn ghost sm" href="#account">Account settings</a></div>`
+        : `<div class="row"><div class="grow"><strong>Optional account</strong><br><span class="note">Sync your progress across devices. Sign in with Google, Facebook, LinkedIn or your email.</span></div><span class="btns" data-style="margin:0"><a class="btn sm" href="#login">Log in</a><a class="btn ghost sm" href="#signup">Sign up</a></span></div>`}</div>`;
+    } else {
+      body = `<h2>App and about</h2>
+      <div class="panel">
+        <div class="row"><div class="grow"><strong>Install the app</strong><br><span class="note">Add StudyToCert to your home screen and study offline.</span></div><a class="btn ghost sm" href="#install">Install</a></div>
+        <div class="row"><div class="grow"><strong>What's new</strong><br><span class="note">Recent additions and fixes.</span></div><a class="btn ghost sm" href="#whats-new">See what's new</a></div>
+        <div class="row"><div class="grow"><strong>Privacy, terms and security</strong><br><span class="note">What's stored, where, and how it's protected.</span></div><span class="btns" data-style="margin:0"><a class="btn ghost sm" href="#privacy">Privacy</a><a class="btn ghost sm" href="#terms">Terms</a><a class="btn ghost sm" href="#security">Security</a></span></div>
+        <div class="row"><div class="grow"><strong>Report a problem</strong><br><span class="note">Found a mistake in a lesson or question, or something broken?</span></div><a class="btn ghost sm" href="${esc(CertHub.reportUrl("Problem report", "Page:\\nWhat happened:\\nWhat you expected:"))}" target="_blank" rel="noopener">Report</a></div>
+      </div>`;
+    }
+    return head + body;
+  }
+  document.addEventListener("click", async e => {
+    const b = e.target.closest("button[data-set]"); if (!b) return;
+    const [k, v] = b.dataset.set.split(":");
+    if (k === "theme" && THEME_LABEL[v]) {
+      CertHub.store.set("certhub:theme", v); CertHub.applyTheme(v);
+      const t = document.getElementById("theme"); if (t) { t.textContent = THEME_LABEL[v]; t.setAttribute("aria-label", `Color theme: ${THEME_LABEL[v]}. Change theme`); }
+      document.querySelectorAll('[data-set^="theme:"]').forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    }
+    if (k === "lang" && (v === "en" || v === "es") && v !== CertHub.i18n.lang()) CertHub.i18n.set(v);
+    if (k === "erase") {
+      if (!(await ui.confirm("Erase all progress, notes, badges and settings saved in this browser? This can't be undone.", { ok: "Erase everything", cancel: "Cancel", danger: true }))) return;
+      CertHub.store.keys().forEach(x => CertHub.store.remove(x));
+      location.hash = "home"; location.reload();
+    }
+  });
+  document.addEventListener("change", e => {
+    if (e.target.id !== "set-name") return;
+    CertHub.store.set("certhub:name", e.target.value.trim()); ui.toast("Name saved.");
+  });
 
   /* ---------- for teachers, schools and bootcamps ---------- */
   function schoolsView() {
@@ -285,16 +409,13 @@
     <p class="note"><a href="#dashboard">Your dashboard</a>: readiness, exam countdowns and reviews for every certification you're studying, on one page. <a href="#achievements">Achievements</a>: badges for streaks, scores, labs and games.</p>
     ${(() => { const st = CertHub.activity.streak(); return `<div class="panel startcard"><div class="grow"><strong>${st.current ? `${CertHub.fx.icon("flame", st.current >= 7 ? "flame l3" : st.current >= 3 ? "flame l2" : "flame")} ${esc(st.current)}-day study streak` : "Start a study streak"}</strong><br><span class="note">${st.current ? (st.today ? "You studied today. " : "Study today to keep it going. ") : "Answer a question or read a lesson each day. "}${st.best ? `Best: ${esc(st.best)} days.` : ""}</span></div><button type="button" class="btn ghost sm" data-gact="reminder">Set a daily reminder</button></div>`; })()}
     <div class="panel">
-      <p class="note" data-style="margin:0">Progress, lab notes and checkmarks are saved in this browser only. Nothing is sent anywhere. Back up to move them to another device.</p>
+      ${/* html: fixed markup with esc() */ CertHub.sync ? CertHub.sync.savePrompt() : ""}
+      <p class="note" data-style="margin:0">${CertHub.sync && CertHub.sync.me && CertHub.sync.me.user ? "Your work is saved to your profile and in this browser. You can also download a backup." : "Progress, lab notes and checkmarks are saved in this browser only. Nothing is sent anywhere unless you save them to a profile. Back up to move them to another device."}</p>
       <div class="btns"><button type="button" class="btn ghost sm no-framed" data-gact="download">Download backup</button><button type="button" class="btn ghost sm" data-gact="copybackup">Copy backup</button><label class="btn ghost sm" for="imp">Restore from file</label><input type="file" id="imp" accept="application/json" class="hide"><button type="button" class="btn ghost sm" data-gact="pasterestore">Restore from text</button></div>
     </div>
     ${newsHtml()}
-    <h2>Appearance</h2>
-    <div class="panel"><p class="note" data-style="margin:0">Accent color for buttons and highlights. Use the button at the top right to switch between light, dark and your device's setting.</p>
-      <div class="swatches" role="group" aria-label="Accent color">${CertHub.ACCENTS.map(([k, l, c]) => `<button type="button" class="chipbtn swatch" data-accent="${esc(k)}" aria-pressed="${CertHub.accent() === k}" data-style="--sw:${esc(c)}"><i aria-hidden="true"></i>${esc(l)}</button>`).join("")}</div></div>
-    <h3 id="reading">Reading and sound</h3>
-    ${readingHtml()}
-    <div class="panel installcard supportcard"><div class="grow"><strong>Keep it free</strong><br><span class="note">No ads and no tracking. Share it, report a mistake${CertHub.site && CertHub.site.support && CertHub.site.support.url ? " or chip in" : ""} to help.</span></div><a class="btn ghost sm" href="#support">Support this site</a></div>`;
+    <div class="panel installcard"><div class="grow"><strong>Settings</strong><br><span class="note">Theme, accent color, text size, language, weekly goal, sounds and backups.</span></div><a class="btn ghost sm" href="#settings">Open settings</a></div>
+`;
   }
 
   /* ---------- restore from pasted text ---------- */
@@ -323,7 +444,7 @@
   // Route tokens come from the URL, so only look them up as the objects' own keys
   // (never inherited ones like "constructor" or "__proto__").
   const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
-  const POLICY_TITLES = { privacy: "Privacy Policy", terms: "Terms of Use", security: "Security", install: "Install the App", support: "Support This Site" };
+  const POLICY_TITLES = { privacy: "Privacy Policy", terms: "Terms of Use", security: "Security", install: "Install the App", support: "Support" };
   // Optional page counts (GoatCounter): no cookies, no personal data, skipped when the browser asks not to be tracked.
   let lastCounted = "";
   function countView() {
@@ -341,7 +462,7 @@
     const q = new URLSearchParams({ p: name, t: title || name, e: "true", rnd: Math.random().toString(36).slice(2) });
     try { fetch(`${gc}/count?${q}`, { mode: "no-cors", credentials: "omit", keepalive: true, referrerPolicy: "no-referrer" }).catch(() => {}); } catch (e) {}
   };
-  const LIGHT = new Set(["home", "dashboard", "achievements", "exam-changes", "schools", "whats-new", "review", "privacy", "terms", "security", "install", "support", "exam-day", "account", "login", "signup", "profile"]);
+  const LIGHT = new Set(["home", "dashboard", "achievements", "exam-changes", "schools", "whats-new", "review", "privacy", "terms", "security", "install", "support", "exam-day", "account", "login", "signup", "profile", "settings"]);
   function route() {
     let raw = "";
     try { raw = decodeURIComponent(location.hash.replace(/^#/, "")); } catch (e) { raw = ""; }
@@ -408,6 +529,7 @@
         if (CertHub.blueteam) title = CertHub.blueteam.show(head);
         else { title = "Blue-team practice"; $("#app").innerHTML = `${CertHub.fx.skeleton()}`; CertHub.loadScript("assets/blueteam.js").then(ok => { if (location.hash === "#" + head && CertHub.blueteam) document.title = `${CertHub.blueteam.show(head)} · StudyToCert`; else if (!ok) $("#app").innerHTML = `<p class="meta" role="status">This page couldn't load. Check your connection and try again.</p>`; }); }
       }
+      else if (head === "settings") { topNav(""); $("#app").innerHTML = settingsView(tab); title = tab === "accessibility" ? "Accessibility Settings" : "Settings"; view = head; }
       else if (head === "whats-new") { topNav(""); $("#app").innerHTML = newsView(); title = "What's New"; view = head; }
       else if (head === "review" && CertHub.review) { topNav("home"); $("#app").innerHTML = CertHub.review.show(); title = "Daily Review"; view = "review"; }
       else if (head === "portfolio") { topNav("portfolio"); $("#app").innerHTML = CertHub.labViews.portfolio(); title = "Lab Portfolio"; view = "portfolio"; }
@@ -439,7 +561,7 @@
     if (a === "install") CertHub.install.run().then(ok => { if (!ok) location.hash = "install"; else CertHub.rerender(); });
   });
   document.addEventListener("change", e => {
-    if (e.target.id !== "imp" || view !== "home" || !e.target.files[0]) return;
+    if (e.target.id !== "imp" || (view !== "home" && view !== "settings") || !e.target.files[0]) return;
     CertHub.importAll(e.target.files[0], (err, n) => {
       if (err) return ui.toast(err.message);
       ui.toast(`Restored ${n} saved item${n === 1 ? "" : "s"}.`); setTimeout(() => location.reload(), 800);
@@ -469,5 +591,13 @@
     new MutationObserver(show).observe(nav, { childList: true, subtree: true, attributes: true, attributeFilter: ["aria-selected"] });
     show();
   }
-  document.addEventListener("DOMContentLoaded", () => { CertHub.themeButton(); langButton(); tabBar(); CertHub.i18n.start().then(route, route); });
+  // Browser-tab titles in title case, whichever script sets them: the first letter of every word capitalized.
+  const titleCase = t => t.replace(/(^|[\s(“"/·:])(\p{Ll})/gu, (m, a, b) => a + b.toUpperCase());
+  function titleCaseTitles() {
+    const el = document.querySelector("title"); if (!el) return;
+    const fix = () => { const t = titleCase(document.title); if (t !== document.title) document.title = t; };
+    new MutationObserver(fix).observe(el, { childList: true, characterData: true, subtree: true }); fix();
+  }
+  CertHub.titleCase = titleCase;
+  document.addEventListener("DOMContentLoaded", () => { CertHub.themeButton(); langButton(); tabBar(); titleCaseTitles(); CertHub.i18n.start().then(route, route); });
 })();

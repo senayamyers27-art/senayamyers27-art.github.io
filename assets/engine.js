@@ -205,6 +205,9 @@
     if (!o.qs.length) { CertHub.ui.toast("No questions available yet for this set."); return; }
     // Shuffle answer options every time so position never gives the answer away.
     o.qs = o.qs.map(q => { const idx = shuffle(q.o.map((_, i) => i)); return { ...q, o: idx.map(i => q.o[i]), a: idx.indexOf(q.a), why: q.why ? idx.map(i => q.why[i]) : null }; });
+    // Extra time (Settings → Accessibility) stretches every timed test.
+    const xt = { "1.5": 1.5, "2": 2 }[CertHub.store.get("certhub:extratime")] || 1;
+    if (o.minutes && xt > 1) o = { ...o, minutes: Math.round(o.minutes * xt), extra: xt };
     S.quiz = { ...o, i: 0, ans: [], picked: null, revealed: false, end: o.minutes ? Date.now() + o.minutes * 60000 : null, done: false, flags: {}, struck: {}, reviewing: false, guess: {} };
     S.tab = "practice"; render(); window.scrollTo(0, 0);
   }
@@ -247,7 +250,7 @@
   function reviewScreen(z) {
     const answered = z.qs.filter((_, i) => z.ans[i] != null).length, flagged = z.qs.map((_, i) => i).filter(i => z.flags[i]), open = z.qs.map((_, i) => i).filter(i => z.ans[i] == null);
     const list = (ids, label) => ids.length ? `<p><strong>${esc(label)}:</strong> ${ids.map(i => `<button type="button" class="linkbtn" data-goto="${/* num */ i}">${/* num */ i + 1}</button>`).join(", ")}</p>` : "";
-    return `<div class="qhead"><strong>${esc(z.title)}</strong><span>${z.end ? `<span class="timer" id="timer" aria-label="Time left"></span> · ` : ""}<button class="btn ghost sm" data-act="quit">Quit</button></span></div>
+    return `<div class="qhead"><strong>${esc(z.title)}</strong><span>${z.end ? `<span class="timer" id="timer" aria-label="Time left"></span>${z.extra ? ` <span class="chip">${z.extra === 2 ? "Double time" : "Time and a half"}</span>` : ""} · ` : ""}<button class="btn ghost sm" data-act="quit">Quit</button></span></div>
     <h2>Review your answers</h2>
     <div class="panel"><p class="meta">${esc(answered)} of ${z.qs.length} answered${flagged.length ? ` · ${esc(flagged.length)} flagged` : ""}. Pick a number to go back to it.</p>
       ${qGrid(z)}${list(flagged, "Flagged for review")}${list(open, "Not answered")}
@@ -1168,7 +1171,7 @@
       const btn = `<button class="opt ${cls}${struck[k] ? " struck" : ""}" data-opt="${k}" aria-pressed="${z.picked === k}"><span class="key" aria-hidden="true">${/* safe: a letter A-D or a number */ "ABCD"[k] || k + 1}</span> ${esc(o)}</button>`;
       return test ? `<div class="optrow">${btn}<button type="button" class="strike" data-strike="${k}" aria-pressed="${!!struck[k]}" aria-label="Cross out option ${/* safe: a letter A-D or a number */ "ABCD"[k] || k + 1}" title="Cross out">✕</button></div>` : btn;
     }).join("");
-    return `<div class="qhead"><strong>${esc(z.title)}</strong><span>${z.end ? `<span class="timer" id="timer" aria-label="Time left"></span> · ` : ""}<button class="btn ghost sm" data-act="quit">Quit</button></span></div>
+    return `<div class="qhead"><strong>${esc(z.title)}</strong><span>${z.end ? `<span class="timer" id="timer" aria-label="Time left"></span>${z.extra ? ` <span class="chip">${z.extra === 2 ? "Double time" : "Time and a half"}</span>` : ""} · ` : ""}<button class="btn ghost sm" data-act="quit">Quit</button></span></div>
     <div class="flex note"><span>Question ${esc(z.i + 1)} of ${z.qs.length}</span><span>Domain ${esc(q.d)}${q.lv ? ` · ${esc(LEVELS[q.lv])}` : ""}</span></div>
     <div class="prog" data-style="--c:${dc(q.d)}"><i data-style="width:${100 * (z.i + 1) / z.qs.length}%"></i></div>
     ${test ? `<details class="qnav"><summary>All questions</summary>${qGrid(z)}</details>` : ""}
@@ -1603,6 +1606,7 @@
   document.addEventListener("keydown", e => {
     const z = active && S && S.quiz;
     if (!z || z.done || z.reviewing || S.tab !== "practice" || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (CertHub.store.get("certhub:keys") === "off") return; // turned off in Settings → Accessibility
     const el = e.target;
     if (el && (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) || el.isContentEditable || document.querySelector(".modal-wrap"))) return;
     const k = e.key.toLowerCase(), q = z.qs[z.i];

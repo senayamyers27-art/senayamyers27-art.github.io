@@ -18,7 +18,7 @@
       <li>Your email address, used to send sign-in links and nothing else (no newsletters unless you ask)</li>
       <li>If you sign in with Google, Facebook or LinkedIn: your account ID at that provider, your name and your email address, which the provider shares with your permission. We ask only for basic profile and email access. We never get your password, contacts or posts, we never post anything, and we don't keep the provider's access token after sign-in. You can disconnect a provider on your profile at any time.</li>
       <li>Your profile, only if you fill it in: a display name, a short “About me”, the certification you're working toward and study hours a week. Only you can see it.</li>
-      <li>A copy of your study progress and lab progress, including lab notes, so it can sync between your devices</li>
+      <li>A copy of your study progress and lab progress, including lab notes, so it can sync between your devices, plus the rest of your saved work: study days and streak, readiness history, VM lab and puzzle results, game scores, badges, your weekly goal and the name for your certificates</li>
       <li>One cookie, <code>__Host-cs_session</code>, that keeps you signed in for up to 30 days without use and never more than 90 days. It is secure, HTTP-only and not used for tracking. The site stores only a hash of it.</li>
       <li>For each device you're signed in on: when you signed in and your browser's user-agent string, so the account page can list your devices and let you sign any of them out.</li>
       <li>If you add a passkey: its public key, the name you give it, and when it was added and last used. Your fingerprint, face or device PIN never leaves your device.</li>
@@ -239,7 +239,7 @@
       ? `<div class="panel donate"><strong>Donate</strong><p>If the plans or labs helped you, a small donation covers the domain and hosting and funds new labs and questions. Payments are handled by ${U.esc(sup.label || "the donation service")}; this site never sees your payment details.</p><div class="btns"><a class="btn" href="${U.esc(sup.url)}" target="_blank" rel="noopener">Donate${sup.label ? ` on ${U.esc(sup.label)}` : ""}</a></div></div>`
       : "";
     const shareUrl = location.origin && /^https:/.test(location.origin) ? location.origin + "/" : "";
-    return `<h1>Support this site</h1>
+    return `<h1>Support</h1>
     <p class="meta">${SITE} is free, with no ads, no accounts and no tracking. Here's how you can help keep it that way.</p>
     ${donate}
     <h2>Share it</h2>

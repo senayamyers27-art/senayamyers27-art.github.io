@@ -4,7 +4,8 @@
    Loaded right after core.js; other scripts call CertHub.fx. */
 (function () {
   const esc = CertHub.U.esc;
-  const calm = () => !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+  // Reduced motion: the device setting, or "Reduce motion" in Settings → Accessibility.
+  const calm = () => document.documentElement.getAttribute("data-motion") === "reduce" || !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
   const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
   /* ---------- celebrations ---------- */

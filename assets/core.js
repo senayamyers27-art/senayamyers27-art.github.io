@@ -167,9 +167,13 @@
 
   /* ---------- storage (every read and write may throw in private mode) ---------- */
   const KEY = id => "certhub:v1:" + id;
+  // Saved work beyond study plans and labs (streak, VM labs, puzzles, games, goals…): saved to the profile with the
+  // rest when signed in (the "work" document in sync.js). Keep in step with WORK in sync.js.
+  const WORK_KEY = /^certhub:(activity|qlog|focus|readyhist|vmlabs|vmexam|blueteam|netdesign|games|achievements|goal|name)$/;
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
-    set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } },
+    set(k, v) { try { localStorage.setItem(k, v); if (WORK_KEY.test(k)) changed(k); return true; } catch (e) { return false; } },
+    remove(k) { try { localStorage.removeItem(k); } catch (e) {} },
     keys() { try { return Object.keys(localStorage).filter(k => k.startsWith("certhub:")); } catch (e) { return []; } }
   };
   function freshProgress() { return { checks: {}, stats: {}, review: {}, read: {}, history: [], start: null, examDate: null }; }
