@@ -16,6 +16,8 @@
     <p>You can use everything without an account. If you choose to create one, we store on our server (a Cloudflare Worker with a Cloudflare D1 database):</p>
     <ul>
       <li>Your email address, used to send sign-in links and nothing else (no newsletters unless you ask)</li>
+      <li>If you sign in with Google, Facebook or LinkedIn: your account ID at that provider, your name and your email address, which the provider shares with your permission. We ask only for basic profile and email access. We never get your password, contacts or posts, we never post anything, and we don't keep the provider's access token after sign-in. You can disconnect a provider on your profile at any time.</li>
+      <li>Your profile, only if you fill it in: a display name, a short “About me”, the certification you're working toward and study hours a week. Only you can see it.</li>
       <li>A copy of your study progress and lab progress, including lab notes, so it can sync between your devices</li>
       <li>One cookie, <code>__Host-cs_session</code>, that keeps you signed in for up to 30 days without use and never more than 90 days. It is secure, HTTP-only and not used for tracking. The site stores only a hash of it.</li>
       <li>For each device you're signed in on: when you signed in and your browser's user-agent string, so the account page can list your devices and let you sign any of them out.</li>
@@ -58,8 +60,8 @@
     ${accounts() ? accountPrivacy() : ""}
     <h2>What we don't collect</h2>
     <ul>
-      ${accounts() ? `<li>No passwords or profiles; an email address only if you create an account, and a display name only for classes you join or teach</li>
-      <li>No cookies except the sign-in cookie for people who create an account</li>` : `<li>No accounts, names, email addresses or passwords</li>
+      ${accounts() ? `<li>No passwords and no public profiles; an email address only if you create an account, and a name only if you add one to your private profile or give one to a class</li>
+      <li>No cookies except the sign-in cookie for people who create an account, and a short-lived cookie (<code>__Host-cs_oauth</code>, 10 minutes) while signing in with Google, Facebook or LinkedIn</li>` : `<li>No accounts, names, email addresses or passwords</li>
       <li>No cookies</li>`}
       <li>No advertising, social media or tracking scripts, and no fingerprinting${counts() ? "" : ", and no analytics"}</li>
       <li>No requests to other websites: fonts and all other files are served from this site${accounts() ? " (signed-in accounts also talk to the site's own account service)" : ""}${counts() ? ", apart from the page counter below" : ""}</li>

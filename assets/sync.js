@@ -106,6 +106,7 @@
   const localDocs = () => store.keys().filter(k => /^certhub:v1:[a-z0-9-]{1,40}$/.test(k));
   const readLocal = k => { try { return JSON.parse(store.get(k) || "null"); } catch (e) { return null; } };
 
+  let known = false; // set once the first /v1/me answer is in, so pages don't redirect on a guess
   let me = null, syncing = false, pushTimer = null, lastError = "";
   // Other modules (Pro) listen for "certhub:me" to react to sign-in, sign-out and plan changes.
   const setMe = v => { me = v; document.dispatchEvent(new Event("certhub:me")); };
@@ -114,6 +115,7 @@
   async function refreshMe() {
     if (!API) return null;
     try { setMe((await api("GET", "/v1/me")).data); } catch (e) { setMe(null); }
+    known = true;
     return me;
   }
   const signedIn = () => !!(me && me.user);
@@ -195,20 +197,7 @@
 
   function accountView() {
     if (!API) return `<h1>Account</h1><div class="status">Accounts aren't available on this site yet. Everything still works without one: your progress is saved on this device.</div>`;
-    if (!signedIn()) {
-      return `<h1>Sign in</h1>
-      <p class="meta">An account is optional. It syncs your progress, lab notes and portfolio across your phone and computer. Without one, everything stays on this device.</p>
-      ${PASSKEYS ? `<div class="panel"><div class="row" data-style="border-top:0;padding-top:0"><div class="grow"><strong>Have a passkey?</strong><br><span class="note">Sign in with your fingerprint, face or device PIN.</span></div><button type="button" class="btn" data-aact="passkey-signin">Sign in with a passkey</button></div><p class="note" id="passkey-msg" role="status" data-style="margin:0"></p></div>` : ""}
-      <form id="signin-form" class="panel" novalidate>
-        <label for="signin-email"><strong>Email</strong></label>
-        <input type="email" id="signin-email" autocomplete="email" required placeholder="you@example.com" class="textin">
-        ${TS_KEY ? `<div id="ts-box" class="tsbox"></div>` : ""}
-        <div class="btns"><button type="submit" class="btn">Email me a sign-in link</button></div>
-        <p class="note" id="signin-msg" role="status"></p>
-      </form>
-      <p class="note">No password. We email a link that signs you in once and expires in 15 minutes. Accounts are for ages 13 and up. See the <a href="#terms">Terms</a> and <a href="#privacy">Privacy Policy</a>.</p>
-      ${me && me.billing ? `<h2>Pro</h2><div class="panel">${proPitch()}<p class="note" data-style="margin:0">${PRICE.monthly ? `${esc(PRICE.monthly)} a month or ${esc(PRICE.yearly)} a year. ` : ""}Sign in first, then upgrade from this page.</p></div>` : ""}`;
-    }
+    if (!signedIn()) return loginView("login");
     const u = me.user, plan = me.plan || "free";
     const orgs = me.orgs || [];
     return `<h1>Account</h1>
@@ -447,6 +436,16 @@
   /* ---------- events ---------- */
   document.addEventListener("submit", async e => {
     const f = e.target;
+    if (f.id === "profile-form") {
+      e.preventDefault();
+      const msg = $("#pf-msg");
+      try {
+        msg.textContent = "Saving…";
+        await api("PUT", "/v1/profile", { displayName: $("#pf-name").value, bio: $("#pf-bio").value, goalCert: $("#pf-goal").value, weeklyHours: $("#pf-hours").value });
+        await refreshMe(); ui.toast("Profile saved."); profileView();
+      } catch (err) { msg.textContent = err.message; }
+      return;
+    }
     if (!["signin-form", "org-form", "cohort-form", "class-form", "classcode-form", "join-form", "classedit-form"].includes(f.id)) return;
     e.preventDefault();
     try {
@@ -491,8 +490,13 @@
     const b = e.target.closest("[data-aact]"); if (!b) return;
     const a = b.dataset.aact;
     try {
-      if (a === "signout") { await api("POST", "/v1/auth/logout", {}); setMe(null); ui.toast("Signed out. Your progress stays on this device."); CertHub.rerender(); }
+      if (a === "signout") { await api("POST", "/v1/auth/logout", {}); setMe((await api("GET", "/v1/me").catch(() => ({ data: null }))).data); ui.toast("Signed out. Your progress stays on this device."); if (location.hash === "#profile") location.hash = "login"; else CertHub.rerender(); }
       if (a === "sync") await syncAll();
+      if (a === "unlink" && PNAME[b.dataset.provider]) {
+        const n = PNAME[b.dataset.provider];
+        if (!(await ui.confirm(`Disconnect ${n}? You won't be able to sign in with ${n} until you connect it again. Your email link always works.`, { ok: "Disconnect", cancel: "Keep it" }))) return;
+        await api("DELETE", `/v1/identities/${b.dataset.provider}`); ui.toast(`${n} disconnected.`); profileView();
+      }
       if (a === "passkey-signin") await passkeySignin().catch(err => { const m = $("#passkey-msg"); if (m) m.textContent = err.message; throw err; });
       if (a === "passkey-add") await passkeyAdd();
       if (a === "passkey-del") {
@@ -559,10 +563,24 @@
     } catch (err) { ui.toast(err.message); }
   });
 
+  document.addEventListener("input", e => {
+    if (e.target.id !== "pf-bio") return;
+    const c = $("#pf-bio-count"); if (c) c.textContent = `${280 - e.target.value.length} characters left`;
+  });
+
   // Sign-in links and invite links land here: /?signin=<token>#account, /?invite=<code>#account
   async function handleLanding() {
     const q = new URLSearchParams(location.search);
     const signin = q.get("signin"), invite = q.get("invite");
+    // Back from Google, Facebook or LinkedIn (the API adds one of these).
+    const err = q.get("signin_error"), linked = q.get("linked"), welcome = q.get("welcome"), via = q.get("signed_in");
+    if (err || linked || welcome || via) {
+      history.replaceState(null, "", location.pathname + location.hash);
+      if (err) landingNote = { kind: "warn", text: SIGNIN_ERRORS[err] || SIGNIN_ERRORS.provider_error };
+      else if (linked && PNAME[linked]) landingNote = { kind: "ok", text: `${PNAME[linked]} is connected. You can use it to sign in from now on.` };
+      else if (welcome) landingNote = { kind: "ok", text: "Welcome to StudyToCert! Your account is ready and your progress on this device will sync to it. Add a display name and goal below if you like." };
+      else if (PNAME[via]) ui.toast(`Signed in with ${PNAME[via]}.`);
+    }
     if (!signin && !invite) return;
     history.replaceState(null, "", location.pathname + location.hash); // don't leave tokens in the address bar
     if (invite && /^[0-9a-f]{32}$/.test(invite)) try { sessionStorage.setItem("certhub:invite", invite); } catch (e) {}
@@ -580,8 +598,155 @@
     catch (e) { ui.toast(e.message); }
   }
 
+  /* ---------- sign in or sign up (#login, #signup) and the profile page (#profile) ---------- */
+  // Brand marks for the provider buttons (the providers' own logos, as their guidelines ask for sign-in buttons).
+  const LOGO = {
+    google: `<svg viewBox="0 0 18 18" aria-hidden="true" focusable="false"><path fill="#EA4335" d="M9 3.48c1.69 0 2.83.73 3.48 1.34l2.54-2.48C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l2.91 2.26C4.6 5.05 6.62 3.48 9 3.48z"/><path fill="#4285F4" d="M17.64 9.2c0-.74-.06-1.28-.19-1.84H9v3.34h4.96c-.1.83-.64 2.08-1.84 2.92l2.84 2.2c1.7-1.57 2.68-3.88 2.68-6.62z"/><path fill="#FBBC05" d="M3.88 10.78A5.54 5.54 0 0 1 3.58 9c0-.62.11-1.22.29-1.78L.96 4.96A9 9 0 0 0 0 9c0 1.45.35 2.82.96 4.04l2.92-2.26z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.84-2.2c-.76.53-1.78.9-3.12.9-2.38 0-4.4-1.57-5.12-3.74L.97 13.04C2.45 15.98 5.48 18 9 18z"/></svg>`,
+    facebook: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="12" fill="#1877F2"/><path fill="#fff" d="M16.67 15.47 17.2 12h-3.33V9.75c0-.95.47-1.87 1.96-1.87h1.51V4.92s-1.37-.23-2.68-.23c-2.74 0-4.53 1.66-4.53 4.66V12H7.08v3.47h3.05V24a12.1 12.1 0 0 0 3.74 0v-8.53h2.8z"/></svg>`,
+    linkedin: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect width="24" height="24" rx="4" fill="#0A66C2"/><path fill="#fff" d="M7.1 9.5H4.6V19h2.5V9.5zM5.85 8.4a1.45 1.45 0 1 0 0-2.9 1.45 1.45 0 0 0 0 2.9zM19.4 13.8c0-2.6-1.4-3.9-3.3-3.9-1.5 0-2.2.8-2.6 1.4V9.5H11V19h2.5v-5c0-1.3.3-2.6 1.9-2.6s1.6 1.5 1.6 2.7V19h2.5v-5.2z"/></svg>`
+  };
+  const PNAME = { google: "Google", facebook: "Facebook", linkedin: "LinkedIn" };
+  const providers = () => ((me && me.providers) || []).filter(p => PNAME[p]);
+  const startUrl = (p, link) => `${API}/v1/auth/oauth/${encodeURIComponent(p)}/start${link ? "?link=1" : ""}`;
+  // Messages for the codes the API sends back to the site (?signin_error=...).
+  const SIGNIN_ERRORS = {
+    cancelled: "Sign-in was cancelled. Choose a way to continue whenever you're ready.",
+    email_in_use: "An account with this email already exists. Sign in with an emailed link below, then connect this option on your profile.",
+    no_email: "That account didn't share an email address, which StudyToCert needs. Try another option or use your email.",
+    identity_in_use: "That account is already connected to a different StudyToCert account.",
+    already_linked: "You already have an account from that provider connected. Disconnect it first to connect a different one.",
+    signed_out: "Sign in first, then connect other sign-in options from your profile.",
+    rate_limited: "Too many sign-in attempts. Wait a few minutes and try again.",
+    provider_off: "That sign-in option isn't available right now. Use another option or your email.",
+    state_mismatch: "That sign-in couldn't be completed in this browser. Start again from this page.",
+    expired: "That sign-in took too long or was already used. Start again.",
+    code_rejected: "The sign-in didn't go through. Try again.",
+    no_code: "The sign-in didn't go through. Try again.",
+    provider_error: "The sign-in provider didn't respond as expected. Try again, or use your email."
+  };
+  let landingNote = null; // { kind: "warn" | "ok", text } shown once on the page the API sent the browser to
+
+  function socialButtons() {
+    const list = providers();
+    if (!list.length) return "";
+    return `<div class="social">${list.map(p => `<a class="btn socialbtn" href="${esc(startUrl(p))}" data-provider="${esc(p)}">${/* safe: fixed SVG */ LOGO[p]}<span>Continue with ${esc(PNAME[p])}</span></a>`).join("")}</div>
+      <div class="orline" role="separator"><span>or use your email</span></div>`;
+  }
+  function loginView(mode) {
+    if (!API) return accountView();
+    if (!known) return CertHub.fx.skeleton();
+    if (signedIn()) { setTimeout(() => { location.hash = "profile"; }, 0); return CertHub.fx.skeleton(); }
+    const signup = mode === "signup";
+    const note = landingNote ? `<div class="status ${landingNote.kind === "ok" ? "" : "warn"}" role="alert">${esc(landingNote.text)}</div>` : "";
+    landingNote = null;
+    return `<div class="authcard">
+      <h1>${signup ? "Create your free account" : "Welcome back"}</h1>
+      <p class="meta">${signup ? "Save your progress, labs and portfolio to your account and pick up on any device. Free, no password and no ads." : "Sign in to sync your progress across your phone and computer."}</p>
+      ${note}
+      <div class="panel">
+        ${socialButtons()}
+        <form id="signin-form" novalidate>
+          <label for="signin-email"><strong>Email</strong></label>
+          <input type="email" id="signin-email" autocomplete="email" required placeholder="you@example.com" class="textin">
+          ${TS_KEY ? `<div id="ts-box" class="tsbox"></div>` : ""}
+          <div class="btns"><button type="submit" class="btn">${signup ? "Email me a link to sign up" : "Email me a sign-in link"}</button></div>
+          <p class="note" id="signin-msg" role="status"></p>
+        </form>
+        ${PASSKEYS ? `<div class="btns" data-style="margin-top:0"><button type="button" class="btn ghost" data-aact="passkey-signin">Sign in with a passkey</button></div><p class="note" id="passkey-msg" role="status" data-style="margin:0"></p>` : ""}
+      </div>
+      <p class="note authswitch">${signup ? `Already have an account? <a href="#login">Log in</a>` : `New to StudyToCert? <a href="#signup">Create a free account</a>`}</p>
+      ${me && me.billing ? `<h2>Pro</h2><div class="panel">${/* html: fixed markup */ proPitch()}<p class="note" data-style="margin:0">${PRICE.monthly ? `${esc(PRICE.monthly)} a month or ${esc(PRICE.yearly)} a year. ` : ""}Sign in first, then upgrade from your Account page.</p></div>` : ""}
+      <p class="note">${signup ? "Your account is created the first time you sign in, whichever option you choose. " : ""}We only get your name and email address from Google, Facebook or LinkedIn, never your password or posts, and we never post anything. Accounts are for ages 13 and up. See the <a href="#terms">Terms</a> and <a href="#privacy">Privacy Policy</a>. You can also keep studying without an account: progress is saved on this device.</p>
+    </div>`;
+  }
+
+  const initials = (name, email) => {
+    const w = String(name || "").trim().split(/\s+/).filter(Boolean);
+    return ((w.length ? (w[0][0] + (w.length > 1 ? w[w.length - 1][0] : "")) : String(email || "?")[0]) || "?").toUpperCase();
+  };
+  const avatarHue = s => [...String(s || "")].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
+  function snapshot() {
+    const started = Object.values(CertHub.certs || {}).filter(c => { const p = CertHub.loadProgress(c.id); return p.start && ((p.history || []).length || Object.keys(p.read || {}).length || Object.keys(p.stats || {}).length); }).length;
+    const lp = CertHub.loadLabProgress(), labsDone = CertHub.labOrder.filter(id => CertHub.labs[id] && CertHub.labStatus(CertHub.labs[id], lp).state === "done").length;
+    const st = CertHub.activity ? CertHub.activity.streak() : { current: 0, best: 0 };
+    const badges = CertHub.achievements ? CertHub.achievements.earned().length : 0;
+    const tile = (n, label, href) => `<a class="stat" href="${esc(href)}"><strong>${esc(n)}</strong><span>${esc(label)}</span></a>`;
+    return `<div class="stats">${tile(started, started === 1 ? "certification in progress" : "certifications in progress", "#dashboard")}${tile(st.current, "day streak", "#dashboard")}${tile(labsDone, labsDone === 1 ? "lab done" : "labs done", "#portfolio")}${tile(badges, badges === 1 ? "badge" : "badges", "#achievements")}</div>`;
+  }
+  function methodRow(p, ident) {
+    return `<div class="row"><div class="grow"><span class="plogo">${/* safe: fixed SVG */ LOGO[p]}</span><strong>${esc(PNAME[p])}</strong><br><span class="note">${ident ? `Connected${ident.email ? ` as ${esc(ident.email)}` : ""}` : "Not connected"}</span></div>${ident
+      ? `<button type="button" class="btn ghost sm" data-aact="unlink" data-provider="${esc(p)}">Disconnect</button>`
+      : `<a class="btn ghost sm" href="${esc(startUrl(p, true))}">Connect</a>`}</div>`;
+  }
+  async function profileView() {
+    const app = $("#app");
+    if (!API) { app.innerHTML = accountView(); return; }
+    if (!known) { app.innerHTML = CertHub.fx.skeleton(); return; }
+    if (!signedIn()) { location.hash = "login"; return; }
+    app.innerHTML = `<h1>Your profile</h1>${CertHub.fx.skeleton()}`;
+    let pr;
+    try { pr = (await api("GET", "/v1/profile")).data; }
+    catch (e) { app.innerHTML = `<h1>Your profile</h1><div class="status warn" role="alert">${esc(e.message)}</div>`; return; }
+    if (location.hash !== "#profile") return;
+    const note = landingNote ? `<div class="status ${landingNote.kind === "ok" ? "" : "warn"}" role="alert">${esc(landingNote.text)}</div>` : "";
+    landingNote = null;
+    const name = pr.displayName || pr.email.split("@")[0];
+    const since = new Date(pr.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    const linked = Object.fromEntries(pr.identities.map(i => [i.provider, i]));
+    const shown = Object.keys(PNAME).filter(p => pr.providers.includes(p) || linked[p]);
+    const goal = pr.goalCert && CertHub.certs[pr.goalCert];
+    app.innerHTML = `<div class="profhead"><div class="avatar" data-style="--h:${/* num */ avatarHue(pr.email)}" aria-hidden="true">${esc(initials(pr.displayName, pr.email))}</div>
+      <div class="grow"><h1>${esc(name)}</h1><p class="meta">${esc(pr.email)} · Member since ${esc(since)}</p>${goal ? `<p class="note">Working toward <a href="#${esc(goal.id)}.week">${esc(goal.short)} ${esc(goal.exam)}</a>${pr.weeklyHours ? ` · ${esc(pr.weeklyHours)} hours a week` : ""}</p>` : ""}</div></div>
+      ${note}
+      ${pr.bio ? `<p class="bio">${esc(pr.bio)}</p>` : ""}
+      <h2>Your study snapshot</h2>
+      ${snapshot()}
+      <p class="note">From the progress saved on this device${me && me.user ? " and synced to your account" : ""}.</p>
+      <h2>Edit profile</h2>
+      <form id="profile-form" class="panel" novalidate>
+        <label for="pf-name"><strong>Display name</strong></label>
+        <input type="text" id="pf-name" class="textin" maxlength="60" autocomplete="name" value="${esc(pr.displayName)}" placeholder="How you'd like to be greeted">
+        <label for="pf-bio"><strong>About me</strong> <span class="note">(optional)</span></label>
+        <textarea id="pf-bio" class="textin" maxlength="280" rows="3" placeholder="e.g. Help desk tech studying for Security+ to move into a SOC role.">${esc(pr.bio)}</textarea>
+        <p class="note" id="pf-bio-count" data-style="margin:2px 0 10px">${esc(280 - pr.bio.length)} characters left</p>
+        <div class="formgrid">
+          <div><label for="pf-goal"><strong>Goal certification</strong></label><select id="pf-goal" class="textin">${/* html: options built with esc() */ certOptions(pr.goalCert, "Not decided yet")}</select></div>
+          <div><label for="pf-hours"><strong>Study hours a week</strong></label><input type="number" id="pf-hours" class="textin" min="1" max="80" step="1" inputmode="numeric" value="${esc(pr.weeklyHours || "")}"></div>
+        </div>
+        <div class="btns"><button type="submit" class="btn">Save profile</button></div>
+        <p class="note" id="pf-msg" role="status" data-style="margin:0"></p>
+      </form>
+      <p class="note">Your profile is private: only you can see it. Teachers see only the name you give when you join their class.</p>
+      <h2>Sign-in methods</h2>
+      <div class="panel">
+        <div class="row"><div class="grow"><strong>Email link</strong><br><span class="note">${esc(pr.email)}. Always available.</span></div></div>
+        ${shown.map(p => methodRow(p, linked[p])).join("")}
+        <div class="row"><div class="grow"><strong>Passkeys</strong><br><span class="note">Fingerprint, face or device PIN.</span></div><a class="btn ghost sm" href="#account">Manage</a></div>
+      </div>
+      <h2>Account</h2>
+      <div class="panel">
+        <div class="row"><div class="grow"><strong>Account settings</strong><br><span class="note">Sync, Pro, classes, signed-in devices, download or delete your data.</span></div><a class="btn ghost sm" href="#account">Open</a></div>
+        <div class="row"><div class="grow"><strong>Sign out</strong><br><span class="note">Your progress stays on this device.</span></div><button type="button" class="btn ghost sm" data-aact="signout">Sign out</button></div>
+      </div>`;
+  }
+
+  // The header shows "Log in" or your initials (to the profile) when the site has accounts.
+  function headerChip() {
+    const r = document.querySelector("header.top .right"); if (!r || !API) return;
+    let a = document.getElementById("acctchip");
+    if (!a) { a = document.createElement("a"); a.id = "acctchip"; r.insertBefore(a, r.firstChild); }
+    if (signedIn()) {
+      const u = me.user;
+      a.className = "acctchip in"; a.href = "#profile"; a.textContent = initials(u.displayName, u.email);
+      a.setAttribute("aria-label", "Your profile"); a.style.setProperty("--h", avatarHue(u.email));
+    } else { a.className = "acctchip"; a.href = "#login"; a.textContent = "Log in"; a.removeAttribute("aria-label"); }
+  }
+  document.addEventListener("certhub:me", headerChip);
+
   CertHub.accountViews = {
     account: () => { setTimeout(() => { renderStatus(); if (signedIn()) { classPanel(); passkeyPanel(); devicePanel(); } else turnstile(); }, 0); return accountView(); },
+    login: mode => { setTimeout(turnstile, 0); return loginView(mode); },
+    profile: profileView,
     cohort: cohortView,
     join: joinView,
     classRoster: classView
@@ -595,7 +760,7 @@
     let join = null;
     try { join = sessionStorage.getItem(JOIN_KEY); if (join && signedIn()) sessionStorage.removeItem(JOIN_KEY); } catch (e) {}
     if (join && signedIn() && CODE_RE.test(join) && !/^#?join-/.test(location.hash)) location.hash = "join-" + join;
-    const onAccount = /^#?account/.test(location.hash);
+    const onAccount = /^#?(account|login|signup|profile)/.test(location.hash);
     if (onAccount || signedIn()) CertHub.rerender();
     if (signedIn()) {
       syncAll();
