@@ -28,7 +28,7 @@
     vendorOf: id => vendorOf(id),
     load,
     show(head) {
-      $("#app").innerHTML = `<p class="note">Loading…</p>`;
+      $("#app").innerHTML = `${CertHub.fx.skeleton()}`;
       load().then(d => {
         if (!d) { $("#app").innerHTML = `<p class="note">The exam-day guides couldn't load. Check your connection and try again.</p>`; return; }
         const v = head.startsWith("exam-day-") && d.vendors.find(x => x.id === head.slice(9));

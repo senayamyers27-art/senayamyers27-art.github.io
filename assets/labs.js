@@ -264,6 +264,7 @@ ${lab.deliverable}
       if (open > 0 && !(await ui.confirm(`${open} check${open > 1 ? "s aren't" : " isn't"} ticked yet. Mark the lab complete anyway?`, { ok: "Mark complete", cancel: "Not yet" }))) return;
       s.done = Date.now(); saveLabProgress(p);
       ui.toast("Lab complete. It's now in your portfolio.");
+      CertHub.fx.celebrate({ title: "Lab complete!", sub: current.title });
       CertHub.rerender();
     }
   });

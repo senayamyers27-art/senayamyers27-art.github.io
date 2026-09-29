@@ -89,6 +89,12 @@
 
   /* ---------- sessions ---------- */
   const status = t => { const s = $("#vmstatus"); if (s) s.textContent = t; };
+  // The bar under the buttons while a VM starts: pct 0-100 while downloading, "busy" while waiting, null hides it.
+  const bar = pct => {
+    const b = $("#vmprog"); if (!b) return;
+    b.hidden = pct === null; b.classList.toggle("busy", pct === "busy");
+    b.firstElementChild.style.setProperty("--w", typeof pct === "number" ? pct + "%" : "0%");
+  };
   function leave() {
     if (!S) return;
     clearInterval(S.timer); Object.values(S.vms || {}).forEach(v => v.destroy());
@@ -100,22 +106,22 @@
     leave(); S = { page, vms: {}, starting: true, ...opts.session };
     const btn = $("#vmgo"); if (btn) btn.disabled = true;
     try {
-      status("Loading the emulator…");
+      status("Loading the emulator…"); bar("busy");
       await libs();
       const cfg = await config();
-      const init = opts.init || { state: await snapshot((got, total) => status(total ? `Downloading the VM: ${Math.round(100 * got / total)}% of ${Math.round(total / 1048576)} MB` : `Downloading the VM: ${Math.round(got / 1048576)} MB`)) };
+      const init = opts.init || { state: await snapshot((got, total) => { bar(total ? Math.round(100 * got / total) : "busy"); status(total ? `Downloading the VM: ${Math.round(100 * got / total)}% of ${Math.round(total / 1048576)} MB` : `Downloading the VM: ${Math.round(got / 1048576)} MB`); }) };
       if (!S || S.page !== page) return null;
-      status("Starting…");
+      status("Starting…"); bar("busy");
       document.querySelectorAll("[data-vmbox]").forEach(b => { b.hidden = false; });
       hosts.forEach(h => { const box = document.querySelector(`[data-vmbox="${h}"]`); S.vms[h] = makeVM(h, box, cfg, { ...init, state: opts.init ? init.state : init.state.slice(0) }, hosts.length > 1 ? 18 : 24); });
       await Promise.all(Object.values(S.vms).map(v => v.ready));
       if (opts.setup) await S.vms[hosts[0]].run(opts.setup);
-      S.starting = false;
+      S.starting = false; bar(null);
       status(hosts.length > 1 ? "Ready. Click in a terminal to type." : "Ready. Click in the terminal and type.");
       document.querySelectorAll("[data-vmafter]").forEach(b => { b.hidden = false; });
       return S;
     } catch (e) {
-      status(e.message || "The VM couldn't start."); if (btn) btn.disabled = false;
+      status(e.message || "The VM couldn't start."); bar(null); if (btn) btn.disabled = false;
       leave(); return null;
     }
   }
@@ -189,6 +195,7 @@
     <h2>Free practice</h2>
     <div class="btns"><button type="button" class="btn" data-vm="free" id="vmgo">Start a VM</button><button type="button" class="btn ghost" data-vm="save" data-vmafter hidden>Save my VM</button><button type="button" class="btn ghost" data-vm="restart" data-vmafter hidden>Start fresh</button></div>
     <p id="vmsaveinfo"></p>
+    <div class="vmprog" id="vmprog" hidden aria-hidden="true"><i></i></div>
     <p class="note" id="vmstatus" role="status" aria-live="polite"></p>
     ${terms(["lab"])}
     <h2>Two networked machines</h2>
@@ -210,6 +217,7 @@
     <h1>Two networked machines</h1>
     <p class="meta"><strong>server</strong> (10.10.0.10) and <strong>client</strong> (10.10.0.20) share a private network. Try <code>ping server</code>, <code>ssh student@server</code>, <code>ss -tlnp</code>, <code>sudo iptables -L</code> or <code>busybox httpd</code>. This uses about twice the memory of one VM.</p>
     <div class="btns"><button type="button" class="btn" data-vm="pair" id="vmgo">Start both machines</button><button type="button" class="btn ghost" data-vm="restart" data-vmafter hidden>Start fresh</button></div>
+    <div class="vmprog" id="vmprog" hidden aria-hidden="true"><i></i></div>
     <p class="note" id="vmstatus" role="status" aria-live="polite"></p>
     ${terms(["server", "client"])}`;
   }
@@ -228,6 +236,7 @@
     <ol class="vmsteps">${lab.steps.map(s => `<li>${stepHtml(s, lab)}</li>`).join("")}</ol>
     <p class="note">Tip: click a command to type it into the terminal, then press Enter. You don't have to follow the steps exactly; the checks look at the result.</p>
     <div class="btns"><button type="button" class="btn" data-vm="lab" id="vmgo">Start the lab</button><button type="button" class="btn" data-vm="check" data-vmafter hidden>Check my work</button><button type="button" class="btn ghost" data-vm="restart" data-vmafter hidden>Start over</button></div>
+    <div class="vmprog" id="vmprog" hidden aria-hidden="true"><i></i></div>
     <p class="note" id="vmstatus" role="status" aria-live="polite"></p>
     <div id="vmresults" aria-live="polite"></div>
     ${terms(hosts)}`;
@@ -239,6 +248,7 @@
     <p class="meta">${esc(ex.tasks)} admin tasks picked at random, ${esc(ex.minutes)} minutes, one VM. Like the performance-based parts of Linux+ and RHCSA: no step-by-step hints, and every task is checked inside the machine when you submit. ${esc(ex.pass)}% passes.</p>
     ${r.last ? `<p class="note">Last attempt: ${esc(r.last.score)}% on ${esc(new Date(r.last.when).toLocaleDateString())}. Best: ${esc(r.best)}%.</p>` : ""}
     <div class="btns"><button type="button" class="btn" data-vm="exam" id="vmgo">Start the exam</button></div>
+    <div class="vmprog" id="vmprog" hidden aria-hidden="true"><i></i></div>
     <p class="note" id="vmstatus" role="status" aria-live="polite"></p>
     <div id="vmexam"></div>
     ${terms(["lab"])}`;
@@ -268,7 +278,7 @@
     box.innerHTML = `<div class="panel" data-style="--c:${all ? "var(--ok)" : "var(--warn)"}"><p><strong>${all ? "Lab complete. Nice work." : `${passed} of ${res.length} checks pass.`}</strong></p><ul class="checks">${res.map(r => `<li class="${r.ok ? "ok" : "no"}"><span aria-hidden="true">${r.ok ? "✓" : "✗"}</span> ${esc(r.c.label)}<span class="sr-only">${r.ok ? " (passed)" : " (not yet)"}</span></li>`).join("")}</ul></div>`;
     status(all ? "All checks pass." : "Keep going, then check again.");
     CertHub.activity.mark();
-    if (all) { const d = done(); d[lab.id] = { when: Date.now() }; store.set(LABS_KEY, d); }
+    if (all) { const d = done(), first = !d[lab.id]; d[lab.id] = { when: Date.now() }; store.set(LABS_KEY, d); if (first) CertHub.fx.celebrate({ title: "Lab complete!", sub: lab.title }); }
   }
   async function submitExam() {
     if (!S || !S.exam || S.exam.submitted) return;
@@ -287,6 +297,7 @@
       ${rows.map(x => `<h3>${esc(x.lab.title)} <small class="note">${esc(x.p)}/${esc(x.n)}</small></h3><ul class="checks">${x.res.filter(r => !r.c.keep || !r.ok).map(r => `<li class="${r.ok ? "ok" : "no"}"><span aria-hidden="true">${r.ok ? "✓" : "✗"}</span> ${esc(r.c.label)}</li>`).join("")}</ul><p class="note"><a href="#vm-lab-${esc(x.lab.id)}">Practice this lab</a></p>`).join("")}
       <div class="btns"><button type="button" class="btn" data-vm="exam">Take another exam</button></div></div>`;
     status("Exam scored. The VM stays open so you can look around.");
+    if (pass) CertHub.fx.celebrate({ title: "Exam passed!", sub: `${score}% on the practice VM exam` });
   }
 
   function show(head) {
@@ -301,7 +312,7 @@
       app.innerHTML = `<p class="meta">That lab doesn't exist. <a href="#vm">All practice VMs</a></p>`; return "Practice VMs";
     };
     if (CertHub.vmLabs) return draw();
-    app.innerHTML = `<p class="meta" role="status">Loading…</p>`;
+    app.innerHTML = `${CertHub.fx.skeleton()}`;
     loadLabs().then(() => { if (location.hash === "#" + head) document.title = `${draw()} · StudyToCert`; });
     return "Practice VMs";
   }

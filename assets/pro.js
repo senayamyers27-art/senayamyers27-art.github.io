@@ -58,14 +58,14 @@
     const intro = `<h2>Capstone projects <span class="chip pro">Pro</span></h2>
     <p class="note">Multi-day guided projects that combine several labs into one portfolio piece, each with a grading rubric.</p>`;
     if (!pro.active) return intro + pro.teaser("Unlock capstone projects with rubrics: build a small SOC, secure an office network, run a vulnerability program and more.");
-    if (!capstones) { loadCapstones().then(c => { if (c && /^#?labs/.test(location.hash)) CertHub.rerender(); }); return intro + `<p class="note">Loading…</p>`; }
+    if (!capstones) { loadCapstones().then(c => { if (c && /^#?labs/.test(location.hash)) CertHub.rerender(); }); return intro + `${CertHub.fx.skeleton()}`; }
     return intro + `<div class="labgrid">${capstones.map(l => CertHub.labCard(l, "Capstone")).join("")}</div>`;
   };
   pro.capstoneView = async function (id) {
     const shell = body => { $("#app").innerHTML = `<p class="crumbs"><a href="#labs">Labs</a> / Capstone</p>${/* html: callers pass markup built with esc() */ body}`; };
     if (!pro.available) { shell(`<h1>Capstone project</h1><p class="note">Capstone projects aren't available on this site.</p>`); return; }
     if (!pro.active) { shell(`<h1>Capstone project</h1>${pro.teaser("Capstone projects are part of Pro.")}`); return; }
-    shell(`<h1>Capstone project</h1><p class="note">Loading…</p>`);
+    shell(`<h1>Capstone project</h1>${CertHub.fx.skeleton()}`);
     const list = await loadCapstones();
     if (location.hash.replace("#", "") !== id) return; // moved on while loading
     const lab = list && list.find(l => l.id === id);

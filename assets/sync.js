@@ -227,11 +227,11 @@
     </div>
     <div id="orgpanel"></div>
     <h2>Classes</h2>
-    <div id="classpanel"><p class="note">Loading…</p></div>
+    <div id="classpanel">${CertHub.fx.skeleton()}</div>
     <h2>Passkeys</h2>
-    <div id="passkeypanel"><p class="note">Loading…</p></div>
+    <div id="passkeypanel">${CertHub.fx.skeleton()}</div>
     <h2>Signed-in devices</h2>
-    <div id="devicepanel"><p class="note">Loading…</p></div>
+    <div id="devicepanel">${CertHub.fx.skeleton()}</div>
     <h2>Your data</h2>
     <div class="panel">
       <div class="btns" data-style="margin-top:0"><button type="button" class="btn ghost sm" data-aact="export">Download my account data</button><button type="button" class="btn ghost sm" data-aact="delete">Delete my account</button></div>
@@ -241,7 +241,7 @@
 
   async function orgPanel(orgId) {
     const el = document.getElementById("orgpanel"); if (!el) return;
-    el.innerHTML = `<p class="note">Loading…</p>`;
+    el.innerHTML = `${CertHub.fx.skeleton()}`;
     try {
       const { data } = await api("GET", `/v1/orgs/${orgId}/cohorts`);
       const certs = Object.values(CertHub.certs);
@@ -261,7 +261,7 @@
 
   async function cohortView(hexId) {
     const id = "coh_" + hexId;
-    $("#app").innerHTML = `<p class="crumbs"><a href="#account">Account</a> / Cohort</p><h1>Cohort progress</h1><p class="note">Loading…</p>`;
+    $("#app").innerHTML = `<p class="crumbs"><a href="#account">Account</a> / Cohort</p><h1>Cohort progress</h1>${CertHub.fx.skeleton()}`;
     try {
       const { data } = await api("GET", `/v1/cohorts/${id}/summary`);
       const cert = CertHub.certs[data.cohort.certId];
@@ -377,7 +377,7 @@
       try { sessionStorage.setItem(JOIN_KEY, code); } catch (e) {}
       return shell(`<h1>Join a class</h1><p class="meta">Sign in first (it's free), then you'll come back here to see the class and decide whether to join.</p><div class="btns"><a class="btn" href="#account">Sign in</a></div>`);
     }
-    shell(`<h1>Join a class</h1><p class="note">Loading…</p>`);
+    shell(`<h1>Join a class</h1>${CertHub.fx.skeleton()}`);
     try {
       const { data } = await api("GET", `/v1/classes/join/${code}`);
       if (location.hash.replace("#", "") !== "join-" + code) return; // moved on while loading
@@ -403,7 +403,7 @@
   async function classView(hexId) {
     const id = "cls_" + hexId;
     const crumbs = `<p class="crumbs"><a href="#account">Account</a> / Class</p>`;
-    $("#app").innerHTML = `${crumbs}<h1>Class roster</h1><p class="note">Loading…</p>`;
+    $("#app").innerHTML = `${crumbs}<h1>Class roster</h1>${CertHub.fx.skeleton()}`;
     try {
       const { data } = await api("GET", `/v1/classes/${id}/roster`);
       if (location.hash.replace("#", "") !== "class-" + hexId) return;

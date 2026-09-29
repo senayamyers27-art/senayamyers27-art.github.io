@@ -1,6 +1,15 @@
 /* Spanish interface text. Keys are the exact English strings shown by the app. */
 CertHub.addUiEs({
   exact: {
+    "Certified": "Certificado",
+    "Exam-ready score!": "¡Puntuación lista para el examen!",
+    "Passed!": "¡Aprobado!",
+    "Perfect score!": "¡Puntuación perfecta!",
+    "Lab complete!": "¡Laboratorio completado!",
+    "Exam passed!": "¡Examen aprobado!",
+    "Catch-up plan complete": "Plan de recuperación completado",
+    "Take another practice test to see how far you've come.": "Haz otro examen de práctica para ver cuánto has avanzado.",
+    "Every study day checked off. On to the next one.": "Todos los días de estudio marcados. A por la siguiente.",
     "Practice VMs": "Máquinas virtuales de práctica",
     "Free practice": "Práctica libre",
     "Start a VM": "Iniciar una máquina virtual",
@@ -1055,6 +1064,10 @@ CertHub.addUiEs({
     "Class roster (CSV)": "Lista de la clase (CSV)"
   },
   patterns: [
+    ["^Week (\\d+) done!$", "¡Semana $1 completada!"],
+    ["^(\\d+)% on the practice VM exam$", "$1 % en el examen de las máquinas virtuales de práctica"],
+    ["^(\\d+)% on (.+)$", "$1 % en $2"],
+    ["^(\\d+) of (\\d+) on (.+)$", "$1 de $2 en $3"],
     ["^Added (.+) · last used (.+)$", "Agregada el $1 · último uso: $2"],
     ["^Signed in (.+)$", "Sesión iniciada el $1"],
     ["^Signed out (\\d+) other devices?\\.$", "Se cerró la sesión en $1 dispositivo(s) más."],

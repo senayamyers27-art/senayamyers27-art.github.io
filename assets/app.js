@@ -51,7 +51,7 @@
   }
   function trackPicker() {
     const cur = curTrack();
-    return `<div class="trackpick" role="group" aria-labelledby="tracks-h">${[["all", "All tracks"], ...TRACKS.map(t => [t.id, t.name])].map(([id, name]) => `<button type="button" class="chipbtn" data-track="${esc(id)}" aria-pressed="${cur === id}">${esc(name)}</button>`).join("")}</div>`;
+    return `<div class="trackpick" role="group" aria-labelledby="tracks-h">${[["all", "All tracks"], ...TRACKS.map(t => [t.id, t.name])].map(([id, name]) => `<button type="button" class="chipbtn" data-track="${esc(id)}" aria-pressed="${cur === id}">${CertHub.fx.icon(id)}${esc(name)}</button>`).join("")}</div>`;
   }
   function trackCards() {
     const cur = curTrack();
@@ -143,17 +143,32 @@
     return `<p class="note newsline"><strong>New:</strong> <span${t !== n ? " data-content" : ""}>${esc(t.title)}.</span> <a href="#whats-new">See what's new</a></p>`;
   }
 
+  // The home page's illustration: a path through the career tracks to a certification, with a dot travelling it.
+  function heroArt() {
+    const node = (x, y, ico, c) => `<g class="node" data-style="--c:var(${/* safe: a fixed color token */ c})"><circle cx="${/* num */ x}" cy="${/* num */ y}" r="17"/><g transform="translate(${x - 10} ${y - 10})">${CertHub.fx.icon(ico)}</g></g>`;
+    return `<div class="heroart" aria-hidden="true"><svg viewBox="0 0 420 285" focusable="false">
+      <path class="path" d="M30 250 C 110 250, 90 170, 170 170 S 250 90, 330 90 S 380 30, 390 20"/>
+      <path class="flow" d="M30 250 C 110 250, 90 170, 170 170 S 250 90, 330 90 S 380 30, 390 20"/>
+      <circle class="traveler" r="6"/>
+      <g class="node" data-style="--c:var(--d0)"><circle cx="30" cy="250" r="9"/></g>
+      ${node(100, 210, "network", "--d1")}${node(170, 170, "cybersecurity", "--d2")}${node(250, 130, "cloud", "--d3")}${node(330, 90, "data-ai", "--d5")}
+      <g class="node goal"><circle cx="390" cy="20" r="19"/><g transform="translate(380 10)">${CertHub.fx.icon("medal")}</g></g>
+      <text x="30" y="278" text-anchor="middle">Start</text><text x="360" y="58" text-anchor="middle">Certified</text>
+    </svg></div>`;
+  }
   function homeView() {
     const lp = loadLabProgress();
     const labList = labOrder.map(id => labs[id]);
     const doneLabs = labList.filter(l => labStatus(l, lp).state === "done").length;
     const start = labs["lab-home-lab"];
     const nCerts = CertHub.catalog.filter(id => certs[id]).length;
-    return `<section class="hero">
+    return `<section class="hero withart"><div>
       <h1>Study to certify: free plans for ${nCerts} IT, cloud and cybersecurity certifications</h1>
       <p class="meta">Pick a certification and get a week-by-week plan: short lessons, hands-on labs, quizzes, timed checkpoints, a practice exam weighted like the real one and spaced review. No sign-up and no ads. Your progress stays in your browser.</p>
       ${newsCard()}
       <div class="btns"><button type="button" class="btn" data-jump="pick">Pick your first certification</button><button type="button" class="btn ghost" data-jump="tracks-h">See all ${nCerts} certifications</button><a class="btn ghost" href="#labs">Browse ${labList.length} labs</a>${doneLabs ? `<a class="btn ghost" href="#portfolio">Your portfolio (${doneLabs})</a>` : ""}</div>
+    </div>
+      ${heroArt()}
     </section>
     ${CertHub.install.installed() ? "" : `<div class="panel installcard"><div class="grow"><strong>Get the app on your phone</strong><br><span class="note">Install it from your browser: it opens full screen and works offline. No app store needed.</span></div><div class="btns" data-style="margin:0">${CertHub.install.prompt ? `<button type="button" class="btn sm" data-gact="install">Install</button>` : ""}<a class="btn ghost sm" href="#install">How to install</a></div></div>`}
     ${CertHub.review ? CertHub.review.homeCard() : ""}
@@ -164,7 +179,7 @@
     ${trackPicker()}
     <div id="trackcards">${trackCards()}</div>
     <h2>Your progress</h2>
-    ${(() => { const st = CertHub.activity.streak(); return `<div class="panel startcard"><div class="grow"><strong>${st.current ? `${esc(st.current)}-day study streak` : "Start a study streak"}</strong><br><span class="note">${st.current ? (st.today ? "You studied today. " : "Study today to keep it going. ") : "Answer a question or read a lesson each day. "}${st.best ? `Best: ${esc(st.best)} days.` : ""}</span></div><button type="button" class="btn ghost sm" data-gact="reminder">Set a daily reminder</button></div>`; })()}
+    ${(() => { const st = CertHub.activity.streak(); return `<div class="panel startcard"><div class="grow"><strong>${st.current ? `${CertHub.fx.icon("flame", st.current >= 7 ? "flame l3" : st.current >= 3 ? "flame l2" : "flame")} ${esc(st.current)}-day study streak` : "Start a study streak"}</strong><br><span class="note">${st.current ? (st.today ? "You studied today. " : "Study today to keep it going. ") : "Answer a question or read a lesson each day. "}${st.best ? `Best: ${esc(st.best)} days.` : ""}</span></div><button type="button" class="btn ghost sm" data-gact="reminder">Set a daily reminder</button></div>`; })()}
     <div class="panel">
       <p class="note" data-style="margin:0">Progress, lab notes and checkmarks are saved in this browser only. Nothing is sent anywhere. Back up to move them to another device.</p>
       <div class="btns"><button type="button" class="btn ghost sm no-framed" data-gact="download">Download backup</button><button type="button" class="btn ghost sm" data-gact="copybackup">Copy backup</button><label class="btn ghost sm" for="imp">Restore from file</label><input type="file" id="imp" accept="application/json" class="hide"><button type="button" class="btn ghost sm" data-gact="pasterestore">Restore from text</button></div>
@@ -230,7 +245,7 @@
     if (tab && !/^([a-z]{1,16}|video-l[a-z0-9]{1,14})$/.test(tab)) tab = "";
     // The home page and a few light pages only need the lab index; everything else waits for the full labs.
     if ((!CertHub.labsLoaded() && !LIGHT.has(head) && !/^vm(-|$)/.test(head)) || (own(certs, head) && certs[head].lite)) {
-      $("#app").innerHTML = `<p class="meta" role="status">Loading…</p>`;
+      $("#app").innerHTML = `${CertHub.fx.skeleton()}`;
       const want = location.hash;
       Promise.all([CertHub.loadLabs(), own(certs, head) ? CertHub.loadPlan(head) : true]).then(r => {
         if (location.hash !== want) return;
@@ -263,7 +278,7 @@
       else if (head === "vm" || /^vm-(net|exam|lab-[a-z0-9-]{1,40})$/.test(head)) {
         topNav("labs"); view = head;
         if (CertHub.vm) title = CertHub.vm.show(head);
-        else { title = "Practice VMs"; $("#app").innerHTML = `<p class="meta" role="status">Loading…</p>`; CertHub.loadScript("assets/vm.js").then(ok => { if (location.hash === "#" + head && CertHub.vm) document.title = `${CertHub.vm.show(head)} · StudyToCert`; else if (!ok) $("#app").innerHTML = `<p class="meta" role="status">This page couldn't load. Check your connection and try again.</p>`; }); }
+        else { title = "Practice VMs"; $("#app").innerHTML = `${CertHub.fx.skeleton()}`; CertHub.loadScript("assets/vm.js").then(ok => { if (location.hash === "#" + head && CertHub.vm) document.title = `${CertHub.vm.show(head)} · StudyToCert`; else if (!ok) $("#app").innerHTML = `<p class="meta" role="status">This page couldn't load. Check your connection and try again.</p>`; }); }
       }
       else if (head === "whats-new") { topNav(""); $("#app").innerHTML = newsView(); title = "What's New"; view = head; }
       else if (head === "review" && CertHub.review) { topNav("home"); $("#app").innerHTML = CertHub.review.show(); title = "Daily Review"; view = "review"; }

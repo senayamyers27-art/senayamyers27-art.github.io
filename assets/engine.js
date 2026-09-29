@@ -244,6 +244,9 @@
     S.p.history.unshift({ at: Date.now(), title: z.title, score: z.score, total: z.qs.length, ...(z.kind ? { kind: z.kind } : {}) });
     S.p.history = S.p.history.slice(0, 60);
     save(); render(); window.scrollTo(0, 0);
+    const pct = Math.round(100 * z.score / z.qs.length);
+    if (z.qs.length >= 10 && (z.mode === "test" ? pct >= 80 : pct === 100))
+      CertHub.fx.celebrate(z.mode === "test" ? { title: pct >= 85 ? "Exam-ready score!" : "Passed!", sub: `${pct}% on ${z.title}` } : { title: "Perfect score!", sub: `${z.qs.length} of ${z.qs.length} on ${z.title}` });
   }
   async function quitQuiz() {
     if (S.quiz && !S.quiz.done) {
@@ -560,7 +563,7 @@
   }
   function readinessHtml() {
     const r = readiness();
-    return `<div class="panel ready"><div class="flex"><div><strong>Exam readiness</strong><br><span class="chip" data-style="--c:${esc(r.band[1])}">${esc(r.band[0])}</span></div><div class="big" data-style="margin:0">${esc(r.score)}<small>/100</small></div></div>
+    return `<div class="panel ready"><div class="flex"><div><strong>Exam readiness</strong><br><span class="chip" data-style="--c:${esc(r.band[1])}">${esc(r.band[0])}</span></div>${CertHub.fx.ring(r.score, r.band[1], `<span data-count="${esc(r.score)}">${esc(r.score)}</span><small>/100</small>`)}</div>
       <div class="track" aria-hidden="true"><i data-style="width:${esc(r.score)}%;background:${esc(r.band[1])}"></i></div>
       ${r.tips.length ? `<ul class="clean">${r.tips.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : `<p class="note" data-style="margin:8px 0 0">Everything points to ready. Book the exam while it's fresh.</p>`}
       <p class="note" data-style="margin:8px 0 0">An estimate from your quiz accuracy by domain (weighted like the exam), lessons read, recent practice exams and review backlog. It isn't the real exam's scoring.</p></div>`;
@@ -593,7 +596,7 @@
   }
   // Cheat sheet: every lesson's exam tip and key terms, grouped by domain, ready to print.
   function cheatView() {
-    if (LES === null) return `<h1>${esc(C.short)} cheat sheet</h1><p class="note">Loading…</p>`;
+    if (LES === null) return `<h1>${esc(C.short)} cheat sheet</h1>${CertHub.fx.skeleton()}`;
     if (!LES) return `<h1>${esc(C.short)} cheat sheet</h1><p class="note">The cheat sheet is built from the lessons, which aren't ready for this certification yet.</p>`;
     const ports = NETWORKISH.has(C.id) ? `<h2>Common ports</h2><div class="panel"><div class="scroll" tabindex="0" role="region" aria-label="Common ports table"><table class="sectable"><thead><tr><th>Protocol</th><th>Port</th></tr></thead><tbody>${PORTS.map(([a, b]) => `<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join("")}</tbody></table></div></div>` : "";
     return `<p class="crumbs no-print"><button type="button" class="linkbtn" data-tab="learn">Lessons</button> / Cheat sheet</p>
@@ -610,7 +613,7 @@
   function streakHtml() {
     const st = CertHub.activity.streak();
     if (!st.current && !st.best) return "";
-    return `<p class="streak note">${st.current ? `<strong>${esc(st.current)}-day study streak</strong>${st.today ? "" : ". Study today to keep it going"}` : "No study yet today"}${st.best > st.current ? ` · best ${esc(st.best)} days` : ""} · <button type="button" class="linkbtn" data-act="reminder">Set a daily reminder</button></p>`;
+    return `<p class="streak note">${st.current ? `${CertHub.fx.icon("flame", st.current >= 7 ? "flame l3" : st.current >= 3 ? "flame l2" : "flame")} <strong>${esc(st.current)}-day study streak</strong>${st.today ? "" : ". Study today to keep it going"}` : "No study yet today"}${st.best > st.current ? ` · best ${esc(st.best)} days` : ""} · <button type="button" class="linkbtn" data-act="reminder">Set a daily reminder</button></p>`;
   }
   function placementHtml() {
     const pl = S.p.placement; if (!pl) return "";
@@ -624,7 +627,7 @@
   /* ---------- exam simulations (performance-based questions) ---------- */
   const SIM_TYPE = { match: "Matching", order: "Put in order", select: "Select all that apply", fill: "Fill in" };
   function simsSection() {
-    if (SIMS === null) return `<h2>Exam simulations</h2><p class="note">Loading…</p>`;
+    if (SIMS === null) return `<h2>Exam simulations</h2>${CertHub.fx.skeleton()}`;
     if (!SIMS || !SIMS.length) return "";
     const res = S.p.sims || {};
     return `<h2>Exam simulations</h2>
@@ -754,7 +757,7 @@
   const ENGINES = { kql: "kql", pcap: "pcap", fw: "fw", tf: "tf" };
   const termOf = x => CertHub[TERMS[x.kind]];
   function handsonSection() {
-    if (HO === null) return C.hasHandson ? `<h2>Hands-on practice</h2><p class="note">Loading…</p>` : "";
+    if (HO === null) return C.hasHandson ? `<h2>Hands-on practice</h2>${CertHub.fx.skeleton()}` : "";
     if (!HO || !HO.items.length) return "";
     const done = S.p.handson || {};
     return `<h2>Hands-on practice</h2>` + Object.keys(HO_KIND).map(k => {
@@ -900,7 +903,7 @@
     }
     if (st.err && ENGINES[x.kind]) return head + `<p class="note">${esc(st.err)}</p>`;
     if (x.kind === "pcap") {
-      if (!CertHub.pcap) return head + `<p class="note">Loading…</p>`;
+      if (!CertHub.pcap) return head + `${CertHub.fx.skeleton()}`;
       const all = capOf(x); let shown = all, ferr = "";
       if (st.filter) { try { shown = CertHub.pcap.filter(all, st.filter); } catch (e) { ferr = e.message; shown = []; } }
       const pk = st.sel != null ? all.find(p => p.no === st.sel) : null;
@@ -913,7 +916,7 @@
       <div id="horesult" tabindex="-1" role="status">${st.marks ? `<p><strong>${st.marks.filter(Boolean).length} of ${st.marks.length} correct.</strong></p>` : ""}</div>` + help;
     }
     if (x.kind === "fw") {
-      if (!CertHub.fw) return head + `<p class="note">Loading…</p>`;
+      if (!CertHub.fw) return head + `${CertHub.fx.skeleton()}`;
       const set = x.setup || {};
       return head + `<p class="note">Zones: ${esc((set.zones || []).join(", "))}${set.addresses ? ` · Addresses: ${esc(Object.entries(set.addresses).map(([k, v]) => `${k} (${v})`).join(", "))}` : ""}${set.services ? ` · Services: ${esc(Object.entries(set.services).map(([k, v]) => `${k} (${v})`).join(", "))}` : ""}. Rules are checked top to bottom; the first match wins. List several values with commas, or use any.</p>
       <div class="tablewrap" tabindex="0"><table class="kqlt fwt"><thead><tr><th scope="col">#</th>${FW_COLS.map(([, h]) => `<th scope="col">${esc(h)}</th>`).join("")}<th scope="col"><span class="sr-only">Move or delete</span></th></tr></thead><tbody>${st.rules.map((r, i) => `<tr><td>${i + 1}</td>${FW_COLS.map(([k, h]) => `<td>${k === "action" ? `<select data-fwr="${i}" data-fwk="action" aria-label="Rule ${i + 1} ${esc(h)}">${["allow", "deny"].map(a => `<option ${r.action === a ? "selected" : ""}>${esc(a)}</option>`).join("")}</select>` : `<input type="text" data-fwr="${i}" data-fwk="${esc(k)}" value="${esc(fwList(r[k] ?? (k === "name" ? "" : "any")))}" aria-label="Rule ${i + 1} ${esc(h)}" autocomplete="off" autocapitalize="off" spellcheck="false">`}</td>`).join("")}<td class="nowrap"><button type="button" class="btn ghost sm" data-act="fwup" data-i="${i}" ${i ? "" : "disabled"} aria-label="Move rule ${i + 1} up">↑</button><button type="button" class="btn ghost sm" data-act="fwdel" data-i="${i}" aria-label="Delete rule ${i + 1}">✕</button></td></tr>`).join("")}</tbody></table></div>
@@ -921,7 +924,7 @@
       <div id="horesult" tabindex="-1" role="status">${st.results ? `<ul class="clean hochecks">${x.tests.map((t, i) => { const r = st.results[i]; return `<li>${r.ok ? `<span class="simok" aria-label="as expected">✓</span>` : `<span class="simbad" aria-label="not as expected">✗</span>`} ${inline(t.label)} <span class="note">→ ${esc(r.action)}${r.rule ? ` by ${esc(r.rule)}` : " (no rule matched)"}; expected ${esc(t.expect)}</span></li>`; }).join("")}</ul>${st.warnings && st.warnings.length ? `<div class="status notice"><strong>Check these names:</strong><ul class="clean">${st.warnings.map(w => `<li>${esc(w)}</li>`).join("")}</ul></div>` : ""}${st.passed ? `<p><strong>Every test behaves as required.</strong></p>` : ""}` : ""}</div>` + help;
     }
     if (x.kind === "tf") {
-      if (!CertHub.tf) return head + `<p class="note">Loading…</p>`;
+      if (!CertHub.tf) return head + `${CertHub.fx.skeleton()}`;
       return head + `<label for="hotf" class="lbl">main.tf <span class="note">(Tab indents; press Esc, then Tab, to leave the editor)</span></label>
       <textarea id="hotf" class="codeedit" rows="${Math.min(26, Math.max(10, st.code.split("\n").length + 3))}" spellcheck="false" autocapitalize="off" autocomplete="off">${esc(st.code)}</textarea>
       <div class="btns"><button class="btn" data-act="tfplan">terraform plan</button></div>
@@ -1068,7 +1071,7 @@
     if (z.done) {
       const pct = Math.round(100 * z.score / z.qs.length);
       return `<div class="qhead"><strong>${esc(z.title)}</strong><button class="btn ghost sm" data-act="quit">Done</button></div>
-      <div class="panel"><div class="big">${pct}%</div><p class="meta">${esc(z.score)} of ${z.qs.length} correct${z.mode === "test" ? (pct >= 85 ? ". Exam-ready range." : pct >= 75 ? ". Close. Review the misses below." : ". Revisit these topics before moving on.") : ""}</p>
+      <div class="panel"><div class="ringrow">${CertHub.fx.ring(pct, pct >= 85 ? "var(--ok)" : pct >= 75 ? "var(--warn)" : "var(--bad)", `<span class="big" data-style="margin:0;font-size:inherit"><span data-count="${pct}">${pct}</span>%</span>`)}<p class="meta">${esc(z.score)} of ${z.qs.length} correct${z.mode === "test" ? (pct >= 85 ? ". Exam-ready range." : pct >= 75 ? ". Close. Review the misses below." : ". Revisit these topics before moving on.") : ""}</p></div>
       ${z.kind === "full" ? `<p data-style="margin:8px 0 0"><span class="chip" data-style="--c:${esc(passBand(pct)[1])}">${esc(passBand(pct)[0])}</span> <span class="note">Pass estimate. Real exams use scaled scores, so treat 85%+ on full-length exams as your target.</span></p>
       <div class="bars" data-style="margin-top:12px">${C.domains.map(d => { const qs = z.qs.map((q, i) => [q, i]).filter(([q]) => q.d === d.id); const c = qs.filter(([q, i]) => z.ans[i] === q.a).length; const p = qs.length ? Math.round(100 * c / qs.length) : 0; return `<div class="b" data-style="--c:${dc(d.id)}"><div class="flex"><span>D${esc(d.id)} ${esc(d.name)}</span><strong>${c}/${qs.length}</strong></div><div class="track"><i data-style="width:${p}%"></i></div></div>`; }).join("")}</div>` : ""}</div>
       ${z.kind === "placement" ? placementHtml() : ""}
@@ -1188,7 +1191,7 @@
   function guideView() {
     const intro = `<h1>Flashcards & study guide <span class="chip pro">Pro</span></h1>`;
     if (!Pro().active) return intro + `<p class="meta">Flashcards for every domain with spaced repetition, and a study guide you can print.</p>` + Pro().teaser(`Unlock ${C.short} flashcards and the printable study guide.`);
-    if (!PRO) return intro + `<p class="note">Loading…</p>`;
+    if (!PRO) return intro + `${CertHub.fx.skeleton()}`;
     const cards = PRO.flashcards, sched = S.p.cards || {};
     const now = today().getTime() + 1000;
     const dueN = d => cards.filter(f => (!d || f[0] === d) && (!sched[cardKey(f)] || sched[cardKey(f)].due <= now)).length;
@@ -1461,10 +1464,17 @@
     if (S.sim && el.dataset.sims != null) { el.checked ? S.sim.ans.add(+el.dataset.sims) : S.sim.ans.delete(+el.dataset.sims); return; }
     if (el.dataset && el.dataset.act === "fixdone" && S.p.fix) {
       const f = S.p.fix, i = +el.dataset.i; f.done = (f.done || []).filter(x => x !== i); if (el.checked) { f.done.push(i); CertHub.activity.mark(); }
-      save(); el.closest("li").classList.toggle("checked", el.checked); return;
+      save(); el.closest("li").classList.toggle("checked", el.checked);
+      if (el.checked && f.done.length === f.steps.length) CertHub.fx.celebrate({ title: "Catch-up plan complete", sub: "Take another practice test to see how far you've come." });
+      return;
     }
     const c = el.dataset && el.dataset.check;
-    if (c) { if (el.checked) CertHub.activity.mark(); S.p.checks[c] = el.checked; el.closest("li").classList.toggle("checked", el.checked); save(); return; }
+    if (c) {
+      if (el.checked) CertHub.activity.mark(); S.p.checks[c] = el.checked; el.closest("li").classList.toggle("checked", el.checked); save();
+      const wk = +c.split("-")[0];
+      if (el.checked && DAYS().every((_, i) => S.p.checks[`${wk}-${i}`])) CertHub.fx.celebrate({ title: `Week ${wk} done!`, sub: "Every study day checked off. On to the next one." });
+      return;
+    }
     if (el.id === "exam" && el.value) { S.p.examDate = el.value; save(); renderTabs(); }
     if (el.id === "start" && el.value) { S.p.start = el.value; save(); renderTabs(); }
     if (el.id === "certname") { CertHub.store.set("certhub:name", el.value.trim()); render(); return; }

@@ -1,6 +1,21 @@
 /* What's new: learner-facing release notes, newest first. Add an entry when something visible ships.
    Each entry: { date: "YYYY-MM-DD", title, items: [ ... ], es: { title, items } } (es: the Spanish version). Shown at #whats-new and on the home page. */
 CertHub.news = [
+  { date: "2026-09-29", title: "A livelier look",
+    items: [
+      "Your exam readiness and quiz scores now fill a progress ring, and bars grow in as you scroll.",
+      "Confetti when you finish a study week, pass a practice exam, complete a lab or finish a catch-up plan.",
+      "A study-path picture on the home page, icons for each career track and a flame that grows with your streak.",
+      "Buttons, answers and flashcards respond as you use them, and pages show a placeholder while they load. The practice VM shows a progress bar while it downloads.",
+      "Prefer less movement? Turn on \"reduce motion\" in your device settings and the site stays still."
+    ],
+    es: { title: "Un aspecto más animado", items: [
+      "Tu preparación para el examen y tus puntuaciones ahora llenan un anillo de progreso, y las barras crecen al desplazarte.",
+      "Confeti cuando terminas una semana de estudio, apruebas un examen de práctica, completas un laboratorio o terminas un plan de refuerzo.",
+      "Una imagen del camino de estudio en la página de inicio, iconos para cada área profesional y una llama que crece con tu racha.",
+      "Los botones, las respuestas y las tarjetas reaccionan al usarlos, y las páginas muestran un marcador mientras cargan. La máquina virtual de práctica muestra una barra de progreso mientras se descarga.",
+      "¿Prefieres menos movimiento? Activa «reducir movimiento» en los ajustes de tu dispositivo y el sitio se queda quieto."
+    ] } },
   { date: "2026-09-28", title: "Blue-team labs, comparisons and a catch-up plan",
     items: [
       "Six blue-team labs in the practice VM: investigate a brute-force attack, harden SSH, find a tampered file, audit sudo rights, fix risky permissions and remove an unknown listener.",
