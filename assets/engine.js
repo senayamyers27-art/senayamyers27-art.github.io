@@ -535,7 +535,7 @@
     if (SIMS && SIMS.length && di === 3) { const next = SIMS.find(p => p.d === w.dom && !(S.p.sims || {})[p.id]); if (next) items.push(`<li>Try a simulation: <button type="button" class="linkbtn" data-act="gosim" data-id="${esc(next.id)}">${esc(next.title)}</button></li>`); }
     return `<div class="panel today"><div class="flex"><h2 data-style="margin:0">Today · ${esc(day)}</h2><label class="note"><input type="checkbox" data-check="${esc(k)}" ${doneToday ? "checked" : ""}> Done</label></div>
       <p data-style="margin:8px 0 6px">${esc(di === 3 ? "Hands-on: " + (weekLabs(w).map(l => l.title).join("; ") || w.lab) : text)}</p>
-      ${items.length ? `<ul class="clean">${esc(items.join(""))}</ul>` : `<p class="note" data-style="margin:0">Nothing else due today. Nice work.</p>`}</div>`;
+      ${items.length ? `<ul class="clean">${/* html: list items built above, each value escaped */ items.join("")}</ul>` : `<p class="note" data-style="margin:0">Nothing else due today. Nice work.</p>`}</div>`;
   }
   // Exam readiness, 0-100: weighted domain accuracy (trusted as more questions are answered), lessons read,
   // the best recent practice exam, and a penalty for an overdue review queue.
