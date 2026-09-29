@@ -49,25 +49,31 @@
   /* ---------- chat ---------- */
   const load = () => { try { const v = JSON.parse(sessionStorage.getItem(CHAT_KEY) || "[]"); return Array.isArray(v) ? v.slice(-20) : []; } catch (e) { return []; } };
   const save = m => { try { sessionStorage.setItem(CHAT_KEY, JSON.stringify(m.slice(-20))); } catch (e) {} };
-  let chat = load(), busy = false, tsToken = "", tsWidget = null;
+  let chat = load(), busy = false, tsToken = "", tsWidgets = [];
+  // The help box can appear in several places at once (the floating panel, the home page, the Help page). Each copy
+  // has its own element ids, made from a prefix: "sup" (panel), "hsup" (home), "psup" (Help page). All copies share
+  // one conversation.
+  const el = (p, name) => document.getElementById(p + name);
+  const prefixOf = node => { const r = node && node.closest && node.closest("[data-sup]"); return r ? r.dataset.sup : null; };
   const bubble = m => `<div class="supmsg ${m.role === "user" ? "me" : "bot"}">${m.role === "user" ? `<p>${esc(m.content)}</p>` : /* html: md() escapes first */ md(m.content)}</div>`;
   function renderChat() {
-    const log = $("#suplog"); if (!log) return;
-    log.innerHTML = chat.map(bubble).join("") + (busy ? `<div class="supmsg bot typing" aria-label="${esc(tr("The assistant is typing"))}"><span></span><span></span><span></span></div>` : "");
-    log.scrollTop = log.scrollHeight;
+    document.querySelectorAll(".suplog").forEach(log => {
+      log.innerHTML = chat.map(bubble).join("") + (busy ? `<div class="supmsg bot typing" aria-label="${esc(tr("The assistant is typing"))}"><span></span><span></span><span></span></div>` : "");
+      log.scrollTop = log.scrollHeight;
+    });
   }
-  function turnstile() {
-    const box = $("#sup-ts"); if (!TS_KEY || !box || box.dataset.ready) return;
+  function turnstile(p) {
+    const box = el(p, "-ts"); if (!TS_KEY || !box || box.dataset.ready) return;
     box.dataset.ready = "1";
-    const go = () => { tsWidget = window.turnstile.render(box, { sitekey: TS_KEY, action: "support", callback: t => { tsToken = t; }, "expired-callback": () => { tsToken = ""; } }); };
+    const go = () => { tsWidgets.push(window.turnstile.render(box, { sitekey: TS_KEY, action: "support", callback: t => { tsToken = t; }, "expired-callback": () => { tsToken = ""; } })); };
     if (window.turnstile) return go();
     const s = document.createElement("script"); s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"; s.async = true; s.onload = go; document.head.appendChild(s);
   }
-  async function ask(text) {
+  const status = (p, text) => { const m = el(p, "msg-status"); if (m) m.textContent = text; };
+  async function ask(p, text) {
     if (busy) return;
-    const msg = $("#supmsg-status");
-    if (TS_KEY && !chat.some(m => m.role === "user") && !tsToken) { msg.textContent = tr("Complete the check that you're not a bot first."); return; }
-    chat.push({ role: "user", content: text }); busy = true; save(chat); renderChat(); msg.textContent = "";
+    if (TS_KEY && !chat.some(m => m.role === "user") && !tsToken) { status(p, tr("Complete the check that you're not a bot first.")); return; }
+    chat.push({ role: "user", content: text }); busy = true; save(chat); renderChat(); status(p, "");
     try {
       const res = await fetch(API + "/v1/support/chat", {
         method: "POST", credentials: "omit", cache: "no-store", headers: { "Content-Type": "application/json" },
@@ -78,85 +84,103 @@
       chat.push({ role: "assistant", content: String(data.reply || "") });
     } catch (e) {
       chat.pop(); // take the question back so it can be sent again
-      msg.textContent = e.message || tr("The assistant couldn't answer just now. Try again.");
-      const input = $("#supq"); if (input && !input.value) input.value = text;
+      status(p, e.message || tr("The assistant couldn't answer just now. Try again."));
+      const input = el(p, "q"); if (input && !input.value) input.value = text;
     }
     busy = false; save(chat); renderChat();
-    if (tsWidget != null && window.turnstile) { window.turnstile.reset(tsWidget); tsToken = ""; }
+    if (tsWidgets.length && window.turnstile) { tsWidgets.forEach(w => window.turnstile.reset(w)); tsToken = ""; }
   }
 
-  /* ---------- the panel ---------- */
-  let opener = null;
-  function panelHtml() {
-    const popular = CertHub.help.slice(0, 5).map(h => answerHtml(h, false)).join("");
-    return `<div class="suphead"><h2 id="suptitle">${esc(tr("Help"))}</h2><button type="button" class="suphide" data-supact="close" aria-label="${esc(tr("Close help"))}">✕</button></div>
-      <div class="supbody">
-        <label for="supsearch" class="sr-only">${esc(tr("Search help"))}</label>
-        <input type="search" id="supsearch" class="textin" placeholder="${esc(tr("Search help, e.g. backup, Spanish, labs"))}" autocomplete="off">
-        <div id="supresults" aria-live="polite"><p class="pickq">${esc(tr("Popular questions"))}</p>${/* html: answers built with esc() */ popular}</div>
+  /* ---------- the help box (shared by the panel and the pages) ---------- */
+  const popularHtml = n => `<p class="pickq">${esc(tr(n > 5 ? "All help answers" : "Popular questions"))}</p>${/* html: answers built with esc() */ CertHub.help.slice(0, n).map(h => answerHtml(h, false)).join("")}`;
+  // opts.all: list every help answer (the Help page) instead of the five most asked.
+  function boxHtml(p, opts = {}) {
+    const n = opts.all ? CertHub.help.length : 5;
+    return `<label for="${esc(p)}search" class="sr-only">${esc(tr("Search help"))}</label>
+        <input type="search" id="${esc(p)}search" class="textin supsearch" data-n="${/* num */ n}" placeholder="${esc(tr("Search help, e.g. backup, Spanish, labs"))}" autocomplete="off">
+        <div id="${esc(p)}results" class="supresults" aria-live="polite">${/* html: built with esc() */ popularHtml(n)}</div>
         ${aiOn() ? `<div class="supchat">
           <p class="pickq">${esc(tr("Ask the assistant"))}</p>
-          <div id="suplog" class="suplog" role="log" aria-live="polite" aria-label="${esc(tr("Conversation with the assistant"))}"></div>
-          <form id="supform" novalidate>
-            <label for="supq" class="sr-only">${esc(tr("Your question"))}</label>
-            <textarea id="supq" class="textin" rows="2" maxlength="1500" placeholder="${esc(tr("Ask about the site or an exam topic…"))}"></textarea>
-            ${TS_KEY ? `<div id="sup-ts" class="tsbox"></div>` : ""}
+          <div id="${esc(p)}log" class="suplog" role="log" aria-live="polite" aria-label="${esc(tr("Conversation with the assistant"))}"></div>
+          <form id="${esc(p)}form" class="supform" novalidate>
+            <label for="${esc(p)}q" class="sr-only">${esc(tr("Your question"))}</label>
+            <textarea id="${esc(p)}q" class="textin supq" rows="2" maxlength="1500" placeholder="${esc(tr("Ask about the site or an exam topic…"))}"></textarea>
+            ${TS_KEY ? `<div id="${esc(p)}-ts" class="tsbox"></div>` : ""}
             <div class="btns"><button type="submit" class="btn sm">${esc(tr("Send"))}</button><button type="button" class="btn ghost sm" data-supact="new">${esc(tr("New chat"))}</button></div>
-            <p class="note" id="supmsg-status" role="status"></p>
+            <p class="note" id="${esc(p)}msg-status" role="status"></p>
           </form>
           <p class="note">${esc(tr("AI answers can be wrong: check important details, like exam rules, with the exam provider. Chats aren't saved."))}</p>
-        </div>` : `<p class="note supmore">${esc(tr("Still stuck?"))} <a href="#settings.about" data-supnav>${esc(tr("Report a problem"))}</a></p>`}
-      </div>`;
+        </div>` : `<p class="note supmore">${esc(tr("Still stuck?"))} <a href="#settings.about" data-supnav>${esc(tr("Report a problem"))}</a></p>`}`;
   }
+  // Put a help box inside a page element (the home page card and the Help page).
+  function embed(node, p, opts = {}) {
+    if (!node) return;
+    node.dataset.sup = p; node.dataset.all = opts.all ? "1" : "";
+    node.innerHTML = boxHtml(p, opts);
+    renderChat(); turnstile(p);
+  }
+
+  /* ---------- the floating panel ---------- */
+  let opener = null;
+  const panelHtml = () => `<div class="suphead"><h2 id="suptitle">${esc(tr("Help"))}</h2><button type="button" class="suphide" data-supact="close" aria-label="${esc(tr("Close help"))}">✕</button></div>
+      <div class="supbody" data-sup="sup">${/* html: built with esc() */ boxHtml("sup")}</div>`;
   function open() {
-    let p = $("#supportpanel");
+    let panel = $("#supportpanel");
     opener = document.activeElement;
-    if (!p) {
-      p = document.createElement("section");
-      p.id = "supportpanel"; p.className = "supportpanel"; p.setAttribute("role", "dialog"); p.setAttribute("aria-labelledby", "suptitle");
-      document.body.appendChild(p);
+    if (!panel) {
+      panel = document.createElement("section");
+      panel.id = "supportpanel"; panel.className = "supportpanel"; panel.setAttribute("role", "dialog"); panel.setAttribute("aria-labelledby", "suptitle");
+      document.body.appendChild(panel);
     }
-    p.innerHTML = panelHtml(); p.hidden = false;
+    panel.innerHTML = panelHtml(); panel.hidden = false;
     const b = $("#helpbtn"); if (b) b.setAttribute("aria-expanded", "true");
-    renderChat(); turnstile();
+    renderChat(); turnstile("sup");
     setTimeout(() => { const s = $("#supsearch"); if (s) s.focus(); }, 0);
   }
   function close() {
-    const p = $("#supportpanel"); if (!p || p.hidden) return;
-    p.hidden = true;
+    const panel = $("#supportpanel"); if (!panel || panel.hidden) return;
+    panel.hidden = true;
     const b = $("#helpbtn"); if (b) { b.setAttribute("aria-expanded", "false"); }
     (opener && opener !== document.body && document.contains(opener) ? opener : b || document.body).focus();
   }
 
   document.addEventListener("input", e => {
-    if (e.target.id !== "supsearch") return;
-    const box = $("#supresults"), text = e.target.value.trim();
-    if (!text) { box.innerHTML = `<p class="pickq">${esc(tr("Popular questions"))}</p>${/* html: built with esc() */ CertHub.help.slice(0, 5).map(h => answerHtml(h, false)).join("")}`; return; }
+    if (!e.target.classList || !e.target.classList.contains("supsearch")) return;
+    const p = prefixOf(e.target), box = el(p, "results"), text = e.target.value.trim();
+    if (!box) return;
+    if (!text) { box.innerHTML = popularHtml(+e.target.dataset.n || 5); return; }
     const hits = search(text);
     box.innerHTML = hits.length ? hits.map((h, i) => answerHtml(h, i === 0)).join("")
       : `<p class="note">${esc(tr(aiOn() ? "No matching help answer. Ask the assistant below." : "No matching help answer. Try other words, or report a problem."))}</p>`;
   });
   document.addEventListener("submit", e => {
-    if (e.target.id !== "supform") return;
+    if (!e.target.classList || !e.target.classList.contains("supform")) return;
     e.preventDefault();
-    const q = $("#supq"), text = q.value.trim();
-    if (!text) { $("#supmsg-status").textContent = tr("Type a question first."); q.focus(); return; }
-    q.value = ""; ask(text);
+    const p = prefixOf(e.target), q = el(p, "q"), text = q.value.trim();
+    if (!text) { status(p, tr("Type a question first.")); q.focus(); return; }
+    q.value = ""; ask(p, text);
   });
   document.addEventListener("keydown", e => {
     if (e.key === "Escape" && $("#supportpanel") && !$("#supportpanel").hidden && !document.querySelector(".modal-wrap")) close();
-    if (e.key === "Enter" && !e.shiftKey && e.target.id === "supq") { e.preventDefault(); $("#supform").requestSubmit(); }
+    if (e.key === "Enter" && !e.shiftKey && e.target.classList && e.target.classList.contains("supq")) { e.preventDefault(); e.target.form.requestSubmit(); }
   });
   document.addEventListener("click", e => {
     const a = e.target.closest("[data-supact]");
     if (a && a.dataset.supact === "close") close();
-    if (a && a.dataset.supact === "new") { chat = []; save(chat); renderChat(); $("#supmsg-status").textContent = ""; $("#supq").focus(); }
+    if (a && a.dataset.supact === "new") { const p = prefixOf(a); chat = []; save(chat); renderChat(); status(p, ""); const q = el(p, "q"); if (q) q.focus(); }
     // Following a link to a page of the site closes the panel on small screens so the page is visible.
-    if (e.target.closest("[data-supnav]") && window.innerWidth < 700) setTimeout(close, 0);
+    if (e.target.closest("#supportpanel [data-supnav]") && window.innerWidth < 700) setTimeout(close, 0);
   });
 
-  // The assistant becomes available once the site learns the API has it on (the first /v1/me answer).
-  document.addEventListener("certhub:me", () => { const p = $("#supportpanel"); if (p && !p.hidden && aiOn() && !$("#supform")) { p.innerHTML = panelHtml(); renderChat(); turnstile(); } });
+  // The assistant becomes available once the site learns the API has it on (the first /v1/me answer): redraw every
+  // help box that's showing without it.
+  document.addEventListener("certhub:me", () => {
+    if (!aiOn()) return;
+    const panel = $("#supportpanel");
+    if (panel && !panel.hidden && !$("#supform")) { panel.innerHTML = panelHtml(); turnstile("sup"); }
+    document.querySelectorAll("[data-sup]:not(.supbody)").forEach(node => { if (!node.querySelector(".supform")) embed(node, node.dataset.sup, { all: node.dataset.all === "1" }); });
+    renderChat();
+  });
 
-  CertHub.support = { open, close, md, search };
+  CertHub.support = { open, close, embed, md, search };
 })();

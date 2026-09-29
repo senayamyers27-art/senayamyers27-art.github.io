@@ -400,6 +400,9 @@
     ${CertHub.review ? CertHub.review.homeCard() : ""}
     <div class="panel installcard gamescard"><div class="grow"><strong>Quick games</strong><br><span class="note">Sixty-second rounds on subnetting, ports, acronyms, OSI layers and commands.</span></div><a class="btn ghost sm" href="#games">Play</a></div>
     ${continueHtml()}
+    <h2 id="help-h">Questions? Ask here</h2>
+    <div class="panel helpcard" id="homehelp">${CertHub.fx.skeleton()}</div>
+    <p class="note"><a href="#help">Open the Help page</a> for every answer.</p>
     ${pickerHtml()}
     <h2 id="tracks-h">Certifications by career track</h2>
     <p class="note"><a href="#careers">Career paths</a>: which certification to take first, the jobs each track leads to, and interview practice. <a href="#exam-day">Exam-day guides</a>: scoring, question types and what to expect on test day. <a href="#exam-changes">Exam changes</a>: new versions and retirements.</p>
@@ -462,7 +465,7 @@
     const q = new URLSearchParams({ p: name, t: title || name, e: "true", rnd: Math.random().toString(36).slice(2) });
     try { fetch(`${gc}/count?${q}`, { mode: "no-cors", credentials: "omit", keepalive: true, referrerPolicy: "no-referrer" }).catch(() => {}); } catch (e) {}
   };
-  const LIGHT = new Set(["home", "dashboard", "achievements", "exam-changes", "schools", "whats-new", "review", "privacy", "terms", "security", "install", "support", "exam-day", "account", "login", "signup", "profile", "settings"]);
+  const LIGHT = new Set(["home", "dashboard", "achievements", "exam-changes", "schools", "whats-new", "review", "privacy", "terms", "security", "install", "support", "exam-day", "account", "login", "signup", "profile", "settings", "help"]);
   function route() {
     let raw = "";
     try { raw = decodeURIComponent(location.hash.replace(/^#/, "")); } catch (e) { raw = ""; }
@@ -533,7 +536,8 @@
       else if (head === "whats-new") { topNav(""); $("#app").innerHTML = newsView(); title = "What's New"; view = head; }
       else if (head === "review" && CertHub.review) { topNav("home"); $("#app").innerHTML = CertHub.review.show(); title = "Daily Review"; view = "review"; }
       else if (head === "portfolio") { topNav("portfolio"); $("#app").innerHTML = CertHub.labViews.portfolio(); title = "Lab Portfolio"; view = "portfolio"; }
-      else { topNav("home"); $("#app").innerHTML = homeView(); view = "home"; }
+      else if (head === "help") { topNav(""); $("#app").innerHTML = helpView(); title = "Help"; view = head; embedHelp("helppage", "psup", { all: true }); }
+      else { topNav("home"); $("#app").innerHTML = homeView(); view = "home"; embedHelp("homehelp", "hsup"); }
     }
     const bn = $("#brandname span");
     if (brand === "StudyToCert") bn.innerHTML = "Study<b>To</b>Cert"; else bn.textContent = brand;
@@ -599,6 +603,27 @@
     new MutationObserver(fix).observe(el, { childList: true, characterData: true, subtree: true }); fix();
   }
   CertHub.titleCase = titleCase;
+  // Help answers and the assistant (assets/support.js + data/help.js), loaded when first needed.
+  const loadHelp = () => Promise.all([CertHub.loadScript("data/help.js"), CertHub.loadScript("assets/support.js")]).then(r => r.every(Boolean) && !!CertHub.support);
+  // Fill a help box on the page (the home page card, the Help page) once the widget has loaded.
+  function embedHelp(id, prefix, opts) {
+    loadHelp().then(ok => {
+      const node = document.getElementById(id); if (!node) return;
+      if (ok) CertHub.support.embed(node, prefix, opts);
+      else node.innerHTML = `<p class="note" data-style="margin:0">Help couldn't load. Check your connection and try again.</p>`;
+    });
+  }
+  function helpView() {
+    return `<h1>Help</h1>
+    <p class="meta">Search the answers to common questions${CertHub.sync && CertHub.sync.me && CertHub.sync.me.support ? ", or ask the assistant" : ""}. The Help button at the bottom right of every page opens the same help.</p>
+    <div class="panel helpcard" id="helppage">${CertHub.fx.skeleton()}</div>
+    <h2>More ways to get help</h2>
+    <div class="panel">
+      <div class="row"><div class="grow"><strong>Report a problem</strong><br><span class="note">A mistake in a lesson or question, or something that doesn't work.</span></div><a class="btn ghost sm" href="${esc(CertHub.reportUrl("Problem report", "Page:\nWhat happened:\nWhat you expected:"))}" target="_blank" rel="noopener">Report</a></div>
+      <div class="row"><div class="grow"><strong>Settings</strong><br><span class="note">Theme, text size, language, accessibility and backups.</span></div><a class="btn ghost sm" href="#settings">Open</a></div>
+      <div class="row"><div class="grow"><strong>Privacy and security</strong><br><span class="note">What's stored, where, and how it's protected.</span></div><span class="btns" data-style="margin:0"><a class="btn ghost sm" href="#privacy">Privacy</a><a class="btn ghost sm" href="#security">Security</a></span></div>
+    </div>`;
+  }
   // Help button (bottom right of every page): loads the help widget on first use (assets/support.js).
   function helpButton() {
     if (document.getElementById("helpbtn")) return;
@@ -610,7 +635,7 @@
       if (p && !p.hidden && CertHub.support) return CertHub.support.close();
       if (b.getAttribute("aria-busy") === "true") return; // still loading from the first click
       b.setAttribute("aria-busy", "true");
-      const ok = (await Promise.all([CertHub.loadScript("data/help.js"), CertHub.loadScript("assets/support.js")])).every(Boolean);
+      const ok = await loadHelp();
       b.removeAttribute("aria-busy");
       if (ok && CertHub.support) CertHub.support.open(); else ui.toast("Help couldn't load. Check your connection and try again.");
     });

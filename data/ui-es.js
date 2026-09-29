@@ -1,6 +1,14 @@
 /* Spanish interface text. Keys are the exact English strings shown by the app. */
 CertHub.addUiEs({
   exact: {
+    "Questions? Ask here": "¿Preguntas? Pregunta aquí",
+    "Open the Help page": "Abre la página de Ayuda",
+    "for every answer.": "para ver todas las respuestas.",
+    "All help answers": "Todas las respuestas de ayuda",
+    "More ways to get help": "Más formas de obtener ayuda",
+    "A mistake in a lesson or question, or something that doesn't work.": "Un error en una lección o pregunta, o algo que no funciona.",
+    "Theme, text size, language, accessibility and backups.": "Tema, tamaño del texto, idioma, accesibilidad y copias de seguridad.",
+    "Privacy and security": "Privacidad y seguridad",
     "Help": "Ayuda",
     "Close help": "Cerrar ayuda",
     "Search help": "Buscar en la ayuda",
