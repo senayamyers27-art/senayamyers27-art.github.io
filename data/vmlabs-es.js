@@ -378,5 +378,81 @@ CertHub.vmLabsEs = {
       "La carpeta del programa está eliminada",
       "SSH sigue en ejecución"
     ]
+  },
+  "cron-review": {
+    title: "Encuentra una tarea programada no autorizada",
+    intro: "Una revisión de cambios encontró que este servidor ejecuta cada cinco minutos una tarea que nadie aprobó. Encuéntrala entre las tareas programadas, anota el archivo de cron en /root/incident/cron.txt y elimina la tarea y el script que ejecuta. No toques la copia de seguridad nocturna aprobada.",
+    steps: [
+      "Lista todos los lugares que lee cron: `ls -la /etc/cron.d /etc/cron.hourly /etc/cron.daily`, `sudo crontab -l` y `ls /var/spool/cron/crontabs`",
+      "Lee los archivos de /etc/cron.d: `sudo cat /etc/cron.d/*`. Busca un intervalo corto, la salida descartada (`>/dev/null 2>&1`) y un archivo oculto (un nombre que empieza con punto).",
+      "Revisa qué ejecuta la tarea: `sudo cat /usr/local/sbin/.cache-sync`. Descargar un script y pasarlo a bash permite que otra persona ejecute cualquier cosa en este servidor.",
+      "Anota el archivo de cron: `echo /etc/cron.d/logrotate-helper | sudo tee /root/incident/cron.txt`",
+      "Elimina la tarea y su script: `sudo rm /etc/cron.d/logrotate-helper /usr/local/sbin/.cache-sync`",
+      "En un incidente real también bloquearías 203.0.113.45 y averiguarías cómo llegó el archivo (`ls -l --time-style=full-iso`, el registro de autenticación, cambios de paquetes)."
+    ],
+    checks: [
+      "cron.txt indica el archivo de cron no autorizado",
+      "La tarea no autorizada está eliminada",
+      "El script que ejecutaba está borrado",
+      "La tarea de copia de seguridad aprobada sigue ahí"
+    ]
+  },
+  "web-log-review": {
+    title: "Detecta un ataque web en el registro de accesos",
+    intro: "El equipo web vio solicitudes extrañas durante la noche. El registro de accesos del servidor web está en /var/log/web-review/access.log. Encuentra la dirección que sondeó el sitio buscando inyección y recorrido de directorios, y el único sondeo que tuvo éxito (estado 200). Escribe ambos en /root/incident/web.txt y luego bloquea la dirección y guarda la regla.",
+    steps: [
+      "Cuenta las solicitudes por dirección: `awk '{print $1}' /var/log/web-review/access.log | sort | uniq -c | sort -rn`",
+      "Busca patrones de ataque: `grep -Ei \"%27|union|select|\\.\\./|%2f|\\.env|wp-login\" /var/log/web-review/access.log`. Las comillas, UNION SELECT y ../ en una URL son sondeos clásicos de inyección y recorrido de directorios.",
+      "El agente de usuario también lo delata: los escáneres automáticos suelen identificarse.",
+      "Encuentra qué sondeo obtuvo un 200 (éxito) en lugar de 404: `grep 198.51.100.23 /var/log/web-review/access.log | awk '$9 == 200'`",
+      "Anota la dirección y la ruta que funcionó: `echo '198.51.100.23 /download?file=../../../../etc/passwd' | sudo tee /root/incident/web.txt`",
+      "Bloquea y guarda: `sudo iptables -I INPUT -s 198.51.100.23 -j DROP`, `sudo mkdir -p /etc/iptables` y `sudo iptables-save | sudo tee /etc/iptables/rules.v4`",
+      "Un 200 en un recorrido de directorios significa que la aplicación entregó un archivo del sistema: la solución real está en la aplicación (validar el nombre del archivo), así que infórmalo a los desarrolladores."
+    ],
+    checks: [
+      "web.txt indica la dirección que sondeó",
+      "web.txt indica el sondeo que tuvo éxito",
+      "El tráfico de esa dirección se descarta",
+      "El bloqueo está guardado en /etc/iptables/rules.v4",
+      "Los visitantes normales (192.0.2.x) no están bloqueados"
+    ]
+  },
+  "backdoor-account": {
+    title: "Encuentra una cuenta puerta trasera y una clave SSH desconocida",
+    intro: "Alguien pudo haberse guardado una forma de volver a entrar a este servidor. Busca cuentas con los poderes de root además de root, y claves SSH que nadie reconozca. Anota la cuenta extra en /root/incident/accounts.txt, elimínala y quita la clave desconocida, conservando la clave del administrador (admin@laptop).",
+    steps: [
+      "Cualquier cuenta con ID de usuario 0 es root, se llame como se llame: `awk -F: '$3 == 0 {print $1}' /etc/passwd`",
+      "Anota la que sobra: `echo sysadm | sudo tee /root/incident/accounts.txt`",
+      "Elimínala: `sudo userdel -f sysadm` (hace falta -f porque comparte el ID de usuario de root, así que sus procesos parecen de root)",
+      "Revisa las claves autorizadas de root: `sudo cat /root/.ssh/authorized_keys`. Cada línea es una clave que puede iniciar sesión; el comentario del final dice de quién es.",
+      "Quita la clave desconocida y conserva admin@laptop: `sudo sed -i '/unknown@203.0.113.45/d' /root/.ssh/authorized_keys`",
+      "Revisa también todos los directorios personales: `sudo find / -name authorized_keys -path '*/.ssh/*' 2>/dev/null`"
+    ],
+    checks: [
+      "accounts.txt indica la cuenta puerta trasera",
+      "Solo root tiene el ID de usuario 0",
+      "La clave SSH desconocida está eliminada",
+      "La clave del administrador sigue ahí"
+    ]
+  },
+  "default-deny": {
+    title: "Configura un firewall de host con denegación por defecto",
+    intro: "Este servidor acepta conexiones en todos los puertos. Cambia su firewall a denegación por defecto: descarta el tráfico entrante salvo el de loopback, las respuestas a conexiones que abrió el servidor, SSH (puerto 22) y ping. Guarda las reglas para que sobrevivan a un reinicio.",
+    steps: [
+      "Mira las reglas y la política actuales: `sudo iptables -S`. Una política ACCEPT sin reglas deja entrar todo.",
+      "Agrega primero las reglas que permiten, para no cortarte el acceso: `sudo iptables -A INPUT -i lo -j ACCEPT` y `sudo iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT`",
+      "Permite SSH y ping: `sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT` y `sudo iptables -A INPUT -p icmp -j ACCEPT`",
+      "Ahora haz que descartar sea lo predeterminado: `sudo iptables -P INPUT DROP`",
+      "Guarda: `sudo iptables-save | sudo tee /etc/iptables/rules.v4` y revisa la lista otra vez con `sudo iptables -S INPUT`",
+      "En un servidor remoto, agrega siempre la regla de SSH antes de cambiar la política y mantén una segunda sesión abierta mientras pruebas."
+    ],
+    checks: [
+      "La política de INPUT es DROP",
+      "Se permite el tráfico de loopback",
+      "Se permiten las respuestas a las conexiones del propio servidor",
+      "Se permite SSH (puerto 22)",
+      "Las reglas están guardadas con la política DROP",
+      "SSH sigue en ejecución"
+    ]
   }
 };

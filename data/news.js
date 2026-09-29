@@ -1,6 +1,17 @@
 /* What's new: learner-facing release notes, newest first. Add an entry when something visible ships.
    Each entry: { date: "YYYY-MM-DD", title, items: [ ... ], es: { title, items } } (es: the Spanish version). Shown at #whats-new and on the home page. */
 CertHub.news = [
+  { date: "2026-09-29", title: "More blue-team practice",
+    items: [
+      "Four new graded labs in the practice VM: find an unauthorized cron job, spot a web attack in an access log, remove a backdoor account and unknown SSH key, and set up a default-deny firewall.",
+      "Log puzzles: eight short excerpts from Windows, Linux, DNS, cloud sign-in, firewall and web logs. Pick the line that matters and read why.",
+      "Incident response tabletops: talk through a ransomware attack, a phishing compromise and a lost laptop, with every choice explained."
+    ],
+    es: { title: "Más práctica de blue team", items: [
+      "Cuatro laboratorios calificados nuevos en la máquina virtual de práctica: encuentra una tarea de cron no autorizada, detecta un ataque web en un registro de accesos, elimina una cuenta puerta trasera y una clave SSH desconocida, y configura un firewall con denegación por defecto.",
+      "Acertijos de registros: ocho fragmentos breves de registros de Windows, Linux, DNS, inicios de sesión en la nube, firewall y web. Elige la línea importante y lee por qué.",
+      "Simulacros de respuesta a incidentes: recorre un ataque de ransomware, un compromiso por phishing y un portátil perdido, con cada decisión explicada."
+    ] } },
   { date: "2026-09-29", title: "Study habits: goals, focus timer and a final-week plan",
     items: [
       "Set a weekly study goal and see a weekly recap on your dashboard: days studied, questions answered, focus minutes and readiness changes. Share it as an image.",

@@ -313,7 +313,7 @@
     if (!/^[a-z0-9-]{1,64}$/.test(head || "")) head = "home";
     if (tab && !/^([a-z]{1,16}|video-l[a-z0-9]{1,14})$/.test(tab)) tab = "";
     // The home page and a few light pages only need the lab index; everything else waits for the full labs.
-    if ((!CertHub.labsLoaded() && !LIGHT.has(head) && !/^(vm|games?)(-|$)/.test(head)) || (own(certs, head) && certs[head].lite)) {
+    if ((!CertHub.labsLoaded() && !LIGHT.has(head) && !/^(vm|games?|log-puzzles|tabletop)(-|$)/.test(head)) || (own(certs, head) && certs[head].lite)) {
       $("#app").innerHTML = `${CertHub.fx.skeleton()}`;
       const want = location.hash;
       Promise.all([CertHub.loadLabs(), own(certs, head) ? CertHub.loadPlan(head) : true]).then(r => {
@@ -356,6 +356,11 @@
         topNav("labs"); view = head;
         if (CertHub.games) title = CertHub.games.show(head);
         else { title = "Quick Games"; $("#app").innerHTML = `${CertHub.fx.skeleton()}`; CertHub.loadScript("assets/games.js").then(ok => { if (location.hash === "#" + head && CertHub.games) document.title = `${CertHub.games.show(head)} · StudyToCert`; else if (!ok) $("#app").innerHTML = `<p class="meta" role="status">This page couldn't load. Check your connection and try again.</p>`; }); }
+      }
+      else if (head === "log-puzzles" || head === "tabletop" || /^tabletop-[a-z-]{2,30}$/.test(head)) {
+        topNav("labs"); view = head;
+        if (CertHub.blueteam) title = CertHub.blueteam.show(head);
+        else { title = "Blue-team practice"; $("#app").innerHTML = `${CertHub.fx.skeleton()}`; CertHub.loadScript("assets/blueteam.js").then(ok => { if (location.hash === "#" + head && CertHub.blueteam) document.title = `${CertHub.blueteam.show(head)} · StudyToCert`; else if (!ok) $("#app").innerHTML = `<p class="meta" role="status">This page couldn't load. Check your connection and try again.</p>`; }); }
       }
       else if (head === "whats-new") { topNav(""); $("#app").innerHTML = newsView(); title = "What's New"; view = head; }
       else if (head === "review" && CertHub.review) { topNav("home"); $("#app").innerHTML = CertHub.review.show(); title = "Daily Review"; view = "review"; }
