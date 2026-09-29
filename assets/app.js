@@ -34,20 +34,66 @@
   const TRACKS = CertHub.tracks || [{ id: "all", name: "All", certs: CertHub.catalog }];
   const TRACK_KEY = "certhub:track";
   const curTrack = () => { const t = CertHub.store.get(TRACK_KEY) || "all"; return t === "all" || TRACKS.some(x => x.id === t) ? t : "all"; };
-  // Certifications with saved progress, newest activity first: jump back in.
-  function continueHtml() {
-    const rows = Object.values(certs).map(c => {
-      let p = null; try { p = JSON.parse(CertHub.store.get("certhub:v1:" + c.id) || "null"); } catch (e) {}
-      if (!p || !p.start) return null;
-      const last = Math.max(0, ...(p.history || []).map(h => h.at));
+  /* ---------- dashboard: every certification you've started, on one page ---------- */
+  function startedCerts() {
+    let ready = {}; try { ready = JSON.parse(CertHub.store.get("certhub:ready") || "{}") || {}; } catch (e) {}
+    return Object.values(certs).map(c => {
+      const p = loadProgress(c.id);
+      if (!p.start) return null;
+      const last = Math.max(0, ...(p.history || []).map(h => h.at || 0));
       const used = last || Object.keys(p.read || {}).length || Object.keys(p.stats || {}).length || Object.values(p.checks || {}).some(Boolean);
       if (!used) return null;
-      const wk = Math.max(1, Math.floor((U.today() - U.parseD(p.start)) / U.DAY / 7) + 1);
+      const weeks = buildPlan(c).weeks.length;
+      const wk = Math.min(weeks, Math.max(1, Math.floor((U.today() - U.parseD(p.start)) / U.DAY / 7) + 1));
       const due = Object.values(p.review || {}).filter(r => r.due <= U.today().getTime() + 1000).length;
-      return { c, wk, due, last };
-    }).filter(Boolean).sort((a, b) => b.last - a.last).slice(0, 4);
+      const s = Object.values(p.stats || {}).reduce((a, x) => ({ c: a.c + x.c, t: a.t + x.t }), { c: 0, t: 0 });
+      const days = p.examDate ? Math.ceil((U.parseD(p.examDate) - U.today()) / U.DAY) : null;
+      const r = ready[c.id] && isFinite(ready[c.id].score) ? Math.round(ready[c.id].score) : null;
+      return { c, p, last, weeks, wk, due, acc: s.t ? Math.round(100 * s.c / s.t) : null, answered: s.t, days, ready: r };
+    }).filter(Boolean).sort((a, b) => b.last - a.last);
+  }
+  const readyColor = r => r >= 80 ? "var(--ok)" : r >= 60 ? "var(--warn)" : "var(--bad)";
+  function dashCard(x) {
+    const id = esc(x.c.id);
+    const ring = CertHub.fx.ring(x.ready ?? 0, x.ready == null ? "var(--line)" : readyColor(x.ready), x.ready == null ? `<span aria-hidden="true">–</span>` : `<span data-count="${esc(x.ready)}">${esc(x.ready)}</span><small>/100</small>`);
+    const exam = x.days == null ? "" : x.days > 0 ? `<strong>${esc(x.days)}</strong> day${x.days === 1 ? "" : "s"} to the exam` : x.days === 0 ? "<strong>Exam day.</strong> Good luck!" : "Exam date passed";
+    return `<div class="panel dashcard" data-style="--c:${dc(x.c.domains[0].id)}">
+      <div class="dashtop">${ring}<div class="grow"><span class="vendor">${esc(x.c.vendor)} · ${esc(x.c.exam)}</span><h2><a href="#${id}.week">${esc(x.c.short || x.c.name)}</a></h2>
+        <p class="note">${x.ready == null ? `Readiness appears after you open <a href="#${id}.progress">Progress</a>.` : `Exam readiness ${esc(x.ready)}/100.`}</p></div></div>
+      <ul class="dashstats">
+        <li>${exam || `<a href="#${id}.progress">Set your exam date</a>`}</li>
+        <li>Week <strong>${esc(x.wk)}</strong> of ${esc(x.weeks)}</li>
+        <li>${x.acc == null ? "No questions answered yet" : `<strong>${esc(x.acc)}%</strong> of ${esc(x.answered)} answered correctly`}</li>
+        <li>${x.due ? `<strong>${esc(x.due)}</strong> review${x.due === 1 ? "" : "s"} due` : "Review queue clear"}</li>
+      </ul>
+      <div class="track" aria-hidden="true"><i data-style="width:${Math.round(100 * x.wk / x.weeks)}%;background:var(--c)"></i></div>
+      <div class="btns"><a class="btn sm" href="#${id}.week">Today's plan</a><a class="btn ghost sm" href="#${id}.practice">Practice</a><a class="btn ghost sm" href="#${id}.progress">Progress</a></div></div>`;
+  }
+  function dashboardView() {
+    const list = startedCerts(), st = CertHub.activity.streak();
+    const lp = loadLabProgress(), doneLabs = labOrder.filter(id => labs[id] && labStatus(labs[id], lp).state === "done").length;
+    if (!list.length) return `<h1>Your dashboard</h1><p class="meta">Every certification you study shows up here with its readiness, exam countdown and what's due.</p>
+      <div class="panel startcard"><div class="grow"><strong>Nothing started yet</strong><br><span class="note">Pick a certification and open its plan. It appears here as soon as you answer a question, read a lesson or check off a day.</span></div><a class="btn sm" href="#home">Pick a certification</a></div>`;
+    const next = list.filter(x => x.days != null && x.days >= 0).sort((a, b) => a.days - b.days)[0];
+    const due = list.reduce((n, x) => n + x.due, 0);
+    const flame = st.current ? CertHub.fx.icon("flame", st.current >= 7 ? "flame l3" : st.current >= 3 ? "flame l2" : "flame") : "";
+    return `<h1>Your dashboard</h1><p class="meta">${list.length} certification${list.length === 1 ? "" : "s"} in progress. Saved in this browser only.</p>
+      <div class="dashsum">
+        <div class="panel"><span class="note">Study streak</span><strong class="dashnum">${flame}<span data-count="${esc(st.current)}">${esc(st.current)}</span> day${st.current === 1 ? "" : "s"}</strong><span class="note">${st.today ? "Studied today." : "Study today to keep it going."}</span></div>
+        <div class="panel"><span class="note">Next exam</span><strong class="dashnum">${next ? `<span data-count="${esc(next.days)}">${esc(next.days)}</span> day${next.days === 1 ? "" : "s"}` : "–"}</strong><span class="note">${next ? esc(`${next.c.short} ${next.c.exam}`) : "No upcoming exam date"}</span></div>
+        <div class="panel"><span class="note">Reviews due</span><strong class="dashnum"><span data-count="${esc(due)}">${esc(due)}</span></strong><span class="note">${due ? `<a href="#review">Start the daily review</a>` : "All caught up"}</span></div>
+        <div class="panel"><span class="note">Labs finished</span><strong class="dashnum"><span data-count="${esc(doneLabs)}">${esc(doneLabs)}</span></strong><span class="note"><a href="#${doneLabs ? "portfolio" : "labs"}">${doneLabs ? "See your portfolio" : "Browse labs"}</a></span></div>
+      </div>
+      <h2>Certifications</h2>
+      <div class="dashgrid">${list.map(dashCard).join("")}</div>
+      <p class="note">Readiness is an estimate from your quizzes, lessons and practice exams, updated when you open a certification. <a href="#home">Add another certification</a>.</p>`;
+  }
+  // Certifications with saved progress, newest activity first: jump back in.
+  function continueHtml() {
+    const rows = startedCerts().slice(0, 4);
     if (!rows.length) return "";
-    return `<h2>Continue studying</h2><div class="panel">${rows.map(r => `<div class="row"><div class="grow"><a href="#${esc(r.c.id)}.week"><strong>${esc(r.c.short)} ${esc(r.c.exam)}</strong></a><br><span class="note">Week ${esc(r.wk)}${r.due ? ` · ${esc(r.due)} review${r.due > 1 ? "s" : ""} due` : ""}</span></div><a class="btn sm" href="#${esc(r.c.id)}.week">Today's plan</a></div>`).join("")}</div>`;
+    return `<h2>Continue studying</h2><div class="panel">${rows.map(r => `<div class="row"><div class="grow"><a href="#${esc(r.c.id)}.week"><strong>${esc(r.c.short)} ${esc(r.c.exam)}</strong></a><br><span class="note">Week ${esc(r.wk)}${r.days != null && r.days >= 0 ? ` · ${esc(r.days)} days to the exam` : ""}${r.due ? ` · ${esc(r.due)} review${r.due > 1 ? "s" : ""} due` : ""}</span></div><a class="btn sm" href="#${esc(r.c.id)}.week">Today's plan</a></div>`).join("")}
+      <div class="btns"><a class="btn ghost sm" href="#dashboard">Open your dashboard</a></div></div>`;
   }
   function trackPicker() {
     const cur = curTrack();
@@ -179,6 +225,7 @@
     ${trackPicker()}
     <div id="trackcards">${trackCards()}</div>
     <h2>Your progress</h2>
+    <p class="note"><a href="#dashboard">Your dashboard</a>: readiness, exam countdowns and reviews for every certification you're studying, on one page.</p>
     ${(() => { const st = CertHub.activity.streak(); return `<div class="panel startcard"><div class="grow"><strong>${st.current ? `${CertHub.fx.icon("flame", st.current >= 7 ? "flame l3" : st.current >= 3 ? "flame l2" : "flame")} ${esc(st.current)}-day study streak` : "Start a study streak"}</strong><br><span class="note">${st.current ? (st.today ? "You studied today. " : "Study today to keep it going. ") : "Answer a question or read a lesson each day. "}${st.best ? `Best: ${esc(st.best)} days.` : ""}</span></div><button type="button" class="btn ghost sm" data-gact="reminder">Set a daily reminder</button></div>`; })()}
     <div class="panel">
       <p class="note" data-style="margin:0">Progress, lab notes and checkmarks are saved in this browser only. Nothing is sent anywhere. Back up to move them to another device.</p>
@@ -235,7 +282,7 @@
     const q = new URLSearchParams({ p: name, t: title || name, e: "true", rnd: Math.random().toString(36).slice(2) });
     try { fetch(`${gc}/count?${q}`, { mode: "no-cors", credentials: "omit", keepalive: true, referrerPolicy: "no-referrer" }).catch(() => {}); } catch (e) {}
   };
-  const LIGHT = new Set(["home", "whats-new", "review", "privacy", "terms", "security", "install", "support", "exam-day", "account"]);
+  const LIGHT = new Set(["home", "dashboard", "whats-new", "review", "privacy", "terms", "security", "install", "support", "exam-day", "account"]);
   function route() {
     let raw = "";
     try { raw = decodeURIComponent(location.hash.replace(/^#/, "")); } catch (e) { raw = ""; }
@@ -280,6 +327,7 @@
         if (CertHub.vm) title = CertHub.vm.show(head);
         else { title = "Practice VMs"; $("#app").innerHTML = `${CertHub.fx.skeleton()}`; CertHub.loadScript("assets/vm.js").then(ok => { if (location.hash === "#" + head && CertHub.vm) document.title = `${CertHub.vm.show(head)} · StudyToCert`; else if (!ok) $("#app").innerHTML = `<p class="meta" role="status">This page couldn't load. Check your connection and try again.</p>`; }); }
       }
+      else if (head === "dashboard") { topNav("home"); $("#app").innerHTML = dashboardView(); title = "Your Dashboard"; view = head; }
       else if (head === "whats-new") { topNav(""); $("#app").innerHTML = newsView(); title = "What's New"; view = head; }
       else if (head === "review" && CertHub.review) { topNav("home"); $("#app").innerHTML = CertHub.review.show(); title = "Daily Review"; view = "review"; }
       else if (head === "portfolio") { topNav("portfolio"); $("#app").innerHTML = CertHub.labViews.portfolio(); title = "Lab Portfolio"; view = "portfolio"; }

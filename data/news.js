@@ -1,6 +1,15 @@
 /* What's new: learner-facing release notes, newest first. Add an entry when something visible ships.
    Each entry: { date: "YYYY-MM-DD", title, items: [ ... ], es: { title, items } } (es: the Spanish version). Shown at #whats-new and on the home page. */
 CertHub.news = [
+  { date: "2026-09-29", title: "Your dashboard",
+    items: [
+      "A new dashboard shows every certification you're studying on one page: exam readiness, days to the exam, where you are in the plan, accuracy and reviews due.",
+      "At the top: your study streak, your next exam, reviews due across all certifications and labs finished."
+    ],
+    es: { title: "Tu panel", items: [
+      "Un nuevo panel muestra todas las certificaciones que estudias en una sola página: preparación para el examen, días hasta el examen, en qué punto del plan vas, aciertos y repasos pendientes.",
+      "Arriba: tu racha de estudio, tu próximo examen, los repasos pendientes de todas las certificaciones y los laboratorios terminados."
+    ] } },
   { date: "2026-09-29", title: "A livelier look",
     items: [
       "Your exam readiness and quiz scores now fill a progress ring, and bars grow in as you scroll.",

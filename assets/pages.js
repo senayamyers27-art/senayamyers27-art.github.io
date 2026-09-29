@@ -2,7 +2,7 @@
    (and at /privacy/, /terms/, /security/ on the real site). Keep these accurate: they describe
    what the code actually does, so update them whenever storage, hosting or tracking changes. */
 (function () {
-  const EFFECTIVE = "September 26, 2026";
+  const EFFECTIVE = "September 29, 2026";
   const SITE = "StudyToCert";
   const U = CertHub.U;
   const contact = () => `<a href="https://github.com/senayamyers27-art/Claude.ai-stuff/security/advisories/new" target="_blank" rel="noopener">GitHub private reporting</a>`;
@@ -24,7 +24,7 @@
       <li>If you join an organization through an invite: your membership. Instructors of your cohort can see your email and progress numbers (questions answered, accuracy, days checked, labs finished, last test score and last activity). They cannot see your lab notes.</li>
       <li>If you join a class with a teacher's join code: the name you choose for that class and, only if you tick the box, your email address. Nothing is shared until you read what the teacher will see and agree to it. From then on the teacher sees a progress summary computed from your synced progress: which certifications you study and, for each, exam readiness, lessons read, best practice exam score, questions answered, hands-on exercises done and when you were last active, plus how many labs you've finished. Teachers never see your answers, review queue, lab notes or write-ups. You can leave a class at any time on the Account page, which stops sharing immediately; a teacher can also remove you or delete the class.</li>
       <li>If you teach a class: its name, the name you show students, its join code and who has joined.</li>
-      <li>A security log of account events (sign-in, billing and organization changes) with the time and IP address, kept to investigate abuse.</li>
+      <li>A security log of account events (sign-in, billing and organization changes) with the time and a keyed hash of the IP address (not the address itself), kept for one year to investigate abuse. Expired sign-in links and sessions are deleted every day.</li>
     </ul>
     <p>Sign-in emails are sent through our email provider (Resend). On the Account page you can download all your account data or delete your account at any time. Deleting it removes your server data and cancels any subscription; progress on your own device stays until you clear it.</p>`;
   }

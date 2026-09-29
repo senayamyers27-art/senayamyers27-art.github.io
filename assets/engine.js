@@ -561,6 +561,14 @@
     if (due > 10) tips.push(`Clear your review queue (${due} due).`);
     return { score, band: score >= 80 ? ["Ready to book", "var(--ok)"] : score >= 60 ? ["Getting close", "var(--warn)"] : ["Not yet", "var(--bad)"], tips };
   }
+  // The latest readiness score for each certification, for the dashboard (which can't compute it without the lessons).
+  function cacheReadiness() {
+    try {
+      const all = JSON.parse(CertHub.store.get("certhub:ready") || "{}"), score = readiness().score, old = all[C.id];
+      if (old && old.score === score && old.at > Date.now() - 36e5) return;
+      all[C.id] = { score, at: Date.now() }; CertHub.store.set("certhub:ready", JSON.stringify(all));
+    } catch (e) {}
+  }
   function readinessHtml() {
     const r = readiness();
     return `<div class="panel ready"><div class="flex"><div><strong>Exam readiness</strong><br><span class="chip" data-style="--c:${esc(r.band[1])}">${esc(r.band[0])}</span></div>${CertHub.fx.ring(r.score, r.band[1], `<span data-count="${esc(r.score)}">${esc(r.score)}</span><small>/100</small>`)}</div>
@@ -1255,6 +1263,7 @@
     if (S.tab === "guide" && !Pro().available) S.tab = "week";
     const v = { certificate: certificateView, cheat: cheatView, week: weekView, learn: learnView, plan: planView, practice: practiceView, labs: labsView, progress: progressView, guide: guideView, about: aboutView }[S.tab];
     $("#app").innerHTML = v();
+    if (LES !== null) cacheReadiness();
     if (pendingVideo && LES && S.tab === "learn") {
       const k = pendingVideo, tt = [...LES.keys()].find(x => lessonKey(x) === k); pendingVideo = null;
       history.replaceState(null, "", `#${C.id}.learn`);
