@@ -1,4 +1,4 @@
-/* Network design puzzles (#net-design): a scenario and a network drawn as rows of devices with blank slots.
+/* Network Design puzzles (#net-design): a scenario and a network drawn as rows of devices with blank slots.
    Pick the device for each slot, check, and read why each belongs where it does. Network+, Security+, CCNA and A+
    level. Loaded on first visit. */
 (function () {
@@ -59,7 +59,7 @@
     const p = PUZZLES[S.i], done = saved();
     const slots = p.rows.flat().filter(n => typeof n !== "string");
     const right = slots.filter(n => S.picks[n.id] === n.answer).length;
-    return `<p class="crumbs"><a href="#labs">Labs</a> / Network design</p><h1>Network design puzzles</h1>
+    return `<p class="crumbs"><a href="#labs">Labs</a> / Network Design</p><h1>Network Design puzzles</h1>
       <p class="meta">Put the right device in each blank. ${PUZZLES.filter(x => done[x.id]).length} of ${PUZZLES.length} solved.</p>
       <div class="panel"><div class="flex"><strong>${esc(S.i + 1)}. ${esc(p.title)}</strong><span class="note">${esc(p.level)}</span></div>
         <p>${esc(p.text)}</p>

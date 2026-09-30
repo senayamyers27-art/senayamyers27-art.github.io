@@ -1,4 +1,4 @@
-/* Blue-team practice in the browser (no VM): log puzzles (#log-puzzles) and incident-response tabletop exercises
+/* Blue Team in the browser (no VM): log puzzles (#log-puzzles) and incident-response tabletop exercises
    (#tabletop, #tabletop-<id>). Log puzzles show a short excerpt: pick the line that matters and read why.
    Tabletops are choose-your-path scenarios that follow the incident response phases (NIST SP 800-61):
    every choice is explained, and the best path is scored. All data is invented for practice. Loaded on first visit. */

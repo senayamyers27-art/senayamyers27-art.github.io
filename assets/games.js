@@ -1,4 +1,4 @@
-/* Quick games (#games, #game-<id>): 60-second rounds of multiple choice on facts worth knowing cold.
+/* Games (#games, #game-<id>): 60-second rounds of multiple choice on facts worth knowing cold.
    Subnetting questions are generated and checked by calculation; ports, acronyms and OSI layers come from
    the fixed lists below. Best scores stay in this browser (certhub:games). Loaded on first visit to a game page. */
 (function () {
@@ -127,7 +127,7 @@
 
   function hub() {
     const s = scores();
-    return `<p class="crumbs"><a href="#labs">Labs</a> / Games</p><h1>Quick games</h1>
+    return `<p class="crumbs"><a href="#labs">Labs</a> / Games</p><h1>Games</h1>
       <p class="meta">Sixty seconds of rapid-fire questions on the facts exams expect you to know cold. Play one while the kettle boils. Use the number keys 1 to 4 to answer.</p>
       <div class="cards gamegrid">${GAMES.map(g => `<a class="card gamecard" href="#game-${esc(g.id)}"><span class="trackico">${CertHub.fx.icon(g.icon)}</span><h2>${esc(g.name)}</h2><p>${esc(g.blurb)}</p>
         <div class="cardfoot"><span>${esc(g.certs)}</span><span>${s[g.id] ? `Best: <strong>${esc(s[g.id].best)}</strong>` : "Not played yet"}</span></div></a>`).join("")}</div>`;
@@ -194,7 +194,7 @@
     const g = byId(($("#gamebox").dataset.gid) || "");
     if (!g) return;
     if (b.dataset.game === "start") start(g);
-    if (b.dataset.game === "share" && G && G.done) CertHub.fx.shareCard({ kicker: "Quick games", title: g.name, pct: G.asked ? Math.round(100 * G.score / G.asked) : 0, ringColor: "var(--accent)", big: String(G.score), line1: `${G.score} of ${G.asked} correct in ${ROUND} seconds`, line2: "Free study plans at StudyToCert", file: `studytocert-${g.id}-${G.score}`, text: `I got ${G.score} in ${ROUND} seconds on ${g.name} at StudyToCert.` });
+    if (b.dataset.game === "share" && G && G.done) CertHub.fx.shareCard({ kicker: "Games", title: g.name, pct: G.asked ? Math.round(100 * G.score / G.asked) : 0, ringColor: "var(--accent)", big: String(G.score), line1: `${G.score} of ${G.asked} correct in ${ROUND} seconds`, line2: "Free study plans at StudyToCert", file: `studytocert-${g.id}-${G.score}`, text: `I got ${G.score} in ${ROUND} seconds on ${g.name} at StudyToCert.` });
   });
   document.addEventListener("keydown", e => {
     if (!G || G.done || !G.q || e.altKey || e.ctrlKey || e.metaKey || /^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || "")) return;

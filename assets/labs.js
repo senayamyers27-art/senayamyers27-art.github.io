@@ -50,8 +50,8 @@
     <p class="meta">${all().length} labs built from what security, network and GRC teams actually do day to day. Each has step-by-step instructions with exact commands, checks that prove it worked, a place for your notes, and a write-up and resume bullet for your portfolio.</p>
     <div class="figs3"><div class="fig"><b>${esc(counts.done)}</b><span>done</span></div><div class="fig"><b>${esc(counts.doing)}</b><span>in progress</span></div><div class="fig"><b>${esc(counts.new)}</b><span>not started</span></div></div>
     <div class="panel installcard vmcard"><div class="grow"><strong>Practice VMs</strong><br><span class="note">Real Linux servers in your browser: free practice, two networked machines, graded labs checked inside the VM, and a timed exam. Nothing to install.</span></div><a class="btn sm" href="#vm">Open the practice VMs</a></div>
-    <div class="panel installcard btcard"><div class="grow"><strong>Blue-team practice in your browser</strong><br><span class="note">Log and cloud puzzles: spot the line that matters in real kinds of logs and cloud settings. Tabletop exercises: talk through a ransomware, phishing or lost-laptop incident step by step. Network design: put the right device in each part of a network.</span></div><div class="btns" data-style="margin:0"><a class="btn ghost sm" href="#log-puzzles">Log puzzles</a><a class="btn ghost sm" href="#tabletop">Tabletops</a><a class="btn ghost sm" href="#net-design">Network design</a></div></div>
-    <div class="panel installcard gamescard"><div class="grow"><strong>Quick games</strong><br><span class="note">Sixty-second rounds on subnetting, ports, acronyms, OSI layers and commands.</span></div><a class="btn ghost sm" href="#games">Play</a></div>
+    <div class="panel installcard btcard"><div class="grow"><strong>Blue Team in your browser</strong><br><span class="note">Log and cloud puzzles: spot the line that matters in real kinds of logs and cloud settings. Tabletop exercises: talk through a ransomware, phishing or lost-laptop incident step by step. Network Design: put the right device in each part of a network.</span></div><div class="btns" data-style="margin:0"><a class="btn ghost sm" href="#log-puzzles">Log puzzles</a><a class="btn ghost sm" href="#tabletop">Tabletops</a><a class="btn ghost sm" href="#net-design">Network Design</a></div></div>
+    <div class="panel installcard gamescard"><div class="grow"><strong>Games</strong><br><span class="note">Sixty-second rounds on subnetting, ports, acronyms, OSI layers and commands.</span></div><a class="btn ghost sm" href="#games">Play</a></div>
     ${first && labStatus(first, lp).state !== "done" ? `<div class="status notice"><strong>Start here:</strong> most labs run in the home lab you build in <a href="#lab-home-lab">${esc(first.title)}</a>.</div>` : ""}
     <div class="filters">
       <label>Track <select id="f-track"><option value="">All tracks</option>${TRACKS.map(t => `<option ${filters.track === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
@@ -95,6 +95,11 @@
     <h2>Your notes and findings</h2>
     <p class="note">Write what you saw, commands that behaved differently, screenshots you took. Saved in this browser as you type, and used in your write-up.</p>
     <textarea id="labnotes" rows="7" placeholder="e.g. Lynis hardening index went from 58 to 74 after disabling password SSH and enabling ufw.">${esc(s.notes || "")}</textarea>
+    ${/* html: built with esc() in sync.js */ CertHub.premium ? `<div class="btns">${CertHub.premium.button("writeup", "AI feedback on my write-up", () => {
+      const notes = (($("#labnotes") || {}).value || "").trim();
+      if (notes.length < 20) { CertHub.ui.toast("Write a few notes about what you did first."); return null; }
+      return { subtitle: lab.title, context: { title: lab.title, goal: lab.goal || lab.summary || "", deliverable: lab.deliverable || "", bullet: lab.resume || "", notes } };
+    })}</div>` : ""}
     <h2>For your portfolio</h2>
     <div class="panel"><strong>Deliverable</strong><p>${esc(lab.deliverable)}</p>
       <strong>Resume bullet</strong><p class="resume">${esc(lab.resume)}</p>
@@ -195,11 +200,16 @@ ${lab.deliverable}
   function resumeBuilder() {
     const roles = nice().roles;
     return `<h2>Resume builder</h2>
-    <p class="note">Builds a resume section from your finished labs and the certifications you're studying. Nothing leaves your browser.</p>
+    <p class="note">Builds a resume section from your finished labs and the certifications you're studying. Nothing leaves your browser${CertHub.premium && CertHub.premium.active ? " unless you ask for the AI resume review" : ""}.</p>
     <div class="panel resumeb">
       <label for="rb-name">Your name (optional)</label><input type="text" id="rb-name" autocomplete="name">
       <label for="rb-role">Target role</label><select id="rb-role">${roles.map(r => `<option value="${esc(r.id)}">${esc(r.name)}</option>`).join("")}</select>
-      <div class="btns"><button type="button" class="btn" data-lact="resumecopy">Copy resume section</button><button type="button" class="btn ghost no-framed" data-lact="resumedl">Download (.md)</button></div>
+      ${CertHub.premium && CertHub.premium.active ? `<label for="rb-own">Your current resume or LinkedIn summary (optional, for the AI review)</label><textarea id="rb-own" rows="6" maxlength="8000" placeholder="Paste it here, or leave empty to review the section built from your labs."></textarea>` : ""}
+      <div class="btns"><button type="button" class="btn" data-lact="resumecopy">Copy resume section</button><button type="button" class="btn ghost no-framed" data-lact="resumedl">Download (.md)</button>${/* html: built with esc() in sync.js */ CertHub.premium ? CertHub.premium.button("resume", "AI resume review", () => {
+        const roleId = (document.getElementById("rb-role") || {}).value, role = nice().roles.find(r => r.id === roleId);
+        const own = ((document.getElementById("rb-own") || {}).value || "").trim();
+        return { subtitle: `For ${role ? role.name : "your target role"}`, context: { role: role ? role.name : "IT professional", resume: own || resumeMarkdown() } };
+      }) : ""}</div>
     </div>`;
   }
   function resumeMarkdown() {

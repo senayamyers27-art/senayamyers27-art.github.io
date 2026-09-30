@@ -471,6 +471,39 @@
   }
   const lessonLink = q => { const t = lessonFor(q); return t ? `<button type="button" class="linkbtn" data-ui data-act="golesson" data-k="${lessonKey(t)}">Review the lesson: ${esc(t.length > 70 ? t.slice(0, 68) + "…" : t)}</button>` : ""; };
   const reportLink = (title, body) => { const u = CertHub.reportUrl(title, body); return u ? `<a class="report" data-ui href="${esc(u)}" target="_blank" rel="noopener">Report a mistake</a>` : ""; };
+  // Free plan: one timed practice exam per certification (the regular or hard mode exam); paid plans are unlimited.
+  // Counts exams started (S.p.examStarts) and, for progress saved before the limit existed, finished ones.
+  const PLANS = () => CertHub.plans || { paid: true, FREE: {} };
+  const examsUsed = () => Math.max(S.p.examStarts || 0, (S.p.history || []).filter(h => /^(Practice exam|Hard mode exam)$/.test(h.title)).length);
+  const examsLeft = () => PLANS().paid ? Infinity : Math.max(0, PLANS().FREE.exams - examsUsed());
+  function startExam(title, qs) {
+    if (!examsLeft()) { PLANS().upsell(`The Free plan includes ${PLANS().FREE.exams} practice exam for each certification, and you've used the one for ${C.short}. Pro and Premium Pro include unlimited practice exams, plus full-length exams and a score report. Weekly quizzes, checkpoint tests and smart practice stay free.`); return; }
+    if (!PLANS().paid) { S.p.examStarts = examsUsed() + 1; save(); }
+    startQuiz({ title, qs, mode: "test", minutes: examMinutes(qs.length) });
+  }
+  const examBtn = (act, cls) => examsLeft() ? `<button class="${esc(cls)}" data-act="${esc(act)}">Start</button>` : CertHub.plans.lock();
+  // Pro: 3 full-length exams a month per certification; Premium Pro (and organization seats) are unlimited.
+  const FULL_PER_MONTH = 3, month = () => new Date().toISOString().slice(0, 7);
+  const fullUsed = () => (S.p.fullMonth && S.p.fullMonth.m === month() ? S.p.fullMonth.n : 0);
+  const fullLimited = () => CertHub.plans && CertHub.plans.current === "pro";
+  // Premium Pro: AI weak-spot practice from this certification's weakest domains and recently missed questions.
+  function drillBtn() {
+    if (!CertHub.premium) return "";
+    return CertHub.premium.button("drill", "AI weak-spot practice", () => {
+      const weak = C.domains.map(d => { const st = (S.p.stats || {})[d.id] || { c: 0, t: 0 }; return { name: d.name, answered: st.t, accuracy: st.t ? Math.round(100 * st.c / st.t) : null, score: st.t ? st.c / st.t : 0.5 }; }).sort((a, b) => a.score - b.score).slice(0, 3);
+      const missed = Object.keys(S.p.review || {}).map(id => Q.find(q => q.id === id)).filter(Boolean).slice(0, 5).map(q => q.q);
+      return { subtitle: `${C.short} ${C.exam} · new questions on your weakest topics`, context: { certId: C.id, certName: `${C.name} (${C.exam})`, weak: weak.map(({ name, answered, accuracy }) => ({ name, answered, accuracy })), missed } };
+    });
+  }
+
+  // Free plan: the first exam simulation in each domain.
+  const simFree = p => PLANS().paid || !SIMS || SIMS.find(x => x.d === p.d) === p;
+
+  // Premium Pro: "Explain with the AI tutor" for a question (CertHub.premium in sync.js; empty when not offered).
+  const tutorBtn = (q, picked) => { const b = CertHub.premium ? CertHub.premium.button("explain", "Explain with the AI tutor", () => ({
+    subtitle: `${C.short} ${C.exam} · ${domName(q.d)}`,
+    context: { certId: C.id, certName: `${C.name} (${C.exam})`, domain: domName(q.d), question: q.q, options: q.o, answer: q.a, chosen: picked == null ? null : picked, explanation: q.e }
+  }), "linkbtn") : ""; return b ? "<br>" + b : ""; };
   const qReport = q => reportLink(`${C.short}: question ${q.id}`, `Certification: ${C.name} (${C.exam})\nQuestion ${q.id}: ${q.q}\nMarked answer: ${q.o[q.a]}`);
   const diagramHtml = t => CertHub.diagramsFor(C.id, t).map(d => `<figure class="diagram">${esc(d.svg.replace(/^<svg /, `<svg role="img" aria-label="${esc(d.alt)}" focusable="false" `))}<figcaption>${esc(d.title)}</figcaption></figure>`).join("");
   const lessonTopics = w => w.dom ? w.topics.filter(t => !/^Checkpoint test/i.test(t)) : [];
@@ -586,7 +619,7 @@
     unread.forEach(t => items.push(`<li>Read: <button type="button" class="linkbtn" data-act="golesson" data-k="${lessonKey(t)}">${esc(t.length > 80 ? t.slice(0, 78) + "…" : t)}</button></li>`));
     if (due) items.push(`<li><button type="button" class="linkbtn" data-act="review">Review ${due} question${due > 1 ? "s" : ""} due today</button></li>`);
     if (di === 4) items.push(`<li><button type="button" class="linkbtn" data-act="weekly" data-w="${esc(n)}">Take the week ${esc(n)} quiz</button></li>`);
-    if (SIMS && SIMS.length && di === 3) { const next = SIMS.find(p => p.d === w.dom && !(S.p.sims || {})[p.id]); if (next) items.push(`<li>Try a simulation: <button type="button" class="linkbtn" data-act="gosim" data-id="${esc(next.id)}">${esc(next.title)}</button></li>`); }
+    if (SIMS && SIMS.length && di === 3) { const next = SIMS.find(p => p.d === w.dom && !(S.p.sims || {})[p.id] && simFree(p)); if (next) items.push(`<li>Try a simulation: <button type="button" class="linkbtn" data-act="gosim" data-id="${esc(next.id)}">${esc(next.title)}</button></li>`); }
     return `<div class="panel today"><div class="flex"><h2 data-style="margin:0">Today · ${esc(day)}</h2><label class="note"><input type="checkbox" data-check="${esc(k)}" ${doneToday ? "checked" : ""}> Done</label></div>
       <p data-style="margin:8px 0 6px">${esc(di === 3 ? "Hands-on: " + (weekLabs(w).map(l => l.title).join("; ") || w.lab) : text)}</p>
       ${items.length ? `<ul class="clean">${/* html: list items built above, each value escaped */ items.join("")}</ul>` : `<p class="note" data-style="margin:0">Nothing else due today. Nice work.</p>`}</div>`;
@@ -709,10 +742,12 @@
     const res = S.p.sims || {};
     return `<h2>Exam simulations</h2>
     <p class="note">Hands-on items like the performance-based questions on the real exam: match, order, read logs and configs, and fill in values.</p>
-    <div class="panel">${SIMS.map(p => { const r = res[p.id]; return `<div class="row"><div class="grow"><h3>${esc(p.title)}</h3><span class="note">${esc(SIM_TYPE[p.type]) || ""} · Domain ${esc(p.d)}${r ? ` · best ${esc(r.best)}%` : ""}</span></div><button class="btn ${r ? "ghost" : ""}" data-act="simstart" data-id="${esc(p.id)}">${r ? "Retry" : "Start"}</button></div>`; }).join("")}</div>`;
+    ${PLANS().paid ? "" : `<p class="note planlimit">Free plan: the first simulation in each domain. <a href="#plans">Pro and Premium Pro</a> include all ${esc(SIMS.length)}.</p>`}
+    <div class="panel">${SIMS.map(p => { const r = res[p.id]; return `<div class="row"><div class="grow"><h3>${esc(p.title)}</h3><span class="note">${esc(SIM_TYPE[p.type]) || ""} · Domain ${esc(p.d)}${r ? ` · best ${esc(r.best)}%` : ""}</span></div>${simFree(p) ? `<button class="btn ${r ? "ghost" : ""}" data-act="simstart" data-id="${esc(p.id)}">${r ? "Retry" : "Start"}</button>` : CertHub.plans.lock("Pro")}</div>`; }).join("")}</div>`;
   }
   function simStart(id) {
     const p = SIMS && SIMS.find(x => x.id === id); if (!p) return;
+    if (!simFree(p)) { PLANS().upsell("The Free plan includes the first exam simulation in each domain. Pro and Premium Pro include every simulation for every certification."); return; }
     const st = { p, done: false };
     if (p.type === "match") { st.opts = shuffle([...new Set(p.pairs.map(x => x[1]).concat(p.extra || []))]); st.items = shuffle(p.pairs.map((_, i) => i)); st.ans = p.pairs.map(() => ""); }
     if (p.type === "order") { do { st.order = shuffle(p.steps.map((_, i) => i)); } while (p.steps.length > 1 && st.order.every((v, i) => v === i)); }
@@ -1118,6 +1153,7 @@
       <div class="row"><div class="grow"><h3>Placement test</h3><span class="note">${S.p.placement ? `Last taken ${esc(fmt(new Date(S.p.placement.at)))}. Retake it to see where you stand now.` : "A few questions from every domain to find what you already know and where to start"}</span></div><button class="btn ${S.p.placement ? "ghost" : ""}" data-act="placement">${S.p.placement ? "Retake" : "Start"}</button></div>
       <div class="row"><div class="grow"><h3>Weekly quiz</h3><span class="note">10 questions with instant feedback</span></div><select id="wsel" aria-label="Week">${W.map(w => `<option value="${esc(w.n)}" ${w.n === weekNow() ? "selected" : ""}>Week ${esc(w.n)}</option>`).join("")}</select><button class="btn" data-act="weekly-sel">Start</button></div>
       <div class="row"><div class="grow"><h3>Smart practice</h3><span class="note">15 questions picked for you: more from your weaker domains, harder where you're already strong</span></div><button class="btn" data-act="smart">Start</button></div>
+      ${/* html: built with esc() in sync.js */ drillBtn() ? `<div class="row"><div class="grow"><h3>AI weak-spot practice</h3><span class="note">New questions written for your weakest topics, one at a time, with explanations. Premium Pro.</span></div>${drillBtn()}</div>` : ""}
       <div class="row"><div class="grow"><h3>Review queue</h3><span class="note">Questions you missed, spaced 1, 3, 7 and 14 days apart</span></div><button class="btn" data-act="review" ${due ? "" : "disabled"}>${due ? `Review ${due}` : "Nothing due"}</button></div>
       <div class="row"><div class="grow"><h3>Domain drill</h3><span class="note">15 random questions</span></div><select id="dsel" aria-label="Domain">${C.domains.map(d => `<option value="${esc(d.id)}">D${esc(d.id)} (${cnt(d.id)})</option>`).join("")}</select>${Q.some(q => q.lv) ? `<select id="lvsel" aria-label="Difficulty"><option value="0">Any level</option>${[1, 2, 3].map(n => `<option value="${esc(n)}">${esc(LEVELS[n])}</option>`).join("")}</select>` : ""}<button class="btn" data-act="drill">Start</button></div>
       <details class="builder"><summary><h3>Build your own quiz</h3></summary>
@@ -1136,16 +1172,18 @@
     <p class="note">Timed, up to 25 questions, answers shown at the end. Aim for 80% or better before moving on.</p>
     <div class="panel">${PLAN.checkpoints.map(c => `<div class="row"><div class="grow"><h3>Domain ${esc(c.dom)}: ${esc(DOM[c.dom].name)}</h3><span class="note">End of week ${esc(c.after)} · ${Math.min(25, cnt(c.dom))} questions, ${Math.max(5, Math.round(30 * Math.min(25, cnt(c.dom)) / 25))} minutes</span></div><button class="btn ghost" data-act="checkpoint" data-d="${esc(c.dom)}">Start</button></div>`).join("")}</div>
     <h2>Full practice exam</h2>
-    <div class="panel"><div class="row"><div class="grow"><h3>Exam simulation</h3><span class="note">Weighted like the real exam. ${ex} questions available now${ex < C.examSim.questions ? ` (the real exam has ${esc(C.examSim.questions)})` : ""}, ${examMinutes(ex)} minutes at the real exam's pace.</span></div><button class="btn" data-act="exam">Start</button></div>
-    ${Q.some(q => q.lv === 3) ? `<div class="row"><div class="grow"><h3>Hard mode exam</h3><span class="note">Only medium and hard questions, weighted like the real exam. A good test in your last week.</span></div><button class="btn ghost" data-act="hardexam">Start</button></div>` : ""}
+    <div class="panel"><div class="row"><div class="grow"><h3>Exam simulation</h3><span class="note">Weighted like the real exam. ${ex} questions available now${ex < C.examSim.questions ? ` (the real exam has ${esc(C.examSim.questions)})` : ""}, ${examMinutes(ex)} minutes at the real exam's pace.</span></div>${/* html: fixed markup */ examBtn("exam", "btn")}</div>
+    ${Q.some(q => q.lv === 3) ? `<div class="row"><div class="grow"><h3>Hard mode exam</h3><span class="note">Only medium and hard questions, weighted like the real exam. A good test in your last week.</span></div>${/* html: fixed markup */ examBtn("hardexam", "btn ghost")}</div>` : ""}
     ${fullExamRow()}</div>
+    ${PLANS().paid ? "" : `<p class="note planlimit">Free plan: ${examsLeft() ? `${esc(examsLeft())} practice exam left` : "you've used your practice exam"} for ${esc(C.short)}. <a href="#plans">Pro and Premium Pro</a> include unlimited practice exams.</p>`}
     ${Pro().available && !Pro().active ? Pro().teaser(`Get about 300 more ${C.short} questions and full-length ${C.examSim.questions}-question exams with a pass estimate.`) : ""}`;
   }
   function fullExamRow() {
     if (!Pro().available) return "";
     const N = C.examSim.questions, M = C.examSim.minutes;
     const ready = Pro().active && PRO;
-    return `<div class="row"><div class="grow"><h3>Full-length exam <span class="chip pro">Pro</span></h3><span class="note">${esc(N)} questions in ${esc(M)} minutes, weighted like the real exam, with a pass estimate at the end.${Pro().active && !PRO ? " Loading the Pro question bank…" : ""}</span></div>${ready ? `<button class="btn" data-act="fullexam">Start</button>` : Pro().active ? "" : `<a class="btn ghost" href="#account">Unlock</a>`}</div>`;
+    const left = fullLimited() ? FULL_PER_MONTH - fullUsed() : null;
+    return `<div class="row"><div class="grow"><h3>Full-length exam <span class="chip pro">Pro</span></h3><span class="note">${esc(N)} questions in ${esc(M)} minutes, weighted like the real exam, with a pass estimate at the end.${Pro().active && !PRO ? " Loading the Pro question bank…" : ""}${left == null ? "" : ` Pro: ${esc(Math.max(0, left))} of ${FULL_PER_MONTH} left this month; <a href="#plans">Premium Pro</a> is unlimited.`}</span></div>${ready ? `<button class="btn" data-act="fullexam">Start</button>` : Pro().active ? "" : `<a class="btn ghost" href="#account">Unlock</a>`}</div>`;
   }
   // A rough pass estimate from a full-length score. Real exams use scaled scores, so this is a guide.
   const passBand = pct => pct >= 85 ? ["Likely pass", "var(--ok)"] : pct >= 75 ? ["Borderline", "var(--warn)"] : ["Not yet", "var(--bad)"];
@@ -1161,7 +1199,7 @@
       <div class="bars" data-style="margin-top:12px">${C.domains.map(d => { const qs = z.qs.map((q, i) => [q, i]).filter(([q]) => q.d === d.id); const c = qs.filter(([q, i]) => z.ans[i] === q.a).length; const p = qs.length ? Math.round(100 * c / qs.length) : 0; return `<div class="b" data-style="--c:${dc(d.id)}"><div class="flex"><span>D${esc(d.id)} ${esc(d.name)}</span><strong>${c}/${qs.length}</strong></div><div class="track"><i data-style="width:${p}%"></i></div></div>`; }).join("")}</div>` : ""}</div>
       ${z.kind === "placement" ? placementHtml() : ""}
       ${z.fix ? fixHtml(S.p.fix === z.fix ? S.p.fix : z.fix, "result") : ""}
-      <h2>Review</h2>${z.qs.map((q, i) => { const ok = z.ans[i] === q.a; return `<div class="panel" data-style="--c:${ok ? "var(--ok)" : "var(--bad)"}"><p data-style="margin:0 0 6px"><strong>${ok ? "Correct" : "Missed"}</strong> · <span class="note">${esc(domName(q.d))}</span></p><p class="qtext" data-style="margin:0 0 8px">${esc(q.q)}</p>${ok ? "" : `<p class="note" data-style="margin:0">Your answer: ${esc(z.ans[i] == null ? "none" : q.o[z.ans[i]])}</p>`}<p data-style="margin:4px 0 0"><strong>${esc(q.o[q.a])}</strong></p><div class="expl">${esc(q.e)}${whyHtml(q, z.ans[i])}${q.src ? `<br><small class="note">Source: ${esc(q.src)}</small>` : ""}${ok ? "" : `<br>${lessonLink(q)}`}<br>${qReport(q)}</div></div>`; }).join("")}`;
+      <h2>Review</h2>${z.qs.map((q, i) => { const ok = z.ans[i] === q.a; return `<div class="panel" data-style="--c:${ok ? "var(--ok)" : "var(--bad)"}"><p data-style="margin:0 0 6px"><strong>${ok ? "Correct" : "Missed"}</strong> · <span class="note">${esc(domName(q.d))}</span></p><p class="qtext" data-style="margin:0 0 8px">${esc(q.q)}</p>${ok ? "" : `<p class="note" data-style="margin:0">Your answer: ${esc(z.ans[i] == null ? "none" : q.o[z.ans[i]])}</p>`}<p data-style="margin:4px 0 0"><strong>${esc(q.o[q.a])}</strong></p><div class="expl">${esc(q.e)}${whyHtml(q, z.ans[i])}${q.src ? `<br><small class="note">Source: ${esc(q.src)}</small>` : ""}${ok ? "" : `<br>${lessonLink(q)}${/* html: built with esc() in sync.js */ tutorBtn(q, z.ans[i])}`}<br>${qReport(q)}</div></div>`; }).join("")}`;
     }
     if (z.mode === "test" && z.reviewing) return reviewScreen(z);
     const q = z.qs[z.i], test = z.mode === "test", struck = (test && z.struck[z.i]) || {};
@@ -1177,7 +1215,7 @@
     ${test ? `<details class="qnav"><summary>All questions</summary>${qGrid(z)}</details>` : ""}
     <p class="q">${esc(q.q)}</p>${opts}
     ${z.revealed ? (z.guess[z.i] && z.picked === q.a ? `<p class="note" data-ui>Right, but you marked it as a guess, so it comes back for review tomorrow.</p>` : "") : `<p class="guessrow"><button type="button" class="chipbtn" data-act="guess" aria-pressed="${!!z.guess[z.i]}">🤔 I'm guessing</button> <span class="note">Right answers you guessed come back for review.</span></p>`}
-    ${z.revealed ? `<div class="expl" role="status" data-style="--c:${z.picked === q.a ? "var(--ok)" : "var(--bad)"}"><strong data-ui>${z.picked === q.a ? "Correct." : "Not quite."}</strong> ${esc(q.e)}${whyHtml(q, z.picked)}${q.src ? `<br><small class="note" data-ui>Source: ${esc(q.src)}</small>` : ""}${z.picked !== q.a ? `<br>${lessonLink(q)}` : ""}<br>${qReport(q)}</div>` : ""}
+    ${z.revealed ? `<div class="expl" role="status" data-style="--c:${z.picked === q.a ? "var(--ok)" : "var(--bad)"}"><strong data-ui>${z.picked === q.a ? "Correct." : "Not quite."}</strong> ${esc(q.e)}${whyHtml(q, z.picked)}${q.src ? `<br><small class="note" data-ui>Source: ${esc(q.src)}</small>` : ""}${z.picked !== q.a ? `<br>${lessonLink(q)}${/* html: built with esc() in sync.js */ tutorBtn(q, z.picked)}` : ""}<br>${qReport(q)}</div>` : ""}
     <div class="btns">${z.mode === "test" && z.i > 0 ? `<button class="btn ghost" data-act="prev">Back</button>` : ""}
     ${(z.mode === "learn" && z.revealed) || z.mode === "test" ? `<button class="btn" data-act="next">${z.i + 1 === z.qs.length ? (z.mode === "test" && z.end ? "Review answers" : "Finish") : "Next"}</button>` : ""}
     ${test ? `<button class="btn ghost" data-act="flag" aria-pressed="${!!z.flags[z.i]}">${z.flags[z.i] ? "⚑ Flagged" : "⚐ Flag for review"}</button><button class="btn ghost" data-act="reviewall">Review all</button><button class="btn ghost" data-act="finish">Submit test</button>` : ""}</div>
@@ -1455,10 +1493,17 @@
       },
       fixclear: () => { if (!S.p.fix) return; if ((S.p.fix.done || []).length >= S.p.fix.steps.length) S.p.fix = null; else S.p.fix.hidden = true; save(); render(); },
       checkpoint: () => cp(d),
-      exam: () => { const qs = examQs(); startQuiz({ title: "Practice exam", qs, mode: "test", minutes: examMinutes(qs.length) }); },
+      exam: () => startExam("Practice exam", examQs()),
       smart: () => { const qs = smartQs(); if (!qs.length) return; startQuiz({ title: "Smart practice", qs, mode: "learn" }); },
-      hardexam: () => { const qs = hardQs(); startQuiz({ title: "Hard mode exam", qs, mode: "test", minutes: examMinutes(qs.length) }); },
-      fullexam: () => { if (!PRO) return; startQuiz({ title: "Full-length exam", qs: fullExamQs(), mode: "test", minutes: C.examSim.minutes, kind: "full" }); },
+      hardexam: () => startExam("Hard mode exam", hardQs()),
+      fullexam: () => {
+        if (!PRO) return;
+        if (fullLimited()) {
+          if (fullUsed() >= FULL_PER_MONTH) { CertHub.plans.upsell(`Pro includes ${FULL_PER_MONTH} full-length exams a month for each certification, and you've taken this month's ${FULL_PER_MONTH} for ${C.short}. They reset on the 1st. Premium Pro includes unlimited full-length exams.`); return; }
+          S.p.fullMonth = { m: month(), n: fullUsed() + 1 }; save();
+        }
+        startQuiz({ title: "Full-length exam", qs: fullExamQs(), mode: "test", minutes: C.examSim.minutes, kind: "full" });
+      },
       fcstart: () => {
         const dom = +$("#fcsel").value, sched = S.p.cards || {}, now = today().getTime() + 1000;
         const due = PRO.flashcards.filter(f => (!dom || f[0] === dom) && (!sched[cardKey(f)] || sched[cardKey(f)].due <= now));

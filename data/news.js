@@ -30,9 +30,9 @@ CertHub.news = [
       "Cada una tiene un plan semana a semana, una lección por tema, 90 preguntas de práctica con explicaciones de las respuestas incorrectas, simulaciones de examen y tarjetas, en inglés y en español.",
       "El plan de CISM ya sigue el temario que entra en vigor el 3 de noviembre de 2026, y el de CCSP sigue el temario revisado el 1 de agosto de 2026."
     ] } },
-  { date: "2026-09-29", title: "Pay and job outlook, network design and cloud puzzles",
+  { date: "2026-09-29", title: "Pay and Job Outlook, network design and cloud puzzles",
     items: [
-      "Pay and job outlook: US median pay and projected growth for the jobs each career track leads to, from the Bureau of Labor Statistics, with a link to every source.",
+      "Pay and Job Outlook: US median pay and projected growth for the jobs each career track leads to, from the Bureau of Labor Statistics, with a link to every source.",
       "Network design puzzles: put the router, firewall, switch, IPS, load balancer or VPN concentrator in the right place in five networks.",
       "Four cloud puzzles join the log puzzles: a public S3 bucket, SSH open to the internet, an admin-level IAM policy and a privileged Kubernetes container."
     ],

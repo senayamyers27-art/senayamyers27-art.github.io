@@ -17,6 +17,7 @@
     <ul>
       <li>Your email address, used to send sign-in links and nothing else (no newsletters unless you ask)</li>
       <li>If you sign in with Google, Facebook or LinkedIn: your account ID at that provider, your name and your email address, which the provider shares with your permission. We ask only for basic profile and email access. We never get your password, contacts or posts, we never post anything, and we don't keep the provider's access token after sign-in. You can disconnect a provider on your profile at any time.</li>
+      <li>If you have Premium Pro and use the AI tutor, study coach or mock interviews: what you type, plus the question you're asking about, your study numbers for that certification (week, exam date, readiness and accuracy by domain) or the job role, is sent through our server to Anthropic to get an answer. We don't store these conversations either.</li>
       <li>If you use the AI assistant in the Help panel: your questions and the conversation so far are sent through our server to Anthropic, which provides the AI model, to get an answer. We don't store the conversation; it stays in your browser tab until you close it. Don't include personal details.</li>
       <li>Your profile, only if you fill it in: a display name, a short “About me”, the certification you're working toward and study hours a week. Only you can see it.</li>
       <li>A copy of your study progress and lab progress, including lab notes, so it can sync between your devices, plus the rest of your saved work: study days and streak, readiness history, VM lab and puzzle results, game scores, badges, your weekly goal and the name for your certificates</li>
@@ -203,7 +204,7 @@
       ? `<div class="btns"><button type="button" class="btn" data-gact="install">Install StudyToCert</button></div>`
       : "";
     const step = (n, t) => `<li><strong>${U.esc(n)}</strong> ${U.esc(t)}</li>`;
-    return `<h1>Install the app</h1>
+    return `<h1>Install App</h1>
     <p class="meta">Add ${SITE} to your phone's home screen. It opens full screen like any app, works with no connection, and keeps your progress, lab notes and portfolio on the device.</p>
     ${state}
     ${[["ios", `    <h2${plat === "ios" ? ' class="here"' : ""}>iPhone or iPad</h2>
@@ -241,7 +242,7 @@
       : "";
     const shareUrl = location.origin && /^https:/.test(location.origin) ? location.origin + "/" : "";
     return `<h1>Support</h1>
-    <p class="meta">${SITE} is free, with no ads, no accounts and no tracking. Here's how you can help keep it that way.</p>
+    <p class="meta">${SITE} is free to use, with no ads and no tracking. Here's how you can help keep it that way.</p>
     ${donate}
     <h2>Share it</h2>
     <p>Send it to classmates, your bootcamp cohort or anyone studying for a certification. Word of mouth is the biggest help.</p>

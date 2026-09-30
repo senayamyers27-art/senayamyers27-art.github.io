@@ -1,4 +1,4 @@
-/* Daily review (#review): about five minutes of questions across every certification you've started.
+/* Daily Review (#review): about five minutes of questions across every certification you've started.
    Questions due in each certification's spaced-review queue come first, then fresh questions from the
    weeks you've reached. Answers update the same progress and review queue as the certification page. */
 (function () {
@@ -27,7 +27,7 @@
     const list = started();
     if (!list.length) return "";
     const due = list.reduce((n, x) => n + dueCount(x.p), 0);
-    return `<div class="panel installcard reviewcard"><div class="grow"><strong>Daily review</strong><br><span class="note">${due ? `${due} question${due === 1 ? "" : "s"} due across ${list.length} certification${list.length === 1 ? "" : "s"}` : `Ten quick questions from the ${list.length === 1 ? "certification" : `${list.length} certifications`} you're studying`}. About five minutes.</span></div><a class="btn sm" href="#review">Start review</a></div>`;
+    return `<div class="panel installcard reviewcard"><div class="grow"><strong>Daily Review</strong><br><span class="note">${due ? `${due} question${due === 1 ? "" : "s"} due across ${list.length} certification${list.length === 1 ? "" : "s"}` : `Ten quick questions from the ${list.length === 1 ? "certification" : `${list.length} certifications`} you're studying`}. About five minutes.</span></div><a class="btn sm" href="#review">Start review</a></div>`;
   }
 
   function build(list) {
@@ -67,20 +67,20 @@
   }
 
   function view() {
-    if (!S) return `<h1>Daily review</h1><p class="meta">Loading your questions…</p>`;
-    if (!S.items.length) return `<h1>Daily review</h1><p class="meta">Start a study plan first. The daily review mixes questions from every certification you're studying.</p><div class="btns"><a class="btn" href="#certifications">Choose a certification</a></div>`;
+    if (!S) return `<h1>Daily Review</h1><p class="meta">Loading your questions…</p>`;
+    if (!S.items.length) return `<h1>Daily Review</h1><p class="meta">Start a study plan first. The daily review mixes questions from every certification you're studying.</p><div class="btns"><a class="btn" href="#certifications">Choose a certification</a></div>`;
     if (S.i >= S.items.length) {
       const by = {};
       S.items.forEach((x, i) => { const b = by[x.c.id] || (by[x.c.id] = { c: x.c, ok: 0, n: 0 }); b.n++; if (S.ans[i] === x.q.a) b.ok++; });
       const ok = S.items.filter((x, i) => S.ans[i] === x.q.a).length;
-      return `<h1>Daily review done</h1><div class="panel"><div class="big">${ok} of ${S.items.length}</div><p class="meta">Missed questions come back tomorrow. The ones you got right come back later, spaced further apart each time.</p>
+      return `<h1>Daily Review done</h1><div class="panel"><div class="big">${ok} of ${S.items.length}</div><p class="meta">Missed questions come back tomorrow. The ones you got right come back later, spaced further apart each time.</p>
       <div class="bars">${Object.values(by).map(b => `<div class="b"><div class="flex"><span><a href="#${esc(b.c.id)}.week">${esc(b.c.short)}</a></span><strong>${esc(b.ok)}/${esc(b.n)}</strong></div></div>`).join("")}</div>
       <div class="btns"><button type="button" class="btn" data-rv="again">Ten more</button><a class="btn ghost" href="#home">Home</a></div></div>`;
     }
     const x = S.items[S.i], q = x.q, picked = S.ans[S.i], shown = picked != null;
     const opts = q.o.map((o, k) => { let cls = ""; if (shown) { if (k === q.a) cls = "right"; else if (k === picked) cls = "wrong"; } return `<button type="button" class="opt ${cls}" data-rvopt="${k}" aria-pressed="${picked === k}"${shown ? " disabled" : ""}>${esc(o)}</button>`; }).join("");
     const why = shown && picked !== q.a && q.why && q.why[picked] ? `<br><span data-ui><strong>Why this answer is wrong:</strong></span> ${inline(q.why[picked])}` : "";
-    return `<div class="qhead"><strong>Daily review</strong><a class="btn ghost sm" href="#home">Stop</a></div>
+    return `<div class="qhead"><strong>Daily Review</strong><a class="btn ghost sm" href="#home">Stop</a></div>
     <div class="flex note"><span>Question ${esc(S.i + 1)} of ${S.items.length}</span><span>${esc(x.c.short)}${x.due ? " · review" : ""}</span></div>
     <div class="prog"><i data-style="width:${100 * (S.i + 1) / S.items.length}%"></i></div>
     <p class="q">${esc(q.q)}</p>${opts}

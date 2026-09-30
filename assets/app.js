@@ -53,6 +53,20 @@
     }).filter(Boolean).sort((a, b) => b.last - a.last);
   }
   const readyColor = r => r >= 80 ? "var(--ok)" : r >= 60 ? "var(--warn)" : "var(--bad)";
+  // Premium Pro: the AI study coach gets this certification's numbers (no answers, notes or personal details).
+  function coachBtn(x) {
+    if (!CertHub.premium) return "";
+    return CertHub.premium.button("coach", "AI study coach", () => {
+      let hours = ""; try { hours = (JSON.parse(CertHub.store.get("certhub:profile") || "{}") || {}).hours || ""; } catch (e) {}
+      const me = CertHub.sync && CertHub.sync.me;
+      const lp = loadLabProgress();
+      return { subtitle: `${x.c.short} ${x.c.exam} · a 7-day plan from your progress`,
+        context: { certId: x.c.id, certName: `${x.c.name} (${x.c.exam})`, examDate: x.p.examDate || null, week: x.wk, weeks: x.weeks,
+          lessonsRead: Object.keys(x.p.read || {}).length, labsDone: labOrder.filter(id => labs[id] && labStatus(labs[id], lp).state === "done").length,
+          hoursPerWeek: hours || (me && me.user && me.user.weeklyHours) || null, readiness: x.ready, reviewDue: x.due,
+          domains: x.c.domains.map(d => { const st = (x.p.stats || {})[d.id] || { c: 0, t: 0 }; return { name: d.name, weight: d.w, answered: st.t, accuracy: st.t ? Math.round(100 * st.c / st.t) : null }; }) } };
+    });
+  }
   function dashCard(x) {
     const id = esc(x.c.id);
     const ring = CertHub.fx.ring(x.ready ?? 0, x.ready == null ? "var(--line)" : readyColor(x.ready), x.ready == null ? `<span aria-hidden="true">–</span>` : `<span data-count="${esc(x.ready)}">${esc(x.ready)}</span><small>/100</small>`);
@@ -67,7 +81,7 @@
         <li>${x.due ? `<strong>${esc(x.due)}</strong> review${x.due === 1 ? "" : "s"} due` : "Review queue clear"}</li>
       </ul>
       <div class="track" aria-hidden="true"><i data-style="width:${Math.round(100 * x.wk / x.weeks)}%;background:var(--c)"></i></div>
-      <div class="btns"><a class="btn sm" href="#${id}.week">Today's plan</a><a class="btn ghost sm" href="#${id}.practice">Practice</a><a class="btn ghost sm" href="#${id}.progress">Progress</a></div></div>`;
+      <div class="btns"><a class="btn sm" href="#${id}.week">Today's plan</a><a class="btn ghost sm" href="#${id}.practice">Practice</a><a class="btn ghost sm" href="#${id}.progress">Progress</a>${/* html: built with esc() in sync.js */ coachBtn(x)}</div></div>`;
   }
   function dashboardView() {
     const list = startedCerts(), st = CertHub.activity.streak();
@@ -289,7 +303,7 @@
     } else {
       body = `<h2>App and about</h2>
       <div class="panel">
-        <div class="row"><div class="grow"><strong>Install the app</strong><br><span class="note">Add StudyToCert to your home screen and study offline.</span></div><a class="btn ghost sm" href="#install">Install</a></div>
+        <div class="row"><div class="grow"><strong>Install App</strong><br><span class="note">Add StudyToCert to your home screen and study offline.</span></div><a class="btn ghost sm" href="#install">Install</a></div>
         <div class="row"><div class="grow"><strong>What's new</strong><br><span class="note">Recent additions and fixes.</span></div><a class="btn ghost sm" href="#whats-new">See what's new</a></div>
         <div class="row"><div class="grow"><strong>Privacy, terms and security</strong><br><span class="note">What's stored, where, and how it's protected.</span></div><span class="btns" data-style="margin:0"><a class="btn ghost sm" href="#privacy">Privacy</a><a class="btn ghost sm" href="#terms">Terms</a><a class="btn ghost sm" href="#security">Security</a></span></div>
         <div class="row"><div class="grow"><strong>Report a problem</strong><br><span class="note">Found a mistake in a lesson or question, or something broken?</span></div><a class="btn ghost sm" href="${esc(CertHub.reportUrl("Problem report", "Page:\\nWhat happened:\\nWhat you expected:"))}" target="_blank" rel="noopener">Report</a></div>
@@ -321,7 +335,7 @@
   function schoolsView() {
     const n = CertHub.catalog.filter(id => certs[id]).length, fb = CertHub.reportUrl("Using StudyToCert in a class", "School or program:\nCertifications you teach:\nWhat would help:");
     const item = (h, t, href, link) => `<div class="panel"><strong>${esc(h)}</strong><p class="note" data-style="margin:4px 0 0">${esc(t)}${href ? ` <a href="${esc(href)}">${esc(link)}</a>` : ""}</p></div>`;
-    return `<h1>For teachers, schools and bootcamps</h1>
+    return `<h1>Teachers, Schools and Bootcamps</h1>
       <p class="meta">StudyToCert is free to use in class: no accounts for students, no ads and no tracking. Everything runs in the browser, and students' progress stays on their own devices.</p>
       <h2>What you can use</h2>
       <div class="dashgrid">
@@ -329,7 +343,7 @@
         ${item("Printable materials", "Cheat sheets, key-term flashcards to cut out and a study planner, all ready to print or save as PDF.", "#security-plus.cheat", "See a cheat sheet")}
         ${item("Hands-on labs without installs", "Real Linux servers run in the browser for Linux+, Security+, CySA+ and Network+ practice, with graded labs checked inside the machine.", "#vm", "Open the practice VMs")}
         ${item("Blue-team exercises for class discussion", "Log puzzles and incident response tabletops work well projected on a screen: the class decides each step, then reads why.", "#tabletop", "Try a tabletop")}
-        ${item("Quick games for warm-ups", "Sixty-second rounds on subnetting, ports, acronyms, OSI layers and commands.", "#games", "Play a game")}
+        ${item("Games for warm-ups", "Sixty-second rounds on subnetting, ports, acronyms, OSI layers and commands.", "#games", "Play a game")}
         ${item("Works offline and on phones", "Students can install it like an app and keep studying without a connection.", "#install", "How to install")}
       </div>
       <h2>Good to know</h2>
@@ -345,7 +359,7 @@
     const list = CertHub.catalog.map(id => certs[id]).filter(Boolean);
     const withNotes = list.map(c => ({ c, notes: CertHub.activeNotices(c) })).filter(x => x.notes.length);
     const fmt = d => { try { return U.parseD(d).toLocaleDateString(CertHub.i18n.lang() === "es" ? "es" : "en", { year: "numeric", month: "short", day: "numeric" }); } catch (e) { return d; } };
-    return `<h1>Exam changes</h1><p class="meta">New exam versions, retirements and other changes that affect what you study, for every certification on this site. Always confirm dates with the vendor before you book.</p>
+    return `<h1>Exam Changes</h1><p class="meta">New exam versions, retirements and other changes that affect what you study, for every certification on this site. Always confirm dates with the vendor before you book.</p>
       <h2>Current notices</h2>
       ${withNotes.length ? withNotes.map(x => `<div class="panel"><div class="flex"><a href="#${esc(x.c.id)}.about"><strong>${esc(x.c.short || x.c.name)} ${esc(x.c.exam)}</strong></a><span class="note">${esc(x.c.vendor)}</span></div>${x.notes.map(n => `<p data-style="margin:6px 0 0">${esc(n.text)}</p>`).join("")}</div>`).join("") : `<p class="note">No current notices.</p>`}
       <h2>When each certification was last checked</h2>
@@ -386,11 +400,11 @@
   const SECTIONS = () => {
     const n = CertHub.catalog.filter(id => certs[id]).length, acct = CertHub.sync && CertHub.sync.enabled, me = acct && CertHub.sync.me;
     return [
-      ["Study", [["certifications", "Certifications", `Free week-by-week plans for ${n} certifications`, "cybersecurity"], ["dashboard", "Dashboard", "Readiness, exam countdowns and what's due", "chart"], ["review", "Daily review", "Five minutes of spaced review across your plans", "flame"], ["exam-day", "Exam-day guides", "Scoring, question types and test day", "check"], ["exam-changes", "Exam changes", "New exam versions and retirements", "news"]]],
-      ["Practice", [["labs", "Labs", `${labOrder.length} hands-on labs with step-by-step guides`, "lab"], ["vm", "Practice VM", "A Linux machine in your browser, with graded labs", "terminal"], ["games", "Quick games", "Sixty-second rounds: subnets, ports, acronyms", "game"], ["log-puzzles", "Blue-team practice", "Log puzzles and incident tabletops", "shield"], ["net-design", "Network design", "Put the right device in each part of a network", "network"]]],
-      ["Career", [["careers", "Career paths", "Which certification first, jobs and interview practice", "career"], ["job-outlook", "Pay and job outlook", "Median pay and projected growth", "chart"], ["portfolio", "Portfolio", "Your finished labs as write-ups and resume bullets", "portfolio"], ["frameworks", "Frameworks", "NIST, ISO, CIS and more, mapped to certifications", "book"], ["achievements", "Achievements", "Badges for streaks, scores and labs", "badge"]]],
-      ["You", [...(acct ? [me && me.user ? ["profile", "Your profile", "Your saved work and sign-in methods", "user"] : ["login", "Log in or sign up", "Save your work to a free profile", "user"]] : []), ["settings", "Settings", "Theme, text size, accessibility, backups", "settings"], ["help", "Help", "Answers to common questions", "help"]]],
-      ["About", [["whats-new", "What's new", "", ""], ["schools", "For teachers", "", ""], ["install", "Install the app", "", ""], ["support", "Support", "", ""], ["privacy", "Privacy Policy", "", ""], ["terms", "Terms of Use", "", ""], ["security", "Security", "", ""]]]
+      ["Study", [["certifications", "Certifications", `Free week-by-week plans for ${n} certifications`, "cybersecurity"], ["dashboard", "Dashboard", "Readiness, exam countdowns and what's due", "chart"], ["review", "Daily Review", "Five minutes of spaced review across your plans", "flame"], ["exam-day", "Exam-Day Guides", "Scoring, question types and test day", "check"], ["exam-changes", "Exam Changes", "New exam versions and retirements", "news"]]],
+      ["Practice", [["labs", "Labs", `${labOrder.length} hands-on labs with step-by-step guides`, "lab"], ["vm", "Practice VM", "A Linux machine in your browser, with graded labs", "terminal"], ["games", "Games", "Sixty-second rounds: subnets, ports, acronyms", "game"], ["log-puzzles", "Blue Team", "Log puzzles and incident tabletops", "shield"], ["net-design", "Network Design", "Put the right device in each part of a network", "network"]]],
+      ["Career", [["careers", "Career Paths", "Which certification first, jobs and interview practice", "career"], ["job-outlook", "Pay and Job Outlook", "Median pay and projected growth", "chart"], ["portfolio", "Portfolio", "Your finished labs as write-ups and resume bullets", "portfolio"], ["frameworks", "Frameworks", "NIST, ISO, CIS and more, mapped to certifications", "book"], ["achievements", "Achievements", "Badges for streaks, scores and labs", "badge"]]],
+      ["You", [(acct ? me && me.user : CertHub.store.get("certhub:profile")) ? ["profile", "Your profile", "Your saved work and sign-in methods", "user"] : ["login", "Log in or sign up", "Save your work to a free profile", "user"], ["plans", "Plans", "Free, Pro and Premium Pro compared", "spark"], ["settings", "Settings", "Theme, text size, accessibility, backups", "settings"], ["help", "Help", "Answers to common questions", "help"]]],
+      ["About", [["whats-new", "What's new", "", ""], ["schools", "Teachers", "", ""], ["install", "Install App", "", ""], ["support", "Support", "", ""], ["privacy", "Privacy Policy", "", ""], ["terms", "Terms of Use", "", ""], ["security", "Security", "", ""]]]
     ];
   };
   const HOME_TILES = ["certifications", "dashboard", "labs", "vm", "games", "careers", "portfolio", "help"];
@@ -404,7 +418,7 @@
       <h1>Study to certify: free plans for ${nCerts} IT, cloud and cybersecurity certifications</h1>
       <p class="meta">Pick a certification and get a week-by-week plan: short lessons, hands-on labs, quizzes, timed checkpoints, a practice exam weighted like the real one and spaced review. No sign-up and no ads.</p>
       ${newsCard()}
-      <div class="btns"><a class="btn" href="#certifications">Find your certification</a><a class="btn ghost" href="#labs">Browse ${labOrder.length} labs</a></div>
+      <div class="btns"><a class="btn" href="#certifications">Find your certification</a><a class="btn ghost" href="#labs">Browse Labs</a></div>
     </div>
       ${heroArt()}
     </section>
@@ -424,10 +438,10 @@
     const nCerts = CertHub.catalog.filter(id => certs[id]).length;
     return `<h1>Certifications</h1>
     <p class="meta">Free week-by-week study plans for ${nCerts} IT, cloud and cybersecurity certifications. Not sure where to start? Answer a few questions below.</p>
-    <div class="btns"><button type="button" class="btn ghost sm" data-jump="pick">Help me choose</button><button type="button" class="btn ghost sm" data-jump="tracks-h">Browse by career track</button><a class="btn ghost sm" href="#careers">Career paths</a></div>
+    <div class="btns"><button type="button" class="btn ghost sm" data-jump="pick">Help me choose</button><button type="button" class="btn ghost sm" data-jump="tracks-h">Browse by career track</button><a class="btn ghost sm" href="#careers">Career Paths</a></div>
     ${pickerHtml()}
     <h2 id="tracks-h">Certifications by career track</h2>
-    <p class="note"><a href="#careers">Career paths</a>: which certification to take first, the jobs each track leads to, and interview practice. <a href="#exam-day">Exam-day guides</a>: scoring, question types and what to expect on test day. <a href="#exam-changes">Exam changes</a>: new versions and retirements.</p>
+    <p class="note"><a href="#careers">Career Paths</a>: which certification to take first, the jobs each track leads to, and interview practice. <a href="#exam-day">Exam-Day Guides</a>: scoring, question types and what to expect on test day. <a href="#exam-changes">Exam Changes</a>: new versions and retirements.</p>
     ${trackPicker()}
     <div id="trackcards">${trackCards()}</div>`;
   }
@@ -476,7 +490,7 @@
     const q = new URLSearchParams({ p: name, t: title || name, e: "true", rnd: Math.random().toString(36).slice(2) });
     try { fetch(`${gc}/count?${q}`, { mode: "no-cors", credentials: "omit", keepalive: true, referrerPolicy: "no-referrer" }).catch(() => {}); } catch (e) {}
   };
-  const LIGHT = new Set(["home", "dashboard", "achievements", "exam-changes", "schools", "whats-new", "review", "privacy", "terms", "security", "install", "support", "exam-day", "account", "login", "signup", "profile", "settings", "help", "certifications"]);
+  const LIGHT = new Set(["home", "dashboard", "achievements", "exam-changes", "schools", "whats-new", "review", "privacy", "terms", "security", "install", "support", "exam-day", "account", "login", "signup", "profile", "plans", "settings", "help", "certifications"]);
   function route() {
     let raw = "";
     try { raw = decodeURIComponent(location.hash.replace(/^#/, "")); } catch (e) { raw = ""; }
@@ -511,6 +525,7 @@
       else if (own(POLICY_TITLES, head)) { topNav(""); const pv = CertHub.policyViews; $("#app").innerHTML = head === "privacy" ? pv.privacy() : head === "terms" ? pv.terms() : head === "install" ? pv.install() : head === "support" ? pv.support() : pv.security(); title = POLICY_TITLES[head]; view = head; }
       else if ((head === "login" || head === "signup") && CertHub.accountViews) { topNav("account"); $("#app").innerHTML = CertHub.accountViews.login(head); title = head === "signup" ? "Sign Up" : "Log In"; view = head; }
       else if (head === "profile" && CertHub.accountViews) { topNav("account"); CertHub.accountViews.profile(); title = "Your Profile"; view = head; }
+      else if (head === "plans" && CertHub.accountViews) { topNav(""); $("#app").innerHTML = CertHub.accountViews.plans(); title = "Plans"; view = head; }
       else if (head === "account" && CertHub.accountViews) { topNav("account"); $("#app").innerHTML = CertHub.accountViews.account(); title = "Account"; view = "account"; }
       else if (/^join-[a-km-np-z2-9]{10}$/.test(head) && CertHub.accountViews) { topNav("account"); CertHub.accountViews.join(head.slice(5)); title = "Join a Class"; view = head; }
       else if (/^class-[0-9a-f]{24}$/.test(head) && CertHub.accountViews) { topNav("account"); CertHub.accountViews.classRoster(head.slice(6)); title = "Class Roster"; view = head; }
@@ -542,7 +557,7 @@
       else if (head === "log-puzzles" || head === "tabletop" || /^tabletop-[a-z-]{2,30}$/.test(head)) {
         topNav("labs"); view = head;
         if (CertHub.blueteam) title = CertHub.blueteam.show(head);
-        else { title = "Blue-team practice"; $("#app").innerHTML = `${CertHub.fx.skeleton()}`; CertHub.loadScript("assets/blueteam.js").then(ok => { if (location.hash === "#" + head && CertHub.blueteam) document.title = `${CertHub.blueteam.show(head)} · StudyToCert`; else if (!ok) $("#app").innerHTML = `<p class="meta" role="status">This page couldn't load. Check your connection and try again.</p>`; }); }
+        else { title = "Blue Team"; $("#app").innerHTML = `${CertHub.fx.skeleton()}`; CertHub.loadScript("assets/blueteam.js").then(ok => { if (location.hash === "#" + head && CertHub.blueteam) document.title = `${CertHub.blueteam.show(head)} · StudyToCert`; else if (!ok) $("#app").innerHTML = `<p class="meta" role="status">This page couldn't load. Check your connection and try again.</p>`; }); }
       }
       else if (head === "settings") { topNav(""); $("#app").innerHTML = settingsView(tab); title = tab === "accessibility" ? "Accessibility Settings" : "Settings"; view = head; }
       else if (head === "whats-new") { topNav(""); $("#app").innerHTML = newsView(); title = "What's New"; view = head; }

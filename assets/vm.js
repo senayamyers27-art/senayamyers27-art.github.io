@@ -184,7 +184,12 @@
       <li>The first start downloads about 40 MB (then it's cached). A computer with 4 GB of memory or more works best.</li>
     </ul></div>`;
 
-  const labGrid = (list, d) => `<div class="labgrid">${list.map(l => `<a class="labcard" href="#vm-lab-${esc(l.id)}"><span class="labtop"><span class="chip">${l.mode === "network" ? "2 VMs" : "1 VM"}</span>${d[l.id] ? `<span class="chip done">Done</span>` : ""}</span><strong>${esc(l.title)}</strong><span class="note">${esc(l.level)} · about ${esc(l.minutes)} min · ${esc(l.certs.map(certName).join(", "))}</span></a>`).join("")}</div>`;
+  // Free plan: the first three admin labs and the first two blue-team labs; the VM exam needs a paid plan.
+  // Free practice VMs and the two-machine network stay free for everyone.
+  const paid = () => !CertHub.plans || CertHub.plans.paid;
+  const freeLab = l => paid() || [...labs().filter(x => x.group !== "blue").slice(0, 3), ...labs().filter(x => x.group === "blue").slice(0, 2)].includes(l);
+  const LOCK_MSG = "The Free plan includes 5 graded VM labs (3 admin and 2 blue-team) and unlimited free practice VMs. Pro and Premium Pro include every graded lab and the timed VM exam.";
+  const labGrid = (list, d) => `<div class="labgrid">${list.map(l => `<a class="labcard" href="#vm-lab-${esc(l.id)}"><span class="labtop"><span class="chip">${l.mode === "network" ? "2 VMs" : "1 VM"}</span>${d[l.id] ? `<span class="chip done">Done</span>` : ""}${freeLab(l) ? "" : `<span class="chip premchip">Pro</span>`}</span><strong>${esc(l.title)}</strong><span class="note">${esc(l.level)} · about ${esc(l.minutes)} min · ${esc(l.certs.map(certName).join(", "))}</span></a>`).join("")}</div>`;
 
   function hubView() {
     const d = done(), best = store.get(EXAM_KEY, {}).best;
@@ -200,6 +205,7 @@
     ${terms(["lab"])}
     <h2>Two networked machines</h2>
     <div class="panel installcard vmcard"><div class="grow"><strong>server and client on one network</strong><br><span class="note">Practice SSH, firewalls, web servers and troubleshooting between two machines.</span></div><a class="btn sm" href="#vm-net">Open</a></div>
+    ${paid() ? "" : `<p class="note planlimit">Free plan: 5 graded labs (marked without "Pro") and unlimited free practice. <a href="#plans">Pro and Premium Pro</a> include every graded lab and the VM exam.</p>`}
     <h2>Admin labs</h2>
     <p class="note">Each lab starts a fresh VM, walks you through a real admin task and checks your work inside the machine. ${Object.keys(d).length} of ${labs().length} done.</p>
     ${labGrid(labs().filter(l => l.group !== "blue"), d)}
@@ -235,6 +241,7 @@
     <h2>Steps</h2>
     <ol class="vmsteps">${lab.steps.map(s => `<li>${stepHtml(s, lab)}</li>`).join("")}</ol>
     <p class="note">Tip: click a command to type it into the terminal, then press Enter. You don't have to follow the steps exactly; the checks look at the result.</p>
+    ${freeLab(lab) ? "" : `<div class="status">${esc(LOCK_MSG)} <a href="#plans">See plans</a></div>`}
     <div class="btns"><button type="button" class="btn" data-vm="lab" id="vmgo">Start the lab</button><button type="button" class="btn" data-vm="check" data-vmafter hidden>Check my work</button><button type="button" class="btn ghost" data-vm="restart" data-vmafter hidden>Start over</button></div>
     <div class="vmprog" id="vmprog" hidden aria-hidden="true"><i></i></div>
     <p class="note" id="vmstatus" role="status" aria-live="polite"></p>
@@ -247,6 +254,7 @@
     <h1>VM exam</h1>
     <p class="meta">${esc(ex.tasks)} admin tasks picked at random, ${esc(ex.minutes)} minutes, one VM. Like the performance-based parts of Linux+ and RHCSA: no step-by-step hints, and every task is checked inside the machine when you submit. ${esc(ex.pass)}% passes.</p>
     ${r.last ? `<p class="note">Last attempt: ${esc(r.last.score)}% on ${esc(new Date(r.last.when).toLocaleDateString())}. Best: ${esc(r.best)}%.</p>` : ""}
+    ${paid() ? "" : `<div class="status">${esc(LOCK_MSG)} <a href="#plans">See plans</a></div>`}
     <div class="btns"><button type="button" class="btn" data-vm="exam" id="vmgo">Start the exam</button></div>
     <div class="vmprog" id="vmprog" hidden aria-hidden="true"><i></i></div>
     <p class="note" id="vmstatus" role="status" aria-live="polite"></p>
@@ -328,6 +336,7 @@
     const a = t.dataset.vm;
     if (a === "free") start(["lab"]);
     if (a === "pair") start(["server", "client"]);
+    if ((a === "lab" && lab && !freeLab(lab)) || (a === "exam" && !paid())) { CertHub.plans.upsell(LOCK_MSG); return; }
     if (a === "lab" && lab) { $("#vmresults").innerHTML = ""; start(lab.mode === "network" ? ["server", "client"] : ["lab"], { setup: lab.setup }); }
     if (a === "check" && lab) checkLab(lab);
     if (a === "restart") { const hosts = Object.keys((S && S.vms) || {}); if (hosts.length) { const r = $("#vmresults"); if (r) r.innerHTML = ""; start(hosts, { setup: lab && lab.setup }); } }

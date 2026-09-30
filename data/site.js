@@ -9,6 +9,10 @@ CertHub.site = {
     "monthly": "$7",
     "yearly": "$49"
   },
+  "premium": {
+    "monthly": "$15",
+    "yearly": "$99"
+  },
   "apiUrl": "",
   "compare": [
     [

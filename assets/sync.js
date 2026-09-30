@@ -227,8 +227,50 @@
       pending.add(storageKey);
       clearTimeout(pushTimer); pushTimer = setTimeout(pushPending, 2500);
     },
-    syncAll, refreshMe, savePrompt, get me() { return me; }, get enabled() { return !!API; }
+    syncAll, refreshMe, savePrompt, api, get me() { return me; }, get enabled() { return !!API; }
   };
+
+  /* ---------- plan limits ---------- */
+  // What the Free plan includes, and helpers for the pages that limit it. Pro, Premium Pro and organization seats
+  // lift the limits. Everyone without a paid plan (including everyone while accounts aren't switched on) is on Free.
+  CertHub.plans = {
+    FREE: { exams: 1, vmLabs: 5 },
+    get current() { return API && me && me.user ? (me.plan || "free") : "free"; },
+    get paid() { return ["pro", "premium", "org"].includes(this.current); },
+    // A "Pro" lock button that opens the plans page.
+    lock(label = "Unlock with Pro") { return `<a class="btn ghost sm lockbtn" href="#plans">${CertHub.fx.icon("spark")}${esc(label)}</a>`; },
+    // Explains a limit and offers the plans page.
+    async upsell(message) {
+      if (await ui.confirm(message, { ok: "See plans", cancel: "Not now" })) location.hash = "plans";
+    }
+  };
+
+  /* ---------- Premium Pro features (AI tutor, study coach, mock interviews: assets/tutor.js) ---------- */
+  // Pages add a button with premium.button(mode, label, getContext). For Premium Pro members it opens the tutor with
+  // the context getContext() returns when clicked; where Premium Pro can be bought it links to the plans page;
+  // otherwise it renders nothing.
+  const tutorCtx = new Map();
+  let tutorN = 0;
+  CertHub.premium = {
+    get active() { return !!(me && me.features && me.features.includes("ai_tutor")); },
+    get forSale() { return !!(API && me && me.premium); },
+    button(mode, label, getContext, cls = "btn ghost sm") {
+      if (this.active) {
+        const k = "t" + (++tutorN); tutorCtx.set(k, getContext);
+        if (tutorCtx.size > 200) tutorCtx.delete(tutorCtx.keys().next().value);
+        return `<button type="button" class="${esc(cls)} tutbtn" data-tutor="${esc(mode)}" data-tk="${esc(k)}">${CertHub.fx.icon("spark")}${esc(label)}</button>`;
+      }
+      if (this.forSale) return `<a class="${esc(cls)} tutbtn" href="#plans">${CertHub.fx.icon("spark")}${esc(label)} <span class="chip premchip">Premium Pro</span></a>`;
+      return "";
+    }
+  };
+  document.addEventListener("click", async e => {
+    const b = e.target.closest("[data-tutor]"); if (!b) return;
+    const get = tutorCtx.get(b.dataset.tk); if (!get) return;
+    const ctx = get(); if (!ctx) return;
+    if (!CertHub.tutor) { b.setAttribute("aria-busy", "true"); const ok = await CertHub.loadScript("assets/tutor.js"); b.removeAttribute("aria-busy"); if (!ok || !CertHub.tutor) { ui.toast("The AI tutor couldn't load. Check your connection and try again."); return; } }
+    CertHub.tutor.open(b.dataset.tutor, ctx.context, ctx.subtitle, b);
+  });
 
   /* ---------- account page ---------- */
   function renderStatus() {
@@ -236,18 +278,29 @@
     const st = state();
     el.textContent = syncing ? "Syncing…" : lastError ? `Not synced: ${lastError}` : st.lastSync ? `Synced ${new Date(st.lastSync).toLocaleString()}` : "Not synced yet";
   }
-  const PLAN = { free: "Free", pro: "Pro", org: "Organization" };
+  const PLAN = { free: "Free", pro: "Pro", premium: "Premium Pro", org: "Organization" };
   const PRICE = (CertHub.site && CertHub.site.pro) || {};
-  // What Pro adds. Everything else on the site stays free.
-  const proPitch = () => `<p data-style="margin:0">Everything on the site stays free. Pro adds:</p><ul class="clean">
+  const PREMIUM = (CertHub.site && CertHub.site.premium) || {};
+  // What Pro adds on top of the Free plan.
+  const proPitch = () => `<p data-style="margin:0">Pro removes the Free plan's limits (unlimited practice exams, every simulation and graded VM lab) and adds:</p><ul class="clean">
       <li>About 300 extra practice questions per certification, with explanations</li>
       <li>Full-length timed exams at the real exam's length, with a pass estimate</li>
       <li>A score report: weakest domains and objectives, trend and exam readiness</li>
       <li>Flashcards with spaced repetition, and printable study guides</li>
       <li>Capstone projects with grading rubrics for your portfolio</li></ul>`;
 
+  // The plan section of the Account page.
+  function planPanel(plan) {
+    if (plan === "org") return `<h2>Pro</h2><div class="panel"><p data-style="margin:0">Your organization's plan includes every Pro feature.</p></div>`;
+    if (!me.billing) return "";
+    const plans = `<a class="btn ghost" href="#plans">Compare plans</a>`;
+    if (plan === "premium") return `<h2>Premium Pro</h2><div class="panel"><p data-style="margin:0">You have Premium Pro: everything in Pro, plus unlimited full-length exams, the AI tutor, weak-spot practice, study coach, resume and lab reviews, and mock interviews. Thanks for supporting the site.</p><div class="btns"><button type="button" class="btn ghost" data-aact="portal">Manage billing</button>${plans}</div></div>`;
+    if (plan === "pro") return `<h2>Pro</h2><div class="panel"><p data-style="margin:0">You have Pro. Thanks for supporting the site. Manage, change or cancel your plan any time.</p>${me.premium ? `<p class="note">Premium Pro adds the AI tutor, study coach and mock interviews. Switch plans from Manage billing.</p>` : ""}<div class="btns"><button type="button" class="btn ghost" data-aact="portal">Manage billing</button>${plans}</div></div>`;
+    return `<h2>Upgrade</h2><div class="panel">${proPitch()}${me.premium ? `<p data-style="margin:8px 0 0"><strong>Premium Pro</strong> adds an AI tutor for every question you miss, a personal AI study coach and AI mock job interviews.</p>` : ""}<div class="btns"><a class="btn" href="#plans">See plans and prices</a></div><p class="note" data-style="margin:0">Cancel any time from Manage billing. 7-day refund on your first payment. Payments are handled by Stripe.</p></div>`;
+  }
+
   function accountView() {
-    if (!API) return `<h1>Account</h1><div class="status">Accounts aren't available on this site yet. Everything still works without one: your progress is saved on this device.</div>`;
+    if (!API) return `<h1>Account</h1><div class="status">Online accounts are opening soon. Everything works without one: your progress is saved on this device.</div><div class="btns"><a class="btn" href="#profile">${hasLocalProfile() ? "Open your profile" : "Create a profile on this device"}</a><a class="btn ghost" href="#plans">See plans</a></div>`;
     if (!signedIn()) return loginView("login");
     const u = me.user, plan = me.plan || "free";
     const orgs = me.orgs || [];
@@ -256,9 +309,7 @@
       <div class="row"><div class="grow"><strong class="nocap">${esc(u.email)}</strong><br><span class="note">Plan: ${esc(PLAN[plan] || plan)}</span></div><button type="button" class="btn ghost sm" data-aact="signout">Sign out</button></div>
       <div class="row"><div class="grow"><strong>Sync</strong><br><span class="note" id="syncstatus"></span></div><button type="button" class="btn sm" data-aact="sync">Sync now</button></div>
     </div>
-    ${plan === "org" ? `<h2>Pro</h2><div class="panel"><p data-style="margin:0">Your organization's plan includes every Pro feature.</p></div>` : me.billing ? `<h2>Pro</h2><div class="panel">${plan === "pro"
-      ? `<p data-style="margin:0">You have Pro. Thanks for supporting the site. Manage or cancel your plan any time.</p><div class="btns"><button type="button" class="btn ghost" data-aact="portal">Manage billing</button></div>`
-      : `${proPitch()}<div class="btns"><button type="button" class="btn" data-aact="upgrade" data-interval="month">${PRICE.monthly ? `${esc(PRICE.monthly)} a month` : "Upgrade monthly"}</button><button type="button" class="btn ghost" data-aact="upgrade" data-interval="year">${PRICE.yearly ? `${esc(PRICE.yearly)} a year` : "Upgrade yearly"}</button></div><p class="note" data-style="margin:0">Cancel any time from Manage billing. 7-day refund on your first payment. Payments are handled by Stripe.</p>`}</div>` : ""}
+    ${/* html: built with esc() */ planPanel(plan)}
     <h2>Organizations</h2>
     <div class="panel">${orgs.length ? orgs.map(o => `<div class="row"><div class="grow"><strong>${esc(o.name)}</strong><br><span class="note">${esc(o.role)}${o.active ? "" : " · no active seats"}</span></div>${o.role !== "learner" ? `<button type="button" class="btn ghost sm" data-aact="manage" data-org="${esc(o.id)}">Manage</button>` : ""}</div>`).join("") : `<p class="note" data-style="margin:0">You're not in an organization. If your school or employer gave you an invite link, open it and you'll join automatically.</p>`}
       <details class="sq"><summary>Create an organization (for instructors)</summary>
@@ -487,6 +538,14 @@
   /* ---------- events ---------- */
   document.addEventListener("submit", async e => {
     const f = e.target;
+    if (f.id === "profile-form" && !API) {
+      e.preventDefault();
+      saveLocalProfile({ name: $("#pf-name").value, bio: $("#pf-bio").value, goal: $("#pf-goal").value, hours: $("#pf-hours").value });
+      ui.toast("Profile saved on this device.");
+      headerChip();
+      if (location.hash === "#profile") profileView(); else location.hash = "profile";
+      return;
+    }
     if (f.id === "profile-form") {
       e.preventDefault();
       const msg = $("#pf-msg");
@@ -543,6 +602,10 @@
     try {
       if (a === "signout") { await api("POST", "/v1/auth/logout", {}); setMe((await api("GET", "/v1/me").catch(() => ({ data: null }))).data); ui.toast("Signed out. Your progress stays on this device."); if (location.hash === "#profile") location.hash = "login"; else CertHub.rerender(); }
       if (a === "sync") await syncAll();
+      if (a === "removeprofile") {
+        if (!(await ui.confirm("Remove your profile from this browser? Your study progress stays.", { ok: "Remove", cancel: "Keep it" }))) return;
+        store.remove(LP_KEY); store.remove("certhub:name"); headerChip(); ui.toast("Profile removed."); location.hash = "home";
+      }
       if (a === "savework") {
         b.disabled = true; b.textContent = "Saving…";
         await syncAll();
@@ -567,7 +630,7 @@
         const { data } = await api("DELETE", "/v1/sessions/others"); ui.toast(`Signed out ${data.ended} other device${data.ended === 1 ? "" : "s"}.`); devicePanel();
       }
       if (a === "upgrade" || a === "portal") {
-        const { data } = await api("POST", a === "upgrade" ? "/v1/billing/checkout" : "/v1/billing/portal", a === "upgrade" ? { plan: "pro", interval: b.dataset.interval } : {});
+        const { data } = await api("POST", a === "upgrade" ? "/v1/billing/checkout" : "/v1/billing/portal", a === "upgrade" ? { plan: b.dataset.plan === "premium" ? "premium" : "pro", interval: b.dataset.interval } : {});
         if (/^https:\/\//.test(data.url)) location.href = data.url;
       }
       if (a === "manage") orgPanel(b.dataset.org);
@@ -666,7 +729,7 @@
     }
     return `<div class="panel installcard savecard"><div class="grow"><strong>Save your work to a free profile</strong><br><span class="note">Your progress, lab notes, write-ups and scores are only in this browser right now. Save them to a profile to keep them safe and pick up on any device.</span></div><span class="btns" data-style="margin:0"><a class="btn sm" href="#signup">Create free profile</a><a class="btn ghost sm" href="#login">Log in</a></span></div>`;
   }
-  function savedWorkHtml() {
+  function savedWorkHtml(deviceOnly) {
     const certs = Object.values(CertHub.certs || {}).map(c => ({ c, p: CertHub.loadProgress(c.id) })).filter(x => x.p.start && ((x.p.history || []).length || Object.keys(x.p.read || {}).length || Object.keys(x.p.stats || {}).length));
     const lp = CertHub.loadLabProgress(), labIds = Object.keys(lp).filter(id => CertHub.labs[id]);
     const labsDone = labIds.filter(id => CertHub.labStatus(CertHub.labs[id], lp).state === "done").length, notes = labIds.filter(id => (lp[id].notes || "").trim()).length;
@@ -681,7 +744,7 @@
       ${row("Labs and write-ups", `${labsDone} lab${labsDone === 1 ? "" : "s"} finished · notes on ${notes}`, "#portfolio")}
       ${row("Hands-on practice", `${vm} VM lab${vm === 1 ? "" : "s"} passed${vmBest ? ` · VM exam best ${vmBest}%` : ""} · ${puzzles} puzzle${puzzles === 1 ? "" : "s"} and exercises · ${games} game${games === 1 ? "" : "s"} played`, "#labs")}
       ${row("Study history", `${days} study day${days === 1 ? "" : "s"}, streak, readiness history, badges and weekly goal`, "#achievements")}
-      <div class="row"><div class="grow"><strong id="savedstatus">${st.lastSync ? `Saved ${esc(new Date(st.lastSync).toLocaleString())}` : "Not saved yet"}</strong><br><span class="note">Your work saves automatically a few seconds after each change while you're signed in, and comes back on any device you sign in on.</span></div><button type="button" class="btn sm" data-aact="savework">Save now</button></div>
+      ${deviceOnly ? `<div class="row"><div class="grow"><strong>Saved in this browser</strong><br><span class="note">Download a backup to keep a copy or move it to another device.</span></div><a class="btn ghost sm" href="#settings.data">Backup</a></div>` : `<div class="row"><div class="grow"><strong id="savedstatus">${st.lastSync ? `Saved ${esc(new Date(st.lastSync).toLocaleString())}` : "Not saved yet"}</strong><br><span class="note">Your work saves automatically a few seconds after each change while you're signed in, and comes back on any device you sign in on.</span></div><button type="button" class="btn sm" data-aact="savework">Save now</button></div>`}
     </div>`;
   }
 
@@ -713,6 +776,72 @@
   };
   let landingNote = null; // { kind: "warn" | "ok", text } shown once on the page the API sent the browser to
 
+  /* ---------- profile on this device (before online accounts are switched on) ---------- */
+  // The name is the one the site already uses for certificates (certhub:name); the rest is kept in certhub:profile.
+  const LP_KEY = "certhub:profile";
+  function localProfile() {
+    let p = {}; try { p = JSON.parse(store.get(LP_KEY) || "{}") || {}; } catch (e) {}
+    return { name: String(store.get("certhub:name") || "").slice(0, 60), bio: String(p.bio || "").slice(0, 280), goal: CertHub.certs[p.goal] ? p.goal : "", hours: Number(p.hours) > 0 ? Math.min(80, Math.round(Number(p.hours))) : "", createdAt: Number(p.createdAt) || 0 };
+  }
+  const hasLocalProfile = () => !!localProfile().createdAt;
+  function saveLocalProfile(v) {
+    const old = localProfile();
+    store.set("certhub:name", String(v.name || "").trim().slice(0, 60));
+    store.set(LP_KEY, JSON.stringify({ bio: String(v.bio || "").trim().slice(0, 280), goal: CertHub.certs[v.goal] ? v.goal : "", hours: Number(v.hours) > 0 ? Math.min(80, Math.round(Number(v.hours))) : "", createdAt: old.createdAt || Date.now() }));
+  }
+  // The profile form (same fields for a profile on this device and an online account).
+  const profileForm = (p, submit) => `<form id="profile-form" class="panel" novalidate>
+        <label for="pf-name"><strong>Display name</strong></label>
+        <input type="text" id="pf-name" class="textin" maxlength="60" autocomplete="name" value="${esc(p.name)}" placeholder="How you'd like to be greeted">
+        <label for="pf-bio"><strong>About me</strong> <span class="note">(optional)</span></label>
+        <textarea id="pf-bio" class="textin" maxlength="280" rows="3" placeholder="e.g. Help desk tech studying for Security+ to move into a SOC role.">${esc(p.bio)}</textarea>
+        <p class="note" id="pf-bio-count" data-style="margin:2px 0 10px">${esc(280 - p.bio.length)} characters left</p>
+        <div class="formgrid">
+          <div><label for="pf-goal"><strong>Goal certification</strong></label><select id="pf-goal" class="textin">${/* html: options built with esc() */ certOptions(p.goal, "Not decided yet")}</select></div>
+          <div><label for="pf-hours"><strong>Study hours a week</strong></label><input type="number" id="pf-hours" class="textin" min="1" max="80" step="1" inputmode="numeric" value="${esc(p.hours || "")}"></div>
+        </div>
+        <div class="btns"><button type="submit" class="btn">${esc(submit)}</button></div>
+        <p class="note" id="pf-msg" role="status" data-style="margin:0"></p>
+      </form>`;
+  // #login and #signup while online accounts aren't switched on: create or open a profile on this device.
+  function localLoginView(mode) {
+    if (hasLocalProfile()) { setTimeout(() => { location.hash = "profile"; }, 0); return CertHub.fx.skeleton(); }
+    const signup = mode === "signup";
+    return `<div class="authcard">
+      <h1>${signup ? "Create your free profile" : "Welcome"}</h1>
+      <p class="meta">${signup ? "Set up your profile to track your goal, study hours and progress in one place. Free, with no password and no ads." : "Online sign-in is opening soon. For now, create a free profile on this device: your progress, labs and badges are already saved here."}</p>
+      <div class="status">Sign-in with Google, Facebook, LinkedIn or an emailed link is coming soon. Your profile and progress move to your account when it opens.</div>
+      ${profileForm({ name: "", bio: "", goal: "", hours: "" }, "Create my profile")}
+      <p class="note">Your profile is saved only in this browser until online accounts open. Download a backup any time from <a href="#settings.data">Settings → Your data</a>. See the <a href="#privacy">Privacy Policy</a>.</p>
+    </div>`;
+  }
+  // #profile while online accounts aren't switched on.
+  function localProfileView() {
+    const app = $("#app");
+    if (!hasLocalProfile()) { location.hash = "signup"; return; }
+    const p = localProfile(), name = p.name || "Your profile";
+    const goal = p.goal && CertHub.certs[p.goal];
+    const since = new Date(p.createdAt).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    app.innerHTML = `<div class="profhead"><div class="avatar" data-style="--h:${/* num */ avatarHue(p.name || "me")}" aria-hidden="true">${esc(initials(p.name, "?"))}</div>
+      <div class="grow"><h1>${esc(name)}</h1><p class="meta">Profile on this device · Since ${esc(since)}</p>${goal ? `<p class="note">Working toward <a href="#${esc(goal.id)}.week">${esc(goal.short)} ${esc(goal.exam)}</a>${p.hours ? ` · ${esc(p.hours)} hours a week` : ""}</p>` : ""}</div></div>
+      ${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ""}
+      <h2>Your study snapshot</h2>
+      ${snapshot()}
+      <h2>Your saved work</h2>
+      ${/* html: built with esc() */ savedWorkHtml(true)}
+      <h2>Edit profile</h2>
+      ${profileForm(p, "Save profile")}
+      <h2>Your plan</h2>
+      <div class="panel"><div class="row"><div class="grow"><strong>Free</strong><br><span class="note">Every study plan, lesson, lab, quiz and practice exam. Pro and Premium Pro add more practice and AI study help.</span></div><a class="btn ghost sm" href="#plans">Compare plans</a></div></div>
+      <h2>Sign-in methods</h2>
+      <div class="panel"><div class="row"><div class="grow"><strong>Coming soon</strong><br><span class="note">Google, Facebook, LinkedIn, an emailed link and passkeys. When sign-in opens, your profile and progress move to your account so you can use them on any device.</span></div></div></div>
+      <h2>Settings</h2>
+      <div class="panel">
+        <div class="row"><div class="grow"><strong>Site settings</strong><br><span class="note">Theme, text size, language, weekly goal and backups on this device.</span></div><a class="btn ghost sm" href="#settings">Open</a></div>
+        <div class="row"><div class="grow"><strong>Remove this profile</strong><br><span class="note">Removes your name and profile details from this browser. Your study progress stays.</span></div><button type="button" class="btn ghost sm" data-aact="removeprofile">Remove</button></div>
+      </div>`;
+  }
+
   function socialButtons() {
     const list = providers();
     if (!list.length) return "";
@@ -720,7 +849,7 @@
       <div class="orline" role="separator"><span>or use your email</span></div>`;
   }
   function loginView(mode) {
-    if (!API) return accountView();
+    if (!API) return localLoginView(mode);
     if (!known) return CertHub.fx.skeleton();
     if (signedIn()) { setTimeout(() => { location.hash = "profile"; }, 0); return CertHub.fx.skeleton(); }
     const signup = mode === "signup";
@@ -765,9 +894,14 @@
       ? `<button type="button" class="btn ghost sm" data-aact="unlink" data-provider="${esc(p)}">Disconnect</button>`
       : `<a class="btn ghost sm" href="${esc(startUrl(p, true))}">Connect</a>`}</div>`;
   }
+  // The account's profile, with blanks filled from a profile made on this device before sign-in opened.
+  function onlineForm(pr) {
+    const lp = localProfile();
+    return { name: pr.displayName || lp.name, bio: pr.bio || lp.bio, goal: pr.goalCert || lp.goal, hours: pr.weeklyHours || lp.hours };
+  }
   async function profileView() {
     const app = $("#app");
-    if (!API) { app.innerHTML = accountView(); return; }
+    if (!API) return localProfileView();
     if (!known) { app.innerHTML = CertHub.fx.skeleton(); return; }
     if (!signedIn()) { location.hash = "login"; return; }
     app.innerHTML = `<h1>Your profile</h1>${CertHub.fx.skeleton()}`;
@@ -792,19 +926,7 @@
       <h2>Your saved work</h2>
       ${/* html: built with esc() */ savedWorkHtml()}
       <h2>Edit profile</h2>
-      <form id="profile-form" class="panel" novalidate>
-        <label for="pf-name"><strong>Display name</strong></label>
-        <input type="text" id="pf-name" class="textin" maxlength="60" autocomplete="name" value="${esc(pr.displayName)}" placeholder="How you'd like to be greeted">
-        <label for="pf-bio"><strong>About me</strong> <span class="note">(optional)</span></label>
-        <textarea id="pf-bio" class="textin" maxlength="280" rows="3" placeholder="e.g. Help desk tech studying for Security+ to move into a SOC role.">${esc(pr.bio)}</textarea>
-        <p class="note" id="pf-bio-count" data-style="margin:2px 0 10px">${esc(280 - pr.bio.length)} characters left</p>
-        <div class="formgrid">
-          <div><label for="pf-goal"><strong>Goal certification</strong></label><select id="pf-goal" class="textin">${/* html: options built with esc() */ certOptions(pr.goalCert, "Not decided yet")}</select></div>
-          <div><label for="pf-hours"><strong>Study hours a week</strong></label><input type="number" id="pf-hours" class="textin" min="1" max="80" step="1" inputmode="numeric" value="${esc(pr.weeklyHours || "")}"></div>
-        </div>
-        <div class="btns"><button type="submit" class="btn">Save profile</button></div>
-        <p class="note" id="pf-msg" role="status" data-style="margin:0"></p>
-      </form>
+      ${profileForm(onlineForm(pr), "Save profile")}
       <p class="note">Your profile is private: only you can see it. Teachers see only the name you give when you join their class.</p>
       <h2>Sign-in methods</h2>
       <div class="panel">
@@ -820,20 +942,104 @@
       </div>`;
   }
 
-  // The header shows "Log in" or your initials (to the profile) when the site has accounts.
+  // The header shows "Log in" and "Sign up", or your initials (to your profile). Before online accounts are
+  // switched on, the profile is the one on this device.
   function headerChip() {
-    const r = document.querySelector("header.top .right"); if (!r || !API) return;
-    let a = document.getElementById("acctchip");
-    if (!a) { a = document.createElement("a"); a.id = "acctchip"; r.insertBefore(a, r.firstChild); }
-    if (signedIn()) {
-      const u = me.user;
-      a.className = "acctchip in"; a.href = "#profile"; a.textContent = initials(u.displayName, u.email);
-      a.setAttribute("aria-label", "Your profile"); a.style.setProperty("--h", avatarHue(u.email));
-    } else { a.className = "acctchip"; a.href = "#login"; a.textContent = "Log in"; a.removeAttribute("aria-label"); }
+    const r = document.querySelector("header.top .right"); if (!r) return;
+    let box = document.getElementById("acctchip");
+    if (!box) { box = document.createElement("span"); box.id = "acctchip"; box.className = "acctbox"; r.insertBefore(box, r.firstChild); }
+    const who = API ? (signedIn() ? { name: me.user.displayName, key: me.user.email } : null) : (hasLocalProfile() ? { name: localProfile().name, key: localProfile().name || "me" } : null);
+    if (who) {
+      box.innerHTML = `<a class="acctchip in" href="#profile" aria-label="Your profile">${esc(initials(who.name, who.key))}</a>`;
+      box.firstChild.style.setProperty("--h", avatarHue(who.key));
+    } else box.innerHTML = `<a class="acctchip" href="#login">Log in</a><a class="acctchip signup" href="#signup">Sign up</a>`;
   }
   document.addEventListener("certhub:me", headerChip);
+  if (!API) document.addEventListener("DOMContentLoaded", headerChip);
+
+  /* ---------- plans (#plans): Free, Pro and Premium Pro compared ---------- */
+  const PLAN_ROWS = [
+    ["Study", [
+      ["Week-by-week study plans for every certification", 1, 1, 1],
+      ["Lessons, diagrams, cheat sheets and flashcards", 1, 1, 1],
+      ["Weekly quizzes, checkpoint tests and smart practice", 1, 1, 1],
+      ["Timed practice exams (regular and hard mode)", "1 per certification", "Unlimited", "Unlimited"],
+      ["Exam simulations (performance-based questions)", "First in each domain", "All", "All"],
+      ["Spaced review, readiness score and exam countdown", 1, 1, 1],
+      ["About 300 extra practice questions per certification", 0, 1, 1],
+      ["Full-length timed exams with a pass estimate", 0, "3 a month", "Unlimited"],
+      ["AI weak-spot practice: new questions on the topics you miss most", 0, 0, 1],
+      ["Score report by exam objective, with trends", 0, 1, 1],
+      ["Printable study guides", 0, 1, 1]]],
+    ["Practice", [
+      ["106 hands-on lab guides", 1, 1, 1],
+      ["Linux practice VMs in your browser (free practice)", 1, 1, 1],
+      ["Graded VM labs", "5", "All", "All"],
+      ["Timed VM exam", 0, 1, 1],
+      ["Games, log puzzles, incident tabletops and network design", 1, 1, 1],
+      ["Capstone projects with grading rubrics for your portfolio", 0, 1, 1],
+      ["AI feedback on your lab notes and write-ups", 0, 0, 1]]],
+    ["AI help", [
+      ["Help assistant questions a day", "5", "30", "100"],
+      ["AI Tutor: a personal explanation of any question you miss, with follow-up questions", 0, 0, 1],
+      ["AI Study Coach: a 7-day plan from your own progress and exam date", 0, 0, 1],
+      ["AI mock job interviews with feedback on every answer", 0, 0, 1]]],
+    ["Account", [
+      ["Free profile, saved work and sync across devices", 1, 1, 1],
+      ["Career Paths, resume builder and portfolio", 1, 1, 1],
+      ["AI resume and LinkedIn review for your target role", 0, 0, 1],
+      ["No ads, ever", 1, 1, 1]]]
+  ];
+  function plansView() {
+    const cur = signedIn() ? (me.plan || "free") : "free";
+    const live = !!(API && me && me.billing), premLive = !!(API && me && me.premium);
+    const price = (x, fallback) => x.monthly ? `<span class="pprice"><strong>${esc(x.monthly)}</strong> a month</span><span class="note">or ${esc(x.yearly)} a year</span>` : `<span class="pprice"><strong>${esc(fallback)}</strong></span>`;
+    // The buttons for a paid plan, depending on whether payments are on, who's signed in and their current plan.
+    const cta = kind => {
+      const on = kind === "premium" ? premLive : live, X = kind === "premium" ? PREMIUM : PRICE;
+      if (cur === kind) return `<p class="pcur">Your current plan</p><button type="button" class="btn ghost" data-aact="portal">Manage billing</button>`;
+      if (cur === "org") return `<p class="note">Your organization's plan includes Pro.</p>`;
+      if (!on) return `<button type="button" class="btn" disabled>Coming soon</button>`;
+      if (!signedIn()) return `<a class="btn" href="#signup">Sign up to upgrade</a><p class="note">Create a free account first, then choose the plan.</p>`;
+      if (cur === "pro" || cur === "premium") return `<button type="button" class="btn" data-aact="portal">Switch plans</button><p class="note">Change plans in Manage billing. The difference is prorated.</p>`;
+      return `<button type="button" class="btn" data-aact="upgrade" data-plan="${esc(kind)}" data-interval="month">${X.monthly ? `${esc(X.monthly)} a month` : "Monthly"}</button><button type="button" class="btn ghost" data-aact="upgrade" data-plan="${esc(kind)}" data-interval="year">${X.yearly ? `${esc(X.yearly)} a year` : "Yearly"}</button>`;
+    };
+    const tick = v => typeof v === "string" ? `<span class="pval">${esc(v)}</span>` : v ? `<span class="ptick" aria-hidden="true">✓</span><span class="sr-only">Included</span>` : `<span class="pno" aria-hidden="true">–</span><span class="sr-only">Not included</span>`;
+    return `<h1>Plans</h1>
+    <p class="meta">Every study plan, lesson, quiz and lab guide is free. Pro removes the Free plan's limits and adds more practice and exam simulation. Premium Pro adds an AI tutor, study coach and mock interviews on top.</p>
+    ${live ? "" : `<div class="status">Paid plans are opening soon. The Free plan works today, with no sign-up.</div>`}
+    <div class="plancards">
+      <div class="panel plancard"><h2>Free</h2>${price({}, "$0")}
+        <p>For everyone. The full study site, with no ads and no sign-up.</p>
+        <ul class="clean"><li>Study plans for ${esc(Object.keys(CertHub.certs).length)} certifications</li><li>Lessons, quizzes and checkpoint tests</li><li>1 practice exam per certification</li><li>106 lab guides, practice VMs and 5 graded VM labs</li><li>5 help assistant questions a day</li></ul>
+        <div class="btns">${cur === "free" && signedIn() ? `<p class="pcur">Your current plan</p>` : `<a class="btn ghost" href="#certifications">Start studying</a>`}</div></div>
+      <div class="panel plancard"><h2>Pro</h2>${price(PRICE, "Pro")}
+        <p>For exam prep at full length: more questions, real-length timed exams and a detailed score report.</p>
+        <ul class="clean"><li>Everything in Free, without its limits</li><li>Unlimited practice exams</li><li>Every exam simulation, graded VM lab and the VM exam</li><li>About 300 extra questions per certification</li><li>3 full-length timed exams a month and a score report</li><li>30 help assistant questions a day</li></ul>
+        <div class="btns">${/* html: fixed markup with esc() */ cta("pro")}</div></div>
+      <div class="panel plancard best"><span class="chip premchip">Most help</span><h2>Premium Pro</h2>${price(PREMIUM, "Premium Pro")}
+        <p>For personal coaching: an AI tutor that explains your mistakes, a study coach and interview practice.</p>
+        <ul class="clean"><li>Everything in Pro</li><li>Unlimited full-length exams</li><li>AI Tutor for every missed question</li><li>AI weak-spot practice questions</li><li>AI Study Coach with a weekly plan</li><li>AI resume review and mock job interviews</li><li>AI feedback on lab write-ups</li><li>100 help assistant questions a day</li></ul>
+        <div class="btns">${/* html: fixed markup with esc() */ cta("premium")}</div></div>
+    </div>
+    <h2>Compare plans</h2>
+    <div class="panel ptablewrap" tabindex="0" role="region" aria-label="Plan comparison"><table class="ptable">
+      <thead><tr><th scope="col">Feature</th><th scope="col">Free</th><th scope="col">Pro</th><th scope="col">Premium Pro</th></tr></thead>
+      <tbody>${PLAN_ROWS.map(([group, rows]) => `<tr class="pgroup"><th scope="colgroup" colspan="4">${esc(group)}</th></tr>${rows.map(([name, a, b, c]) => `<tr><th scope="row">${esc(name)}</th><td>${tick(a)}</td><td>${tick(b)}</td><td>${tick(c)}</td></tr>`).join("")}`).join("")}</tbody>
+    </table></div>
+    <h2>Questions</h2>
+    <div class="panel">
+      <details class="sq"><summary>What does the Free plan include?</summary><p>Every study plan, lesson, weekly quiz, checkpoint test, flashcard, cheat sheet and lab guide, free practice VMs, games and career pages, with no ads. Its limits: 1 timed practice exam per certification, the first exam simulation in each domain, 5 graded VM labs and 5 help assistant questions a day. Paid plans remove the limits and pay for the site's running costs.</p></details>
+      <details class="sq"><summary>Can I cancel any time?</summary><p>Yes. Cancel from Manage billing on your Account page and keep your plan until the end of the period you paid for. Your first payment can be refunded within 7 days.</p></details>
+      <details class="sq"><summary>Can I switch between Pro and Premium Pro?</summary><p>Yes, from Manage billing. The price difference is prorated, so you only pay for the time on each plan.</p></details>
+      <details class="sq"><summary>How does the AI tutor work? Is it always right?</summary><p>It's Claude, an AI model by Anthropic, set up to teach exam topics from each question, your progress numbers or the job you're practicing for. It explains, asks you check questions and gives feedback, but like any AI it can make mistakes, so check important facts against the lessons and official objectives. Nothing you type to it is stored.</p></details>
+      <details class="sq"><summary>Do you have plans for schools and teams?</summary><p>Yes. Teachers can use the site free with their classes, and organizations can buy Pro seats for their learners. See <a href="#schools">Teachers</a>.</p></details>
+      <details class="sq"><summary>How do payments work?</summary><p>Payments are handled by Stripe. StudyToCert never sees or stores your card details.</p></details>
+    </div>`;
+  }
 
   CertHub.accountViews = {
+    plans: plansView,
     account: () => { setTimeout(() => { renderStatus(); if (signedIn()) { classPanel(); passkeyPanel(); devicePanel(); } else turnstile(); }, 0); return accountView(); },
     login: mode => { setTimeout(turnstile, 0); return loginView(mode); },
     profile: profileView,
@@ -850,7 +1056,7 @@
     let join = null;
     try { join = sessionStorage.getItem(JOIN_KEY); if (join && signedIn()) sessionStorage.removeItem(JOIN_KEY); } catch (e) {}
     if (join && signedIn() && CODE_RE.test(join) && !/^#?join-/.test(location.hash)) location.hash = "join-" + join;
-    const onAccount = /^#?(account|login|signup|profile|dashboard|portfolio|home)?$|^#?(account|login|signup|profile)/.test(location.hash);
+    const onAccount = /^#?(account|login|signup|profile|plans|dashboard|portfolio|home)?$|^#?(account|login|signup|profile)/.test(location.hash);
     if (onAccount || signedIn()) CertHub.rerender();
     if (signedIn()) {
       syncAll();
