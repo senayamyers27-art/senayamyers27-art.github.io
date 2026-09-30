@@ -695,6 +695,11 @@
     const signin = q.get("signin"), invite = q.get("invite");
     // Back from Google, Facebook or LinkedIn (the API adds one of these).
     const err = q.get("signin_error"), linked = q.get("linked"), welcome = q.get("welcome"), via = q.get("signed_in");
+    // Back from Stripe Checkout (?checkout=cs_…): the plan is recorded by the webhook, which can take a few seconds.
+    if (q.has("checkout")) {
+      history.replaceState(null, "", location.pathname + location.hash);
+      if (/^cs_(test|live)_[A-Za-z0-9]{10,200}$/.test(q.get("checkout") || "")) pendingCheckout = true;
+    }
     if (err || linked || welcome || via) {
       history.replaceState(null, "", location.pathname + location.hash);
       if (err) landingNote = { kind: "warn", text: SIGNIN_ERRORS[err] || SIGNIN_ERRORS.provider_error };
@@ -709,6 +714,16 @@
       try { await api("POST", "/v1/auth/magic-link/verify", { token: signin }); ui.toast("Signed in."); }
       catch (e) { ui.toast(e.message); }
     }
+  }
+  let pendingCheckout = false;
+  // After Checkout: check the plan a few times while Stripe's webhook arrives, then say what happened.
+  async function confirmCheckout() {
+    if (!pendingCheckout || !signedIn()) return;
+    pendingCheckout = false;
+    const paid = () => ["pro", "premium"].includes(me && me.plan);
+    for (let i = 0; i < 6 && !paid(); i++) { await new Promise(r => setTimeout(r, 2000)); await refreshMe(); }
+    if (paid()) { ui.toast(`Welcome to ${PLAN[me.plan]}. Thanks for supporting StudyToCert.`); CertHub.rerender(); }
+    else ui.toast("Payment received. Your plan can take a minute to switch on; reload this page if it doesn't show soon.");
   }
   async function acceptPendingInvite() {
     let code = null;
@@ -1052,6 +1067,7 @@
     await handleLanding();
     await refreshMe();
     await acceptPendingInvite();
+    confirmCheckout();
     // Opened a class join link before signing in: go back to it (joining still needs consent there).
     let join = null;
     try { join = sessionStorage.getItem(JOIN_KEY); if (join && signedIn()) sessionStorage.removeItem(JOIN_KEY); } catch (e) {}
