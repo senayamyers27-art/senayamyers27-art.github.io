@@ -6,7 +6,9 @@
   const { U, store } = CertHub;
   const { $, esc } = U;
   const API = (CertHub.site && CertHub.site.apiUrl) || "";
-  const TS_KEY = (CertHub.site && CertHub.site.turnstileSiteKey) || "";
+  const NATIVE = window.CertHubNative || null;
+  const TS_KEY = NATIVE ? "" : (CertHub.site && CertHub.site.turnstileSiteKey) || "";
+  const signedIn = () => !!(CertHub.sync && CertHub.sync.me && CertHub.sync.me.user);
   const CHAT_KEY = "certhub:supportchat";
   const es = () => CertHub.i18n.lang() === "es";
   const tr = s => CertHub.i18n.t(s);
@@ -73,11 +75,15 @@
   async function ask(p, text) {
     if (busy) return;
     // Signed out, the bot check runs once per chat; the server then hands back a short-lived pass.
-    if (TS_KEY && !pass && !tsToken) { status(p, tr("Complete the check that you're not a bot first.")); return; }
+    // In the apps the bot check can't run, so the assistant is for signed-in members there.
+    if (NATIVE && !signedIn()) { status(p, tr("Sign in to ask the assistant. You can still search the help answers above.")); return; }
+    if (TS_KEY && !signedIn() && !pass && !tsToken) { status(p, tr("Complete the check that you're not a bot first.")); return; }
     chat.push({ role: "user", content: text }); busy = true; save(chat); renderChat(); status(p, "");
     try {
       const res = await fetch(API + "/v1/support/chat", {
-        method: "POST", credentials: "omit", cache: "no-store", headers: { "Content-Type": "application/json" },
+        // Signed-in members are counted by their plan's daily limit: the site's cookie, or the app's bearer token.
+        method: "POST", credentials: NATIVE ? "omit" : "include", cache: "no-store",
+        headers: { "Content-Type": "application/json", ...(NATIVE && NATIVE.token() ? { Authorization: `Bearer ${NATIVE.token()}` } : {}) },
         body: JSON.stringify({ messages: chat.map(m => ({ role: m.role, content: m.content })), turnstile: tsToken || undefined, pass: pass || undefined })
       });
       const data = await res.json().catch(() => ({}));

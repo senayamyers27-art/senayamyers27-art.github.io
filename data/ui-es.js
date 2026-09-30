@@ -112,6 +112,7 @@ CertHub.addUiEs({
     "No matching help answer. Try other words, or report a problem.": "No hay una respuesta que coincida. Prueba otras palabras o informa un problema.",
     "Type a question first.": "Escribe una pregunta primero.",
     "Complete the check that you're not a bot first.": "Completa primero la verificación de que no eres un bot.",
+    "Sign in to ask the assistant. You can still search the help answers above.": "Inicia sesión para preguntarle al asistente. Aún puedes buscar en las respuestas de ayuda de arriba.",
     "Help couldn't load. Check your connection and try again.": "La ayuda no se pudo cargar. Revisa tu conexión e inténtalo de nuevo.",
     "Lab library": "Biblioteca de laboratorios",
     "Dashboard": "Panel",

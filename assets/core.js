@@ -362,6 +362,7 @@
 
   /* ---------- offline support and "update ready" bar ---------- */
   function registerSW() {
+    if (window.CertHubNative) return; // the iOS and Android apps carry their files; updates come from the store
     if (!("serviceWorker" in navigator) || !/^https?:$/.test(location.protocol)) return;
     const m = document.querySelector('link[rel="manifest"]');
     if (!m) return; // embedded copies (e.g. a hosted preview) run without offline support
@@ -392,7 +393,7 @@
   // iPhone and iPad install only from Safari's Share menu, so we show steps instead.
   const install = {
     prompt: null,
-    installed: () => { try { return matchMedia("(display-mode: standalone)").matches || navigator.standalone === true; } catch (e) { return false; } },
+    installed: () => { try { return !!window.CertHubNative || matchMedia("(display-mode: standalone)").matches || navigator.standalone === true; } catch (e) { return false; } },
     platform() {
       const ua = navigator.userAgent || "";
       if (/iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) return "ios";
@@ -549,6 +550,7 @@
       "BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${txt(title)}`, "TRIGGER:-PT0M", "END:VALARM", "END:VEVENT", "END:VCALENDAR"].filter(Boolean).join("\r\n") + "\r\n";
   }
   function downloadFile(name, text, type) {
+    if (window.CertHubNative) { CertHubNative.saveFile(name, text, type).catch(e => { if (CertHub.ui) CertHub.ui.toast(e.message); }); return; }
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([text], { type }));
     a.download = name;
@@ -557,6 +559,7 @@
   }
   // Asks the person for a time, then saves a daily calendar event they open in their calendar app.
   function addReminder(title, url) {
+    if (window.CertHubNative) return CertHubNative.reminder(title); // a notification on the phone instead of a calendar file
     const wrap = document.createElement("div");
     wrap.className = "modal-wrap";
     wrap.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="rm-h"><p id="rm-h"><strong>Daily study reminder</strong><br><span class="note">Saves a repeating event. Open the file to add it to your phone or computer calendar, which will remind you every day.</span></p>

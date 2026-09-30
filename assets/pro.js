@@ -19,7 +19,7 @@
     load(name) {
       if (!pro.active || !/^[a-z0-9-]{1,40}$/.test(name)) return Promise.resolve(null);
       if (!cache[name]) {
-        cache[name] = fetch(`${API}/v1/content/${name}`, { credentials: "include", cache: "no-store" })
+        cache[name] = fetch(`${API}/v1/content/${name}`, { ...CertHub.sync.authInit(), cache: "no-store" })
           .then(r => r.ok ? r.json() : null).catch(() => null)
           .then(j => { if (!j || typeof j !== "object") { delete cache[name]; return null; } return j; });
       }

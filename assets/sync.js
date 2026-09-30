@@ -5,6 +5,11 @@
   const { U, store, ui } = CertHub;
   const { $, esc } = U;
   const API = (CertHub.site && CertHub.site.apiUrl) || "";
+  // The iOS and Android apps (assets/native.js): the session is a bearer token, sign-in uses the emailed code, and
+  // paid plans follow the stores' rules. BUY is "web" (a US app: a link to subscribe on the website), "none" (an
+  // app elsewhere: no prices or buy buttons; members sign in to use a plan they have) or "" (the website).
+  const NATIVE = (typeof window !== "undefined" && window.CertHubNative) || null;
+  const BUY = NATIVE ? (NATIVE.webPurchase ? "web" : "none") : "";
 
   /* ---------- merge rules (pure; also used by tests) ---------- */
   const isObj = v => v && typeof v === "object" && !Array.isArray(v);
@@ -97,7 +102,7 @@
   const mergeDoc = (docKey, local, server) => docKey === "labs" ? mergeLabs(local, server) : docKey === "work" ? mergeWork(local, server) : mergePlan(local, server);
 
   /* ---------- optional Turnstile bot check on sign-in (site.config.json turnstileSiteKey) ---------- */
-  const TS_KEY = (CertHub.site && CertHub.site.turnstileSiteKey) || "";
+  const TS_KEY = NATIVE ? "" : (CertHub.site && CertHub.site.turnstileSiteKey) || ""; // the widget only runs on the site's domain
   let tsToken = "", tsWidget = null, tsLoading = null;
   function turnstile() {
     const box = $("#ts-box");
@@ -118,10 +123,13 @@
   function turnstileReset() { tsToken = ""; if (tsWidget != null && window.turnstile) window.turnstile.reset(tsWidget); }
 
   /* ---------- API client ---------- */
+  // Headers and credentials for a request to the API: the site's cookie, or the app's bearer token.
+  const authInit = () => NATIVE ? { credentials: "omit", headers: NATIVE.token() ? { Authorization: `Bearer ${NATIVE.token()}` } : {} } : { credentials: "include", headers: {} };
   async function api(method, path, body) {
+    const a = authInit();
     const res = await fetch(API + path, {
-      method, credentials: "include", cache: "no-store",
-      headers: body !== undefined ? { "Content-Type": "application/json" } : {},
+      method, credentials: a.credentials, cache: "no-store",
+      headers: body !== undefined ? { ...a.headers, "Content-Type": "application/json" } : a.headers,
       body: body !== undefined ? JSON.stringify(body) : undefined
     });
     let data = {};
@@ -227,7 +235,7 @@
       pending.add(storageKey);
       clearTimeout(pushTimer); pushTimer = setTimeout(pushPending, 2500);
     },
-    syncAll, refreshMe, savePrompt, api, get me() { return me; }, get enabled() { return !!API; }
+    syncAll, refreshMe, savePrompt, api, authInit, get me() { return me; }, get enabled() { return !!API; }
   };
 
   /* ---------- plan limits ---------- */
@@ -241,6 +249,12 @@
     lock(label = "Unlock with Pro") { return `<a class="btn ghost sm lockbtn" href="#plans">${CertHub.fx.icon("spark")}${esc(label)}</a>`; },
     // Explains a limit and offers the plans page.
     async upsell(message) {
+      // An app outside the US can't point to a purchase: it only says what the limit is and offers sign-in.
+      if (BUY === "none") {
+        if (signedIn()) { await ui.confirm(message.replace(/\s*(See|Open) (the )?Plans[^.]*\.?/i, ""), { ok: "OK", cancel: "Close" }); return; }
+        if (await ui.confirm(`${message.replace(/\s*(See|Open) (the )?Plans[^.]*\.?/i, "")} If you have a plan, sign in to use it.`, { ok: "Sign in", cancel: "Not now" })) location.hash = "login";
+        return;
+      }
       if (await ui.confirm(message, { ok: "See plans", cancel: "Not now" })) location.hash = "plans";
     }
   };
@@ -253,7 +267,7 @@
   let tutorN = 0;
   CertHub.premium = {
     get active() { return !!(me && me.features && me.features.includes("ai_tutor")); },
-    get forSale() { return !!(API && me && me.premium); },
+    get forSale() { return BUY !== "none" && !!(API && me && me.premium); },
     button(mode, label, getContext, cls = "btn ghost sm") {
       if (this.active) {
         const k = "t" + (++tutorN); tutorCtx.set(k, getContext);
@@ -293,6 +307,8 @@
   function planPanel(plan) {
     if (plan === "org") return `<h2>Pro</h2><div class="panel"><p data-style="margin:0">Your organization's plan includes every Pro feature.</p></div>`;
     if (!me.billing) return "";
+    // An app outside the US: no billing buttons or prices, just the plan the member has.
+    if (BUY === "none") return plan === "free" ? "" : `<h2>${esc(PLAN[plan] || plan)}</h2><div class="panel"><p data-style="margin:0">You have ${esc(PLAN[plan] || plan)}. Thanks for supporting the site.</p></div>`;
     const plans = `<a class="btn ghost" href="#plans">Compare plans</a>`;
     if (plan === "premium") return `<h2>Premium Pro</h2><div class="panel"><p data-style="margin:0">You have Premium Pro: everything in Pro, plus unlimited full-length exams, the AI tutor, weak-spot practice, study coach, resume and lab reviews, and mock interviews. Thanks for supporting the site.</p><div class="btns"><button type="button" class="btn ghost" data-aact="portal">Manage billing</button>${plans}</div></div>`;
     if (plan === "pro") return `<h2>Pro</h2><div class="panel"><p data-style="margin:0">You have Pro. Thanks for supporting the site. Manage, change or cancel your plan any time.</p>${me.premium ? `<p class="note">Premium Pro adds the AI tutor, study coach and mock interviews. Switch plans from Manage billing.</p>` : ""}<div class="btns"><button type="button" class="btn ghost" data-aact="portal">Manage billing</button>${plans}</div></div>`;
@@ -379,7 +395,8 @@
     <p class="note" data-style="margin:0">Not shared: your answers, review queue, lab notes or write-ups. You can leave the class at any time from the Account page, which stops sharing at once.</p>`;
 
   /* ---------- passkeys (WebAuthn) and signed-in devices ---------- */
-  const PASSKEYS = typeof window !== "undefined" && !!(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create);
+  // Not in the apps: passkeys are tied to the website's domain, which the app's web view isn't.
+  const PASSKEYS = !NATIVE && typeof window !== "undefined" && !!(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create);
   const b64u = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   const unb64u = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), c => c.charCodeAt(0));
   const when = t => t ? new Date(t).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "never";
@@ -556,10 +573,28 @@
       } catch (err) { msg.textContent = err.message; }
       return;
     }
-    if (!["signin-form", "org-form", "cohort-form", "class-form", "classcode-form", "join-form", "classedit-form"].includes(f.id)) return;
+    if (!["signin-form", "code-form", "org-form", "cohort-form", "class-form", "classcode-form", "join-form", "classedit-form"].includes(f.id)) return;
     e.preventDefault();
     try {
-      if (f.id === "signin-form") {
+      if (f.id === "signin-form" && NATIVE) {
+        // The app: the email carries a code to type here (the app can't open the emailed link).
+        const msg = $("#signin-msg"), email = $("#signin-email").value.trim();
+        msg.textContent = "Sending…";
+        const { data } = await api("POST", "/v1/auth/magic-link", { email, app: true });
+        f.id = "code-form"; f.dataset.email = email;
+        f.innerHTML = `<p data-style="margin-top:0">${esc(data.message)} We sent it to <strong class="nocap">${esc(email)}</strong>.${data.devCode ? ` Development code: <code>${esc(data.devCode)}</code>` : ""}</p>
+          <label for="signin-code"><strong>Sign-in code</strong></label>
+          <input type="text" id="signin-code" class="textin" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" maxlength="9" placeholder="ABCD-EFGH" required>
+          <div class="btns"><button type="submit" class="btn">Sign in</button><button type="button" class="btn ghost" data-aact="code-restart">Use a different email</button></div>
+          <p class="note" id="signin-msg" role="status"></p>`;
+        $("#signin-code").focus();
+      } else if (f.id === "code-form") {
+        const msg = $("#signin-msg");
+        msg.textContent = "Checking…";
+        const { data } = await api("POST", "/v1/auth/code/verify", { email: f.dataset.email, code: $("#signin-code").value });
+        NATIVE.setToken(data.token);
+        await refreshMe(); ui.toast("Signed in."); syncAll(); location.hash = "profile";
+      } else if (f.id === "signin-form") {
         const msg = $("#signin-msg");
         msg.textContent = "Sending…";
         if (TS_KEY && !tsToken) { msg.textContent = "Complete the check that you're not a bot first."; return; }
@@ -593,14 +628,15 @@
         await api("POST", `/v1/orgs/${f.dataset.org}/cohorts`, { name: $("#cohort-name").value, certId: $("#cohort-cert").value });
         orgPanel(f.dataset.org);
       }
-    } catch (err) { ui.toast(err.message); if (f.id === "signin-form") { $("#signin-msg").textContent = err.message; turnstileReset(); } }
+    } catch (err) { ui.toast(err.message); if (f.id === "code-form") { const m = $("#signin-msg"); if (m) m.textContent = err.message; } if (f.id === "signin-form") { $("#signin-msg").textContent = err.message; turnstileReset(); } }
   });
 
   document.addEventListener("click", async e => {
     const b = e.target.closest("[data-aact]"); if (!b) return;
     const a = b.dataset.aact;
     try {
-      if (a === "signout") { await api("POST", "/v1/auth/logout", {}); setMe((await api("GET", "/v1/me").catch(() => ({ data: null }))).data); ui.toast("Signed out. Your progress stays on this device."); if (location.hash === "#profile") location.hash = "login"; else CertHub.rerender(); }
+      if (a === "code-restart") { CertHub.rerender(); return; }
+      if (a === "signout") { await api("POST", "/v1/auth/logout", {}); if (NATIVE) NATIVE.setToken(""); setMe((await api("GET", "/v1/me").catch(() => ({ data: null }))).data); ui.toast("Signed out. Your progress stays on this device."); if (location.hash === "#profile") location.hash = "login"; else CertHub.rerender(); }
       if (a === "sync") await syncAll();
       if (a === "removeprofile") {
         if (!(await ui.confirm("Remove your profile from this browser? Your study progress stays.", { ok: "Remove", cancel: "Keep it" }))) return;
@@ -629,6 +665,8 @@
         if (!(await ui.confirm("Sign out on every other device? You stay signed in here.", { ok: "Sign out others", cancel: "Cancel" }))) return;
         const { data } = await api("DELETE", "/v1/sessions/others"); ui.toast(`Signed out ${data.ended} other device${data.ended === 1 ? "" : "s"}.`); devicePanel();
       }
+      if (a === "webplans") { if (NATIVE && BUY === "web") NATIVE.openWeb(b.dataset.path === "/#account" ? "/#account" : "/#plans"); return; }
+      if ((a === "upgrade" || a === "portal") && NATIVE) { if (BUY === "web") NATIVE.openWeb(a === "portal" ? "/#account" : "/#plans"); return; }
       if (a === "upgrade" || a === "portal") {
         const { data } = await api("POST", a === "upgrade" ? "/v1/billing/checkout" : "/v1/billing/portal", a === "upgrade" ? { plan: b.dataset.plan === "premium" ? "premium" : "pro", interval: b.dataset.interval } : {});
         if (/^https:\/\//.test(data.url)) location.href = data.url;
@@ -639,7 +677,7 @@
         ui.copy(data.link, "invite link (valid 30 days)");
       }
       if (a === "csv") {
-        const res = await fetch(`${API}/v1/cohorts/${b.dataset.cohort}/summary.csv`, { credentials: "include" });
+        const res = await fetch(`${API}/v1/cohorts/${b.dataset.cohort}/summary.csv`, authInit());
         if (!res.ok) throw new Error("Couldn't download the CSV.");
         download("cohort-progress.csv", await res.text(), "text/csv");
       }
@@ -665,7 +703,7 @@
         ui.toast("You left the class. Sharing has stopped."); classPanel();
       }
       if (a === "classcsv") {
-        const res = await fetch(`${API}/v1/classes/${b.dataset.class}/roster.csv`, { credentials: "include", cache: "no-store" });
+        const res = await fetch(`${API}/v1/classes/${b.dataset.class}/roster.csv`, { ...authInit(), cache: "no-store" });
         if (!res.ok) throw new Error("Couldn't download the CSV.");
         const text = await res.text();
         if (document.documentElement.classList.contains("framed")) ui.showText(text, "Class roster (CSV)"); else download("class-roster.csv", text, "text/csv");
@@ -858,6 +896,7 @@
   }
 
   function socialButtons() {
+    if (NATIVE) return ""; // Google and others don't allow sign-in from inside an app's web view
     const list = providers();
     if (!list.length) return "";
     return `<div class="social">${list.map(p => `<a class="btn socialbtn" href="${esc(startUrl(p))}" data-provider="${esc(p)}">${/* safe: fixed SVG */ LOGO[p]}<span>Continue with ${esc(PNAME[p])}</span></a>`).join("")}</div>
@@ -880,14 +919,14 @@
           <label for="signin-email"><strong>Email</strong></label>
           <input type="email" id="signin-email" autocomplete="email" required placeholder="you@example.com" class="textin">
           ${TS_KEY ? `<div id="ts-box" class="tsbox"></div>` : ""}
-          <div class="btns"><button type="submit" class="btn">${signup ? "Email me a link to sign up" : "Email me a sign-in link"}</button></div>
+          <div class="btns"><button type="submit" class="btn">${NATIVE ? "Email me a sign-in code" : signup ? "Email me a link to sign up" : "Email me a sign-in link"}</button></div>
           <p class="note" id="signin-msg" role="status"></p>
         </form>
         ${PASSKEYS ? `<div class="btns" data-style="margin-top:0"><button type="button" class="btn ghost" data-aact="passkey-signin">Sign in with a passkey</button></div><p class="note" id="passkey-msg" role="status" data-style="margin:0"></p>` : ""}
       </div>
       <p class="note authswitch">${signup ? `Already have an account? <a href="#login">Log in</a>` : `New to StudyToCert? <a href="#signup">Create a free account</a>`}</p>
-      ${me && me.billing ? `<h2>Pro</h2><div class="panel">${/* html: fixed markup */ proPitch()}<p class="note" data-style="margin:0">${PRICE.monthly ? `${esc(PRICE.monthly)} a month or ${esc(PRICE.yearly)} a year. ` : ""}Sign in first, then upgrade from your Account page.</p></div>` : ""}
-      <p class="note">${signup ? "Your account is created the first time you sign in, whichever option you choose. " : ""}We only get your name and email address from Google, Facebook or LinkedIn, never your password or posts, and we never post anything. Accounts are for ages 13 and up. See the <a href="#terms">Terms</a> and <a href="#privacy">Privacy Policy</a>. You can also keep studying without an account: progress is saved on this device.</p>
+      ${me && me.billing && !NATIVE ? `<h2>Pro</h2><div class="panel">${/* html: fixed markup */ proPitch()}<p class="note" data-style="margin:0">${PRICE.monthly ? `${esc(PRICE.monthly)} a month or ${esc(PRICE.yearly)} a year. ` : ""}Sign in first, then upgrade from your Account page.</p></div>` : ""}
+      <p class="note">${signup ? "Your account is created the first time you sign in, whichever option you choose. " : ""}${NATIVE ? "" : "We only get your name and email address from Google, Facebook or LinkedIn, never your password or posts, and we never post anything. "}Accounts are for ages 13 and up. See the <a href="#terms">Terms</a> and <a href="#privacy">Privacy Policy</a>. You can also keep studying without an account: progress is saved on this device.</p>
     </div>`;
   }
 
@@ -1008,10 +1047,16 @@
   function plansView() {
     const cur = signedIn() ? (me.plan || "free") : "free";
     const live = !!(API && me && me.billing), premLive = !!(API && me && me.premium);
-    const price = (x, fallback) => x.monthly ? `<span class="pprice"><strong>${esc(x.monthly)}</strong> a month</span><span class="note">or ${esc(x.yearly)} a year</span>` : `<span class="pprice"><strong>${esc(fallback)}</strong></span>`;
+    const price = (x, fallback) => BUY === "none" ? "" : x.monthly ? `<span class="pprice"><strong>${esc(x.monthly)}</strong> a month</span><span class="note">or ${esc(x.yearly)} a year</span>` : `<span class="pprice"><strong>${esc(fallback)}</strong></span>`;
     // The buttons for a paid plan, depending on whether payments are on, who's signed in and their current plan.
     const cta = kind => {
       const on = kind === "premium" ? premLive : live, X = kind === "premium" ? PREMIUM : PRICE;
+      if (BUY === "none") return cur === kind ? `<p class="pcur">Your current plan</p>` : "";
+      if (BUY === "web") {
+        if (cur === kind) return `<p class="pcur">Your current plan</p><button type="button" class="btn ghost" data-aact="webplans" data-path="/#account">Manage on studytocert.com</button>`;
+        if (cur === "org") return `<p class="note">Your organization's plan includes Pro.</p>`;
+        return on ? `<button type="button" class="btn" data-aact="webplans" data-path="/#plans">Subscribe at studytocert.com</button><p class="note">Opens the website. Then sign in here with the same email.</p>` : `<button type="button" class="btn" disabled>Coming soon</button>`;
+      }
       if (cur === kind) return `<p class="pcur">Your current plan</p><button type="button" class="btn ghost" data-aact="portal">Manage billing</button>`;
       if (cur === "org") return `<p class="note">Your organization's plan includes Pro.</p>`;
       if (!on) return `<button type="button" class="btn" disabled>Coming soon</button>`;
@@ -1022,7 +1067,7 @@
     const tick = v => typeof v === "string" ? `<span class="pval">${esc(v)}</span>` : v ? `<span class="ptick" aria-hidden="true">✓</span><span class="sr-only">Included</span>` : `<span class="pno" aria-hidden="true">–</span><span class="sr-only">Not included</span>`;
     return `<h1>Plans</h1>
     <p class="meta">Every study plan, lesson, quiz and lab guide is free. Pro removes the Free plan's limits and adds more practice and exam simulation. Premium Pro adds an AI tutor, study coach and mock interviews on top.</p>
-    ${live ? "" : `<div class="status">Paid plans are opening soon. The Free plan works today, with no sign-up.</div>`}
+    ${BUY === "none" ? `<div class="status">${signedIn() ? `Your plan: ${esc(PLAN[cur] || cur)}.` : "Have a Pro or Premium Pro plan? Sign in to use it in the app."}</div>` : live ? "" : `<div class="status">Paid plans are opening soon. The Free plan works today, with no sign-up.</div>`}
     <div class="plancards">
       <div class="panel plancard"><h2>Free</h2>${price({}, "$0")}
         <p>For everyone. The full study site, with no ads and no sign-up.</p>
