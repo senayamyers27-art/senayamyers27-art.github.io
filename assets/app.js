@@ -385,14 +385,14 @@
 
   // The home page's illustration: a path through the career tracks to a certification, with a dot travelling it.
   function heroArt() {
-    const node = (x, y, ico, c) => `<g class="node" data-style="--c:var(${/* safe: a fixed color token */ c})"><circle cx="${/* num */ x}" cy="${/* num */ y}" r="17"/><g transform="translate(${x - 10} ${y - 10})">${CertHub.fx.icon(ico)}</g></g>`;
+    const node = (x, y, ico, c) => `<g class="node" data-style="--c:var(${/* safe: a fixed color token */ c})"><circle cx="${/* num */ x}" cy="${/* num */ y}" r="17"/><g transform="translate(${x - 10} ${y - 10})">${CertHub.fx.icon(ico, "", 20)}</g></g>`;
     return `<div class="heroart" aria-hidden="true"><svg viewBox="0 0 420 285" focusable="false">
       <path class="path" d="M30 250 C 110 250, 90 170, 170 170 S 250 90, 330 90 S 380 30, 390 20"/>
       <path class="flow" d="M30 250 C 110 250, 90 170, 170 170 S 250 90, 330 90 S 380 30, 390 20"/>
       <circle class="traveler" r="6"/>
       <g class="node" data-style="--c:var(--d0)"><circle cx="30" cy="250" r="9"/></g>
       ${node(100, 210, "network", "--d1")}${node(170, 170, "cybersecurity", "--d2")}${node(250, 130, "cloud", "--d3")}${node(330, 90, "data-ai", "--d5")}
-      <g class="node goal"><circle cx="390" cy="20" r="19"/><g transform="translate(380 10)">${CertHub.fx.icon("medal")}</g></g>
+      <g class="node goal"><circle cx="390" cy="20" r="19"/><g transform="translate(380 10)">${CertHub.fx.icon("medal", "", 20)}</g></g>
       <text x="30" y="278" text-anchor="middle">Start</text><text x="360" y="58" text-anchor="middle">Certified</text>
     </svg></div>`;
   }

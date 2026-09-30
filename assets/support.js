@@ -49,7 +49,7 @@
   /* ---------- chat ---------- */
   const load = () => { try { const v = JSON.parse(sessionStorage.getItem(CHAT_KEY) || "[]"); return Array.isArray(v) ? v.slice(-20) : []; } catch (e) { return []; } };
   const save = m => { try { sessionStorage.setItem(CHAT_KEY, JSON.stringify(m.slice(-20))); } catch (e) {} };
-  let chat = load(), busy = false, tsToken = "", tsWidgets = [];
+  let chat = load(), busy = false, tsToken = "", tsWidgets = [], pass = "";
   // The help box can appear in several places at once (the floating panel, the home page, the Help page). Each copy
   // has its own element ids, made from a prefix: "sup" (panel), "hsup" (home), "psup" (Help page). All copies share
   // one conversation.
@@ -72,15 +72,18 @@
   const status = (p, text) => { const m = el(p, "msg-status"); if (m) m.textContent = text; };
   async function ask(p, text) {
     if (busy) return;
-    if (TS_KEY && !chat.some(m => m.role === "user") && !tsToken) { status(p, tr("Complete the check that you're not a bot first.")); return; }
+    // Signed out, the bot check runs once per chat; the server then hands back a short-lived pass.
+    if (TS_KEY && !pass && !tsToken) { status(p, tr("Complete the check that you're not a bot first.")); return; }
     chat.push({ role: "user", content: text }); busy = true; save(chat); renderChat(); status(p, "");
     try {
       const res = await fetch(API + "/v1/support/chat", {
         method: "POST", credentials: "omit", cache: "no-store", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: chat.map(m => ({ role: m.role, content: m.content })), turnstile: tsToken || undefined })
+        body: JSON.stringify({ messages: chat.map(m => ({ role: m.role, content: m.content })), turnstile: tsToken || undefined, pass: pass || undefined })
       });
       const data = await res.json().catch(() => ({}));
+      if (data.error === "challenge_required") pass = "";
       if (!res.ok) throw new Error(data.message || tr("The assistant couldn't answer just now. Try again."));
+      if (typeof data.pass === "string") pass = data.pass;
       chat.push({ role: "assistant", content: String(data.reply || "") });
     } catch (e) {
       chat.pop(); // take the question back so it can be sent again

@@ -123,7 +123,19 @@
     <h2>5. Your content</h2>
     <p>Notes, write-ups and portfolio text you create belong to you. They are stored in your browser${accounts() ? ", and on our server only if you sign in to sync them," : ""} (see the <a href="#privacy">Privacy Policy</a>).${accounts() ? " You let us store and copy them only to sync them to your devices." : ""}</p>
     ${accounts() ? `<h2>5a. Accounts and paid plans</h2>
-    <p>Accounts are optional. You must be at least 13 years old to create one, or older where local law sets a higher age for consenting to online services. Keep your email account secure, since sign-in links go there. Pro and group plans renew automatically until cancelled; you can cancel any time from Manage billing and keep access until the end of the paid period. If you're not happy with Pro, ask within 7 days of your first payment for a full refund. Prices and taxes are shown at checkout by Stripe. Organization owners are responsible for inviting only people who agreed to share their progress numbers with instructors. We may suspend accounts that abuse the service.</p>` : ""}
+    <p>Accounts are optional. You must be at least 13 years old to create one, or older where local law sets a higher age for consenting to online services. Keep your email account secure, since sign-in links go there. Organization owners are responsible for inviting only people who agreed to share their progress numbers with instructors. We may suspend accounts that abuse the service.</p>` : ""}
+
+    <h2>5b. Plans, billing and refunds</h2>
+    <ul>
+      <li><strong>Free plan.</strong> Free to use with no account. It includes limits (for example, one timed practice exam per certification); the <a href="#plans">Plans</a> page lists them. We may change what the Free plan includes, and will say so on the What's New page.</li>
+      <li><strong>Pro and Premium Pro</strong> are subscriptions billed monthly or yearly, in advance, and renew automatically until you cancel. Prices and any sales tax are shown before you pay. Payments are processed by Stripe; we never see your card number.</li>
+      <li><strong>Changing plans.</strong> You can switch between Pro and Premium Pro, or between monthly and yearly, from Manage billing on your Account page. Upgrades apply straight away and you're charged the prorated difference at once; downgrades take effect at the end of the period you've paid for.</li>
+      <li><strong>Cancelling.</strong> Cancel any time from Manage billing. You keep your plan until the end of the period you've paid for, and you won't be charged again.</li>
+      <li><strong>Refunds.</strong> If you're not happy, ask within 7 days of your first payment and we'll refund it in full. Use <a href="#settings.about">Report a problem</a> or reply to your welcome email, from the email address on your account. After that, payments aren't refundable except where the law requires, but cancelling stops future charges.</li>
+      <li><strong>Failed payments.</strong> If a renewal payment fails, Stripe retries it and emails you. If it still can't be collected, the plan ends and your account moves to the Free plan; your progress stays.</li>
+      <li><strong>AI features</strong> (Premium Pro, and the help assistant) are study aids. They can be wrong, so check important facts against the lessons and the official exam objectives. Daily limits apply, and we may pause them to prevent abuse.</li>
+      <li><strong>Price changes.</strong> We'll tell you at least 30 days before a price change affects your subscription, and you can cancel before it does.</li>
+    </ul>
 
     <h2>6. Acceptable use</h2>
     <p>Don't try to disrupt the site or its hosting, bypass its security controls, or use automated tools to overload it. If you find a security issue, please report it privately (see the <a href="#security">Security</a> page).</p>

@@ -1016,7 +1016,7 @@
       if (cur === "org") return `<p class="note">Your organization's plan includes Pro.</p>`;
       if (!on) return `<button type="button" class="btn" disabled>Coming soon</button>`;
       if (!signedIn()) return `<a class="btn" href="#signup">Sign up to upgrade</a><p class="note">Create a free account first, then choose the plan.</p>`;
-      if (cur === "pro" || cur === "premium") return `<button type="button" class="btn" data-aact="portal">Switch plans</button><p class="note">Change plans in Manage billing. The difference is prorated.</p>`;
+      if (cur === "pro" || cur === "premium") return `<button type="button" class="btn" data-aact="portal">Switch plans</button><p class="note">Change plans in Manage billing. Upgrades charge the prorated difference right away.</p>`;
       return `<button type="button" class="btn" data-aact="upgrade" data-plan="${esc(kind)}" data-interval="month">${X.monthly ? `${esc(X.monthly)} a month` : "Monthly"}</button><button type="button" class="btn ghost" data-aact="upgrade" data-plan="${esc(kind)}" data-interval="year">${X.yearly ? `${esc(X.yearly)} a year` : "Yearly"}</button>`;
     };
     const tick = v => typeof v === "string" ? `<span class="pval">${esc(v)}</span>` : v ? `<span class="ptick" aria-hidden="true">✓</span><span class="sr-only">Included</span>` : `<span class="pno" aria-hidden="true">–</span><span class="sr-only">Not included</span>`;
@@ -1046,7 +1046,7 @@
     <div class="panel">
       <details class="sq"><summary>What does the Free plan include?</summary><p>Every study plan, lesson, weekly quiz, checkpoint test, flashcard, cheat sheet and lab guide, free practice VMs, games and career pages, with no ads. Its limits: 1 timed practice exam per certification, the first exam simulation in each domain, 5 graded VM labs and 5 help assistant questions a day. Paid plans remove the limits and pay for the site's running costs.</p></details>
       <details class="sq"><summary>Can I cancel any time?</summary><p>Yes. Cancel from Manage billing on your Account page and keep your plan until the end of the period you paid for. Your first payment can be refunded within 7 days.</p></details>
-      <details class="sq"><summary>Can I switch between Pro and Premium Pro?</summary><p>Yes, from Manage billing. The price difference is prorated, so you only pay for the time on each plan.</p></details>
+      <details class="sq"><summary>Can I switch between Pro and Premium Pro?</summary><p>Yes, from Manage billing. An upgrade charges the prorated difference right away; a downgrade starts at your next renewal.</p></details>
       <details class="sq"><summary>How does the AI tutor work? Is it always right?</summary><p>It's Claude, an AI model by Anthropic, set up to teach exam topics from each question, your progress numbers or the job you're practicing for. It explains, asks you check questions and gives feedback, but like any AI it can make mistakes, so check important facts against the lessons and official objectives. Nothing you type to it is stored.</p></details>
       <details class="sq"><summary>Do you have plans for schools and teams?</summary><p>Yes. Teachers can use the site free with their classes, and organizations can buy Pro seats for their learners. See <a href="#schools">Teachers</a>.</p></details>
       <details class="sq"><summary>How do payments work?</summary><p>Payments are handled by Stripe. StudyToCert never sees or stores your card details.</p></details>

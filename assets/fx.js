@@ -105,7 +105,8 @@
     medal: '<circle cx="12" cy="14.5" r="5.5"/><path d="M9 3l3 6 3-6M12 12v5M10.5 13.5l1.5-1.5"/>',
     flame: '<path d="M12 21c-3.9 0-6.5-2.6-6.5-6.2 0-3.4 2.4-5.4 3.6-8.3.6 1.9 1.6 2.9 2.8 3.4C12 7.3 13 4.6 15.4 3c-.3 3.6 3.1 5.8 3.1 11.2C18.5 18.4 15.9 21 12 21z"/>'
   };
-  const icon = (name, cls = "") => `<svg class="ico ${esc(cls)}" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${/* html: fixed SVG shapes defined above */ ICONS[name] || ICONS.all}</svg>`;
+  // size: width and height attributes, for icons nested inside another SVG (Safari ignores CSS sizes there).
+  const icon = (name, cls = "", size = 0) => `<svg class="ico ${esc(cls)}"${size ? ` width="${/* num */ +size}" height="${/* num */ +size}"` : ""} viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${/* html: fixed SVG shapes defined above */ ICONS[name] || ICONS.all}</svg>`;
 
   /* ---------- share cards: a square image of a score, for social posts ---------- */
   // Resolves "var(--ok)" and similar to the color the page is using right now.
