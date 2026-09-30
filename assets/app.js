@@ -413,6 +413,9 @@
     <h2>Explore</h2>
     ${/* html: tiles built with esc() */ tilesHtml()}
     <p class="note">Everything else is in the <button type="button" class="linkbtn" data-menu="open">Menu</button> at the top of every page.</p>
+    <h2 id="help-h">Questions? Ask here</h2>
+    <div class="panel helpcard" id="homehelp">${CertHub.fx.skeleton()}</div>
+    <p class="note"><a href="#help">Open the Help page</a> for every answer.</p>
     ${CertHub.install.installed() ? "" : `<div class="panel installcard"><div class="grow"><strong>Get the app on your phone</strong><br><span class="note">Install it from your browser: it opens full screen and works offline. No app store needed.</span></div><a class="btn ghost sm" href="#install">Install</a></div>`}
     ${newsHtml()}`;
   }
@@ -546,7 +549,7 @@
       else if (head === "review" && CertHub.review) { topNav("home"); $("#app").innerHTML = CertHub.review.show(); title = "Daily Review"; view = "review"; }
       else if (head === "portfolio") { topNav("portfolio"); $("#app").innerHTML = CertHub.labViews.portfolio(); title = "Lab Portfolio"; view = "portfolio"; }
       else if (head === "help") { topNav(""); $("#app").innerHTML = helpView(); title = "Help"; view = head; embedHelp("helppage", "psup", { all: true }); }
-      else { topNav("home"); $("#app").innerHTML = homeView(); view = "home"; }
+      else { topNav("home"); $("#app").innerHTML = homeView(); view = "home"; embedHelp("homehelp", "hsup"); }
     }
     const bn = $("#brandname span");
     if (brand === "StudyToCert") bn.innerHTML = "Study<b>To</b>Cert"; else bn.textContent = brand;
