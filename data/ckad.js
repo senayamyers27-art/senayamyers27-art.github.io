@@ -7,7 +7,7 @@ CertHub.register({
   exam: "CKAD (Kubernetes v1.35 curriculum)",
   blurb: "Hands-on Kubernetes exam for developers who design, build, configure, deploy, expose and troubleshoot cloud native applications on a cluster.",
   status: "verified",
-  statusNote: "Domains and weights read on Sept 24, 2026 in the CNCF CKAD Curriculum v1.35 PDF (github.com/cncf/curriculum): Application Design and Build 20%, Application Deployment 20%, Application Observability and Maintenance 15%, Application Environment, Configuration and Security 25%, Services and Networking 20%. The Linux Foundation training site could not be opened from here, so exam length (2 hours, 15–20 tasks) and the 66% pass mark come from the Linux Foundation FAQ as quoted in search results; confirm them on the exam page before booking.",
+  statusNote: "Built from The Linux Foundation / CNCF's published exam objectives (CKAD (Kubernetes v1.35 curriculum)). Confirm the details on the official exam page before you book.",
   lastVerified: "2026-09-24",
   notices: [],
   examInfo: {

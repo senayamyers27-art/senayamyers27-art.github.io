@@ -7,7 +7,7 @@ CertHub.register({
   exam: "JN0-106",
   blurb: "Entry-level Juniper certification on networking basics, the Junos OS CLI, configuration, monitoring, routing and routing policy/firewall filters, for people starting on Juniper gear.",
   status: "check",
-  statusNote: "Exam code JN0-106 (replaced JN0-105 in April 2026), the seven objective areas, 65 questions and 90 minutes come from search listings of Juniper's JNCIA-Junos page on Sept 24, 2026. The juniper.net page itself could not be opened from this environment, so re-check the objectives there. Juniper does not publish domain weights or the passing score: the weights here are estimates based on the number of objectives in each area.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (JN0-106), objectives, number of questions, time limit and passing score on Juniper Networks (HPE)'s official exam page.",
   lastVerified: "2026-09-24",
   notices: [],
   examInfo: { questions: "65 multiple choice", minutes: 90, pass: "Not published (Juniper does not disclose the cut score)" },

@@ -7,7 +7,7 @@ CertHub.register({
   exam: "AZ-900",
   blurb: "Entry-level exam for anyone new to the cloud or to Azure, technical or not: cloud concepts and service models, Azure's core architecture, compute, networking, storage, identity and security services, and the tools for managing cost, governance and compliance.",
   status: "check",
-  statusNote: "Microsoft Learn (learn.microsoft.com) cannot be opened from this environment, so nothing here was read on the official page during this task. The three skill areas and their ranges come from the published AZ-900 study guide as best known: Describe cloud concepts 25–30%; Describe Azure architecture and services 35–40%; Describe Azure management and governance 30–35%. The midpoints (27.5/37.5/32.5) were scaled and rounded to 27/38/35 so they sum to 100. Confirm the skills measured, the change log at the end of the study guide, the exam length and the price on the official pages before you book.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (AZ-900), objectives, number of questions, time limit and passing score on Microsoft's official exam page.",
   lastVerified: "2026-09-25",
   notices: [],
   examInfo: { questions: "Not published (Microsoft fundamentals exams usually have about 40–60 questions, which can include multiple choice, drag-and-drop and yes/no series)", minutes: 45, pass: "700 on a 1–1000 scale", extra: "Fundamentals certifications do not expire, so there is no yearly renewal. No prerequisites. Microsoft Learn offers a free self-paced learning path and a free practice assessment for AZ-900." },

@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="../../../../manifest.webmanifest">
 <link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="../../../../assets/style.css?v=32f9296f813d" integrity="sha384-n8i8BqzrZuK1vTCzy/tOwDFFS/ztJm0OfRYP2RCSmc1L3kG1WxqF02iIAmElmXJO">
+<link rel="stylesheet" href="../../../../assets/style.css?v=b3c4c1be42f8" integrity="sha384-Pzw3GGC/UqMPzpMKlKEf+/fec2SgbANfjoxJg9Imk9WYXfkxm967Y6DN4ahAhlKm">
 <script src="../../../../assets/theme.js?v=a52affcb5efa" integrity="sha384-8A+GHkEOMVd7UxelXZF3ZEoes/II4HChRPN0kQyad9SL0tjHjB2JgMO0SfYV8NCV"></script>
 
 </head>
@@ -42,50 +42,7 @@
 <h1>Peers de NetworkPolicy: podSelector, namespaceSelector, ipBlock; semántica AND vs OR de las reglas; permitir DNS en egress</h1>
 <article class="lbody">
 <p>Dentro de una lista <code>from</code> (ingress) o <code>to</code> (egress), cada entrada es un peer que describe quién puede conectarse. Hay tres tipos, y la forma en que los combinas en YAML cambia el significado de forma radical.</p>
-<p>Un peer <code>podSelector</code> por sí solo coincide con los Pods que tienen esas etiquetas en el propio namespace de la política. Un peer <code>namespaceSelector</code> por sí solo coincide con todos los Pods de los namespaces cuyas etiquetas coinciden. Cada namespace lleva una etiqueta automática <code>kubernetes.io/metadata.name=&lt;name&gt;</code>, así que puedes seleccionar un namespace por su nombre sin agregar etiquetas. Un peer <code>ipBlock</code> coincide con rangos de IP en notación CIDR, con rangos <code>except</code> opcionales; está pensado para tráfico de fuera del clúster, ya que las IPs de los Pods cambian.</p>
-<p>Ahora la regla crítica. Los peers escritos como elementos separados de la lista (cada uno empezando con su propio guion) se combinan con OR: se permite el tráfico de cualquiera de ellos. Un <code>namespaceSelector</code> y un <code>podSelector</code> escritos en el mismo elemento de la lista (un guion, dos claves) se combinan con AND: el tráfico debe venir de Pods con esas etiquetas dentro de namespaces que coincidan.</p>
-<pre class="code" tabindex="0"><code># AND: Pods con la etiqueta app=monitor en namespaces con la etiqueta team=ops
-ingress:
-- from:
-  - namespaceSelector:
-      matchLabels: {team: ops}
-    podSelector:
-      matchLabels: {app: monitor}
----
-# OR: cualquier Pod de namespaces team=ops, O Pods app=monitor de este namespace
-ingress:
-- from:
-  - namespaceSelector:
-      matchLabels: {team: ops}
-  - podSelector:
-      matchLabels: {app: monitor}</code></pre>
-<p>La diferencia es un solo guion, y la versión OR suele ser mucho más permisiva de lo previsto. De forma similar, dentro de una regla, <code>from</code> y <code>ports</code> se combinan con AND (estos orígenes, en estos puertos), mientras que las reglas separadas de la lista <code>ingress</code> se combinan con OR.</p>
-<p>Las políticas de egress necesitan un cuidado especial con el DNS. Una vez que un Pod está aislado para egress, no puede llegar a los Pods de DNS del clúster a menos que lo permitas, así que falla toda búsqueda de un nombre de Service, y las aplicaciones reportan errores de 'resolución de nombres' que parecen no tener relación con la política. Permite los puertos UDP y TCP 53 hacia los Pods de DNS en <code>kube-system</code>:</p>
-<pre class="code" tabindex="0"><code>egress:
-- to:
-  - namespaceSelector:
-      matchLabels:
-        kubernetes.io/metadata.name: kube-system
-    podSelector:
-      matchLabels:
-        k8s-app: kube-dns
-  ports:
-  - {protocol: UDP, port: 53}
-  - {protocol: TCP, port: 53}
-- to:
-  - podSelector:
-      matchLabels: {app: db}
-  ports:
-  - {protocol: TCP, port: 5432}</code></pre>
-<p>Una variante más simple y amplia permite el puerto 53 hacia cualquier destino omitiendo <code>to</code> en esa regla. Revisa las etiquetas reales de los Pods de DNS con <code>kubectl get pods -n kube-system --show-labels</code>; <code>k8s-app=kube-dns</code> es común pero no está garantizada. Prueba con <code>nslookup</code> y <code>wget</code> desde un Pod temporal que lleve las etiquetas de la política.</p>
-<h2>Términos clave</h2>
-<dl class="terms"><dt>namespaceSelector</dt><dd>Peer que coincide con los Pods de los namespaces que tienen las etiquetas indicadas.</dd><dt>ipBlock</dt><dd>Peer que coincide con un rango CIDR, con rangos except opcionales, normalmente para tráfico externo.</dd><dt>AND semantics (semántica AND)</dt><dd>namespaceSelector y podSelector en el mismo elemento de peer deben coincidir ambos.</dd><dt>OR semantics (semántica OR)</dt><dd>Elementos de peer separados o reglas separadas permiten tráfico cada uno de forma independiente.</dd><dt>kubernetes.io/metadata.name</dt><dd>Etiqueta automática del namespace que contiene su nombre.</dd></dl>
-<div class="panel ex"><strong>Ejemplo real</strong><p>Una política pensada para permitir que solo los Pods de Prometheus en <code>monitoring</code> hicieran scraping de una app usaba dos guiones, así que podían conectarse todos los Pods de <code>monitoring</code> y todos los Pods con la etiqueta <code>app: prometheus</code> del propio namespace de la app. Unir los selectores en un solo elemento con un único guion la restringió solo a los Pods de Prometheus en <code>monitoring</code>.</p></div>
-<div class="status notice"><strong>Consejo para el examen:</strong> Un guion con ambos selectores significa AND; dos guiones significan OR. Después de agregar una política de egress, permite siempre el puerto 53 UDP y TCP para el DNS.</div>
-<h2>Comprueba lo que sabes</h2>
-<details class="sq"><summary>¿Cómo seleccionas el namespace <code>payments</code> por su nombre en un namespaceSelector?</summary><p>matchLabels <code>kubernetes.io/metadata.name: payments</code>.</p></details>
-<details class="sq"><summary>Una política de egress permite el tráfico hacia los Pods db, pero la app no puede conectarse a <code>db</code> por nombre. ¿Por qué?</summary><p>Las búsquedas DNS están bloqueadas; agrega una regla de egress que permita el puerto 53 UDP y TCP hacia los Pods de DNS del clúster.</p></details>
-<details class="sq"><summary>Dentro de una regla de ingress, ¿cómo se combinan <code>from</code> y <code>ports</code>?</summary><p>Con AND: el tráfico debe venir de un origen listado y dirigirse a un puerto listado.</p></details>
+<div class="panel gatewall"><span class="chip">Cuenta gratis</span><h2>Sigue leyendo gratis</h2><p>Crea una cuenta gratis de StudyToCert para leer el resto de esta lección: 7 secciones más, 5 términos clave, un ejemplo real, un consejo para el examen y preguntas de repaso. Todas las lecciones, laboratorios y exámenes de práctica son gratis con una cuenta.</p><p class="btns"><a class="btn" href="../../../../#signup">Crear cuenta gratis</a> <a class="btn ghost" href="../../../../#login">Iniciar sesión</a></p></div>
 </article>
 <div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semana a semana con lecciones, cuestionarios, simulaciones de examen y práctica, en español.</span></div><a class="btn sm" href="../../../../ckad/?lang=es">Abrir el plan de estudio</a></div>
 <nav class="pager" aria-label="Más lecciones"><a href="../networkpolicy-basics-podselector-policytypes-ingress-and-egress-rules/">← Fundamentos de NetworkPolicy: podSelector, policyTypes, regl</a><a href="../networkpolicy-needs-a-cni-plugin-that-enforces-it-for-example-calico-o/">NetworkPolicy necesita un plugin CNI que la aplique (por eje →</a></nav>

@@ -4,9 +4,9 @@
 (function () {
   const { U } = CertHub;
   const { esc } = U;
-  const TITLES = { explain: "AI Tutor", coach: "AI Study Coach", interview: "AI Mock Interview", resume: "AI Resume Review", writeup: "AI Lab Review", drill: "AI Weak-Spot Practice" };
-  const HINTS = { explain: "Ask a follow-up, or answer the tutor's check question", coach: "Tell the coach what to change, e.g. \"I only have 3 hours this week\"", interview: "Type your answer, or \"finish\" for your feedback", resume: "Ask about a section, or paste a new version", writeup: "Ask for help with a part of your write-up", drill: "Answer A, B, C or D, or ask a question" };
-  const OPENERS = { explain: "Explain this question for me.", coach: "Make my study plan for the next 7 days.", interview: "I'm ready. Please start the interview.", resume: "Please review my resume for this role.", writeup: "Please review my lab notes and help me turn them into a strong write-up.", drill: "Give me my first practice question." };
+  const TITLES = { explain: "AI Tutor", coach: "AI Study Coach", interview: "AI Mock Interview", resume: "AI Resume Review", writeup: "AI Lab Review", drill: "AI Weak-Spot Practice", path: "AI Career & Certification Advisor" };
+  const HINTS = { explain: "Ask a follow-up, or answer the tutor's check question", coach: "Tell the coach what to change, e.g. \"I only have 3 hours this week\"", interview: "Type your answer, or \"finish\" for your feedback", resume: "Ask about a section, or paste a new version", writeup: "Ask for help with a part of your write-up", drill: "Answer A, B, C or D, or ask a question", path: "Ask about a step, or compare two options, e.g. \"cloud or security first?\"" };
+  const OPENERS = { explain: "Explain this question for me.", coach: "Make my study plan for the next 7 days.", interview: "I'm ready. Please start the interview.", resume: "Please review my resume for this role.", writeup: "Please review my lab notes and help me turn them into a strong write-up.", drill: "Give me my first practice question.", path: "Recommend a career direction and certification path for me." };
 
   // Replies are shown as text with a small Markdown subset (bold, code, lists). No links at all.
   function md(text) {

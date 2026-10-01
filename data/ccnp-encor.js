@@ -7,7 +7,7 @@ CertHub.register({
   exam: "350-401 v1.2",
   blurb: "The CCNP and CCIE Enterprise core exam: campus and WAN architecture, virtualization, routing and switching, assurance, security, and automation with AI, for network engineers moving past CCNA.",
   status: "check",
-  statusNote: "Could not open Cisco's official ENCOR exam page or the v1.2 exam topics PDF during this task (blocked from this environment). Search results citing the official v1.2 blueprint show Infrastructure 30%, Security 20% and Automation and AI 15%; Architecture 15%, Virtualization 10% and Network Assurance 10% are carried over from v1.1 and still need checking against the official PDF. v1.2 replaced v1.1 on March 19, 2026 and removed the wireless topics. No newer ENCOR version had been announced as of Sept 24, 2026.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (350-401 v1.2), objectives, number of questions, time limit and passing score on Cisco's official exam page.",
   lastVerified: "2026-09-24",
   notices: [],
   examInfo: { questions: "About 90–110 (Cisco does not publish an exact count)", minutes: 120, pass: "Cisco does not publish a fixed passing score", extra: "v1.2 removed the wireless topics that were in v1.1. Wireless is now covered by Cisco's separate wireless exams." },

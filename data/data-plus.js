@@ -7,7 +7,7 @@ CertHub.register({
   exam: "DA0-002",
   blurb: "Entry-level data analysis certification for people who collect, clean, analyze, visualize and govern data: data concepts, acquisition and preparation, statistics, reporting and governance.",
   status: "check",
-  statusNote: "Domains and weights come from the published DA0-002 exam objectives as best known (Data concepts and environments 18%; Data acquisition and preparation 22%; Data analysis 24%; Visualization and reporting 20%; Data governance 16%). The CompTIA site could not be opened from this environment, so confirm the domains, weights, question count and passing score on the official Data+ page before booking.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (DA0-002), objectives, number of questions, time limit and passing score on CompTIA's official exam page.",
   lastVerified: "2026-09-25",
   notices: [],
   examInfo: { questions: "Up to 90 (multiple choice and performance-based)", minutes: 90, pass: "Check the official page (DA0-001 required 675 on a 100–900 scale)", extra: "No formal prerequisites. CompTIA suggests some experience working with data, such as 1–2 years in a report, business or data analyst role. The certification is valid for 3 years and can be renewed through continuing education." },

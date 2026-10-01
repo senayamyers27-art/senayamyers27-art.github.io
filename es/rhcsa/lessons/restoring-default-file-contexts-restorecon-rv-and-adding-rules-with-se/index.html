@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="../../../../manifest.webmanifest">
 <link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="../../../../assets/style.css?v=32f9296f813d" integrity="sha384-n8i8BqzrZuK1vTCzy/tOwDFFS/ztJm0OfRYP2RCSmc1L3kG1WxqF02iIAmElmXJO">
+<link rel="stylesheet" href="../../../../assets/style.css?v=b3c4c1be42f8" integrity="sha384-Pzw3GGC/UqMPzpMKlKEf+/fec2SgbANfjoxJg9Imk9WYXfkxm967Y6DN4ahAhlKm">
 <script src="../../../../assets/theme.js?v=a52affcb5efa" integrity="sha384-8A+GHkEOMVd7UxelXZF3ZEoes/II4HChRPN0kQyad9SL0tjHjB2JgMO0SfYV8NCV"></script>
 
 </head>
@@ -42,25 +42,7 @@
 <h1>Restaurar los contextos de archivo predeterminados (restorecon -Rv) y añadir reglas con semanage fcontext</h1>
 <article class="lbody">
 <p>SELinux mantiene una base de datos de la política con la etiqueta que debe tener cada ruta, escrita como expresiones regulares como <code>/var/www(/.*)?</code> asociadas a <code>httpd_sys_content_t</code>. La etiqueta real se guarda en cada archivo. Cuando ambas no coinciden, la solución es restablecer el archivo a lo que dice la política. Cuando la propia política no tiene ninguna regla para tu ruta personalizada, primero añades una.</p>
-<p><code>restorecon</code> devuelve los archivos a la etiqueta que espera la política. <code>-R</code> actúa recursivamente y <code>-v</code> imprime cada cambio, para que veas qué estaba mal. <code>restorecon -Rv /var/www/html</code> corrige los archivos movidos ahí desde directorios personales. Es seguro ejecutarlo repetidamente, ya que solo cambia las etiquetas que difieren de la política. <code>restorecon -Rnv</code> muestra lo que cambiaría sin cambiar nada.</p>
-<pre class="code" tabindex="0"><code>restorecon -Rv /var/www/html
-# Relabeled /var/www/html/page.html from ...admin_home_t:s0 to ...httpd_sys_content_t:s0</code></pre>
-<p>Las ubicaciones personalizadas necesitan una regla. Si sirves contenido web desde <code>/web</code>, la etiqueta predeterminada de la política para esa ruta es <code>default_t</code>, que httpd no puede leer, y restorecon simplemente volvería a poner <code>default_t</code>. Añade una regla con <code>semanage fcontext -a -t type 'regex'</code> y luego aplícala con restorecon. La expresión regular <code>'/web(/.*)?'</code> coincide con el directorio y todo lo que contiene; ponla entre comillas para que el shell no la expanda.</p>
-<pre class="code" tabindex="0"><code>semanage fcontext -a -t httpd_sys_content_t '/web(/.*)?'
-restorecon -Rv /web
-ls -dZ /web
-semanage fcontext -l -C        # listar las personalizaciones locales</code></pre>
-<p><code>semanage fcontext -l</code> lista todas las reglas, y puedes filtrarlo con grep buscando una ruta existente parecida para encontrar el tipo correcto, por ejemplo <code>semanage fcontext -l | grep '/var/www'</code>. <code>-d</code> borra una regla local y <code>-m</code> modifica una. semanage viene del paquete policycoreutils-python-utils, que puede que tengas que instalar. Como la regla se guarda en la política, sobrevive a los reinicios y a los reetiquetados completos.</p>
-<p>Compáralo con <code>chcon</code>, que cambia directamente la etiqueta de un archivo, por ejemplo <code>chcon -t httpd_sys_content_t /web/index.html</code>. Funciona de inmediato pero es temporal, en el sentido de que restorecon o un reetiquetado lo deshacen, ya que la política sigue diciendo otra cosa. En el examen, usa semanage fcontext más restorecon para todo lo que deba persistir.</p>
-<p>Dos trucos relacionados: <code>touch /.autorelabel</code> y un reinicio reetiquetan todo el sistema de archivos, y <code>restorecon</code> es la solución correcta después de colocar claves SSH o archivos de configuración con <code>mv</code>.</p>
-<h2>Términos clave</h2>
-<dl class="terms"><dt>restorecon</dt><dd>Restablece las etiquetas de SELinux de los archivos a los valores definidos en la política; -R actúa recursivamente y -v informa de los cambios.</dd><dt>semanage fcontext</dt><dd>Añade, modifica, borra o lista las reglas de la política que asocian patrones de ruta con tipos de archivo.</dd><dt>chcon</dt><dd>Cambia directamente la etiqueta de un archivo; el cambio se pierde con restorecon o un reetiquetado.</dd><dt>(/.*)?</dt><dd>El sufijo de expresión regular que, en las reglas de fcontext, coincide con un directorio y todo lo que hay debajo.</dd></dl>
-<div class="panel ex"><strong>Ejemplo real</strong><p>Apache debe servir contenido desde /srv/site. Ejecutas semanage fcontext -a -t httpd_sys_content_t '/srv/site(/.*)?' y luego restorecon -Rv /srv/site, que reetiqueta todos los archivos. Tras probar un reetiquetado completo con touch /.autorelabel y un reinicio, ls -Z sigue mostrando httpd_sys_content_t porque la regla está en la política.</p></div>
-<div class="status notice"><strong>Consejo para el examen:</strong> semanage fcontext solo registra la regla; no cambia ningún archivo. Síguelo siempre de restorecon -Rv sobre la ruta, y prefiere esta pareja a chcon para que el cambio persista.</div>
-<h2>Comprueba lo que sabes</h2>
-<details class="sq"><summary>Añadiste una regla con semanage fcontext pero ls -Z muestra la etiqueta anterior. ¿Qué olvidaste?</summary><p>Ejecutar restorecon -Rv sobre la ruta para aplicar la regla a los archivos existentes.</p></details>
-<details class="sq"><summary>¿Por qué chcon no es una solución persistente?</summary><p>Solo cambia la etiqueta en el archivo; restorecon o un reetiquetado la restablecen a lo que dice la política.</p></details>
-<details class="sq"><summary>¿Con qué coincide el patrón '/data(/.*)?'?</summary><p>Con el propio directorio /data y todo lo que hay debajo.</p></details>
+<div class="panel gatewall"><span class="chip">Cuenta gratis</span><h2>Sigue leyendo gratis</h2><p>Crea una cuenta gratis de StudyToCert para leer el resto de esta lección: 7 secciones más, 4 términos clave, un ejemplo real, un consejo para el examen y preguntas de repaso. Todas las lecciones, laboratorios y exámenes de práctica son gratis con una cuenta.</p><p class="btns"><a class="btn" href="../../../../#signup">Crear cuenta gratis</a> <a class="btn ghost" href="../../../../#login">Iniciar sesión</a></p></div>
 </article>
 <div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semana a semana con lecciones, cuestionarios, simulaciones de examen y práctica, en español.</span></div><a class="btn sm" href="../../../../rhcsa/?lang=es">Abrir el plan de estudio</a></div>
 <nav class="pager" aria-label="Más lecciones"><a href="../listing-and-identifying-selinux-file-and-process-contexts-ls-z-ps-ez-i/">← Listar e identificar contextos de SELinux de archivos y proc</a><a href="../managing-selinux-port-labels-semanage-port-a-t-http-port-t-p-tcp/">Gestionar las etiquetas de puertos de SELinux (semanage port →</a></nav>

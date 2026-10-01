@@ -7,7 +7,7 @@ CertHub.register({
   exam: "CAS-005",
   blurb: "Advanced, expert-level security certification (formerly CASP+) for senior practitioners who design, engineer and run enterprise security: governance and risk, security architecture, security engineering and security operations.",
   status: "check",
-  statusNote: "The four domains and weights (Governance, risk and compliance 20%; Security architecture 27%; Security engineering 31%; Security operations 22%) come from CompTIA's published CAS-005 exam objectives as best known on Sept 25, 2026. comptia.org could not be opened from this environment, so confirm the domains, weights, exam length and objective numbering on the official SecurityX page before booking.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (CAS-005), objectives, number of questions, time limit and passing score on CompTIA's official exam page.",
   lastVerified: "2026-09-25",
   notices: [],
   examInfo: { questions: "Maximum of 90 (multiple choice and performance-based)", minutes: 165, pass: "Pass/fail only (no scaled score is reported)", extra: "CompTIA recommends about ten years of IT experience, including five years of hands-on security work. SecurityX replaced CASP+ (CAS-004); existing CASP+ holders were carried over to SecurityX. Certification is renewed every three years through continuing education." },

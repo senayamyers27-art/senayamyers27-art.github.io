@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="../../../../manifest.webmanifest">
 <link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="../../../../assets/style.css?v=32f9296f813d" integrity="sha384-n8i8BqzrZuK1vTCzy/tOwDFFS/ztJm0OfRYP2RCSmc1L3kG1WxqF02iIAmElmXJO">
+<link rel="stylesheet" href="../../../../assets/style.css?v=b3c4c1be42f8" integrity="sha384-Pzw3GGC/UqMPzpMKlKEf+/fec2SgbANfjoxJg9Imk9WYXfkxm967Y6DN4ahAhlKm">
 <script src="../../../../assets/theme.js?v=a52affcb5efa" integrity="sha384-8A+GHkEOMVd7UxelXZF3ZEoes/II4HChRPN0kQyad9SL0tjHjB2JgMO0SfYV8NCV"></script>
 
 </head>
@@ -42,27 +42,7 @@
 <h1>Configurar la autenticación SSH basada en claves (ssh-keygen, ssh-copy-id, permisos de ~/.ssh, sshd_config)</h1>
 <article class="lbody">
 <p>La autenticación con claves de SSH (Secure Shell) reemplaza una contraseña escrita con un par de claves. La clave privada se queda en tu cliente; la clave pública se copia al servidor. Cuando te conectas, el servidor desafía al cliente a demostrar que tiene la clave privada correspondiente, y la clave privada en sí nunca viaja por la red. Las claves resisten la adivinación de contraseñas, permiten la automatización y se esperan en el RHCSA cada vez que una tarea dice inicio de sesión sin contraseña.</p>
-<p>Genera un par con <code>ssh-keygen</code>. El tipo predeterminado en el RHEL actual es Ed25519 o RSA según la versión, y puedes elegirlo con <code>-t ed25519</code>. Acepta la ubicación predeterminada en <code>~/.ssh/</code> y elige si proteger la clave privada con una frase de contraseña (passphrase); una frase vacía permite el uso desatendido, mientras que una frase añade protección si roban el archivo, y <code>ssh-agent</code> puede guardarla en caché.</p>
-<pre class="code" tabindex="0"><code>ssh-keygen -t ed25519            # crea ~/.ssh/id_ed25519 y .pub
-ssh-copy-id student@serverb      # pide la contraseña una vez
-ssh student@serverb              # ahora inicia sesión con la clave</code></pre>
-<p><code>ssh-copy-id</code> añade tu clave pública a <code>~/.ssh/authorized_keys</code> en el servidor para el usuario de destino y establece permisos razonables. Si la copias a mano, los permisos importan, porque sshd rechaza las claves cuando los archivos están demasiado abiertos: el directorio personal no debe poder escribirlo el grupo ni los otros, <code>~/.ssh</code> debe ser 700, <code>authorized_keys</code> 600 y la clave privada 600. Todo debe pertenecer al usuario. Las etiquetas de SELinux también importan; si creas los archivos moviéndolos, ejecuta <code>restorecon -Rv ~/.ssh</code>.</p>
-<p>El comportamiento del servidor se establece en <code>/etc/ssh/sshd_config</code> y, preferiblemente, en archivos drop-in dentro de <code>/etc/ssh/sshd_config.d/</code> que terminan en <code>.conf</code>, que se leen primero; para la mayoría de las opciones gana el primer valor encontrado. Ajustes comunes: <code>PubkeyAuthentication yes</code> (el predeterminado), <code>PasswordAuthentication no</code> para exigir claves y <code>PermitRootLogin</code> con los valores <code>yes</code>, <code>no</code> o <code>prohibit-password</code> (root solo puede iniciar sesión con clave).</p>
-<pre class="code" tabindex="0"><code># /etc/ssh/sshd_config.d/50-local.conf
-PasswordAuthentication no
-PermitRootLogin no
-
-sshd -t                  # probar la sintaxis
-systemctl reload sshd</code></pre>
-<p>Antes de deshabilitar las contraseñas, confirma en una segunda sesión que el inicio con clave funciona para no quedarte sin acceso. Si se rechaza una clave, ejecuta el cliente con <code>ssh -v</code> y lee el lado del servidor en <code>journalctl -u sshd</code>, que normalmente nombra el permiso incorrecto. Protege las claves privadas como si fueran contraseñas: nunca las copies a los servidores y quita las claves públicas de authorized_keys cuando deba terminar el acceso.</p>
-<h2>Términos clave</h2>
-<dl class="terms"><dt>Key pair (par de claves)</dt><dd>Una clave privada guardada en el cliente y una clave pública correspondiente colocada en los servidores para la autenticación.</dd><dt>authorized_keys</dt><dd>El archivo ~/.ssh/authorized_keys de un servidor que lista las claves públicas autorizadas para iniciar sesión como ese usuario.</dd><dt>ssh-copy-id</dt><dd>Copia una clave pública al archivo authorized_keys de un usuario remoto con los permisos correctos.</dd><dt>PermitRootLogin</dt><dd>Un ajuste de sshd que controla los inicios de sesión de root: yes, no o prohibit-password (solo con clave).</dd></dl>
-<div class="panel ex"><strong>Ejemplo real</strong><p>El usuario student de servera debe iniciar sesión en serverb sin contraseña. Como student ejecutas ssh-keygen aceptando los valores predeterminados, luego ssh-copy-id student@serverb e introduces la contraseña una vez. Ahora ssh student@serverb hostname imprime serverb sin pedir nada, y journalctl -u sshd en serverb muestra Accepted publickey.</p></div>
-<div class="status notice"><strong>Consejo para el examen:</strong> La mayoría de los fallos con claves son de permisos: ~/.ssh debe ser 700, authorized_keys 600 y el directorio personal no debe poder escribirlo el grupo ni el resto del mundo. Revisa journalctl -u sshd en el servidor para ver la razón.</div>
-<h2>Comprueba lo que sabes</h2>
-<details class="sq"><summary>¿Qué archivo del servidor debe contener tu clave pública?</summary><p>~/.ssh/authorized_keys en el directorio personal de la cuenta con la que inicias sesión.</p></details>
-<details class="sq"><summary>¿Qué ejecutas después de cambiar los ajustes de sshd?</summary><p>sshd -t para revisar la sintaxis y luego systemctl reload sshd (o restart).</p></details>
-<details class="sq"><summary>¿Qué permite PermitRootLogin prohibit-password?</summary><p>Que root inicie sesión con una clave, pero no con una contraseña.</p></details>
+<div class="panel gatewall"><span class="chip">Cuenta gratis</span><h2>Sigue leyendo gratis</h2><p>Crea una cuenta gratis de StudyToCert para leer el resto de esta lección: 6 secciones más, 4 términos clave, un ejemplo real, un consejo para el examen y preguntas de repaso. Todas las lecciones, laboratorios y exámenes de práctica son gratis con una cuenta.</p><p class="btns"><a class="btn" href="../../../../#signup">Crear cuenta gratis</a> <a class="btn ghost" href="../../../../#login">Iniciar sesión</a></p></div>
 </article>
 <div class="panel startcard"><div class="grow"><strong>Estudia RHCSA gratis</strong><br><span class="note">Plan semana a semana con lecciones, cuestionarios, simulaciones de examen y práctica, en español.</span></div><a class="btn sm" href="../../../../rhcsa/?lang=es">Abrir el plan de estudio</a></div>
 <nav class="pager" aria-label="Más lecciones"><a href="../managing-default-file-permissions-with-umask-shell-and-etc-login-defs/">← Gestionar los permisos predeterminados de los archivos con u</a><a href="../setting-selinux-enforcing-and-permissive-modes-getenforce-setenforce-e/">Establecer los modos enforcing y permissive de SELinux (gete →</a></nav>

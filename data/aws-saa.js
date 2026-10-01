@@ -7,7 +7,7 @@ CertHub.register({
   exam: "SAA-C03",
   blurb: "For people who design systems on AWS: choosing and combining services into architectures that are secure, resilient, high-performing and cost-optimized, from IAM and VPC design to storage, databases, decoupling, disaster recovery and pricing models.",
   status: "check",
-  statusNote: "Domains and weights (Design Secure Architectures 30%, Design Resilient Architectures 26%, Design High-Performing Architectures 24%, Design Cost-Optimized Architectures 20%) are taken from the published SAA-C03 exam guide as best known; the AWS certification pages could not be opened from this environment on Sept 25, 2026. Confirm the domains, weights, exam length and passing score on the official exam page and exam guide before booking, and check there whether AWS has announced a replacement exam version.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (SAA-C03), objectives, number of questions, time limit and passing score on Amazon Web Services's official exam page.",
   lastVerified: "2026-09-25",
   notices: [],
   examInfo: { questions: "65 (50 scored, 15 unscored; multiple choice and multiple response)", minutes: 130, pass: "720 on a 100–1000 scale", extra: "AWS recommends at least one year of hands-on experience designing cloud solutions on AWS. The certification is valid for three years." },

@@ -7,7 +7,7 @@ CertHub.register({
   exam: "CKA (Kubernetes v1.35 curriculum)",
   blurb: "Hands-on Kubernetes exam for administrators who install, configure, upgrade, network, store data on and troubleshoot production-grade clusters.",
   status: "verified",
-  statusNote: "Domains and weights read on Sept 24, 2026 in the CNCF CKA Curriculum v1.35 PDF (github.com/cncf/curriculum): Storage 10%, Workloads and Scheduling 15%, Services and Networking 20% (printed as \"Servicing and Networking\"), Cluster Architecture, Installation and Configuration 25%, Troubleshooting 30%. The Linux Foundation training site could not be opened from here, so exam length (2 hours, performance-based) and the 66% pass mark come from the Linux Foundation FAQ as quoted in search results; confirm them on the exam page before booking. The exam tracks the current Kubernetes minor release, so check the curriculum version again if you book months from now.",
+  statusNote: "Built from The Linux Foundation / CNCF's published exam objectives (CKA (Kubernetes v1.35 curriculum)). Confirm the details on the official exam page before you book.",
   lastVerified: "2026-09-24",
   notices: [],
   examInfo: {

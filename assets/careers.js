@@ -34,8 +34,51 @@
     return `<h1>Career Paths</h1>
     <p class="meta">Where each track leads: which certification to take first, the jobs it opens up, the skills employers ask for, and interview practice for each role. <a href="#job-outlook">Pay and Job Outlook</a> for each kind of job.</p>
     <div class="cards">${CertHub.tracks.map(t => { const c = list.find(x => x.track === t.id); return c ? `<a class="card" href="#career-${esc(t.id)}"><span class="trackico">${CertHub.fx.icon(t.id)}</span><strong>${esc(c.title)}</strong><span class="note">${esc(t.blurb || "")}</span><span class="note">${c.jobs.length} jobs · ${c.path.length}-step certification path</span></a>` : ""; }).join("")}</div>
+    ${/* html: built with esc() */ advisorHtml()}
     ${compare.length ? `<h2>Compare certifications</h2><p class="note">Not sure which one to take? Side-by-side comparisons of popular pairs.</p><div class="panel"><ul class="clean">${compare.map(([a, b]) => `<li><a href="/compare/${esc(a)}-vs-${esc(b)}/">${esc(CertHub.certs[a].short)} vs ${esc(CertHub.certs[b].short)}</a></li>`).join("")}</ul></div>` : ""}`;
   }
+  // Premium Pro: the AI career and certification advisor (tutor mode "path" on the server). Shown whenever accounts
+  // are on; the button opens the advisor for Premium Pro members and points everyone else to sign up or Plans.
+  function advisorHtml() {
+    if (!(CertHub.sync && CertHub.sync.enabled)) return "";
+    const tracks = CertHub.tracks || [];
+    return `<h2>AI Career & Certification Advisor <span class="chip premchip">Premium Pro</span></h2>
+    <form id="advisor-form" class="panel" novalidate>
+      <p class="note" data-style="margin-top:0">Tell the advisor about you and the job you want. It suggests a direction and the certifications to take, in order, from the plans on this site, with time estimates and the labs to build.</p>
+      <label for="adv-goal"><strong>What would you like to do?</strong></label>
+      <input type="text" id="adv-goal" class="textin" maxlength="300" placeholder="e.g. Get my first IT job, or move from help desk into cybersecurity">
+      <div class="formgrid">
+        <div><label for="adv-exp"><strong>Experience</strong></label><select id="adv-exp" class="textin"><option value="none">No IT experience yet</option><option value="some">Some (school, home lab, self-study)</option><option value="it-job">In IT, under 2 years</option><option value="it-years">In IT, 2+ years</option></select></div>
+        <div><label for="adv-hours"><strong>Study hours a week</strong></label><input type="number" id="adv-hours" class="textin" min="1" max="80" step="1" inputmode="numeric" value="8"></div>
+      </div>
+      <fieldset><legend>Interests <span class="note">(optional)</span></legend><div class="trackpick">${tracks.map(t => `<label class="chipbtn"><input type="checkbox" name="adv-int" value="${esc(t.name)}"> ${esc(t.name)}</label>`).join("")}</div></fieldset>
+      <label for="adv-bg"><strong>Your background</strong> <span class="note">(optional)</span></label>
+      <input type="text" id="adv-bg" class="textin" maxlength="300" placeholder="e.g. Retail manager, good with people, built my own PC">
+      <div class="formgrid">
+        <div><label for="adv-certs"><strong>Certifications you have</strong> <span class="note">(optional)</span></label><input type="text" id="adv-certs" class="textin" maxlength="300" placeholder="e.g. A+, Google IT Support"></div>
+        <div><label for="adv-time"><strong>Timeframe</strong></label><select id="adv-time" class="textin"><option>3 months</option><option selected>6 months</option><option>1 year</option><option>2 years or more</option></select></div>
+      </div>
+      <div class="btns"><button type="submit" class="btn">${CertHub.fx.icon("spark")}Get my career path</button></div>
+      <p class="note" id="adv-msg" role="status" data-style="margin:0"></p>
+    </form>`;
+  }
+  document.addEventListener("submit", async e => {
+    if (e.target.id !== "advisor-form") return;
+    e.preventDefault();
+    const v = id => (document.getElementById(id) || {}).value || "";
+    const msg = document.getElementById("adv-msg");
+    const goal = v("adv-goal").trim();
+    if (!goal) { msg.textContent = "Tell the advisor what you'd like to do."; document.getElementById("adv-goal").focus(); return; }
+    const me = CertHub.sync.me;
+    if (!(me && me.user)) { location.hash = "signup"; return; }
+    if (!(CertHub.premium && CertHub.premium.active)) { msg.textContent = "The AI advisor is part of Premium Pro."; location.hash = "plans"; return; }
+    if (!CertHub.tutor && !(await CertHub.loadScript("assets/tutor.js"))) { msg.textContent = "The advisor couldn't load. Check your connection and try again."; return; }
+    const context = { goal, experience: v("adv-exp"), hoursPerWeek: +v("adv-hours") || null, background: v("adv-bg"), timeframe: v("adv-time"),
+      interests: [...document.querySelectorAll('input[name="adv-int"]:checked')].map(x => x.value),
+      certs: v("adv-certs").split(/[,;]/).map(x => x.trim()).filter(Boolean) };
+    msg.textContent = "";
+    CertHub.tutor.open("path", context, goal.slice(0, 80), e.target.querySelector("button"));
+  });
   // A typical day in one common role for the track (data/dayinlife.js), in the interface language.
   function dayHtml(id) {
     const d = CertHub.dayInLife && CertHub.dayInLife[id]; if (!d) return "";

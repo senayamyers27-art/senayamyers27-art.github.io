@@ -7,7 +7,7 @@ CertHub.register({
   exam: "NSE4_FGT_AD-7.6",
   blurb: "Core Fortinet firewall exam (part of Fortinet Certified Professional – Network Security) for network and security admins who deploy, configure and troubleshoot FortiGate on FortiOS 7.6.",
   status: "check",
-  statusNote: "Fortinet publishes no domain weights; weights are estimated from the number of objectives per topic area. Objectives, 90 minutes, 50 multiple-choice questions and FortiOS 7.6.0 were read in Fortinet's official FCP - FortiGate 7.6 Administrator (FCP_FGT_AD-7.6) exam description (dated June 2025) on Sept 24, 2026. Fortinet's training pages could not be reached during this check. Search results report that FCP_FGT_AD-7.6 retired on Dec 31, 2025 and was replaced by NSE 4 - FortiOS 7.6 Administrator (NSE4_FGT_AD-7.6) with the same five areas plus logging and cloud deployment tasks, and some sources give 50–55 questions. Confirm the current exam code, question count and whether remote access VPN is still tested on the FortiOS Administrator exam page before booking.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (NSE4_FGT_AD-7.6), objectives, number of questions, time limit and passing score on Fortinet's official exam page.",
   lastVerified: "2026-09-24",
   notices: [],
   examInfo: { questions: "About 50 multiple-choice questions (some sources say 50–55)", minutes: 90, pass: "Pass/fail; the passing score is not published", extra: "Delivered by Pearson VUE in English and Japanese. Product version FortiOS 7.6.0." },

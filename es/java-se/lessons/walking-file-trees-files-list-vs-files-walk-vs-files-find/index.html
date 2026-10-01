@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="../../../../manifest.webmanifest">
 <link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="../../../../assets/style.css?v=32f9296f813d" integrity="sha384-n8i8BqzrZuK1vTCzy/tOwDFFS/ztJm0OfRYP2RCSmc1L3kG1WxqF02iIAmElmXJO">
+<link rel="stylesheet" href="../../../../assets/style.css?v=b3c4c1be42f8" integrity="sha384-Pzw3GGC/UqMPzpMKlKEf+/fec2SgbANfjoxJg9Imk9WYXfkxm967Y6DN4ahAhlKm">
 <script src="../../../../assets/theme.js?v=a52affcb5efa" integrity="sha384-8A+GHkEOMVd7UxelXZF3ZEoes/II4HChRPN0kQyad9SL0tjHjB2JgMO0SfYV8NCV"></script>
 
 </head>
@@ -42,29 +42,7 @@
 <h1>Recorrer árboles de archivos: Files.list vs Files.walk vs Files.find</h1>
 <article class="lbody">
 <p>Tres métodos de <code>Files</code> devuelven un <code>Stream&lt;Path&gt;</code> que describe el contenido de un directorio, y la diferencia entre ellos es una pregunta común del examen. Los tres son perezosos, los tres mantienen abiertos manejadores de directorio y los tres deben usarse en try-with-resources.</p>
-<p><code>Files.list(dir)</code> devuelve las entradas que están directamente dentro de un directorio: archivos y subdirectorios, pero no el contenido de esos subdirectorios. No es recursivo, y no incluye el propio directorio. Lanza <code>NotDirectoryException</code> si la ruta no es un directorio. Piensa en él como <code>ls</code>.</p>
-<p><code>Files.walk(start)</code> recorre todo el árbol en profundidad, empezando por el propio <code>start</code> y descendiendo a cada subdirectorio. <code>Files.walk(start, maxDepth)</code> limita la profundidad: un maxDepth de 0 da solo la ruta de inicio, 1 da el inicio más sus hijos directos, y así sucesivamente. Así que <code>Files.walk(dir, 1)</code> es como <code>Files.list(dir)</code> más el propio <code>dir</code>. Por defecto walk no sigue los enlaces simbólicos; pasar <code>FileVisitOption.FOLLOW_LINKS</code> hace que los siga, y entonces un ciclo de enlaces causa una <code>FileSystemLoopException</code> envuelta en una UncheckedIOException.</p>
-<p><code>Files.find(start, maxDepth, matcher)</code> también recorre el árbol pero va filtrando mientras avanza. El matcher es un <code>BiPredicate&lt;Path, BasicFileAttributes&gt;</code>, que te da los atributos del archivo, como el tamaño, la fecha de modificación y si es un directorio, sin una llamada adicional al sistema por cada archivo. A diferencia de walk, el parámetro maxDepth es obligatorio. Usar find suele ser más eficiente que walk seguido de un filtro que llama a <code>Files.size</code> o <code>Files.isDirectory</code> en cada ruta.</p>
-<pre class="code" tabindex="0"><code>Path root = Path.of(&quot;project&quot;);
-try (Stream&lt;Path&gt; s = Files.list(root)) {
-    s.forEach(System.out::println);               // solo los hijos directos
-}
-try (Stream&lt;Path&gt; s = Files.walk(root)) {
-    long javaFiles = s.filter(p -&gt; p.toString().endsWith(&quot;.java&quot;)).count();
-}
-try (Stream&lt;Path&gt; s = Files.find(root, 10,
-        (p, attr) -&gt; attr.isRegularFile() &amp;&amp; attr.size() &gt; 1_000_000)) {
-    s.forEach(p -&gt; System.out.println(&quot;large: &quot; + p));
-}</code></pre>
-<p>Los errores que ocurren mientras se consume el stream, como un subdirectorio que no tienes permiso para leer, se lanzan como <code>UncheckedIOException</code>. Para más control, incluidas acciones antes y después de visitar cada directorio y la posibilidad de saltarse subárboles, el antiguo <code>Files.walkFileTree(start, visitor)</code> recibe un <code>FileVisitor</code>, normalmente una subclase de <code>SimpleFileVisitor</code> que sobrescribe <code>visitFile</code> y <code>postVisitDirectory</code>. Es la forma estándar de eliminar un árbol de directorios, porque cada directorio debe vaciarse antes de poder eliminarse.</p>
-<h2>Términos clave</h2>
-<dl class="terms"><dt>Files.list</dt><dd>Devuelve un Stream&lt;Path&gt; perezoso de las entradas directas de un directorio, sin recursión.</dd><dt>Files.walk</dt><dd>Devuelve un Stream&lt;Path&gt; perezoso, en profundidad, de un árbol de directorios, incluida la ruta de inicio, opcionalmente limitado por maxDepth.</dd><dt>Files.find</dt><dd>Recorre un árbol hasta un maxDepth obligatorio y devuelve las rutas que cumplen un BiPredicate&lt;Path, BasicFileAttributes&gt;.</dd><dt>BasicFileAttributes</dt><dd>Una interfaz que expone el tamaño, las marcas de tiempo y el tipo de archivo leídos junto con la entrada del directorio.</dd><dt>FOLLOW_LINKS</dt><dd>Una FileVisitOption que hace que walk y find sigan los enlaces simbólicos.</dd></dl>
-<div class="panel ex"><strong>Ejemplo real</strong><p>Un script de limpieza usa Files.find(logDir, 3, (p, a) -&gt; a.isRegularFile() &amp;&amp; a.lastModifiedTime().toInstant().isBefore(cutoff)) para encontrar archivos de log antiguos sin llamar a Files.getLastModifiedTime por separado para cada archivo, y luego elimina cada coincidencia.</p></div>
-<div class="status notice"><strong>Consejo para el examen:</strong> list es un solo nivel y excluye el directorio de inicio; walk es recursivo e incluye el directorio de inicio; find requiere maxDepth y un BiPredicate que recibe atributos. Todos devuelven streams que deben cerrarse.</div>
-<h2>Comprueba lo que sabes</h2>
-<details class="sq"><summary>¿Files.walk(dir) incluye el propio dir en el stream?</summary><p>Sí. La ruta de inicio es el primer elemento.</p></details>
-<details class="sq"><summary>¿Qué devuelve Files.walk(dir, 0)?</summary><p>Un stream que contiene solo dir.</p></details>
-<details class="sq"><summary>¿Cuáles son los tipos de los parámetros del matcher que se pasa a Files.find?</summary><p>Path y BasicFileAttributes, en un BiPredicate.</p></details>
+<div class="panel gatewall"><span class="chip">Cuenta gratis</span><h2>Sigue leyendo gratis</h2><p>Crea una cuenta gratis de StudyToCert para leer el resto de esta lección: 5 secciones más, 5 términos clave, un ejemplo real, un consejo para el examen y preguntas de repaso. Todas las lecciones, laboratorios y exámenes de práctica son gratis con una cuenta.</p><p class="btns"><a class="btn" href="../../../../#signup">Crear cuenta gratis</a> <a class="btn ghost" href="../../../../#login">Iniciar sesión</a></p></div>
 </article>
 <div class="panel startcard"><div class="grow"><strong>Estudia OCP Java gratis</strong><br><span class="note">Plan semana a semana con lecciones, cuestionarios, simulaciones de examen y práctica, en español.</span></div><a class="btn sm" href="../../../../java-se/?lang=es">Abrir el plan de estudio</a></div>
 <nav class="pager" aria-label="Más lecciones"><a href="../reading-and-writing-text-with-files-readalllines-files-lines-files-wri/">← Leer y escribir texto con Files.readAllLines, Files.lines, F</a><a href="../byte-and-character-streams-bufferedreader-and-bufferedwriter/">Streams de bytes y de caracteres, BufferedReader y BufferedW →</a></nav>

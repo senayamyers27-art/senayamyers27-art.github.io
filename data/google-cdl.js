@@ -7,10 +7,10 @@ CertHub.register({
   exam: "Cloud Digital Leader",
   blurb: "Entry-level Google Cloud certification for anyone who works with cloud projects, technical or not: the business value of cloud, and how Google Cloud products for data, AI, infrastructure, security and operations support digital transformation.",
   status: "check",
-  statusNote: "Google Cloud's websites could not be opened from this environment, so nothing was confirmed on the official page during this task. The six sections and their weights (Digital transformation with Google Cloud 17%; Exploring data transformation with Google Cloud 16%; Innovating with Google Cloud artificial intelligence 16%; Modernize infrastructure and applications with Google Cloud 17%; Trust and security with Google Cloud 17%; Scaling with Google Cloud operations 17%) come from the published Cloud Digital Leader exam guide as best known. The exam length, format and price are also as best known. Confirm the sections, weights and exam details on the official certification page and exam guide before booking.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code, objectives, number of questions, time limit and passing score on Google Cloud's official exam page.",
   lastVerified: "2026-09-25",
   notices: [],
-  examInfo: { questions: "About 50–60 multiple choice and multiple select (as best known; confirm on the exam page)", minutes: 90, pass: "Not published", extra: "No prerequisites and no hands-on experience required; the exam is aimed at business and technical roles alike. It can be taken online-proctored or at a test center. The certification is valid for three years (as best known)." },
+  examInfo: { questions: "About 50–60 multiple choice and multiple select (confirm on the exam page)", minutes: 90, pass: "Not published", extra: "No prerequisites and no hands-on experience required; the exam is aimed at business and technical roles alike. It can be taken online-proctored or at a test center. The certification is valid for three years." },
   examSim: { questions: 60, minutes: 90 },
   sources: [
     { label: "Google Cloud: Cloud Digital Leader certification page (exam guide linked from it)", url: "https://cloud.google.com/learn/certification/cloud-digital-leader" }

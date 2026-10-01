@@ -7,7 +7,7 @@ CertHub.register({
   exam: "PK0-005",
   blurb: "Entry-level IT project management: core concepts, the project life cycle, tools and documentation, and the IT and governance basics a project coordinator or junior project manager needs, including agile.",
   status: "check",
-  statusNote: "CompTIA's pages could not be opened from this environment. The four domains and weights (Project management concepts 33%, Project life cycle phases 30%, Tools and documentation 19%, Basics of IT and governance 18%) and the exam facts come from the published PK0-005 exam guide as best known. Confirm them, the passing score and whether a newer Project+ version has been announced on the official CompTIA Project+ page before booking.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (PK0-005), objectives, number of questions, time limit and passing score on CompTIA's official exam page.",
   lastVerified: "2026-09-25",
   notices: [],
   examInfo: {questions: "Maximum of 90 (multiple choice and performance-based)", minutes: 90, pass: "710 on a 100–900 scale (confirm on the official page)", extra: "No prerequisites are required. CompTIA suggests some experience managing or coordinating small to medium IT projects. Project+ does not require continuing education renewal; check the current policy on the official page."},

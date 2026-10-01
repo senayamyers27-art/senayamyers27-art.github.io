@@ -336,7 +336,7 @@
     const n = CertHub.catalog.filter(id => certs[id]).length, fb = CertHub.reportUrl("Using StudyToCert in a class", "School or program:\nCertifications you teach:\nWhat would help:");
     const item = (h, t, href, link) => `<div class="panel"><strong>${esc(h)}</strong><p class="note" data-style="margin:4px 0 0">${esc(t)}${href ? ` <a href="${esc(href)}">${esc(link)}</a>` : ""}</p></div>`;
     return `<h1>Teachers, Schools and Bootcamps</h1>
-      <p class="meta">StudyToCert is free to use in class: no accounts for students, no ads and no tracking. Everything runs in the browser, and students' progress stays on their own devices.</p>
+      <p class="meta">StudyToCert is free to use in class, with no ads and no tracking. Students create a free account to open every lesson, lab and practice test, and their progress syncs between their devices.</p>
       <h2>What you can use</h2>
       <div class="dashgrid">
         ${item(`Week-by-week plans for ${n} certifications`, "Each plan has lessons, a quiz per week, timed checkpoints and a practice exam weighted like the real one. Point students at the week you're teaching.", "#certifications", "Browse certifications")}
@@ -536,6 +536,12 @@
       else if (head === "frameworks" && CertHub.frameworksView) { topNav("frameworks"); $("#app").innerHTML = CertHub.frameworksView(); title = "Frameworks"; view = "frameworks"; }
       else if ((head === "exam-day" || /^exam-day-[a-z]{2,20}$/.test(head)) && CertHub.examDay) { topNav("careers"); CertHub.examDay.show(head); title = "Exam-Day Guides"; view = head; }
       else if ((head === "careers" || head === "job-outlook" || /^career-[a-z]{2,20}$/.test(head)) && CertHub.careerViews) { topNav("careers"); CertHub.careerViews.show(head); title = "Career Paths"; view = head; }
+      // Free-account gate: practice tools need a free account (CertHub.gate in sync.js).
+      else if (CertHub.gate && CertHub.gate.locked && (head === "vm" || /^vm-/.test(head) || head === "games" || /^game-/.test(head) || head === "net-design" || head === "log-puzzles" || head === "tabletop" || /^tabletop-/.test(head) || head === "review")) {
+        topNav(head === "review" ? "home" : "labs"); view = head;
+        title = { review: "Daily Review", "net-design": "Network Design Puzzles" }[head] || (/^vm/.test(head) ? "Practice VMs" : /^game/.test(head) ? "Quick Games" : "Blue Team Practice");
+        $("#app").innerHTML = `<h1>${esc(title)}</h1>${/* html: fixed markup from sync.js */ CertHub.gate.wall("tools")}`;
+      }
       else if (head === "vm" || /^vm-(net|exam|lab-[a-z0-9-]{1,40})$/.test(head)) {
         topNav("labs"); view = head;
         if (CertHub.vm) title = CertHub.vm.show(head);

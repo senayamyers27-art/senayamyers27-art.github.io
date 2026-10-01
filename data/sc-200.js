@@ -7,7 +7,7 @@ CertHub.register({
   exam: "SC-200",
   blurb: "Security operations with Microsoft Defender XDR, Microsoft Defender for Cloud and Microsoft Sentinel: configuring detections, responding to incidents and hunting with KQL, for SOC analysts.",
   status: "check",
-  statusNote: "Could not open learn.microsoft.com directly on Sept 24, 2026 (blocked from this build environment), so the weights come from search results that quote the official SC-200 study guide. Those results say the skills measured were restructured on April 16, 2026 and refreshed on July 28, 2026 into three groups: Manage a security operations environment (40–45%), Respond to security incidents (35–40%) and Perform threat hunting (20–25%). The midpoints (42.5, 37.5, 22.5) were scaled to sum to 100 and rounded to 41/37/22. Microsoft's pages also list an update to the English exam on October 21, 2026. No retirement or replacement announcement was found. Before you book, check the study guide for the current percentages and change log.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (SC-200), objectives, number of questions, time limit and passing score on Microsoft's official exam page.",
   lastVerified: "2026-09-24",
   notices: [
     { from: "2026-09-24", until: "2026-10-21", text: "Microsoft lists an update to the English SC-200 exam on October 21, 2026. Compare the new 'skills measured' list in the official study guide with this plan before your exam date. The exam is still available, and no retirement has been announced." }

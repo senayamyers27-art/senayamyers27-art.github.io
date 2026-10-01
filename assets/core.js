@@ -600,6 +600,7 @@
   function reportUrl(title, body) {
     const f = (window.CertHub && CertHub.site && CertHub.site.feedbackUrl) || "";
     if (!f) return "";
+    if (/^mailto:/.test(f)) return `${f}?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(body + "\n\nWhat's wrong, and what should it say?\n")}`;
     if (/github\.com\/[^/]+\/[^/]+\/issues\/?$/.test(f)) return `${f.replace(/\/$/, "")}/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body + "\n\nWhat's wrong, and what should it say?\n")}`;
     return f;
   }

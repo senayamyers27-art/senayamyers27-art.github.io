@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="../../../../manifest.webmanifest">
 <link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="../../../../assets/style.css?v=32f9296f813d" integrity="sha384-n8i8BqzrZuK1vTCzy/tOwDFFS/ztJm0OfRYP2RCSmc1L3kG1WxqF02iIAmElmXJO">
+<link rel="stylesheet" href="../../../../assets/style.css?v=b3c4c1be42f8" integrity="sha384-Pzw3GGC/UqMPzpMKlKEf+/fec2SgbANfjoxJg9Imk9WYXfkxm967Y6DN4ahAhlKm">
 <script src="../../../../assets/theme.js?v=a52affcb5efa" integrity="sha384-8A+GHkEOMVd7UxelXZF3ZEoes/II4HChRPN0kQyad9SL0tjHjB2JgMO0SfYV8NCV"></script>
 
 </head>
@@ -42,34 +42,7 @@
 <h1>Hooks del ciclo de vida de appspec.yml de CodeDeploy para EC2, Lambda y ECS; el agente de CodeDeploy</h1>
 <article class="lbody">
 <p>AWS CodeDeploy automatiza el despliegue de revisiones de aplicaciones en tres plataformas de cómputo: servidores EC2 y locales (on-premises), Lambda y Amazon ECS. En cada despliegue lee un archivo de especificación de la aplicación, <code>appspec.yml</code> (o JSON para Lambda y ECS), que describe qué desplegar y qué hooks de eventos del ciclo de vida ejecutar. El examen evalúa el orden de los hooks y cuáles existen en cada plataforma.</p>
-<p>En los servidores EC2 y locales, CodeDeploy depende del agente de CodeDeploy, un programa instalado y en ejecución en cada instancia. El agente sondea CodeDeploy en busca de trabajo, descarga la revisión (desde S3 o GitHub), copia los archivos según lo descrito en la sección <code>files</code>, establece los <code>permissions</code> y ejecuta tus scripts de hooks. La instancia también necesita un perfil de instancia que le permita leer la revisión desde S3. Si los despliegues se quedan colgados o fallan de inmediato en una instancia, comprueba que el agente esté instalado y en ejecución y que sus logs (en el directorio de logs del agente) no muestren errores de permisos.</p>
-<p>El orden del ciclo de vida en EC2 in-place es: <code>ApplicationStop</code>, <code>DownloadBundle</code>, <code>BeforeInstall</code>, <code>Install</code>, <code>AfterInstall</code>, <code>ApplicationStart</code>, <code>ValidateService</code>. Con un balanceador de carga, <code>BeforeBlockTraffic</code>, <code>BlockTraffic</code> y <code>AfterBlockTraffic</code> van primero, y <code>BeforeAllowTraffic</code>, <code>AllowTraffic</code> y <code>AfterAllowTraffic</code> van al final. Puedes asociar scripts a los hooks, pero no a los eventos que ejecuta el propio CodeDeploy (<code>DownloadBundle</code>, <code>Install</code>, <code>BlockTraffic</code>, <code>AllowTraffic</code>). Ten en cuenta que <code>ApplicationStop</code> ejecuta el script de la revisión desplegada anteriormente, por eso un script de detención roto de una revisión antigua puede hacer fallar un despliegue nuevo.</p>
-<pre class="code" tabindex="0"><code>version: 0.0
-os: linux
-files:
-  - source: /
-    destination: /var/www/app
-hooks:
-  ApplicationStop:
-    - location: scripts/stop.sh
-      timeout: 60
-  AfterInstall:
-    - location: scripts/install_deps.sh
-  ApplicationStart:
-    - location: scripts/start.sh
-  ValidateService:
-    - location: scripts/health_check.sh</code></pre>
-<p>En Lambda no hay instancias ni archivos. El AppSpec nombra la función, el alias, la versión actual y la versión de destino, y CodeDeploy desplaza el tráfico del alias según la configuración de despliegue (canary, lineal o todo a la vez). Los únicos hooks son <code>BeforeAllowTraffic</code> y <code>AfterAllowTraffic</code>, y cada uno nombra una función Lambda que ejecuta pruebas de validación e informa el éxito o la falla a CodeDeploy con <code>PutLifecycleEventHookExecutionStatus</code>.</p>
-<p>En ECS, CodeDeploy realiza despliegues blue/green: inicia un conjunto de tareas de reemplazo (green) con la nueva definición de tarea detrás del listener de prueba de un balanceador de carga, y luego desplaza el tráfico de producción desde el conjunto de tareas blue. El AppSpec indica la definición de tarea, el nombre del contenedor y el puerto. Los hooks, cada uno una función Lambda, son <code>BeforeInstall</code>, <code>AfterInstall</code>, <code>AfterAllowTestTraffic</code>, <code>BeforeAllowTraffic</code> y <code>AfterAllowTraffic</code>; <code>AfterAllowTestTraffic</code> es donde ejecutas pruebas a través del listener de prueba antes de que lleguen los usuarios reales.</p>
-<p>Ajustes de despliegue que debes conocer: las configuraciones de despliegue de EC2 como <code>CodeDeployDefault.OneAtATime</code>, <code>HalfAtATime</code> y <code>AllAtOnce</code>; in-place frente a blue/green en EC2; y la reversión automática cuando un despliegue falla o se dispara una alarma de CloudWatch, que vuelve a desplegar la última revisión que funcionaba.</p>
-<h2>Términos clave</h2>
-<dl class="terms"><dt>appspec.yml</dt><dd>El archivo de especificación de la aplicación de CodeDeploy que describe los archivos que se despliegan y los scripts o funciones de los hooks del ciclo de vida.</dd><dt>CodeDeploy agent (agente de CodeDeploy)</dt><dd>Software en instancias EC2 o locales que obtiene las revisiones de CodeDeploy y ejecuta los hooks del ciclo de vida.</dd><dt>Lifecycle event hook (hook de evento del ciclo de vida)</dt><dd>Un punto de un despliegue en el que CodeDeploy ejecuta tu script o función Lambda, como AfterInstall.</dd><dt>AfterAllowTestTraffic</dt><dd>Un hook de despliegue de ECS que se ejecuta después de que el listener de prueba envía tráfico al nuevo conjunto de tareas, antes de que se desplace el tráfico de producción.</dd></dl>
-<div class="panel ex"><strong>Ejemplo real</strong><p>Los despliegues en un grupo de instancias EC2 fallan en ApplicationStop solo en un host. El log del despliegue muestra que falta el script de la revisión anterior. El desarrollador vuelve a ejecutar el despliegue con la opción de ignorar las fallas de ApplicationStop y luego corrige el script de detención en la nueva revisión para que los despliegues futuros tengan éxito.</p></div>
-<div class="status notice"><strong>Consejo para el examen:</strong> Memoriza el orden en EC2: ApplicationStop, DownloadBundle, BeforeInstall, Install, AfterInstall, ApplicationStart, ValidateService. Lambda solo tiene BeforeAllowTraffic y AfterAllowTraffic. Los despliegues en EC2 que nunca empiezan suelen significar que el agente no está en ejecución.</div>
-<h2>Comprueba lo que sabes</h2>
-<details class="sq"><summary>¿Qué hook usarías para verificar que una aplicación en EC2 está sana después de iniciarse?</summary><p>ValidateService.</p></details>
-<details class="sq"><summary>¿Qué hooks del ciclo de vida puede usar un despliegue de Lambda?</summary><p>BeforeAllowTraffic y AfterAllowTraffic.</p></details>
-<details class="sq"><summary>¿Qué debe estar instalado en las instancias EC2 para que CodeDeploy funcione?</summary><p>El agente de CodeDeploy, además de un perfil de instancia que permita acceder a la ubicación de la revisión.</p></details>
+<div class="panel gatewall"><span class="chip">Cuenta gratis</span><h2>Sigue leyendo gratis</h2><p>Crea una cuenta gratis de StudyToCert para leer el resto de esta lección: 6 secciones más, 4 términos clave, un ejemplo real, un consejo para el examen y preguntas de repaso. Todas las lecciones, laboratorios y exámenes de práctica son gratis con una cuenta.</p><p class="btns"><a class="btn" href="../../../../#signup">Crear cuenta gratis</a> <a class="btn ghost" href="../../../../#login">Iniciar sesión</a></p></div>
 </article>
 <div class="panel startcard"><div class="grow"><strong>Estudia Developer Associate gratis</strong><br><span class="note">Plan semana a semana con lecciones, cuestionarios, simulaciones de examen y práctica, en español.</span></div><a class="btn sm" href="../../../../aws-developer/?lang=es">Abrir el plan de estudio</a></div>
 <nav class="pager" aria-label="Más lecciones"><a href="../codepipeline-stages-and-actions-manual-approvals-codebuild-buildspec-p/">← Etapas y acciones de CodePipeline, aprobaciones manuales; fa</a><a href="../testing-in-development-environments-unit-tests-in-ci-integration-tests/">Pruebas en entornos de desarrollo: pruebas unitarias en CI,  →</a></nav>

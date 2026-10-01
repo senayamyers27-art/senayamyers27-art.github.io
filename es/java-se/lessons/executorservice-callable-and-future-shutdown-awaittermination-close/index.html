@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="../../../../manifest.webmanifest">
 <link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="../../../../assets/style.css?v=32f9296f813d" integrity="sha384-n8i8BqzrZuK1vTCzy/tOwDFFS/ztJm0OfRYP2RCSmc1L3kG1WxqF02iIAmElmXJO">
+<link rel="stylesheet" href="../../../../assets/style.css?v=b3c4c1be42f8" integrity="sha384-Pzw3GGC/UqMPzpMKlKEf+/fec2SgbANfjoxJg9Imk9WYXfkxm967Y6DN4ahAhlKm">
 <script src="../../../../assets/theme.js?v=a52affcb5efa" integrity="sha384-8A+GHkEOMVd7UxelXZF3ZEoes/II4HChRPN0kQyad9SL0tjHjB2JgMO0SfYV8NCV"></script>
 
 </head>
@@ -42,27 +42,7 @@
 <h1>ExecutorService, Callable y Future; shutdown, awaitTermination, close()</h1>
 <article class="lbody">
 <p>Un <code>ExecutorService</code> separa el envío de tareas de la decisión de qué hilos las ejecutan. Creas uno con los métodos de fábrica de <code>Executors</code>: <code>newSingleThreadExecutor()</code> ejecuta las tareas de una en una y en orden, <code>newFixedThreadPool(n)</code> usa n hilos reutilizables, <code>newCachedThreadPool()</code> crece y se reduce según se necesite, <code>newScheduledThreadPool(n)</code> ejecuta tareas después de un retraso o periódicamente, y <code>newVirtualThreadPerTaskExecutor()</code> usa un hilo virtual nuevo por tarea.</p>
-<p>Las tareas tienen dos formas. Un <code>Runnable</code> tiene <code>void run()</code> y no puede lanzar excepciones checked. Un <code>Callable&lt;V&gt;</code> tiene <code>V call() throws Exception</code>, así que puede devolver un resultado y lanzar excepciones checked. <code>execute(Runnable)</code> es de disparar y olvidar y devuelve void. <code>submit</code> acepta un Runnable o un Callable y devuelve un <code>Future</code>. <code>invokeAll(collection)</code> ejecuta muchos Callables y devuelve una lista de Futures cuando todos terminan, e <code>invokeAny(collection)</code> devuelve el resultado de uno que terminó con éxito y cancela el resto.</p>
-<p>Un <code>Future&lt;V&gt;</code> representa un resultado que puede no estar listo todavía. <code>get()</code> se bloquea hasta que la tarea termina y devuelve el valor; para un Runnable enviado el valor es null. <code>get(timeout, unit)</code> espera como máximo ese tiempo y lanza <code>TimeoutException</code> si el resultado no está listo. Si la tarea lanzó una excepción, <code>get()</code> lanza <code>ExecutionException</code> con la excepción original como causa. <code>get()</code> también lanza la <code>InterruptedException</code> checked. <code>isDone()</code> comprueba sin bloquearse, y <code>cancel(true)</code> intenta detener la tarea interrumpiéndola.</p>
-<pre class="code" tabindex="0"><code>ExecutorService ex = Executors.newFixedThreadPool(2);
-try {
-    Future&lt;Integer&gt; f = ex.submit(() -&gt; 6 * 7);   // Callable&lt;Integer&gt;
-    Future&lt;?&gt; r = ex.submit(() -&gt; System.out.println(&quot;hi&quot;)); // Runnable
-    System.out.println(f.get());                 // 42 (se bloquea hasta que termina)
-} finally {
-    ex.shutdown();
-    if (!ex.awaitTermination(5, TimeUnit.SECONDS)) ex.shutdownNow();
-}</code></pre>
-<p>Los hilos de un executor mantienen viva la JVM hasta que lo cierras. <code>shutdown()</code> deja de aceptar tareas nuevas pero permite que terminen las ya enviadas; no espera. Enviar algo después de eso lanza <code>RejectedExecutionException</code>. <code>shutdownNow()</code> además intenta detener las tareas en ejecución interrumpiéndolas y devuelve la lista de tareas que nunca empezaron. <code>awaitTermination(timeout, unit)</code> se bloquea hasta que todas las tareas terminan después de un shutdown, o hasta el timeout, y devuelve true si terminó. <code>isShutdown()</code> pasa a true después de llamar a shutdown; <code>isTerminated()</code> pasa a true solo cuando todas las tareas han terminado.</p>
-<p>Desde Java 19, ExecutorService implementa <code>AutoCloseable</code>, así que puedes usar try-with-resources. Su método <code>close()</code> llama a shutdown y luego espera a que terminen todas las tareas, así que salir del bloque garantiza que el trabajo está hecho. Este es el patrón idiomático con executors de hilos virtuales. Ten cuidado de no confundir <code>close()</code>, que espera, con <code>shutdown()</code>, que no espera.</p>
-<h2>Términos clave</h2>
-<dl class="terms"><dt>Callable&lt;V&gt;</dt><dd>Una interfaz de tarea con V call() throws Exception, que devuelve un resultado y puede lanzar excepciones checked.</dd><dt>Future&lt;V&gt;</dt><dd>Un manejador de un resultado pendiente, con get, get con timeout, isDone y cancel.</dd><dt>ExecutionException</dt><dd>La excepción checked que lanza Future.get cuando la propia tarea lanzó una excepción; la excepción original es su causa.</dd><dt>shutdown</dt><dd>Hace que un executor deje de aceptar tareas nuevas mientras permite que terminen las enviadas, sin esperar.</dd><dt>awaitTermination</dt><dd>Se bloquea hasta que todas las tareas terminan después del shutdown o hasta que vence un timeout, y devuelve si terminó.</dd></dl>
-<div class="panel ex"><strong>Ejemplo real</strong><p>Un agregador de precios envía un Callable por proveedor a un pool fijo, y luego llama a future.get(2, TimeUnit.SECONDS) en cada uno para que un proveedor lento no bloquee la página, y atrapa TimeoutException para mostrar ese proveedor como no disponible.</p></div>
-<div class="status notice"><strong>Consejo para el examen:</strong> execute devuelve void y solo recibe un Runnable; submit devuelve un Future. shutdown no espera, awaitTermination espera y close() hace ambas cosas. Las excepciones dentro de una tarea te llegan envueltas en ExecutionException desde get().</div>
-<h2>Comprueba lo que sabes</h2>
-<details class="sq"><summary>¿Qué devuelve Future.get() para un Runnable enviado?</summary><p>null, una vez que la tarea ha terminado.</p></details>
-<details class="sq"><summary>Después de shutdown(), ¿qué ocurre cuando envías otra tarea?</summary><p>Se rechaza con una RejectedExecutionException.</p></details>
-<details class="sq"><summary>¿Cuál es la diferencia entre isShutdown() e isTerminated()?</summary><p>isShutdown es true en cuanto se pidió el shutdown; isTerminated es true solo después de que todas las tareas han terminado tras el shutdown.</p></details>
+<div class="panel gatewall"><span class="chip">Cuenta gratis</span><h2>Sigue leyendo gratis</h2><p>Crea una cuenta gratis de StudyToCert para leer el resto de esta lección: 5 secciones más, 5 términos clave, un ejemplo real, un consejo para el examen y preguntas de repaso. Todas las lecciones, laboratorios y exámenes de práctica son gratis con una cuenta.</p><p class="btns"><a class="btn" href="../../../../#signup">Crear cuenta gratis</a> <a class="btn ghost" href="../../../../#login">Iniciar sesión</a></p></div>
 </article>
 <div class="panel startcard"><div class="grow"><strong>Estudia OCP Java gratis</strong><br><span class="note">Plan semana a semana con lecciones, cuestionarios, simulaciones de examen y práctica, en español.</span></div><a class="btn sm" href="../../../../java-se/?lang=es">Abrir el plan de estudio</a></div>
 <nav class="pager" aria-label="Más lecciones"><a href="../platform-threads-vs-virtual-threads-executors-newvirtualthreadpertaske/">← Hilos de plataforma vs hilos virtuales; Executors.newVirtual</a><a href="../thread-lifecycle-and-start-vs-run/">Ciclo de vida de los hilos y start() vs run() →</a></nav>

@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="../../../../manifest.webmanifest">
 <link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="../../../../assets/style.css?v=32f9296f813d" integrity="sha384-n8i8BqzrZuK1vTCzy/tOwDFFS/ztJm0OfRYP2RCSmc1L3kG1WxqF02iIAmElmXJO">
+<link rel="stylesheet" href="../../../../assets/style.css?v=b3c4c1be42f8" integrity="sha384-Pzw3GGC/UqMPzpMKlKEf+/fec2SgbANfjoxJg9Imk9WYXfkxm967Y6DN4ahAhlKm">
 <script src="../../../../assets/theme.js?v=a52affcb5efa" integrity="sha384-8A+GHkEOMVd7UxelXZF3ZEoes/II4HChRPN0kQyad9SL0tjHjB2JgMO0SfYV8NCV"></script>
 
 </head>
@@ -42,36 +42,7 @@
 <h1>SecurityContext a nivel de Pod y de contenedor: runAsUser, runAsNonRoot, fsGroup, readOnlyRootFilesystem, allowPrivilegeEscalation</h1>
 <article class="lbody">
 <p>Los contenedores son procesos sobre un kernel Linux compartido, así que importa con cuántos privilegios se ejecutan. Si un atacante explota un bug de tu app, un contenedor que se ejecuta como root con un sistema de archivos escribible le da mucho más con qué trabajar que uno que se ejecuta como usuario sin privilegios con un sistema de archivos de solo lectura. El campo <code>securityContext</code> te permite definir estos privilegios de forma declarativa.</p>
-<p>Hay dos niveles. <code>spec.securityContext</code> en el Pod se aplica a todos los contenedores y además contiene configuraciones exclusivas del Pod. <code>spec.containers[].securityContext</code> se aplica a un contenedor y sobrescribe los valores a nivel de Pod cuando ambos definen el mismo campo. Algunos campos existen solo en un nivel, algo que al examen le gusta evaluar.</p>
-<p><code>runAsUser</code> define el ID numérico de usuario (UID) con el que se ejecutan los procesos del contenedor, y <code>runAsGroup</code> el ID del grupo principal. <code>runAsNonRoot: true</code> le dice al kubelet que verifique que el contenedor no se ejecutará como UID 0; si el usuario de la imagen es root y ningún <code>runAsUser</code> lo sobrescribe, el contenedor se rechaza con un error como 'container has runAsNonRoot and image will run as root' (estado CreateContainerConfigError). Si la imagen especifica un usuario por nombre en lugar de por número, el kubelet no puede verificarlo y también lo rechaza, así que define un <code>runAsUser</code> numérico. Estos tres se pueden definir en cualquiera de los dos niveles.</p>
-<p><code>fsGroup</code> es solo a nivel de Pod. Define un ID de grupo suplementario para todos los contenedores, y los volúmenes compatibles pasan a pertenecer a ese grupo al montarse, para que un proceso que no es root pueda escribir en ellos. Es la solución habitual cuando un contenedor no root recibe 'permission denied' en un PVC o emptyDir.</p>
-<p><code>readOnlyRootFilesystem: true</code> (solo a nivel de contenedor) hace que el propio sistema de archivos del contenedor sea de solo lectura. El malware o un atacante no pueden modificar binarios ni dejar herramientas, y la app no puede escribir por accidente donde no debe. Las apps que necesitan espacio temporal reciben un emptyDir montado, por ejemplo, en <code>/tmp</code>. <code>allowPrivilegeEscalation: false</code> (solo a nivel de contenedor) impide que un proceso obtenga más privilegios que su padre, por ejemplo mediante binarios setuid; activa el flag no_new_privs de Linux.</p>
-<pre class="code" tabindex="0"><code>spec:
-  securityContext:
-    runAsUser: 1000
-    runAsGroup: 3000
-    fsGroup: 2000
-    runAsNonRoot: true
-  containers:
-  - name: app
-    image: app:1.0
-    securityContext:
-      readOnlyRootFilesystem: true
-      allowPrivilegeEscalation: false
-    volumeMounts:
-    - {name: tmp, mountPath: /tmp}
-  volumes:
-  - name: tmp
-    emptyDir: {}</code></pre>
-<p>Verifica dentro del contenedor: <code>kubectl exec app -- id</code> debería mostrar <code>uid=1000 gid=3000</code> con 2000 entre los grupos, y <code>kubectl exec app -- touch /test</code> debería fallar con 'Read-only file system'. Otros campos de contenedor que encontrarás son <code>privileged</code> (acceso total al host; evítalo), <code>capabilities</code> y <code>seccompProfile</code>, que se ven junto con Pod Security Admission.</p>
-<h2>Términos clave</h2>
-<dl class="terms"><dt>runAsUser</dt><dd>UID numérico con el que se ejecutan los procesos del contenedor.</dd><dt>runAsNonRoot</dt><dd>Hace que el kubelet se niegue a iniciar un contenedor que se ejecutaría como UID 0.</dd><dt>fsGroup</dt><dd>Grupo suplementario a nivel de Pod aplicado a los contenedores y a la propiedad de los volúmenes compatibles.</dd><dt>readOnlyRootFilesystem</dt><dd>Configuración a nivel de contenedor que hace de solo lectura el sistema de archivos raíz del contenedor.</dd><dt>allowPrivilegeEscalation</dt><dd>Configuración a nivel de contenedor que, en false, impide que los procesos obtengan más privilegios que su padre.</dd></dl>
-<div class="panel ex"><strong>Ejemplo real</strong><p>Una tarea pide un Pod que se ejecute como el usuario 1000, escriba solo en /data en un PVC y no pueda modificar su propio sistema de archivos. Defines runAsUser 1000 y fsGroup 1000 a nivel de Pod, readOnlyRootFilesystem true y allowPrivilegeEscalation false en el contenedor, y confirmas con <code>kubectl exec -- id</code> y un <code>touch /x</code> que falla.</p></div>
-<div class="status notice"><strong>Consejo para el examen:</strong> fsGroup es solo a nivel de Pod; readOnlyRootFilesystem, allowPrivilegeEscalation, capabilities y privileged son solo a nivel de contenedor. Los valores del contenedor sobrescriben los del Pod.</div>
-<h2>Comprueba lo que sabes</h2>
-<details class="sq"><summary>Un Pod define runAsUser 1000 y uno de sus contenedores define runAsUser 2000. ¿Qué UID usa ese contenedor?</summary><p>2000, porque la configuración a nivel de contenedor sobrescribe la del Pod.</p></details>
-<details class="sq"><summary>¿Por qué un contenedor con runAsNonRoot: true falla con CreateContainerConfigError?</summary><p>Su imagen se ejecuta como root (o con un usuario no numérico) y ningún runAsUser numérico lo sobrescribe, así que el kubelet se niega a iniciarlo.</p></details>
-<details class="sq"><summary>¿Dónde defines fsGroup?</summary><p>Solo en el securityContext a nivel de Pod.</p></details>
+<div class="panel gatewall"><span class="chip">Cuenta gratis</span><h2>Sigue leyendo gratis</h2><p>Crea una cuenta gratis de StudyToCert para leer el resto de esta lección: 6 secciones más, 5 términos clave, un ejemplo real, un consejo para el examen y preguntas de repaso. Todas las lecciones, laboratorios y exámenes de práctica son gratis con una cuenta.</p><p class="btns"><a class="btn" href="../../../../#signup">Crear cuenta gratis</a> <a class="btn ghost" href="../../../../#login">Iniciar sesión</a></p></div>
 </article>
 <div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semana a semana con lecciones, cuestionarios, simulaciones de examen y práctica, en español.</span></div><a class="btn sm" href="../../../../ckad/?lang=es">Abrir el plan de estudio</a></div>
 <nav class="pager" aria-label="Más lecciones"><a href="../serviceaccounts-serviceaccountname-token-projection-automountserviceac/">← ServiceAccounts: serviceAccountName, proyección de tokens, a</a><a href="../linux-capabilities-add-drop-and-pod-security-admission-levels-privileg/">Capabilities de Linux (add/drop) y niveles de Pod Security A →</a></nav>

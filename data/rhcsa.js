@@ -7,7 +7,7 @@ CertHub.register({
   exam: "EX200 (RHEL 10)",
   blurb: "Hands-on Linux administration exam on Red Hat Enterprise Linux 10: shell tools, software, storage, boot, networking, users and SELinux, for new Linux and cloud system administrators.",
   status: "check",
-  statusNote: "redhat.com was blocked by the network proxy during this check on Sept 24, 2026, so the EX200 page could not be read directly. Search results quoting Red Hat's EX200 page say the exam is now based on RHEL 10, lists ten objective groups, adds Flatpak repositories/packages and systemd timer scheduling, and no longer includes the containers (Podman) group. Red Hat publishes no weights for this performance-based exam: the weights here are estimates based on how many objectives each group has and how often the group shows up in hands-on tasks. Exam length (3 hours) and the 210/300 pass mark also come from search results. Confirm the objective list, duration and score on the EX200 page before booking.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (EX200 (RHEL 10)), objectives, number of questions, time limit and passing score on Red Hat's official exam page.",
   lastVerified: "2026-09-24",
   notices: [],
   examInfo: {

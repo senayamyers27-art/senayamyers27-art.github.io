@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="../../../../manifest.webmanifest">
 <link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="../../../../assets/style.css?v=32f9296f813d" integrity="sha384-n8i8BqzrZuK1vTCzy/tOwDFFS/ztJm0OfRYP2RCSmc1L3kG1WxqF02iIAmElmXJO">
+<link rel="stylesheet" href="../../../../assets/style.css?v=b3c4c1be42f8" integrity="sha384-Pzw3GGC/UqMPzpMKlKEf+/fec2SgbANfjoxJg9Imk9WYXfkxm967Y6DN4ahAhlKm">
 <script src="../../../../assets/theme.js?v=a52affcb5efa" integrity="sha384-8A+GHkEOMVd7UxelXZF3ZEoes/II4HChRPN0kQyad9SL0tjHjB2JgMO0SfYV8NCV"></script>
 
 </head>
@@ -42,40 +42,7 @@
 <h1>Variables de entrada: `type`, `default`, `description`, `sensitive`, `nullable` y precedencia de valores (TF_VAR_, tfvars, auto.tfvars, -var)</h1>
 <article class="lbody">
 <p>Las variables de entrada son los parámetros de un módulo. Permiten que el mismo código sirva a distintos entornos, regiones o equipos sin editarlo. Declaras cada una con un bloque <code>variable</code> y te refieres a ella como <code>var.NAME</code>.</p>
-<pre class="code" tabindex="0"><code>variable &quot;instance_count&quot; {
-  type        = number
-  default     = 2
-  description = &quot;Number of web servers to run.&quot;
-  nullable    = false
-
-  validation {
-    condition     = var.instance_count &gt; 0
-    error_message = &quot;instance_count must be at least 1.&quot;
-  }
-}
-
-variable &quot;db_password&quot; {
-  type      = string
-  sensitive = true
-}</code></pre>
-<p>Los argumentos: <code>type</code> restringe qué valores se aceptan, como <code>string</code>, <code>number</code>, <code>bool</code> o tipos complejos como <code>list(string)</code>; Terraform convierte los valores compatibles y rechaza los demás. <code>default</code> proporciona un valor cuando no se da ninguno, lo que hace que la variable sea opcional; una variable sin default es obligatoria. <code>description</code> documenta el propósito para los usuarios y para la documentación del módulo. <code>sensitive = true</code> oculta el valor en la salida de plan y apply, y todo lo que se derive de él también se trata como sensible, pero igual se guarda en el estado. <code>nullable</code> controla si se permite <code>null</code>; su valor predeterminado es true, y con <code>nullable = false</code> quien pase <code>null</code> obtiene el default en su lugar. Un bloque <code>validation</code> agrega reglas personalizadas con un mensaje de error útil. Las versiones más recientes también admiten <code>ephemeral = true</code> para valores que nunca deben persistirse.</p>
-<p>Los valores pueden proporcionarse de varias formas, y cuando la misma variable se establece en más de un lugar, Terraform usa esta precedencia, de menor a mayor, en la que las fuentes posteriores anulan a las anteriores:</p>
-<pre class="code" tabindex="0"><code>1. Variables de entorno llamadas TF_VAR_&lt;name&gt;, p. ej. TF_VAR_region=us-east-1
-2. terraform.tfvars, si existe
-3. terraform.tfvars.json, si existe
-4. Archivos *.auto.tfvars y *.auto.tfvars.json, en orden léxico del nombre de archivo
-5. Opciones -var y -var-file en la línea de comandos, en el orden dado</code></pre>
-<p>Solo <code>terraform.tfvars</code>, <code>terraform.tfvars.json</code> y los archivos que terminan en <code>.auto.tfvars</code> o <code>.auto.tfvars.json</code> se cargan automáticamente. Cualquier otro archivo, como <code>prod.tfvars</code>, debe pasarse con <code>-var-file</code>. Si una variable obligatoria no tiene valor en ninguna fuente, Terraform lo pide de forma interactiva, o falla si se ejecuta con <code>-input=false</code>. Los defaults se usan solo cuando ninguna fuente proporciona un valor.</p>
-<p>En HCP Terraform, las variables del workspace también pueden proporcionar valores; se envían como variables de Terraform o de entorno en cada ejecución. Para los secretos, prefiere variables de entorno o un gestor de secretos en lugar de hacer commit de archivos <code>.tfvars</code> que contengan contraseñas, y marca esas variables como sensibles para que no aparezcan en los logs.</p>
-<p>Para los módulos hijos, las variables se establecen como argumentos en el bloque <code>module</code>, y ninguna de las fuentes de precedencia anteriores se les aplica directamente; solo el módulo raíz lee los archivos tfvars y las variables <code>TF_VAR_</code>.</p>
-<h2>Términos clave</h2>
-<dl class="terms"><dt>Input variable (variable de entrada)</dt><dd>Un parámetro de un módulo declarado con un bloque <code>variable</code> y referenciado como <code>var.NAME</code>.</dd><dt>TF_VAR_ environment variable (variable de entorno TF_VAR_)</dt><dd>Una variable de entorno llamada <code>TF_VAR_&lt;name&gt;</code> que establece una variable del módulo raíz; tiene la precedencia más baja.</dd><dt>terraform.tfvars</dt><dd>Archivo de definiciones de variables que Terraform carga automáticamente desde el directorio del módulo raíz.</dd><dt>nullable</dt><dd>Ajuste de variable (true de forma predeterminada) que controla si se acepta <code>null</code>; cuando es false, null se reemplaza por el default.</dd><dt>sensitive (sensible)</dt><dd>Ajuste de variable que oculta el valor en la salida de la CLI, pero no lo mantiene fuera del estado.</dd></dl>
-<div class="panel ex"><strong>Ejemplo real</strong><p>Un pipeline establece <code>TF_VAR_region=us-east-1</code> en su entorno, el repositorio tiene <code>terraform.tfvars</code> con <code>region = &quot;eu-west-1&quot;</code>, y el ingeniero ejecuta <code>terraform plan -var region=ap-south-1</code>. Terraform usa <code>ap-south-1</code>, porque los valores de la línea de comandos tienen la precedencia más alta.</p></div>
-<div class="status notice"><strong>Consejo para el examen:</strong> Precedencia de menor a mayor: variables de entorno TF_VAR_, terraform.tfvars, terraform.tfvars.json, *.auto.tfvars en orden léxico, y luego -var y -var-file. Los archivos que no siguen esos patrones de nombre solo se cargan mediante -var-file.</div>
-<h2>Comprueba lo que sabes</h2>
-<details class="sq"><summary>Si <code>region</code> se establece tanto en <code>terraform.tfvars</code> como en <code>override.auto.tfvars</code>, ¿cuál gana?</summary><p><code>override.auto.tfvars</code>, porque los archivos <code>*.auto.tfvars</code> se cargan después de <code>terraform.tfvars</code> y tienen precedencia.</p></details>
-<details class="sq"><summary>¿Qué pasa cuando una variable no tiene default y no se proporciona ningún valor?</summary><p>Terraform lo pide de forma interactiva, o da error si la entrada está deshabilitada con <code>-input=false</code>.</p></details>
-<details class="sq"><summary>¿<code>sensitive = true</code> mantiene el valor de una variable fuera del archivo de estado?</summary><p>No. Solo lo oculta en la salida de la CLI; el valor igual puede guardarse en el estado.</p></details>
+<div class="panel gatewall"><span class="chip">Cuenta gratis</span><h2>Sigue leyendo gratis</h2><p>Crea una cuenta gratis de StudyToCert para leer el resto de esta lección: 7 secciones más, 5 términos clave, un ejemplo real, un consejo para el examen y preguntas de repaso. Todas las lecciones, laboratorios y exámenes de práctica son gratis con una cuenta.</p><p class="btns"><a class="btn" href="../../../../#signup">Crear cuenta gratis</a> <a class="btn ghost" href="../../../../#login">Iniciar sesión</a></p></div>
 </article>
 <div class="panel startcard"><div class="grow"><strong>Estudia Terraform Associate gratis</strong><br><span class="note">Plan semana a semana con lecciones, cuestionarios, simulaciones de examen y práctica, en español.</span></div><a class="btn sm" href="../../../../terraform/?lang=es">Abrir el plan de estudio</a></div>
 <nav class="pager" aria-label="Más lecciones"><a href="../cross-resource-references-and-implicit-dependencies/">← Referencias entre recursos y dependencias implícitas</a><a href="../output-values-and-local-values/">Valores de output y valores locales →</a></nav>

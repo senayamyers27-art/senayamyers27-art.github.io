@@ -7,7 +7,7 @@ CertHub.register({
   exam: "CWNA-109",
   blurb: "Vendor-neutral enterprise Wi-Fi certification covering RF, 802.11 standards and protocols, WLAN design, security and site surveys, for network staff who build and support wireless networks.",
   status: "check",
-  statusNote: "cwnp.com could not be opened from this environment on Sept 24, 2026, so the official page was not read directly. Domains and weights (15/20/20/15/10/20) are taken from CWNP's CWNA-109 objectives PDF (January 2023) as indexed by search. Exam length, time and pass mark are CWNP's long-standing CWNA figures and need confirming. CWNA-110 is reported to have launched in September 2026 with different objectives; check which version you will sit.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (CWNA-109), objectives, number of questions, time limit and passing score on CWNP's official exam page.",
   lastVerified: "2026-09-24",
   notices: [
     { from: "2026-09-01", until: "2026-12-31", text: "CWNA-110 is reported to be launching in September 2026, with CWNA-109 available until December 31, 2026. This plan follows CWNA-109. If you will test in 2027 or choose CWNA-110, compare its objectives on cwnp.com first." }

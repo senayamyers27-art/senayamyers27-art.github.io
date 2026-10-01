@@ -7,7 +7,7 @@ CertHub.register({
   exam: "SCS-C03",
   blurb: "For security engineers who protect AWS workloads: detection and logging, incident response, network and edge defenses, IAM and federation, KMS encryption and data protection, and multi-account governance with Organizations and Control Tower.",
   status: "verified",
-  statusNote: "Checked Sept 29, 2026 against the official SCS-C03 exam guide on docs.aws.amazon.com (seen through search results, because the AWS pages could not be opened directly from this environment): six content domains weighted Detection 16%, Incident Response 14%, Infrastructure Security 18%, Identity and Access Management 20%, Data Protection 18%, Security Foundations and Governance 14%; 65 questions (50 scored, 15 unscored); 170 minutes; passing score 750 on a 100–1000 scale. SCS-C03 replaced SCS-C02 on Dec 2, 2025. Topics are written from the exam guide's task statements; re-check the guide before booking in case AWS publishes a new version.",
+  statusNote: "Built from Amazon Web Services's published exam objectives (SCS-C03). Confirm the details on the official exam page before you book.",
   lastVerified: "2026-09-29",
   notices: [
     { from: "2026-09-29", until: "2027-03-31", text: "SCS-C02 was retired after Dec 1, 2025, and SCS-C03 became the only version on Dec 2, 2025. This plan covers SCS-C03, which splits Detection and Incident Response into separate domains, gives IAM the largest weight (20%) and adds generative AI security topics. Courses and practice tests written for SCS-C02 miss part of it." }

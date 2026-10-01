@@ -7,7 +7,7 @@ CertHub.register({
   exam: "CLF-C02",
   blurb: "Entry-level AWS cloud fundamentals for technical and non-technical roles: cloud value and economics, the shared responsibility model and core security services, the main AWS compute, storage, database and networking services, and how AWS pricing, billing and support work.",
   status: "check",
-  statusNote: "Domains and weights (Cloud Concepts 24%, Security and Compliance 30%, Cloud Technology and Services 34%, Billing, Pricing, and Support 12%) come from the published CLF-C02 exam guide as best known. The AWS certification pages and exam guide could not be opened from this environment during this check on Sept 25, 2026, so confirm the domains, weights, exam length (65 questions, 90 minutes) and passing score (700) on the official exam page before booking, and check whether AWS has announced a successor exam. AWS has also been revising its Support plan lineup, so confirm current plan names and features on the AWS Support plans page.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (CLF-C02), objectives, number of questions, time limit and passing score on Amazon Web Services's official exam page.",
   lastVerified: "2026-09-25",
   notices: [],
   examInfo: { questions: "65 (50 scored, 15 unscored; multiple choice and multiple response)", minutes: 90, pass: "700 on a 100–1000 scale", extra: "No prerequisites. AWS recommends up to about 6 months of exposure to the AWS Cloud in any role (technical, managerial, sales, purchasing or financial). The certification is valid for 3 years." },

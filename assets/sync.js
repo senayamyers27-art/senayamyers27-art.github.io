@@ -169,13 +169,43 @@
   const setMe = v => { me = v; document.dispatchEvent(new Event("certhub:me")); };
   const pending = new Set();
 
+  // Someone who has signed in on this device keeps access to free content while the API can't be reached
+  // (offline, or an outage); the gate only locks for people who have never signed in here.
+  const MEMBER_KEY = "certhub:member";
+  let offlineMember = false;
   async function refreshMe() {
     if (!API) return null;
-    try { setMe((await api("GET", "/v1/me")).data); } catch (e) { setMe(null); }
+    let v = null;
+    try { v = (await api("GET", "/v1/me")).data; offlineMember = false; }
+    catch (e) { offlineMember = !e.status && store.get(MEMBER_KEY) === "1"; }
     known = true;
+    setMe(v);
+    if (signedIn()) { store.set(MEMBER_KEY, "1"); await applySignupDetails(); }
     return me;
   }
   const signedIn = () => !!(me && me.user);
+
+  /* ---------- free-account gate ---------- */
+  // With accounts switched on, signed-out visitors get a sample (each plan's first lessons, the first lab of each
+  // track, the placement test and weekly quizzes); the rest asks for a free account. Pro and Premium Pro content
+  // is separate: it only ever comes from the API, for members with that plan.
+  CertHub.gate = {
+    get locked() { return !!API && known && !signedIn() && !offlineMember; },
+    wall(kind) {
+      const what = { lesson: "Read every lesson in this plan", lab: "Open every hands-on lab, with step-by-step guides and checks", practice: "Smart practice, domain drills, checkpoint tests, exam simulations and a full practice exam", tools: "Practice VMs, games, puzzles, flashcards, cheat sheets and daily review" }[kind] || "Every lesson, lab and practice test";
+      return `<div class="panel gatewall"><span class="chip">Free account</span>
+        <h2>Create a free account to keep going</h2>
+        <p>${esc(what)}, plus your progress saved on every device. Free, with no card and no ads.</p>
+        <div class="btns"><a class="btn" href="#signup">Sign up free</a><a class="btn ghost" href="#login">Log in</a></div></div>`;
+    }
+  };
+  // When the gate opens or closes (the first /v1/me answer, sign-in, sign-out), redraw the page.
+  let gateWas = null;
+  document.addEventListener("certhub:me", () => {
+    const now = CertHub.gate.locked;
+    if (gateWas !== null && gateWas !== now && CertHub.rerender) CertHub.rerender();
+    gateWas = now;
+  });
 
   async function put(docKey, body, baseVersion, tries = 2) {
     const r = await api("PUT", `/v1/progress/${docKey}`, { baseVersion, body });
@@ -331,7 +361,7 @@
     <h2>Organizations</h2>
     <div class="panel">${orgs.length ? orgs.map(o => `<div class="row"><div class="grow"><strong>${esc(o.name)}</strong><br><span class="note">${esc(o.role)}${o.active ? "" : " · no active seats"}</span></div>${o.role !== "learner" ? `<button type="button" class="btn ghost sm" data-aact="manage" data-org="${esc(o.id)}">Manage</button>` : ""}</div>`).join("") : `<p class="note" data-style="margin:0">You're not in an organization. If your school or employer gave you an invite link, open it and you'll join automatically.</p>`}
       <details class="sq"><summary>Create an organization (for instructors)</summary>
-        <form id="org-form"><input type="text" id="org-name" maxlength="80" placeholder="e.g. UTD Cybersecurity Bootcamp" class="textin" required><div class="btns"><button type="submit" class="btn sm">Create</button></div></form>
+        <form id="org-form"><input type="text" id="org-name" maxlength="80" placeholder="e.g. Riverside College IT Program" class="textin" required><div class="btns"><button type="submit" class="btn sm">Create</button></div></form>
       </details>
     </div>
     <div id="orgpanel"></div>
@@ -614,7 +644,7 @@
       <div class="panel">${d.certs.length ? `<ol>${d.certs.map(c => `<li>${esc(certLabel(c.certId))} <span class="note">· ${plural(c.learners, "learner")}</span></li>`).join("")}</ol>` : `<p class="note" data-style="margin:0">No synced study yet.</p>`}</div>
       <h2>Classes and referrals</h2>
       <div class="stats">${tile(d.classes.classes, "classes")}${tile(d.classes.students, "students in classes")}${tile(d.referrals.referred, "plans from referrals")}${tile(d.referrals.rewarded, "referral credits given")}</div>`;
-    } catch (e) { $("#app").innerHTML = `${crumbs}<h1>Site dashboard</h1><div class="status warn">${esc(e.status === 403 ? "This page is for the site's owner. Add your email to the STUDY_API_ADMIN_EMAILS repository variable and redeploy the API." : e.message)}</div>`; }
+    } catch (e) { $("#app").innerHTML = `${crumbs}<h1>Site dashboard</h1><div class="status warn">${esc(e.status === 403 ? "This page is for the site's owner." : e.message)}</div>`; }
   }
 
   // What an assignment asks for, in words.
@@ -644,8 +674,30 @@
       const msg = $("#pf-msg");
       try {
         msg.textContent = "Saving…";
-        await api("PUT", "/v1/profile", { displayName: $("#pf-name").value, bio: $("#pf-bio").value, goalCert: $("#pf-goal").value, weeklyHours: $("#pf-hours").value });
+        await api("PUT", "/v1/profile", { displayName: $("#pf-name").value, bio: $("#pf-bio").value, goalCert: $("#pf-goal").value, weeklyHours: $("#pf-hours").value, phone: $("#pf-phone").value, role: $("#pf-role").value, examDate: $("#pf-date").value });
         await refreshMe(); ui.toast("Profile saved."); profileView();
+      } catch (err) { msg.textContent = err.message; }
+      return;
+    }
+    if (f.id === "password-form") {
+      e.preventDefault();
+      const msg = $("#pw-msg");
+      try {
+        msg.textContent = "Checking…";
+        const { data } = await api("POST", "/v1/auth/password", { email: $("#pw-email").value, password: $("#pw-pass").value });
+        if (NATIVE && data.token) NATIVE.setToken(data.token);
+        await refreshMe(); ui.toast("Signed in."); syncAll(); location.hash = "profile";
+      } catch (err) { msg.textContent = err.message; }
+      return;
+    }
+    if (f.id === "setpw-form") {
+      e.preventDefault();
+      const msg = $("#setpw-msg");
+      try {
+        if ($("#pw-new").value !== $("#pw-new2").value) { msg.textContent = "The two passwords don't match."; return; }
+        msg.textContent = "Saving…";
+        await api("POST", "/v1/account/password", { password: $("#pw-new").value, current: ($("#pw-cur") || {}).value || undefined });
+        ui.toast("Backup password saved."); profileView();
       } catch (err) { msg.textContent = err.message; }
       return;
     }
@@ -661,6 +713,7 @@
     if (!["signin-form", "code-form", "org-form", "cohort-form", "class-form", "classcode-form", "join-form", "classedit-form"].includes(f.id)) return;
     e.preventDefault();
     try {
+      if (f.id === "signin-form" && f.dataset.intent === "signup") readSignupDetails();
       if (f.id === "signin-form" && NATIVE) {
         // The app: the email carries a code to type here (the app can't open the emailed link).
         const msg = $("#signin-msg"), email = $("#signin-email").value.trim();
@@ -723,13 +776,17 @@
     const a = b.dataset.aact;
     try {
       if (a === "code-restart") { CertHub.rerender(); return; }
+      if (a === "rmpassword") {
+        if (!(await ui.confirm("Remove your backup password? You'll sign in with an email link, Google or a passkey.", { ok: "Remove", cancel: "Keep it", danger: true }))) return;
+        await api("DELETE", "/v1/account/password"); ui.toast("Backup password removed."); profileView(); return;
+      }
       if (a === "copyref") { ui.copy($("#ref-link").value, "invite link"); return; }
       if (a === "shareref") { navigator.share({ title: "StudyToCert", text: "Free study plans for IT, cloud and cybersecurity certifications. Your first month of Pro is free with my link.", url: $("#ref-link").value }).catch(() => {}); return; }
       if (a === "delassign") {
         if (!(await ui.confirm(`Delete the assignment "${b.dataset.name}"?`, { ok: "Delete", cancel: "Keep it", danger: true }))) return;
         await api("DELETE", `/v1/classes/${b.dataset.class}/assignments/${b.dataset.assign}`); ui.toast("Assignment deleted."); classView(b.dataset.class.slice(4)); return;
       }
-      if (a === "signout") { await api("POST", "/v1/auth/logout", {}); if (NATIVE) NATIVE.setToken(""); setMe((await api("GET", "/v1/me").catch(() => ({ data: null }))).data); ui.toast("Signed out. Your progress stays on this device."); if (location.hash === "#profile") location.hash = "login"; else CertHub.rerender(); }
+      if (a === "signout") { store.set(MEMBER_KEY, ""); await api("POST", "/v1/auth/logout", {}); if (NATIVE) NATIVE.setToken(""); setMe((await api("GET", "/v1/me").catch(() => ({ data: null }))).data); ui.toast("Signed out. Your progress stays on this device."); if (location.hash === "#profile") location.hash = "login"; else CertHub.rerender(); }
       if (a === "sync") await syncAll();
       if (a === "removeprofile") {
         if (!(await ui.confirm("Remove your profile from this browser? Your study progress stays.", { ok: "Remove", cancel: "Keep it" }))) return;
@@ -952,6 +1009,12 @@
           <div><label for="pf-goal"><strong>Goal certification</strong></label><select id="pf-goal" class="textin">${/* html: options built with esc() */ certOptions(p.goal, "Not decided yet")}</select></div>
           <div><label for="pf-hours"><strong>Study hours a week</strong></label><input type="number" id="pf-hours" class="textin" min="1" max="80" step="1" inputmode="numeric" value="${esc(p.hours || "")}"></div>
         </div>
+        ${p.online ? `<div class="formgrid">
+          <div><label for="pf-role"><strong>Which describes you?</strong></label><select id="pf-role" class="textin"><option value="">Not set</option>${ROLES.map(([v, l]) => `<option value="${esc(v)}" ${p.role === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></div>
+          <div><label for="pf-date"><strong>Target exam date</strong></label><input type="date" id="pf-date" class="textin" value="${esc(p.examDate || "")}"></div>
+        </div>
+        <label for="pf-phone"><strong>Phone number</strong> <span class="note">(private, for account recovery and support)</span></label>
+        <input type="tel" id="pf-phone" class="textin" maxlength="24" autocomplete="tel" inputmode="tel" value="${esc(p.phone || "")}">` : ""}
         <div class="btns"><button type="submit" class="btn">${esc(submit)}</button></div>
         <p class="note" id="pf-msg" role="status" data-style="margin:0"></p>
       </form>`;
@@ -1034,13 +1097,72 @@
         ${emailForm(NATIVE ? "Email me a sign-in code" : "Email me a login link", "login")}
         ${PASSKEYS ? `<div class="orline" role="separator"><span>or</span></div><div class="btns" data-style="margin-top:0"><button type="button" class="btn ghost" data-aact="passkey-signin">Log in with a passkey</button></div><p class="note" id="passkey-msg" role="status" data-style="margin:0"></p>` : ""}
         <p class="note authhint">No password to remember: we email you a ${NATIVE ? "code" : "link"} each time.</p>
+        <details class="pwlogin"><summary>Can't get to your email? Log in with your password</summary>
+          <form id="password-form" novalidate>
+            <label for="pw-email"><strong>Email</strong></label>
+            <input type="email" id="pw-email" class="textin" autocomplete="username" required placeholder="you@example.com">
+            <label for="pw-pass"><strong>Password</strong></label>
+            <input type="password" id="pw-pass" class="textin" autocomplete="current-password" required>
+            <div class="btns"><button type="submit" class="btn">Log in with password</button></div>
+            <p class="note" id="pw-msg" role="status"></p>
+            <p class="note" data-style="margin:0">No password yet? Log in once with your email, then add a backup password on your profile.</p>
+          </form>
+        </details>
       </div>
       <p class="authswitch">New to StudyToCert? <a class="btn ghost sm" href="#signup">Create a free account</a></p>
     </div>`;
   }
+  /* ---------- sign-up details ---------- */
+  // Asked on the sign-up page before any sign-up option, kept on this device until the first sign-in, then saved
+  // to the profile (the same browser finishes an email link or a Google sign-in).
+  const ROLES = [["student", "Student"], ["career-changer", "Changing careers into IT"], ["it-pro", "Working in IT"], ["teacher", "Teacher or trainer"], ["other", "Something else"]];
+  const SIGNUP_KEY = "certhub:signup";
+  const phoneOk = v => { const d = v.replace(/\D/g, ""); return /^\+?[\d\s().-]{7,24}$/.test(v) && d.length >= 7 && d.length <= 15; };
+  const signupDetailsHtml = () => `<fieldset class="signupdetails"><legend>1. About you</legend>
+          <label for="su-name"><strong>Full name</strong></label>
+          <input type="text" id="su-name" class="textin" maxlength="60" autocomplete="name" required>
+          <label for="su-phone"><strong>Phone number</strong></label>
+          <input type="tel" id="su-phone" class="textin" maxlength="24" autocomplete="tel" inputmode="tel" placeholder="+1 555 123 4567" required>
+          <div class="formgrid">
+            <div><label for="su-role"><strong>Which describes you?</strong></label><select id="su-role" class="textin" required><option value="">Choose one</option>${ROLES.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join("")}</select></div>
+            <div><label for="su-goal"><strong>Goal certification</strong></label><select id="su-goal" class="textin">${/* html: options built with esc() */ certOptions("", "Not decided yet")}</select></div>
+          </div>
+          <label for="su-date"><strong>Target exam date</strong> <span class="note">(optional)</span></label>
+          <input type="date" id="su-date" class="textin" min="${esc(new Date().toISOString().slice(0, 10))}">
+          <p class="note" data-style="margin:6px 0 0">Your phone number is only for getting back into your account and for support. It's never shown to anyone or shared.</p>
+          <p class="note" id="su-msg" role="status" data-style="margin:4px 0 0"></p>
+        </fieldset>`;
+  function readSignupDetails() {
+    const v = id => (($("#" + id) || {}).value || "").trim();
+    const fail = (id, m) => { const el = $("#" + id); if (el) el.focus(); const msg = $("#su-msg"); if (msg) msg.textContent = m; throw new Error(m); };
+    const d = { displayName: v("su-name"), phone: v("su-phone"), role: v("su-role"), goalCert: v("su-goal") || null, examDate: v("su-date") || null };
+    if (d.displayName.length < 2) fail("su-name", "Enter your full name.");
+    if (!phoneOk(d.phone)) fail("su-phone", "Enter a phone number with digits only, for example +1 555 123 4567.");
+    if (!d.role) fail("su-role", "Choose what describes you.");
+    store.set(SIGNUP_KEY, JSON.stringify({ ...d, at: Date.now() }));
+    return d;
+  }
+  async function applySignupDetails() {
+    let d = null; try { d = JSON.parse(store.get(SIGNUP_KEY) || "null"); } catch (e) {}
+    if (!d) return;
+    store.set(SIGNUP_KEY, "");
+    if (Date.now() - (d.at || 0) > 864e5) return;
+    const { at, ...body } = d;
+    try {
+      await api("PUT", "/v1/profile", body);
+      if (me && me.user) me.user.displayName = body.displayName;
+      headerChip();
+    } catch (e) {}
+  }
+  // Sign-up with Google or LinkedIn: check and keep the details first, then follow the link.
+  document.addEventListener("click", e => {
+    const a = e.target.closest(".signupcard .socialbtn"); if (!a) return;
+    try { readSignupDetails(); } catch (err) { e.preventDefault(); }
+  });
+
   function signupPage(note) {
     const steps = [
-      ["Choose how", NATIVE ? "Enter your email address." : "Google, LinkedIn or your email address."],
+      ["Tell us about you", NATIVE ? "Your name and goal, then your email address." : "Your name and goal, then Google, LinkedIn or your email address."],
       ["Confirm your email", NATIVE ? "Type the code we send you." : "Open the link we send you."],
       ["Start studying", "Pick a certification and get your week-by-week plan."]
     ];
@@ -1048,19 +1170,21 @@
       ["Your progress on every device", "Plans, quiz scores, streaks and review cards sync between your phone and computer."],
       ["A portfolio of your labs", "Finished labs become write-ups and resume bullets you can share."],
       ["Classes with your teacher", "Join with a class code and see your assignments."],
-      ["Free, with no ads", "Every study plan, lesson, lab and practice exam stays free. Pro is optional."]
+      ["Free, with no ads", "Every study plan, lesson, lab and practice exam is free with your account. Pro is optional."]
     ];
     return `<div class="authsignup">
       <div class="signuphero">
         <p class="eyebrow">Free account</p>
         <h1>Create your free account</h1>
-        <p class="meta">Everything on the site works without an account. An account keeps your work safe and with you.</p>
+        <p class="meta">A free account unlocks every lesson, lab and practice test, and keeps your work safe and with you on every device.</p>
         <ol class="clean signupsteps">${steps.map(([t, d], i) => `<li><span class="stepnum" aria-hidden="true">${/* num */ i + 1}</span><div><strong>${esc(t)}</strong><span class="note">${esc(d)}</span></div></li>`).join("")}</ol>
       </div>
       <div class="signupbody">
         <div class="panel signupcard">
           <h2>Sign up</h2>
           ${/* html: status markup built with esc() in loginView */ note}
+          ${/* html: fixed markup built with esc() */ signupDetailsHtml()}
+          <p class="suhow"><strong>2. Choose how to sign up</strong></p>
           ${socialButtons(true)}
           ${emailForm(NATIVE ? "Email me a code to sign up" : "Create my account", "signup")}
           <p class="note" data-style="margin:0">By creating an account you agree to the <a href="#terms">Terms</a> and <a href="#privacy">Privacy Policy</a>. Accounts are for ages 13 and up.${NATIVE ? "" : " From Google or LinkedIn we only get your name and email address, and we never post anything."}</p>
@@ -1095,8 +1219,18 @@
   // The account's profile, with blanks filled from a profile made on this device before sign-in opened.
   function onlineForm(pr) {
     const lp = localProfile();
-    return { name: pr.displayName || lp.name, bio: pr.bio || lp.bio, goal: pr.goalCert || lp.goal, hours: pr.weeklyHours || lp.hours };
+    return { name: pr.displayName || lp.name, bio: pr.bio || lp.bio, goal: pr.goalCert || lp.goal, hours: pr.weeklyHours || lp.hours, online: true, phone: pr.phone, role: pr.role, examDate: pr.examDate };
   }
+  const setPwForm = change => `<form id="setpw-form" novalidate>
+          ${change ? `<label for="pw-cur"><strong>Current password</strong></label><input type="password" id="pw-cur" class="textin" autocomplete="current-password" required>` : ""}
+          <input type="email" autocomplete="username" value="${esc((me && me.user && me.user.email) || "")}" hidden>
+          <label for="pw-new"><strong>${change ? "New password" : "Password"}</strong> <span class="note">(at least 10 characters)</span></label>
+          <input type="password" id="pw-new" class="textin" autocomplete="new-password" minlength="10" maxlength="128" required>
+          <label for="pw-new2"><strong>Type it again</strong></label>
+          <input type="password" id="pw-new2" class="textin" autocomplete="new-password" minlength="10" maxlength="128" required>
+          <div class="btns"><button type="submit" class="btn">${change ? "Change password" : "Save backup password"}</button></div>
+          <p class="note" id="setpw-msg" role="status" data-style="margin:0"></p>
+        </form>`;
   async function profileView() {
     const app = $("#app");
     if (!API) return localProfileView();
@@ -1118,6 +1252,7 @@
       <div class="grow"><h1>${esc(name)}</h1><p class="meta">${esc(pr.email)} · Member since ${esc(since)}</p>${goal ? `<p class="note">Working toward <a href="#${esc(goal.id)}.week">${esc(goal.short)} ${esc(goal.exam)}</a>${pr.weeklyHours ? ` · ${esc(pr.weeklyHours)} hours a week` : ""}</p>` : ""}</div></div>
       ${note}
       ${pr.bio ? `<p class="bio">${esc(pr.bio)}</p>` : ""}
+      ${pr.hasPassword ? "" : `<div class="panel setpw"><h2 data-style="margin-top:0">Add a backup password</h2><p class="note">If you ever can't get to your email, you can log in with your email address and this password.</p>${/* html: fixed markup */ setPwForm(false)}</div>`}
       <h2>Your study snapshot</h2>
       ${snapshot()}
       <p class="note">From the progress saved on this device and in your profile.</p>
@@ -1131,6 +1266,8 @@
         <div class="row"><div class="grow"><strong>Email link</strong><br><span class="note">${esc(pr.email)}. Always available.</span></div></div>
         ${shown.map(p => methodRow(p, linked[p])).join("")}
         <div class="row"><div class="grow"><strong>Passkeys</strong><br><span class="note">Fingerprint, face or device PIN.</span></div><a class="btn ghost sm" href="#account">Manage</a></div>
+        <div class="row"><div class="grow"><strong>Backup password</strong><br><span class="note">${pr.hasPassword ? "Set. Use it on the login page if you can't get to your email." : "Not set yet."}</span></div>${pr.hasPassword ? `<button type="button" class="btn ghost sm" data-aact="rmpassword">Remove</button>` : ""}</div>
+        ${pr.hasPassword ? `<details class="pwchange"><summary>Change your backup password</summary>${/* html: fixed markup */ setPwForm(true)}</details>` : ""}
       </div>
       <h2>Account</h2>
       <div class="panel">
@@ -1215,7 +1352,7 @@
     ${BUY === "none" ? `<div class="status">${signedIn() ? `Your plan: ${esc(PLAN[cur] || cur)}.` : "Have a Pro or Premium Pro plan? Sign in to use it in the app."}</div>` : live ? "" : `<div class="status">Paid plans are opening soon. The Free plan works today, with no sign-up.</div>`}
     <div class="plancards">
       <div class="panel plancard"><h2>Free</h2>${price({}, "$0")}
-        <p>For everyone. The full study site, with no ads and no sign-up.</p>
+        <p>For everyone, with a free account. The full study site, with no ads.</p>
         <ul class="clean"><li>Study plans for ${esc(Object.keys(CertHub.certs).length)} certifications</li><li>Lessons, quizzes and checkpoint tests</li><li>1 practice exam per certification</li><li>106 lab guides, practice VMs and 5 graded VM labs</li><li>5 help assistant questions a day</li></ul>
         <div class="btns">${cur === "free" && signedIn() ? `<p class="pcur">Your current plan</p>` : `<a class="btn ghost" href="#certifications">Start studying</a>`}</div></div>
       <div class="panel plancard"><h2>Pro</h2>${price(PRICE, "Pro")}

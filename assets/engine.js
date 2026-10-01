@@ -383,8 +383,19 @@
     const id = ((CertHub.videos || {})[C.id] || {})[t];
     return typeof id === "string" && /^[A-Za-z0-9_-]{11}$/.test(id) ? `<a class="btn ghost sm" href="https://www.youtube.com/watch?v=${esc(id)}" target="_blank" rel="noopener">${tr("▶ Watch on YouTube")}</a>` : "";
   }
+  // Free-account gate (CertHub.gate in sync.js): signed-out visitors read the first lessons of each plan; the
+  // rest show their title with a sign-up card. Off when accounts aren't switched on.
+  const GATE = () => CertHub.gate || { locked: false, wall: () => "" };
+  const FREE_LESSONS = 2;
+  let lessonOrder = null;
+  function lessonLocked(t) {
+    if (!GATE().locked || !LES) return false;
+    if (!lessonOrder || lessonOrder.id !== C.id || lessonOrder.les !== LES) lessonOrder = { id: C.id, les: LES, list: W.flatMap(w => lessonTopics(w).filter(x => LES.has(x))) };
+    return lessonOrder.list.indexOf(t) >= FREE_LESSONS;
+  }
   function lessonHtml(t, n) {
     const l = lessonOf(t);
+    if (l && lessonLocked(t)) return `<li><div class="lesson locked"><span class="grow">${esc(l.tt || t)}</span><a class="btn ghost sm lockbtn" href="#signup">${CertHub.fx.icon("spark")}${tr("Sign up free to read")}</a></div></li>`;
     if (!l) return `<li class="lesson-none">${esc(t)}</li>`;
     const r = isRead(t);
     return `<li><details class="lesson" data-k="${lessonKey(t)}"${l.tt ? ` lang="es"` : ""}><summary><span class="grow">${esc(l.tt || t)}</span>${r ? `<span class="chip done">${tr("Read")}</span>` : ""}</summary>
@@ -1146,8 +1157,15 @@
     const due = dueIds().length;
     const cnt = d => Q.filter(q => q.d === d).length;
     const ex = examQs().length;
+    if (GATE().locked) return `<h1>Quizzes & tests</h1>
+    <p class="meta">Try a quick quiz now. Create a free account for smart practice, domain drills, checkpoint tests, simulations and the practice exam.</p>
+    <div class="panel">
+      <div class="row"><div class="grow"><h3>Placement test</h3><span class="note">A few questions from every domain to find what you already know and where to start</span></div><button class="btn" data-act="placement">Start</button></div>
+      <div class="row"><div class="grow"><h3>Weekly quiz</h3><span class="note">10 questions with instant feedback</span></div><select id="wsel" aria-label="Week">${W.map(w => `<option value="${esc(w.n)}" ${w.n === weekNow() ? "selected" : ""}>Week ${esc(w.n)}</option>`).join("")}</select><button class="btn" data-act="weekly-sel">Start</button></div>
+    </div>
+    ${/* html: fixed markup from sync.js */ GATE().wall("practice")}`;
     return `<h1>Quizzes & tests</h1>
-    <p class="meta">${Q.length} questions in the bank${PRO ? ` (${FREE_Q.length} free + ${PRO.questions.length} Pro)` : ""}, written from the official exam objectives${C.id === "security-plus" ? " and your bootcamp notes" : ""}. Answer options are shuffled every time.</p>
+    <p class="meta">${Q.length} questions in the bank${PRO ? ` (${FREE_Q.length} free + ${PRO.questions.length} Pro)` : ""}, written from the official exam objectives. Answer options are shuffled every time.</p>
     <h2>Quick practice</h2>
     <div class="panel">
       <div class="row"><div class="grow"><h3>Placement test</h3><span class="note">${S.p.placement ? `Last taken ${esc(fmt(new Date(S.p.placement.at)))}. Retake it to see where you stand now.` : "A few questions from every domain to find what you already know and where to start"}</span></div><button class="btn ${S.p.placement ? "ghost" : ""}" data-act="placement">${S.p.placement ? "Retake" : "Start"}</button></div>
@@ -1430,7 +1448,8 @@
     renderTabs();
     if (S.tab === "guide" && !Pro().available) S.tab = "week";
     if (S.tab !== "learn" && window.speechSynthesis) speechSynthesis.cancel();
-    const v = { cards: cardsPrintView, certificate: certificateView, cheat: cheatView, week: weekView, learn: learnView, plan: planView, practice: practiceView, labs: labsView, progress: progressView, guide: guideView, about: aboutView }[S.tab];
+    const walled = fn => () => GATE().locked ? `<h1>${esc(C.short)}</h1>${/* html: fixed markup from sync.js */ GATE().wall("tools")}` : fn();
+    const v = { cards: walled(cardsPrintView), certificate: certificateView, cheat: walled(cheatView), week: weekView, learn: learnView, plan: planView, practice: practiceView, labs: labsView, progress: progressView, guide: guideView, about: aboutView }[S.tab];
     $("#app").innerHTML = v();
     if (LES !== null) cacheReadiness();
     if (pendingVideo && LES && S.tab === "learn") {
@@ -1637,6 +1656,8 @@
         }
       }
     };
+    // Signed out, only the sample quizzes start; everything else asks for a free account.
+    if (GATE().locked && acts[a] && /^(custom|review|drill|drill-d|tc-d|checkpoint|exam|smart|hardexam|fullexam|simstart|drillstart|hostart|fcstart)$/.test(a)) { location.hash = "signup"; return; }
     if (acts[a]) acts[a]();
   });
   document.addEventListener("input", e => {

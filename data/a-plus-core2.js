@@ -7,7 +7,7 @@ CertHub.register({
   exam: "220-1202",
   blurb: "Entry-level IT support certification (second of two exams): Windows, macOS, Linux and mobile operating systems, endpoint security, software troubleshooting and operational procedures.",
   status: "check",
-  statusNote: "Exam code 220-1202 (V15), weights 28/28/23/21, up to 90 questions in 90 minutes and a 700 passing score were confirmed on Sept 24, 2026 only from secondary sources that quote CompTIA's objectives; comptia.org and CompTIA's objectives PDF could not be opened from this environment, so re-check the weights on the official page.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (220-1202), objectives, number of questions, time limit and passing score on CompTIA's official exam page.",
   lastVerified: "2026-09-24",
   notices: [{ from: "2026-09-24", until: "2026-12-31", text: "The older 220-1102 exam retired Sept 25, 2025. This plan covers 220-1202 (V15), the current Core 2 exam, which launched March 25, 2025." }],
   examInfo: { questions: "Up to 90 (multiple choice and PBQs)", minutes: 90, pass: "700 on a 100–900 scale" },

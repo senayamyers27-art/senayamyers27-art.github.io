@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="../../../../manifest.webmanifest">
 <link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="../../../../assets/style.css?v=32f9296f813d" integrity="sha384-n8i8BqzrZuK1vTCzy/tOwDFFS/ztJm0OfRYP2RCSmc1L3kG1WxqF02iIAmElmXJO">
+<link rel="stylesheet" href="../../../../assets/style.css?v=b3c4c1be42f8" integrity="sha384-Pzw3GGC/UqMPzpMKlKEf+/fec2SgbANfjoxJg9Imk9WYXfkxm967Y6DN4ahAhlKm">
 <script src="../../../../assets/theme.js?v=a52affcb5efa" integrity="sha384-8A+GHkEOMVd7UxelXZF3ZEoes/II4HChRPN0kQyad9SL0tjHjB2JgMO0SfYV8NCV"></script>
 
 </head>
@@ -42,35 +42,7 @@
 <h1>CoreDNS: el ConfigMap coredns y el Corefile, reenvío y stub zones, registros DNS de Services y Pods, y dnsPolicy</h1>
 <article class="lbody">
 <p>CoreDNS es el servidor DNS del clúster. En los clústeres de kubeadm se ejecuta como el Deployment <code>coredns</code> en kube-system, expuesto por un Service que por compatibilidad sigue llamándose <code>kube-dns</code>, normalmente en la décima dirección del Service CIDR (10.96.0.10 con el valor predeterminado de kubeadm). El kubelet escribe esa dirección en el <code>/etc/resolv.conf</code> de cada Pod.</p>
-<p>Su configuración es el Corefile, guardado en el ConfigMap <code>coredns</code>. Cada bloque de servidor indica las zonas que atiende y una cadena de plugins. Un bloque predeterminado típico para la zona raíz incluye <code>errors</code>, <code>health</code>, <code>ready</code>, el plugin <code>kubernetes</code> que responde por <code>cluster.local</code> y las zonas inversas, las métricas de <code>prometheus</code>, <code>forward . /etc/resolv.conf</code> para enviar todo lo demás a los resolvers upstream del nodo, <code>cache</code>, <code>loop</code>, <code>reload</code> y <code>loadbalance</code>.</p>
-<pre class="code" tabindex="0"><code>.:53 {
-    errors
-    health
-    ready
-    kubernetes cluster.local in-addr.arpa ip6.arpa {
-       pods insecure
-       fallthrough in-addr.arpa ip6.arpa
-    }
-    forward . /etc/resolv.conf
-    cache 30
-    loop
-    reload
-    loadbalance
-}
-corp.internal:53 {
-    forward . 10.0.0.53
-}</code></pre>
-<p>Para enviar un dominio privado a un servidor DNS específico, lo que se llama una stub zone, agrega un bloque de servidor separado para esa zona con su propio <code>forward</code>, como hace el bloque <code>corp.internal</code> de arriba. Para cambiar los resolvers upstream de todo lo demás, cambia el destino de <code>forward .</code>. Edita con <code>kubectl -n kube-system edit cm coredns</code>; el plugin <code>reload</code> toma el cambio después de un breve retraso, o puedes ejecutar <code>kubectl -n kube-system rollout restart deploy coredns</code>.</p>
-<p>Conoce los formatos de los registros. Un Service normal obtiene un registro A (o AAAA) <code>&lt;svc&gt;.&lt;ns&gt;.svc.cluster.local</code> que apunta a su ClusterIP, y registros SRV para los puertos con nombre, <code>_&lt;port&gt;._&lt;proto&gt;.&lt;svc&gt;.&lt;ns&gt;.svc.cluster.local</code>. El nombre de un headless Service se resuelve en las IP de sus Pods, y los Pods de un StatefulSet obtienen <code>&lt;pod&gt;.&lt;svc&gt;.&lt;ns&gt;.svc.cluster.local</code>. Los Pods tienen registros de la forma <code>10-244-1-5.&lt;ns&gt;.pod.cluster.local</code>, su IP con guiones. El resolv.conf de los Pods incluye los dominios de búsqueda <code>&lt;ns&gt;.svc.cluster.local svc.cluster.local cluster.local</code> y <code>ndots:5</code>, por eso un simple <code>web</code> funciona dentro del mismo namespace y <code>web.other</code> funciona entre namespaces.</p>
-<p>El <code>dnsPolicy</code> de un Pod controla esto. <code>ClusterFirst</code> (el predeterminado) usa el DNS del clúster y reenvía los demás nombres hacia arriba. <code>Default</code> hereda el resolv.conf del nodo, así que los nombres del clúster no se resuelven. <code>ClusterFirstWithHostNet</code> es lo que necesitan los Pods con <code>hostNetwork: true</code> para seguir usando el DNS del clúster. <code>None</code> ignora todo eso y usa solo el <code>dnsConfig</code> que proporciones (nameservers, searches, options).</p>
-<h2>Términos clave</h2>
-<dl class="terms"><dt>Corefile</dt><dd>La configuración de CoreDNS, guardada en el ConfigMap coredns, formada por bloques de servidor y plugins.</dd><dt>forward plugin (plugin forward)</dt><dd>Envía a los resolvers upstream las consultas para las que CoreDNS no es autoritativo.</dd><dt>Stub zone (zona stub)</dt><dd>Un bloque de servidor que reenvía un dominio específico a servidores DNS designados.</dd><dt>dnsPolicy</dt><dd>Ajuste del Pod que elige el comportamiento de DNS ClusterFirst, Default, ClusterFirstWithHostNet o None.</dd></dl>
-<div class="panel ex"><strong>Ejemplo real</strong><p>Los desarrolladores necesitan que los nombres <code>*.corp.internal</code> se resuelvan desde los Pods, pero los resolvers de los nodos no los conocen. Agregas un bloque <code>corp.internal:53 { forward . 10.0.0.53 }</code> al ConfigMap coredns, esperas a que se recargue, y <code>nslookup db.corp.internal</code> desde un Pod de prueba ahora devuelve la dirección interna.</p></div>
-<div class="status notice"><strong>Consejo para el examen:</strong> El Service se llama kube-dns, pero los Pods y el ConfigMap se llaman coredns. dnsPolicy Default no es el predeterminado; el predeterminado es ClusterFirst.</div>
-<h2>Comprueba lo que sabes</h2>
-<details class="sq"><summary>¿Cuál es el nombre DNS completo del Service api en el namespace shop?</summary><p>api.shop.svc.cluster.local.</p></details>
-<details class="sq"><summary>¿Qué dnsPolicy debería usar un Pod con hostNetwork para resolver los Services del clúster?</summary><p>ClusterFirstWithHostNet.</p></details>
-<details class="sq"><summary>¿Cómo reenvías un único dominio privado a un servidor DNS específico?</summary><p>Agrega en el Corefile un bloque de servidor para esa zona con su propia directiva forward.</p></details>
+<div class="panel gatewall"><span class="chip">Cuenta gratis</span><h2>Sigue leyendo gratis</h2><p>Crea una cuenta gratis de StudyToCert para leer el resto de esta lección: 5 secciones más, 4 términos clave, un ejemplo real, un consejo para el examen y preguntas de repaso. Todas las lecciones, laboratorios y exámenes de práctica son gratis con una cuenta.</p><p class="btns"><a class="btn" href="../../../../#signup">Crear cuenta gratis</a> <a class="btn ghost" href="../../../../#login">Iniciar sesión</a></p></div>
 </article>
 <div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semana a semana con lecciones, cuestionarios, simulaciones de examen y práctica, en español.</span></div><a class="btn sm" href="../../../../cka/?lang=es">Abrir el plan de estudio</a></div>
 <nav class="pager" aria-label="Más lecciones"><a href="../ingress-controllers-ingressclass-and-the-default-class-ingress-rules-p/">← Ingress controllers, IngressClass y la clase por defecto; re</a><a href="../testing-connectivity-with-temporary-pods-busybox-nicolaka-netshoot-nsl/">Probar la conectividad con Pods temporales (busybox, nicolak →</a></nav>

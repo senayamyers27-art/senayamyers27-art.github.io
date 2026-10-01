@@ -7,7 +7,7 @@ CertHub.register({
   exam: "CV0-004",
   blurb: "Vendor-neutral cloud certification for cloud and systems administrators: architecture, deployment, operations, security, DevOps fundamentals and troubleshooting across public, private and hybrid clouds.",
   status: "check",
-  statusNote: "Domains and weights (Cloud Architecture 23%, Deployment 19%, Operations 17%, Security 19%, DevOps Fundamentals 10%, Troubleshooting 12%) come from CompTIA's published CV0-004 exam objectives as best known. comptia.org could not be opened from this environment on Sept 25, 2026, so confirm the domains, weights, exam length and passing score on the official CompTIA Cloud+ page and objectives PDF before booking.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (CV0-004), objectives, number of questions, time limit and passing score on CompTIA's official exam page.",
   lastVerified: "2026-09-25",
   notices: [],
   examInfo: { questions: "Up to 90 (multiple choice and performance-based)", minutes: 90, pass: "750 on a 100–900 scale", extra: "CompTIA recommends 2–3 years of systems administration or networking experience, with Network+ and Server+ level knowledge. Confirm current details on the official page." },

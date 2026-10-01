@@ -7,7 +7,7 @@ CertHub.register({
   exam: "100-150 v1.0",
   blurb: "Entry-level Cisco networking certification for help desk and support technicians: network models, IP addressing, cables and wireless, Cisco device basics, troubleshooting and basic security.",
   status: "check",
-  statusNote: "Exam code 100-150, the six domain names and the 50-minute length were confirmed in search results for Cisco's official pages on Sept 24, 2026, but the cisco.com and learningnetwork.cisco.com pages could not be opened from this environment. Cisco does not appear to publish domain weights for CCST, so the weights here are estimates based on the number of objectives in each domain (5/3/4/5/5/3). Check the objectives on the official exam topics page before you test.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (100-150 v1.0), objectives, number of questions, time limit and passing score on Cisco's official exam page.",
   lastVerified: "2026-09-24",
   notices: [],
   examInfo: { questions: "Not published (usually reported as about 40–50 multiple choice, drag-and-drop and similar items)", minutes: 50, pass: "Not published" },

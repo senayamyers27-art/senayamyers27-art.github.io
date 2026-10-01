@@ -7,7 +7,7 @@ CertHub.register({
   exam: "1Z0-831 (Java SE 25)",
   blurb: "Professional-level Java certification covering the core language, OOP, exceptions, collections, streams, modules, concurrency, I/O and localization on Java SE 25, for working Java developers.",
   status: "check",
-  statusNote: "1Z0-831 (Java SE 25 Developer Professional, released May 2026) is the newest Java SE Professional exam; it replaces 1Z0-830 (Java SE 21) as the current target. On Sept 24, 2026 the Oracle exam page could not be opened from this environment, so the exam code, the ten topic groups, 50 questions, 120 minutes and 68% passing score were confirmed only through search results pointing to education.oracle.com. Oracle publishes no domain weights: the weights here are estimates based on how many objectives each topic group has and on published candidate reports. Re-check the topics on the official exam page.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (1Z0-831 (Java SE 25)), objectives, number of questions, time limit and passing score on Oracle's official exam page.",
   lastVerified: "2026-09-24",
   notices: [],
   examInfo: { questions: "50 multiple choice", minutes: 120, pass: "68%" },

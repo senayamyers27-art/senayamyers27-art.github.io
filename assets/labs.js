@@ -66,7 +66,12 @@
 
   /* ---------- one lab ---------- */
   function prog() { const p = loadLabProgress(); return { p, s: p[current.id] || (p[current.id] = { steps: {}, verify: {}, notes: "" }) }; }
+  // Free-account gate: signed out, the first lab of each track opens as a sample; the rest show what the lab
+  // covers and a sign-up card.
+  const sampleLab = lab => all().find(l => l.track === lab.track) === lab;
   function detailView(lab) {
+    const gate = CertHub.gate;
+    if (gate && gate.locked && !sampleLab(lab)) { current = null; return `<p class="crumbs"><a href="#labs">Labs</a> / ${esc(lab.track)}</p><h1>${esc(lab.title)}</h1>${lab.summary ? `<p class="meta">${esc(lab.summary)}</p>` : ""}${/* html: fixed markup from sync.js */ gate.wall("lab")}`; }
     current = lab;
     const s = loadLabProgress()[lab.id] || { steps: {}, verify: {}, notes: "" };
     const st = labStatus(lab);

@@ -7,7 +7,7 @@ CertHub.register({
   exam: "Terraform Associate (004)",
   blurb: "Entry-level infrastructure-as-code certification for cloud engineers, DevOps and security staff who write, plan, apply and manage Terraform configuration and use HCP Terraform.",
   status: "check",
-  statusNote: "Exam version 004 (tests Terraform 1.12, replaced 003 on Jan 8, 2026) and its eight objectives were confirmed from HashiCorp's 004 exam content list and learning path as indexed on developer.hashicorp.com on Sept 24, 2026; the pages could not be opened directly from this network, so re-check the objective wording there. HashiCorp publishes no domain weights: weights here are estimated from the number of sub-objectives in each objective.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (Terraform Associate (004)), objectives, number of questions, time limit and passing score on HashiCorp's official exam page.",
   lastVerified: "2026-09-24",
   notices: [
     { from: "2026-01-08", until: "2026-12-31", text: "Terraform Associate 004 replaced 003 on January 8, 2026. It tests Terraform 1.12 and adds lifecycle rules, custom conditions, ephemeral values and write-only arguments, and HCP Terraform projects. Make sure your study materials say 004." }

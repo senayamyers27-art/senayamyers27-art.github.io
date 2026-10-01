@@ -7,7 +7,7 @@ CertHub.register({
   exam: "PCAP-31-03",
   blurb: "Associate-level Python certification covering modules and packages, exceptions, strings, object-oriented programming, comprehensions, lambdas, closures, generators and file I/O, for learners who already know Python basics.",
   status: "check",
-  statusNote: "The official syllabus page (pythoninstitute.org/pcap-exam-syllabus) could not be opened from this environment on 2026-09-24. The five sections and weights (Modules and Packages 12%, Exceptions 14%, Strings 18%, Object-Oriented Programming 34%, Miscellaneous 22%), 40 items, 65 minutes and the 70% pass mark come from search-result extracts of the official syllabus page and the official PCAP-31-03 syllabus PDF, not a direct read. Some third-party sites report that PCAP-31-03 will retire and a PCAP-31-04 is in development; Python Institute has not confirmed this in anything read here. Check the official page before booking.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (PCAP-31-03), objectives, number of questions, time limit and passing score on Python Institute (OpenEDG)'s official exam page.",
   lastVerified: "2026-09-24",
   notices: [],
   examInfo: { questions: "40 (single-choice and multiple-choice items)", minutes: 65, pass: "70%", extra: "65 minutes for the exam plus about 10 minutes for the NDA and tutorial. Delivered through Pearson VUE test centers and OpenEDG online proctoring." },

@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="../../../../manifest.webmanifest">
 <link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="../../../../assets/style.css?v=32f9296f813d" integrity="sha384-n8i8BqzrZuK1vTCzy/tOwDFFS/ztJm0OfRYP2RCSmc1L3kG1WxqF02iIAmElmXJO">
+<link rel="stylesheet" href="../../../../assets/style.css?v=b3c4c1be42f8" integrity="sha384-Pzw3GGC/UqMPzpMKlKEf+/fec2SgbANfjoxJg9Imk9WYXfkxm967Y6DN4ahAhlKm">
 <script src="../../../../assets/theme.js?v=a52affcb5efa" integrity="sha384-8A+GHkEOMVd7UxelXZF3ZEoes/II4HChRPN0kQyad9SL0tjHjB2JgMO0SfYV8NCV"></script>
 
 </head>
@@ -42,36 +42,7 @@
 <h1>Probes de liveness, readiness y startup; handlers httpGet, tcpSocket, exec y grpc; campos de temporización</h1>
 <article class="lbody">
 <p>Un proceso en ejecución no es necesariamente un proceso sano. Podría estar bloqueado (deadlock), cargando datos todavía o sin poder llegar a su base de datos. Los probes permiten que el kubelet de cada nodo revise un contenedor con regularidad y actúe según el resultado. Kubernetes tiene tres tipos, y cada uno responde una pregunta distinta.</p>
-<p>Un liveness probe pregunta: '¿Este contenedor sigue funcionando o debería reiniciarse?'. Un readiness probe pregunta: '¿Este contenedor debería recibir tráfico ahora mismo?'. Un startup probe pregunta: '¿Este contenedor de arranque lento ya terminó de arrancar?'. Mientras haya un startup probe configurado que todavía no ha tenido éxito, los probes de liveness y readiness quedan en espera, así que un arranque lento no se confunde con un cuelgue. Después de tener éxito una vez, deja de ejecutarse y los otros probes toman el control.</p>
-<p>Cada probe usa un handler. <code>httpGet</code> envía un HTTP GET a un <code>path</code> y <code>port</code>; cualquier estado de 200 a 399 es éxito. <code>tcpSocket</code> tiene éxito si se puede abrir una conexión TCP al puerto. <code>exec</code> ejecuta un comando dentro del contenedor; el código de salida 0 es éxito. <code>grpc</code> llama al servicio estándar de health checking de gRPC en un puerto, para apps que lo implementan. Elige el handler más ligero que refleje de verdad la salud: un endpoint HTTP de salud es común para apps web, y una verificación TCP para servicios de red simples.</p>
-<pre class="code" tabindex="0"><code>containers:
-- name: api
-  image: api:1.0
-  ports:
-  - containerPort: 8080
-  startupProbe:
-    httpGet: {path: /healthz, port: 8080}
-    failureThreshold: 30
-    periodSeconds: 10
-  livenessProbe:
-    httpGet: {path: /healthz, port: 8080}
-    periodSeconds: 10
-    failureThreshold: 3
-  readinessProbe:
-    tcpSocket: {port: 8080}
-    initialDelaySeconds: 5
-    periodSeconds: 5</code></pre>
-<p>Los campos de temporización son comunes a todos los probes. <code>initialDelaySeconds</code> (por defecto 0) espera tras el arranque del contenedor antes de la primera verificación. <code>periodSeconds</code> (por defecto 10) es cada cuánto se ejecuta el probe. <code>timeoutSeconds</code> (por defecto 1) es cuánto se espera una respuesta. <code>failureThreshold</code> (por defecto 3) es cuántos fallos consecutivos cuentan como fallo. <code>successThreshold</code> (por defecto 1) es cuántos éxitos consecutivos se necesitan después de un fallo; debe ser 1 para los probes de liveness y startup.</p>
-<p>El margen de un startup probe es <code>failureThreshold × periodSeconds</code>: el ejemplo permite hasta 300 segundos para arrancar antes de que el contenedor se reinicie. Esto es mejor que un <code>initialDelaySeconds</code> grande en el liveness probe, porque las verificaciones empiezan en cuanto la app está lista en lugar de tras una espera fija.</p>
-<p>Los resultados de los probes aparecen en <code>kubectl describe pod</code> bajo cada contenedor (las líneas Liveness, Readiness y Startup muestran la configuración) y en los eventos, por ejemplo <code>Liveness probe failed: HTTP probe failed with statuscode: 500</code> o <code>Readiness probe failed: dial tcp ... connection refused</code>. La columna READY de <code>kubectl get pods</code> refleja la readiness.</p>
-<h2>Términos clave</h2>
-<dl class="terms"><dt>Liveness probe</dt><dd>Verifica si un contenedor debe reiniciarse.</dd><dt>Readiness probe</dt><dd>Verifica si un contenedor debe recibir tráfico del Service.</dd><dt>Startup probe</dt><dd>Verifica si un contenedor lento ya arrancó, dejando en espera los otros probes hasta que lo haga.</dd><dt>failureThreshold</dt><dd>Fallos consecutivos necesarios antes de considerar que el probe falló (por defecto 3).</dd><dt>Probe handler</dt><dd>El método de verificación: httpGet, tcpSocket, exec o grpc.</dd></dl>
-<div class="panel ex"><strong>Ejemplo real</strong><p>Un servicio Java tarda hasta dos minutos en calentar, y su liveness probe lo mataba a los 30 segundos. Agregar un startup probe con periodSeconds 10 y failureThreshold 15 le da 150 segundos para arrancar, tras lo cual el liveness probe normal, con un timeout corto, toma el control.</p></div>
-<div class="status notice"><strong>Consejo para el examen:</strong> Conoce los valores por defecto: period 10s, timeout 1s, failureThreshold 3, successThreshold 1, initialDelay 0. Para arranques lentos, la respuesta preferida es un startup probe, no un initialDelaySeconds enorme.</div>
-<h2>Comprueba lo que sabes</h2>
-<details class="sq"><summary>¿Qué códigos de estado HTTP cuentan como éxito para un probe httpGet?</summary><p>Cualquier código desde 200 hasta 399.</p></details>
-<details class="sq"><summary>¿Cuánto tiempo permite un startup probe con periodSeconds 5 y failureThreshold 12?</summary><p>Unos 60 segundos (5 x 12) antes de que el contenedor se reinicie.</p></details>
-<details class="sq"><summary>¿Qué pasa con los probes de liveness y readiness mientras un startup probe todavía no ha tenido éxito?</summary><p>No se ejecutan; empiezan solo después de que el startup probe tiene éxito.</p></details>
+<div class="panel gatewall"><span class="chip">Cuenta gratis</span><h2>Sigue leyendo gratis</h2><p>Crea una cuenta gratis de StudyToCert para leer el resto de esta lección: 6 secciones más, 5 términos clave, un ejemplo real, un consejo para el examen y preguntas de repaso. Todas las lecciones, laboratorios y exámenes de práctica son gratis con una cuenta.</p><p class="btns"><a class="btn" href="../../../../#signup">Crear cuenta gratis</a> <a class="btn ghost" href="../../../../#login">Iniciar sesión</a></p></div>
 </article>
 <div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semana a semana con lecciones, cuestionarios, simulaciones de examen y práctica, en español.</span></div><a class="btn sm" href="../../../../ckad/?lang=es">Abrir el plan de estudio</a></div>
 <nav class="pager" aria-label="Más lecciones"><a href="../updating-manifests-to-supported-api-groups-networking-k8s-io-v1-ingres/">← Actualizar manifiestos a grupos de API soportados (Ingress n</a><a href="../what-each-probe-failure-does-restart-the-container-vs-remove-the-pod-f/">Qué provoca el fallo de cada probe: reiniciar el contenedor  →</a></nav>

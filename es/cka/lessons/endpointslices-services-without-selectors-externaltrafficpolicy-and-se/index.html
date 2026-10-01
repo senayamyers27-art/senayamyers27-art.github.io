@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="../../../../manifest.webmanifest">
 <link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="../../../../assets/style.css?v=32f9296f813d" integrity="sha384-n8i8BqzrZuK1vTCzy/tOwDFFS/ztJm0OfRYP2RCSmc1L3kG1WxqF02iIAmElmXJO">
+<link rel="stylesheet" href="../../../../assets/style.css?v=b3c4c1be42f8" integrity="sha384-Pzw3GGC/UqMPzpMKlKEf+/fec2SgbANfjoxJg9Imk9WYXfkxm967Y6DN4ahAhlKm">
 <script src="../../../../assets/theme.js?v=a52affcb5efa" integrity="sha384-8A+GHkEOMVd7UxelXZF3ZEoes/II4HChRPN0kQyad9SL0tjHjB2JgMO0SfYV8NCV"></script>
 
 </head>
@@ -42,29 +42,7 @@
 <h1>EndpointSlices, Services sin selectores, externalTrafficPolicy y sessionAffinity</h1>
 <article class="lbody">
 <p>El selector de un Service no es lo que realmente usa kube-proxy. El controlador de EndpointSlice evalúa el selector y escribe las IP y puertos de los Pods coincidentes en objetos EndpointSlice, y son kube-proxy, el DNS y los ingress controllers quienes los consumen. Las EndpointSlices reemplazaron a la antigua API Endpoints, que no podía escalar a Services muy grandes porque un solo objeto contenía todas las direcciones.</p>
-<p>Cada EndpointSlice lleva la etiqueta <code>kubernetes.io/service-name=&lt;service&gt;</code> y contiene un número limitado de endpoints (100 por defecto), así que un Service grande tiene varias slices. Cada endpoint registra sus direcciones y condiciones: <code>ready</code>, <code>serving</code> y <code>terminating</code>. Los Pods que fallan su readiness probe siguen listados, pero no como listos, y kube-proxy deja de enviarles tráfico nuevo.</p>
-<pre class="code" tabindex="0"><code>kubectl get endpointslices -l kubernetes.io/service-name=web
-kubectl describe endpointslice &lt;name&gt;</code></pre>
-<p>Un Service sin selector no recibe EndpointSlices automáticas. Eso es útil para apuntar un Service del clúster a algo fuera del clúster, como una base de datos en una IP fija, mientras los clientes siguen usando un nombre DNS de Service normal. Creas el Service con puertos pero sin selector y luego creas tú mismo una EndpointSlice con la etiqueta service-name, <code>addressType: IPv4</code>, las direcciones de los endpoints y nombres de puerto coincidentes.</p>
-<pre class="code" tabindex="0"><code>apiVersion: discovery.k8s.io/v1
-kind: EndpointSlice
-metadata:
-  name: legacy-db-1
-  labels: {kubernetes.io/service-name: legacy-db}
-addressType: IPv4
-ports:
-- {name: pg, port: 5432, protocol: TCP}
-endpoints:
-- addresses: [&quot;10.20.0.15&quot;]</code></pre>
-<p><code>externalTrafficPolicy</code> se aplica a los Services NodePort y LoadBalancer y controla el tráfico que llega desde fuera. Con <code>Cluster</code> (el predeterminado), cualquier nodo acepta el tráfico y puede reenviarlo a un Pod de otro nodo; la carga se reparte de forma pareja, pero la IP de origen se reemplaza por la del nodo, así que la aplicación ve una dirección de cliente incorrecta. Con <code>Local</code>, un nodo solo reenvía a Pods que están en él mismo, la IP de origen del cliente se conserva y no hay un salto extra, pero los nodos sin un Pod local descartan el tráfico (los balanceadores de carga en la nube usan un health check node port para evitarlos) y la carga puede quedar desigual. <code>internalTrafficPolicy</code> es el equivalente para el tráfico dentro del clúster.</p>
-<p><code>sessionAffinity: ClientIP</code> hace que kube-proxy envíe todas las conexiones de la misma IP de cliente al mismo Pod de backend, durante un tiempo definido en <code>sessionAffinityConfig.clientIP.timeoutSeconds</code> (10800 segundos, tres horas, por defecto). El valor predeterminado es <code>None</code>, que elige un backend por conexión. La afinidad es solo por IP, así que muchos clientes detrás de un mismo gateway NAT quedan todos pegados a un solo Pod.</p>
-<h2>Términos clave</h2>
-<dl class="terms"><dt>EndpointSlice</dt><dd>Un objeto que lista un subconjunto de las direcciones, puertos y condiciones de readiness de los backends de un Service.</dd><dt>Selectorless Service (Service sin selector)</dt><dd>Un Service sin selector cuyas EndpointSlices gestionas manualmente.</dd><dt>externalTrafficPolicy: Local</dt><dd>Solo los Pods locales del nodo reciben el tráfico externo, conservando la IP de origen del cliente.</dd><dt>sessionAffinity: ClientIP</dt><dd>Enruta de forma consistente una IP de cliente dada al mismo Pod de backend.</dd></dl>
-<div class="panel ex"><strong>Ejemplo real</strong><p>Una aplicación web detrás de un Service NodePort registra a cada visitante con la IP de un nodo, lo que rompe su limitación de tasa. Definir <code>externalTrafficPolicy: Local</code> conserva las IP reales de los clientes. El equipo además ejecuta los Pods como un DaemonSet para que cada nodo tenga un endpoint local y no se descarte tráfico.</p></div>
-<div class="status notice"><strong>Consejo para el examen:</strong> Una EndpointSlice vacía significa que el selector no coincide con ningún Pod Ready; revisa las etiquetas y la readiness antes de culpar a kube-proxy. Para externalTrafficPolicy, recuerda: Local conserva la IP de origen, Cluster reparte la carga.</div>
-<h2>Comprueba lo que sabes</h2>
-<details class="sq"><summary>¿Qué etiqueta vincula una EndpointSlice con su Service?</summary><p>kubernetes.io/service-name con el nombre del Service como valor.</p></details>
-<details class="sq"><summary>¿Cuál es el trade-off de externalTrafficPolicy Local?</summary><p>Conserva las IP de origen de los clientes y evita un salto extra, pero los nodos sin Pods locales no pueden atender el tráfico y la carga puede quedar desigual.</p></details>
+<div class="panel gatewall"><span class="chip">Cuenta gratis</span><h2>Sigue leyendo gratis</h2><p>Crea una cuenta gratis de StudyToCert para leer el resto de esta lección: 6 secciones más, 4 términos clave, un ejemplo real, un consejo para el examen y preguntas de repaso. Todas las lecciones, laboratorios y exámenes de práctica son gratis con una cuenta.</p><p class="btns"><a class="btn" href="../../../../#signup">Crear cuenta gratis</a> <a class="btn ghost" href="../../../../#login">Iniciar sesión</a></p></div>
 </article>
 <div class="panel startcard"><div class="grow"><strong>Estudia CKA gratis</strong><br><span class="note">Plan semana a semana con lecciones, cuestionarios, simulaciones de examen y práctica, en español.</span></div><a class="btn sm" href="../../../../cka/?lang=es">Abrir el plan de estudio</a></div>
 <nav class="pager" aria-label="Más lecciones"><a href="../service-types-clusterip-nodeport-30000-32767-loadbalancer-cloud-contro/">← Tipos de Service: ClusterIP, NodePort (30000–32767), LoadBal</a><a href="../networkpolicies-default-deny-ingress-and-egress-rules-podselector-name/">NetworkPolicies: default deny, reglas de ingress y egress, p →</a></nav>

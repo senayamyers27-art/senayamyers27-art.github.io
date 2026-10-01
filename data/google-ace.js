@@ -7,7 +7,7 @@ CertHub.register({
   exam: "Associate Cloud Engineer",
   blurb: "For engineers who deploy, monitor and manage Google Cloud solutions day to day with the Cloud console and the gcloud CLI: projects and billing, Compute Engine, GKE, Cloud Run, storage and databases, VPC networking, Cloud Monitoring and Logging, and IAM.",
   status: "check",
-  statusNote: "The four sections and their weights come from Google Cloud's published Associate Cloud Engineer exam guide as best known: Setting up a cloud solution environment ~23%; Planning and implementing a cloud solution ~30%; Ensuring successful operation of a cloud solution ~27%; Configuring access and security ~20%. Google's certification pages could not be opened from this environment, so confirm the sections, weights, exam length, price and languages on the official exam page and exam guide before you book.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code, objectives, number of questions, time limit and passing score on Google Cloud's official exam page.",
   lastVerified: "2026-09-25",
   notices: [],
   examInfo: { questions: "About 50–60 multiple choice and multiple select (as last published)", minutes: 120, pass: "Not published (pass or fail result)", extra: "Taken at a test center or online-proctored. Google recommends 6 months or more of hands-on Google Cloud experience. The certification is valid for 3 years (as last published); confirm current fees, length and renewal rules on the official page." },

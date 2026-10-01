@@ -4,7 +4,7 @@ CertHub.site = {
     "label": "",
     "url": ""
   },
-  "feedbackUrl": "https://github.com/senayamyers27-art/senayamyers27-art.github.io/issues",
+  "feedbackUrl": "mailto:support@studytocert.com",
   "pro": {
     "monthly": "$7",
     "yearly": "$49"

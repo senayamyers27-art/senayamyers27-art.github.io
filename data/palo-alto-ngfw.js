@@ -7,7 +7,7 @@ CertHub.register({
   exam: "NGFW-Engineer",
   blurb: "Palo Alto's current firewall certification (successor to PCNSA/PCNSE) for admins and engineers who configure PAN-OS networking, device settings, Panorama and automation.",
   status: "check",
-  statusNote: "Could not open paloaltonetworks.com from this environment on Sept 24, 2026 (blocked), so nothing here was read on an official page. Domain names come from search results summarizing the official NGFW Engineer datasheet. Weights of 38/38/24 are cited for the datasheet, but other secondary sources say 40/40/20. Check the datasheet for the current weights, question count and PAN-OS version before relying on them.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code, objectives, number of questions, time limit and passing score on Palo Alto Networks's official exam page.",
   lastVerified: "2026-09-24",
   notices: [
     { from: "2026-09-24", until: "2027-07-31", text: "PCNSA retired Jan 31, 2025 and PCNSE retired July 31, 2025. Existing holders stay certified for two years from the date they passed. This plan covers the NGFW Engineer certification that replaced them for firewall engineers. There is no one-to-one mapping." }

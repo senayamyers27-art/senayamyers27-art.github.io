@@ -7,7 +7,7 @@ CertHub.register({
   exam: "220-1201",
   blurb: "Entry-level IT support certification (first of two A+ exams) covering mobile devices, networking, PC hardware, virtualization and cloud, and hardware and network troubleshooting.",
   status: "check",
-  statusNote: "comptia.org was unreachable from this environment on Sept 24, 2026, so the official objectives could not be read directly. Exam code 220-1201 (A+ V15, launched Mar 25, 2025), up to 90 questions, 90 minutes, 675 passing score and the five domain weights (13/23/25/11/28) come from search results for CompTIA's Core 1 V15 page and CompTIA-published objectives mirrors. Confirm against the official 220-1201 objectives PDF.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (220-1201), objectives, number of questions, time limit and passing score on CompTIA's official exam page.",
   lastVerified: "2026-09-24",
   notices: [{"from":"2026-09-24","until":"2026-12-31","text":"The older Core 1 exam, 220-1101, retired Sept 25, 2025. This plan covers 220-1201 (A+ V15). Study guides and practice tests written for 220-1101 are out of date."}],
   examInfo: {"questions":"Up to 90 (multiple choice, drag and drop and PBQs)","minutes":90,"pass":"675 on a 100–900 scale","extra":"A+ needs both Core 1 (220-1201) and Core 2 (220-1202) from the same series."},

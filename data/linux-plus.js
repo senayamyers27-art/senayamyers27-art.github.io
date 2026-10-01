@@ -7,7 +7,7 @@ CertHub.register({
   exam: "XK0-006",
   blurb: "Vendor-neutral Linux administration certification covering system management, services and users, security, automation and scripting, and troubleshooting, for junior sysadmins and cloud/DevOps engineers.",
   status: "check",
-  statusNote: "comptia.org could not be opened from this environment on Sept 24, 2026 (network block), so the official page was not read directly. CompTIA's own search listings for the Linux+ V8 page show exam XK0-006 (launched July 15, 2025), up to 90 questions, 90 minutes and a 720 passing score, with XK0-005 retired January 13, 2026 in English. The domain weights (23/20/18/17/22) come from secondary sources and still need to be checked against the official XK0-006 objectives PDF, as do the objective numbers used in the question references.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (XK0-006), objectives, number of questions, time limit and passing score on CompTIA's official exam page.",
   lastVerified: "2026-09-24",
   notices: [
     { from: "2026-01-13", until: "2026-12-31", text: "The previous exam, XK0-005 (Linux+ V7), retired on January 13, 2026 in English (April 14, 2026 in Japanese, Portuguese and Spanish). Study for XK0-006 only." }

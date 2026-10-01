@@ -7,7 +7,7 @@ CertHub.register({
   exam: "SC-300 (skills outline of April 27, 2026)",
   blurb: "Associate-level Microsoft certification for admins who design, implement and run identity and access with Microsoft Entra ID: users and hybrid identity, authentication and Conditional Access, app and workload identities, and identity governance.",
   status: "check",
-  statusNote: "learn.microsoft.com was not reachable from this environment on Sept 24, 2026, so the official study guide could not be read directly. Secondary sources that quote the study guide (skills outline dated April 27, 2026) give the ranges: user identities 20–25%, authentication and access management 25–30%, workload identities 20–25%, identity governance 20–25%. Midpoints 22.5/27.5/22.5/22.5 (sum 95) were scaled to 100 and rounded to 24/28/24/24. The same sources report no retirement or replacement announced for SC-300. Confirm the ranges, the exact domain names and the retirement status on the official study guide.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (SC-300 (skills outline of April 27, 2026)), objectives, number of questions, time limit and passing score on Microsoft's official exam page.",
   lastVerified: "2026-09-24",
   notices: [],
   examInfo: {

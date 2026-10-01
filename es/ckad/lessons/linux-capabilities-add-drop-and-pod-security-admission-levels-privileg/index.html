@@ -30,7 +30,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="../../../../manifest.webmanifest">
 <link rel="preload" href="../../../../assets/fonts/public-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="../../../../assets/style.css?v=32f9296f813d" integrity="sha384-n8i8BqzrZuK1vTCzy/tOwDFFS/ztJm0OfRYP2RCSmc1L3kG1WxqF02iIAmElmXJO">
+<link rel="stylesheet" href="../../../../assets/style.css?v=b3c4c1be42f8" integrity="sha384-Pzw3GGC/UqMPzpMKlKEf+/fec2SgbANfjoxJg9Imk9WYXfkxm967Y6DN4ahAhlKm">
 <script src="../../../../assets/theme.js?v=a52affcb5efa" integrity="sha384-8A+GHkEOMVd7UxelXZF3ZEoes/II4HChRPN0kQyad9SL0tjHjB2JgMO0SfYV8NCV"></script>
 
 </head>
@@ -42,29 +42,7 @@
 <h1>Capabilities de Linux (add/drop) y niveles de Pod Security Admission (privileged, baseline, restricted)</h1>
 <article class="lbody">
 <p>Tradicionalmente en Linux, root podía hacerlo todo y los demás usuarios casi nada. Las capabilities dividen el poder de root en privilegios más pequeños con nombre, como <code>NET_BIND_SERVICE</code> (enlazarse a puertos por debajo de 1024), <code>NET_ADMIN</code> (cambiar la configuración de red), <code>CHOWN</code> (cambiar el propietario de archivos) y <code>SYS_ADMIN</code> (un conjunto muy amplio de acciones administrativas). Los runtimes de contenedores dan a los contenedores un subconjunto de capabilities por defecto, y puedes ajustarlo por contenedor.</p>
-<p>En <code>securityContext.capabilities</code> (solo a nivel de contenedor) listas las capabilities que se agregan con <code>add</code> y se quitan con <code>drop</code>, escritas sin el prefijo <code>CAP_</code>. El patrón recomendado es quitarlas todas y volver a agregar solo las necesarias. Un servidor web que debe escuchar en el puerto 80 como usuario no root solo necesita <code>NET_BIND_SERVICE</code>. Evita <code>privileged: true</code>, que otorga todas las capabilities y acceso a los dispositivos del host, y ten mucho cuidado con capabilities amplias como <code>SYS_ADMIN</code>.</p>
-<pre class="code" tabindex="0"><code>securityContext:
-  runAsNonRoot: true
-  allowPrivilegeEscalation: false
-  capabilities:
-    drop: [&quot;ALL&quot;]
-    add: [&quot;NET_BIND_SERVICE&quot;]
-  seccompProfile:
-    type: RuntimeDefault</code></pre>
-<p>Pod Security Admission (PSA) es el admission controller integrado que aplica los Pod Security Standards por namespace. Hay tres niveles. Privileged no tiene restricciones, para workloads de sistema de confianza. Baseline bloquea las escaladas de privilegios conocidas sin dejar de ser fácil de adoptar: sin contenedores privileged, sin namespaces del host (hostNetwork, hostPID, hostIPC), sin volúmenes hostPath y sin capabilities agregadas más allá de un conjunto similar al por defecto. Restricted sigue las buenas prácticas de hardening: todo lo de baseline más <code>runAsNonRoot: true</code>, <code>allowPrivilegeEscalation: false</code>, capabilities con <code>ALL</code> quitadas (solo se puede agregar <code>NET_BIND_SERVICE</code>), un perfil seccomp <code>RuntimeDefault</code> o <code>Localhost</code>, y solo una lista limitada de tipos de volumen.</p>
-<p>Aplicas los niveles con etiquetas en el namespace, una por modo. <code>enforce</code> rechaza los Pods que incumplen. <code>audit</code> los permite pero registra la infracción en el log de auditoría. <code>warn</code> los permite pero devuelve una advertencia al usuario. Una etiqueta opcional <code>-version</code> fija el estándar a una versión de Kubernetes, o a <code>latest</code>.</p>
-<pre class="code" tabindex="0"><code>kubectl label namespace shop \
-  pod-security.kubernetes.io/enforce=baseline \
-  pod-security.kubernetes.io/warn=restricted</code></pre>
-<p>La aplicación se hace sobre los Pods, no sobre los Deployments. Si la plantilla de Pod de un Deployment incumple un nivel en modo enforce, el Deployment se crea pero su ReplicaSet no puede crear Pods; el error, como 'violates PodSecurity &quot;restricted:latest&quot;: allowPrivilegeEscalation != false', aparece en <code>kubectl describe rs</code> y en los eventos. Los modos warn y audit también revisan las plantillas de los workloads, así que recibes un aviso temprano al aplicar el Deployment. Etiquetar un namespace no elimina los Pods que ya se ejecutan; avisa de las infracciones existentes y bloquea las nuevas. La solución siempre está en el securityContext del Pod, y el mensaje de error lista cada campo que hay que corregir.</p>
-<h2>Términos clave</h2>
-<dl class="terms"><dt>Capability</dt><dd>Una porción con nombre del privilegio de root, como NET_BIND_SERVICE, que se puede agregar a un contenedor o quitarle.</dd><dt>Pod Security Admission</dt><dd>Admission controller integrado que aplica los Pod Security Standards mediante etiquetas en el namespace.</dd><dt>Baseline</dt><dd>Nivel de Pod Security que bloquea escaladas de privilegios conocidas, como contenedores privileged y namespaces del host.</dd><dt>Restricted</dt><dd>El nivel de Pod Security más estricto: exige no root, sin escalada de privilegios, capabilities quitadas y un perfil seccomp.</dd><dt>enforce / audit / warn</dt><dd>Modos de PSA que rechazan, registran o advierten sobre los Pods que incumplen.</dd></dl>
-<div class="panel ex"><strong>Ejemplo real</strong><p>El namespace <code>payments</code> tiene la etiqueta <code>pod-security.kubernetes.io/enforce=restricted</code>. Un Deployment nuevo muestra 0 Pods listos; <code>kubectl describe rs</code> lista que faltan las configuraciones runAsNonRoot, allowPrivilegeEscalation y seccompProfile. Agregarlas junto con <code>capabilities: drop: [&quot;ALL&quot;]</code> permite que el ReplicaSet cree los Pods.</p></div>
-<div class="status notice"><strong>Consejo para el examen:</strong> Las capabilities son solo a nivel de contenedor y se escriben sin CAP_. Los errores de PSA de los Deployments aparecen en el ReplicaSet, y restricted exige drop ALL, runAsNonRoot, allowPrivilegeEscalation false y un perfil seccomp RuntimeDefault o Localhost.</div>
-<h2>Comprueba lo que sabes</h2>
-<details class="sq"><summary>¿Qué capability permite a un proceso no root enlazarse al puerto 80?</summary><p>NET_BIND_SERVICE.</p></details>
-<details class="sq"><summary>¿Qué etiqueta hace que un namespace rechace los Pods que no cumplen el nivel baseline?</summary><p><code>pod-security.kubernetes.io/enforce=baseline</code>.</p></details>
-<details class="sq"><summary>¿Cuál es la diferencia entre los modos warn y enforce de PSA?</summary><p>Warn admite los Pods que incumplen pero devuelve una advertencia; enforce los rechaza.</p></details>
+<div class="panel gatewall"><span class="chip">Cuenta gratis</span><h2>Sigue leyendo gratis</h2><p>Crea una cuenta gratis de StudyToCert para leer el resto de esta lección: 6 secciones más, 5 términos clave, un ejemplo real, un consejo para el examen y preguntas de repaso. Todas las lecciones, laboratorios y exámenes de práctica son gratis con una cuenta.</p><p class="btns"><a class="btn" href="../../../../#signup">Crear cuenta gratis</a> <a class="btn ghost" href="../../../../#login">Iniciar sesión</a></p></div>
 </article>
 <div class="panel startcard"><div class="grow"><strong>Estudia CKAD gratis</strong><br><span class="note">Plan semana a semana con lecciones, cuestionarios, simulaciones de examen y práctica, en español.</span></div><a class="btn sm" href="../../../../ckad/?lang=es">Abrir el plan de estudio</a></div>
 <nav class="pager" aria-label="Más lecciones"><a href="../securitycontext-at-pod-and-container-level-runasuser-runasnonroot-fsgr/">← SecurityContext a nivel de Pod y de contenedor: runAsUser, r</a><a href="../service-types-clusterip-nodeport-loadbalancer-externalname-and-headles/">Tipos de Service: ClusterIP, NodePort, LoadBalancer, Externa →</a></nav>

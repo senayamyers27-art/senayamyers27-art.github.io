@@ -7,7 +7,7 @@ CertHub.register({
   exam: "DVA-C02",
   blurb: "For developers with about a year of hands-on AWS experience: building, securing, deploying and troubleshooting serverless and cloud-native applications with Lambda, DynamoDB, API Gateway, SQS/SNS, Cognito, KMS and the AWS CI/CD tools.",
   status: "check",
-  statusNote: "DVA-C02 domain weights (32/26/24/18) are the ones AWS publishes in its official DVA-C02 exam guide on docs.aws.amazon.com, but the AWS pages could not be opened during this check on Sept 24, 2026, so they were confirmed only through search results that quote that guide. Recheck them, and the exam length (65 questions, 130 minutes) and passing score (720), against the official exam guide. AWS has announced DVA-C03: registration opens Oct 27, 2026 (its exam guide is published then), DVA-C02's last test day is Nov 30, 2026, and DVA-C03 is available from Dec 1, 2026. This plan covers DVA-C02.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (DVA-C02), objectives, number of questions, time limit and passing score on Amazon Web Services's official exam page.",
   lastVerified: "2026-09-24",
   notices: [
     { from: "2026-09-24", until: "2026-11-30", text: "DVA-C02 retires after Nov 30, 2026. DVA-C03 (adds AI-assisted development and AI security) starts Dec 1, 2026, with registration and the new exam guide from Oct 27, 2026. This plan covers DVA-C02." },

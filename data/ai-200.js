@@ -8,7 +8,7 @@ CertHub.register({
   exam: "AI-200 (replaced AZ-204)",
   blurb: "For developers who build back-end and AI-powered apps on Azure: containers, Cosmos DB, PostgreSQL and Redis for AI data, messaging and Functions, plus security and monitoring.",
   status: "check",
-  statusNote: "AZ-204 (Azure Developer Associate) retired on July 31, 2026 and can no longer be booked, so this plan follows its replacement, AI-200: Developing AI Cloud Solutions on Azure. Microsoft Learn could not be opened directly during this check (network block), so the domains and ranges come from search results that quote the official AI-200 study guide (skills updated April 2026): containerized solutions 20–25%, AI data management services 25–30%, connect to and consume Azure services 20–25%, secure/monitor/troubleshoot 20–25%. Weights are the range midpoints (22.5, 27.5, 22.5, 22.5) scaled to 100 and rounded: 24/28/24/24. Confirm the ranges and exam details on the study guide page before you book.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (AI-200 (replaced AZ-204)), objectives, number of questions, time limit and passing score on Microsoft's official exam page.",
   lastVerified: "2026-09-24",
   notices: [
     { from: "2026-09-24", until: "2027-03-31", text: "AZ-204 and the Azure Developer Associate certification retired on July 31, 2026. This plan covers the replacement exam, AI-200 (Azure AI Cloud Developer Associate). If you already hold Azure Developer Associate, it stays valid until its expiry date." },

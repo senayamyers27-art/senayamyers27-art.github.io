@@ -7,7 +7,7 @@ CertHub.register({
   exam: "PCEP-30-02",
   blurb: "Entry-level Python certification covering syntax, data types, operators, control flow, collections, functions and exceptions, for new programmers.",
   status: "check",
-  statusNote: "pythoninstitute.org could not be opened from the research environment on Sept 24, 2026, so the official page was not read directly. Exam code PCEP-30-02, the four sections with weights 18/29/25/28, 30 items, 40 minutes and a 70% pass mark come from search-engine excerpts of the official PCEP-30-0x syllabus page and PDF. A third-party site reports a refreshed PCEP version planned for Q3 2026; confirm the current exam code and weights on the official syllabus page before booking.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (PCEP-30-02), objectives, number of questions, time limit and passing score on Python Institute's official exam page.",
   lastVerified: "2026-09-24",
   notices: [],
   examInfo: { questions: "30 items (single-choice, multiple-choice, drag and drop, gap fill, code insertion)", minutes: 40, pass: "70%", extra: "About 5 more minutes are set aside for the NDA and tutorial. Taken online via OpenEDG Testing Service." },

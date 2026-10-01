@@ -5,21 +5,23 @@
   const EFFECTIVE = "September 29, 2026";
   const SITE = "StudyToCert";
   const U = CertHub.U;
-  const contact = () => `<a href="https://github.com/senayamyers27-art/Claude.ai-stuff/security/advisories/new" target="_blank" rel="noopener">GitHub private reporting</a>`;
+  const contact = () => `<a href="mailto:security@studytocert.com">security@studytocert.com</a>`;
 
   // Accounts exist only when site.config.json sets apiOrigin; the policies describe whichever is true.
   const accounts = () => !!(CertHub.site && CertHub.site.apiUrl);
   const counts = () => !!(CertHub.site && CertHub.site.analytics);
 
   function accountPrivacy() {
-    return `<h2>Optional accounts</h2>
-    <p>You can use everything without an account. If you choose to create one, we store on our server (a Cloudflare Worker with a Cloudflare D1 database):</p>
+    return `<h2>Accounts</h2>
+    <p>Visitors can browse each plan's overview and try a sample (the first lessons, a lab and a quiz) without an account. A free account unlocks the rest. When you create one, we store on our server (a Cloudflare Worker with a Cloudflare D1 database):</p>
     <ul>
       <li>Your email address, used to send sign-in links and nothing else (no newsletters unless you ask)</li>
       <li>If you sign in with Google, Facebook or LinkedIn: your account ID at that provider, your name and your email address, which the provider shares with your permission. We ask only for basic profile and email access. We never get your password, contacts or posts, we never post anything, and we don't keep the provider's access token after sign-in. You can disconnect a provider on your profile at any time.</li>
       <li>If you have Premium Pro and use the AI tutor, study coach or mock interviews: what you type, plus the question you're asking about, your study numbers for that certification (week, exam date, readiness and accuracy by domain) or the job role, is sent through our server to Anthropic to get an answer. We don't store these conversations either.</li>
       <li>If you use the AI assistant in the Help panel: your questions and the conversation so far are sent through our server to Anthropic, which provides the AI model, to get an answer. We don't store the conversation; it stays in your browser tab until you close it. Don't include personal details.</li>
+      <li>The details you give when you sign up: your full name, your phone number, what describes you (for example student or working in IT), and optionally your goal certification and target exam date. Your phone number is used only to help you get back into your account and for support; it's never shown to anyone, shared or used for marketing.</li>
       <li>Your profile, only if you fill it in: a display name, a short “About me”, the certification you're working toward and study hours a week. Only you can see it.</li>
+      <li>If you add a backup password: a salted, one-way hash of it (PBKDF2), so we can check it when you log in. We never store or see the password itself, and we email you when it's added or changed.</li>
       <li>A copy of your study progress and lab progress, including lab notes, so it can sync between your devices, plus the rest of your saved work: study days and streak, readiness history, VM lab and puzzle results, game scores, badges, your weekly goal and the name for your certificates</li>
       <li>One cookie, <code>__Host-cs_session</code>, that keeps you signed in for up to 30 days without use and never more than 90 days. It is secure, HTTP-only and not used for tracking. The site stores only a hash of it.</li>
       <li>For each device you're signed in on: when you signed in and your browser's user-agent string, so the account page can list your devices and let you sign any of them out.</li>
@@ -51,7 +53,7 @@
       <li>Lab progress: steps and checks you ticked, when you finished a lab, and the notes you type</li>
       <li>Your light or dark theme choice</li>
     </ul>
-    <p>${accounts() ? "Unless you sign in to sync it (see Optional accounts below), this" : "This"} data never leaves your device unless you choose to move it. It is not sent to us or to anyone else. Clearing your browser's site data deletes it. Anyone with access to your device and browser profile can see it, so don't put passwords, API keys or other secrets in lab notes.</p>
+    <p>${accounts() ? "Unless you sign in to sync it (see Accounts below), this" : "This"} data never leaves your device unless you choose to move it. It is not sent to us or to anyone else. Clearing your browser's site data deletes it. Anyone with access to your device and browser profile can see it, so don't put passwords, API keys or other secrets in lab notes.</p>
 
     <h2>Backups you create</h2>
     <p>“Download backup” and “Copy backup” produce a file or text containing the data above. It goes only where you save or paste it. “Restore” reads a backup you choose back into your browser.</p>
@@ -127,7 +129,7 @@
 
     <h2>5b. Plans, billing and refunds</h2>
     <ul>
-      <li><strong>Free plan.</strong> Free to use with no account. It includes limits (for example, one timed practice exam per certification); the <a href="#plans">Plans</a> page lists them. We may change what the Free plan includes, and will say so on the What's New page.</li>
+      <li><strong>Free plan.</strong> Free with a free account (visitors without one can try a sample). It includes limits (for example, one timed practice exam per certification); the <a href="#plans">Plans</a> page lists them. We may change what the Free plan includes, and will say so on the What's New page.</li>
       <li><strong>Pro and Premium Pro</strong> are subscriptions billed monthly or yearly, in advance, and renew automatically until you cancel. Prices and any sales tax are shown before you pay. Payments are processed by Stripe; we never see your card number.</li>
       <li><strong>Changing plans.</strong> You can switch between Pro and Premium Pro, or between monthly and yearly, from Manage billing on your Account page. Upgrades apply straight away and you're charged the prorated difference at once; downgrades take effect at the end of the period you've paid for.</li>
       <li><strong>Cancelling.</strong> Cancel any time from Manage billing. You keep your plan until the end of the period you've paid for, and you won't be charged again.</li>
@@ -160,48 +162,28 @@
   function security() {
     const row = (what, how) => `<tr><td><strong>${U.esc(what)}</strong></td><td>${/* html: authored text with <code> tags, all calls are literals below */ how}</td></tr>`;
     return `<h1>Security</h1>
-    <p class="meta">How ${SITE} protects visitors, and how to report a problem. Last reviewed ${EFFECTIVE}.</p>
-    <div class="status notice">${accounts()
-      ? "Without an account the site stores nothing about you on a server. Optional accounts are protected as described under Accounts below."
-      : "The site stores nothing about you on a server: there are no accounts, no database and no cookies. That removes most of the risks a typical website has."}</div>
-    <h2>In the browser</h2>
+    <p class="meta">How ${SITE} protects you, and how to report a problem. Last reviewed ${EFFECTIVE}.</p>
+    <h2>Your data</h2>
     <div class="scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)"><table class="sectable"><tbody>
-      ${row("Content Security Policy", "Scripts, styles, fonts and connections are allowed only from the site itself. No inline scripts, inline style attributes, <code>eval</code> or third-party code. Trusted Types check every piece of HTML the app writes into the page. Plugins (<code>object-src</code>) are blocked.")}
-      ${row("No third parties", counts() ? "Fonts are self-hosted and there are no ads or CDNs. The only outside service is a cookie-free page counter (see the Privacy Policy). An automated check fails if any page loads code from another site." : "Fonts are self-hosted and there are no analytics, ads or CDNs, so no outside service sees your visits. An automated test fails if any page requests another site.")}
-      ${row("Output escaping", "All content is escaped before it's placed on the page, which prevents injected HTML or script (XSS). A lint check blocks unescaped values.")}
-      ${row("Clickjacking protection", "<code>frame-ancestors 'none'</code> and <code>X-Frame-Options: DENY</code> stop other sites from framing the pages.")}
-      ${row("Isolation headers", "<code>Cross-Origin-Opener-Policy</code> and <code>Cross-Origin-Resource-Policy: same-origin</code>, <code>X-Content-Type-Options: nosniff</code>, a strict <code>Referrer-Policy</code>, and a <code>Permissions-Policy</code> that turns off camera, microphone, location, payment and USB access.")}
-      ${row("Local data only", accounts() ? "Progress and notes stay in your browser's storage. Nothing is uploaded unless you sign in to sync." : "Progress and notes stay in your browser's storage. Nothing is uploaded.")}
+      ${row("Kept to a minimum", accounts() ? "Your study progress and notes are saved in your browser. With an account they also sync to your profile so you can use any device. We don't sell or share your information." : "Your study progress and notes stay in your browser's storage. Nothing is uploaded.")}
+      ${row("No ads or trackers", "There are no ads and no third-party trackers on the site.")}
+      ${accounts() ? row("Your control", "Download everything we hold about you, or delete your account, from the Account page.") : ""}
     </tbody></table></div>
-    ${accounts() ? `<h2>Accounts</h2>
+    ${accounts() ? `<h2>Signing in</h2>
     <div class="scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)"><table class="sectable"><tbody>
-      ${row("No passwords", "Sign-in uses passkeys or one-time email links that expire in 15 minutes. Only a SHA-256 hash of each link and session token, and only the public half of each passkey, is stored, so a database leak can't be used to sign in.")}
-      ${row("Devices", "The account page lists every signed-in device, with a button to sign out any of them or everywhere else. Sessions end after 90 days, and at most 10 are kept.")}
-      ${row("Session cookie", "<code>__Host-</code> prefixed, <code>Secure</code>, <code>HttpOnly</code>, <code>SameSite=Strict</code>, 30-day sliding expiry and a 90-day limit, at most 10 devices at once; signing out deletes it on the server.")}
-      ${row("Request forgery", "Every change must come from the site's own origin; the API allows cross-origin requests only from the site.")}
-      ${row("Abuse limits", "Sign-in links are rate-limited per IP address and per email, and request sizes are capped.")}
-      ${row("Access control", "Every query is scoped to the signed-in user. Instructors see progress numbers for their own cohorts only, never lab notes. CSV exports are protected against spreadsheet formula injection.")}
-      ${row("Payments", "Handled by Stripe Checkout. Webhooks are verified with Stripe's signature and processed once; plans are decided on the server, never in the browser.")}
-      ${row("Your control", "Download everything the server holds about you, or delete your account, from the Account page.")}
+      ${row("Email links and passkeys", "Email sign-in links work once and expire in 15 minutes. Passkeys use your fingerprint, face or device PIN, which never leave your device.")}
+      ${row("Backup password", "If you add one, it's stored only as a salted one-way hash, so nobody (including us) can read it. We email you whenever it's added or changed, and repeated wrong guesses are blocked.")}
+      ${row("Your devices", "The Account page lists every signed-in device, with a button to sign out any of them or everywhere else.")}
+      ${row("Payments", "Handled by a certified payment processor. We never see or store card numbers.")}
     </tbody></table></div>` : ""}
-    <h2>In transit</h2>
+    <h2>Keeping the site safe</h2>
     <div class="scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)"><table class="sectable"><tbody>
-      ${row("HTTPS everywhere", "Every <code>http://</code> request is redirected to <code>https://</code> (301), and pages upgrade any insecure request.")}
-      ${row("HSTS", "<code>Strict-Transport-Security</code> for two years including subdomains, so browsers refuse plain HTTP after the first visit.")}
-      ${row("Modern TLS", "TLS 1.2 minimum and TLS 1.3 enabled; TLS 1.0 and 1.1 are refused. Certificates are issued and renewed automatically by Cloudflare.")}
-      ${row("One canonical address", "<code>www</code> and the Cloudflare preview address redirect to the main domain; preview builds are hidden from search engines.")}
-    </tbody></table></div>
-    <h2>In development and operations</h2>
-    <div class="scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)"><table class="sectable"><tbody>
-      ${row("Checks on every change", "Automated CI validates content, runs a security lint (CSP, inline scripts, insecure links, escaping), audits dependencies and runs a browser test of every page before anything can deploy.")}
-      ${row("Code and secret scanning", "CodeQL static analysis and gitleaks secret scanning run on the repository.")}
-      ${row("Dependency updates", "Dependabot opens updates for build tools and GitHub Actions weekly; actions are pinned to exact commit SHAs.")}
-      ${row("Least-privilege automation", "Workflows run with read-only permissions by default; deploy tokens are stored as encrypted secrets and never exposed to pull-request code.")}
-      ${row("Daily live monitoring", "A daily job checks HTTPS, redirects, security headers, certificate validity and that old TLS versions are refused, and alerts on any failure.")}
-      ${row("Configuration drift", "A weekly job checks the Cloudflare HTTPS/TLS settings and DNSSEC and can restore them.")}
+      ${row("Secure connections", "Every page is served over HTTPS, and browsers are told to always use it.")}
+      ${row("Protected pages", "Pages only run the site's own code, and other sites can't embed them to trick you into clicking.")}
+      ${row("Tested and monitored", "Every change is tested automatically before it goes live, and the site is checked every day.")}
     </tbody></table></div>
     <h2>Report a vulnerability</h2>
-    <p>Please report security issues privately through ${contact()} rather than a public issue. Include steps to reproduce. You'll get a response as soon as possible, and fixes are credited if you like. A machine-readable contact is at <a href="/.well-known/security.txt">/.well-known/security.txt</a>.</p>
+    <p>Please report security issues privately to ${contact()}. Include steps to reproduce. You'll get a response as soon as possible, and fixes are credited if you like. A machine-readable contact is at <a href="/.well-known/security.txt">/.well-known/security.txt</a>.</p>
     <p class="note">Please don't run automated scanners or load tests against the live site.</p>`;
   }
 
@@ -260,7 +242,7 @@
     <p>Send it to classmates, your bootcamp cohort or anyone studying for a certification. Word of mouth is the biggest help.</p>
     ${shareUrl ? `<div class="btns"><button type="button" class="btn ghost" data-gact="share">Share the site</button></div>` : ""}
     <h2>Report mistakes and suggest labs</h2>
-    <p>Found a wrong answer, a lab command that doesn't work on your system, or a topic you want covered? ${site.feedbackUrl ? `<a href="${U.esc(site.feedbackUrl)}" target="_blank" rel="noopener">Open an issue on GitHub</a>` : "Let us know"} with the page and what you saw. Security problems go to the <a href="#security">Security</a> page instead.</p>
+    <p>Found a wrong answer, a lab command that doesn't work on your system, or a topic you want covered? ${site.feedbackUrl ? `<a href="${U.esc(site.feedbackUrl)}">Email us</a>` : "Let us know"} with the page and what you saw. Security problems go to the <a href="#security">Security</a> page instead.</p>
     <h2>Show your work</h2>
     <p>Finished labs make a strong portfolio. If you publish yours, mentioning where you practiced helps others find the site.</p>`;
   }

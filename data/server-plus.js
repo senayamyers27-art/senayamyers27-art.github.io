@@ -7,7 +7,7 @@ CertHub.register({
   exam: "SK0-005",
   blurb: "Vendor-neutral server certification for administrators: hardware, storage, operating systems, virtualization, security, backup and troubleshooting in on-premises and hybrid environments.",
   status: "check",
-  statusNote: "Could not read the official page during this task: comptia.org and partners.comptia.org were blocked by the network proxy on 2026-09-24. Exam code, domains, weights (18/30/24/28), length, time and passing score come from the published SK0-005 objectives as reported by search results and training providers. Web searches found no announced SK0-006 or SK0-005 retirement date; confirm both on comptia.org before booking.",
+  statusNote: "Exam details can change. Before you book, confirm the current exam code (SK0-005), objectives, number of questions, time limit and passing score on CompTIA's official exam page.",
   lastVerified: "2026-09-24",
   notices: [],
   examInfo: { questions: "Up to 90 (multiple choice and performance-based)", minutes: 90, pass: "750 on a 100–900 scale" },
