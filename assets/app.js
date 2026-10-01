@@ -399,11 +399,12 @@
   // The site's sections: the menu (header) lists all of them; the home page shows the main ones as tiles.
   const SECTIONS = () => {
     const n = CertHub.catalog.filter(id => certs[id]).length, acct = CertHub.sync && CertHub.sync.enabled, me = acct && CertHub.sync.me;
+    const mine = acct ? me && me.user : CertHub.store.get("certhub:profile");
     return [
       ["Study", [["certifications", "Certifications", `Free week-by-week plans for ${n} certifications`, "cybersecurity"], ["dashboard", "Dashboard", "Readiness, exam countdowns and what's due", "chart"], ["review", "Daily Review", "Five minutes of spaced review across your plans", "flame"], ["exam-day", "Exam-Day Guides", "Scoring, question types and test day", "check"], ["exam-changes", "Exam Changes", "New exam versions and retirements", "news"]]],
       ["Practice", [["labs", "Labs", `${labOrder.length} hands-on labs with step-by-step guides`, "lab"], ["vm", "Practice VM", "A Linux machine in your browser, with graded labs", "terminal"], ["games", "Games", "Sixty-second rounds: subnets, ports, acronyms", "game"], ["log-puzzles", "Blue Team", "Log puzzles and incident tabletops", "shield"], ["net-design", "Network Design", "Put the right device in each part of a network", "network"]]],
       ["Career", [["careers", "Career Paths", "Which certification first, jobs and interview practice", "career"], ["job-outlook", "Pay and Job Outlook", "Median pay and projected growth", "chart"], ["portfolio", "Portfolio", "Your finished labs as write-ups and resume bullets", "portfolio"], ["frameworks", "Frameworks", "NIST, ISO, CIS and more, mapped to certifications", "book"], ["achievements", "Achievements", "Badges for streaks, scores and labs", "badge"]]],
-      ["You", [(acct ? me && me.user : CertHub.store.get("certhub:profile")) ? ["profile", "Your profile", "Your saved work and sign-in methods", "user"] : ["login", "Log in or sign up", "Save your work to a free profile", "user"], ["plans", "Plans", "Free, Pro and Premium Pro compared", "spark"], ["settings", "Settings", "Theme, text size, accessibility, backups", "settings"], ["help", "Help", "Answers to common questions", "help"]]],
+      ["You", [...(mine ? [["profile", "Your profile", "Your saved work and sign-in methods", "user"]] : [["signup", "Sign up", "Create a free account to save your work", "user"], ["login", "Log in", "Already have an account? Log in here", "user"]]), ["plans", "Plans", "Free, Pro and Premium Pro compared", "spark"], ["settings", "Settings", "Theme, text size, accessibility, backups", "settings"], ["help", "Help", "Answers to common questions", "help"]]],
       ["About", [["whats-new", "What's new", "", ""], ["schools", "Teachers", "", ""], ["install", "Install App", "", ""], ["support", "Support", "", ""], ["privacy", "Privacy Policy", "", ""], ["terms", "Terms of Use", "", ""], ["security", "Security", "", ""]]]
     ];
   };
@@ -490,7 +491,7 @@
     const q = new URLSearchParams({ p: name, t: title || name, e: "true", rnd: Math.random().toString(36).slice(2) });
     try { fetch(`${gc}/count?${q}`, { mode: "no-cors", credentials: "omit", keepalive: true, referrerPolicy: "no-referrer" }).catch(() => {}); } catch (e) {}
   };
-  const LIGHT = new Set(["home", "dashboard", "achievements", "exam-changes", "schools", "whats-new", "review", "privacy", "terms", "security", "install", "support", "exam-day", "account", "login", "signup", "profile", "plans", "settings", "help", "certifications"]);
+  const LIGHT = new Set(["home", "dashboard", "achievements", "exam-changes", "schools", "whats-new", "review", "privacy", "terms", "security", "install", "support", "exam-day", "account", "admin", "login", "signup", "profile", "plans", "settings", "help", "certifications"]);
   function route() {
     let raw = "";
     try { raw = decodeURIComponent(location.hash.replace(/^#/, "")); } catch (e) { raw = ""; }
@@ -526,6 +527,7 @@
       else if ((head === "login" || head === "signup") && CertHub.accountViews) { topNav("account"); $("#app").innerHTML = CertHub.accountViews.login(head); title = head === "signup" ? "Sign Up" : "Log In"; view = head; }
       else if (head === "profile" && CertHub.accountViews) { topNav("account"); CertHub.accountViews.profile(); title = "Your Profile"; view = head; }
       else if (head === "plans" && CertHub.accountViews) { topNav(""); $("#app").innerHTML = CertHub.accountViews.plans(); title = "Plans"; view = head; }
+      else if (head === "admin" && CertHub.accountViews) { topNav("account"); CertHub.accountViews.admin(); title = "Site Dashboard"; view = head; }
       else if (head === "account" && CertHub.accountViews) { topNav("account"); $("#app").innerHTML = CertHub.accountViews.account(); title = "Account"; view = "account"; }
       else if (/^join-[a-km-np-z2-9]{10}$/.test(head) && CertHub.accountViews) { topNav("account"); CertHub.accountViews.join(head.slice(5)); title = "Join a Class"; view = head; }
       else if (/^class-[0-9a-f]{24}$/.test(head) && CertHub.accountViews) { topNav("account"); CertHub.accountViews.classRoster(head.slice(6)); title = "Class Roster"; view = head; }

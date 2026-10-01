@@ -13,7 +13,7 @@ CertHub.site = {
     "monthly": "$15",
     "yearly": "$99"
   },
-  "apiUrl": "",
+  "apiUrl": "https://api.studytocert.com",
   "compare": [
     [
       "security-plus",
