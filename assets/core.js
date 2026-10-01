@@ -60,7 +60,44 @@
     const c = certs[id];
     if (!c || !(lang === "es" ? c.hasLessonsEs : c.hasLessons)) return Promise.resolve(null);
     if (lessons[lang][id]) return Promise.resolve(lessons[lang][id]);
-    return loadScript(`data/${lang === "es" ? "lessons-es" : "lessons"}/${id}.js`).then(loadDiagrams).then(() => lessons[lang][id] || null);
+    return loadScript(`data/${lang === "es" ? "lessons-es" : "lessons"}/${id}.js`).then(loadDiagrams).then(() => unlockLessons(id, lang));
+  }
+  // With accounts on, the public files hold the free sample in full and only the opening of the other lessons
+  // (marked `locked`). Signed-in members get the full text from the API; a copy is kept in Cache Storage so it
+  // still opens offline on this device, and is deleted on sign-out.
+  const MEMBER_CACHE = "certhub-member", unlocking = {};
+  async function memberLessons(id, lang) {
+    const api = (CertHub.site && CertHub.site.apiUrl) || "", url = `${api}/v1/content/lessons/${id}${lang === "es" ? "?lang=es" : ""}`;
+    const box = await (window.caches ? caches.open(MEMBER_CACHE).catch(() => null) : null);
+    try {
+      const r = await fetch(url, { ...CertHub.sync.authInit(), cache: "no-store" });
+      if (r.ok) { const j = await r.clone().json(); if (box) box.put(url, r).catch(() => {}); return j; }
+      if (r.status === 401 || r.status === 403) return null;
+    } catch (e) { /* offline: fall back to the saved copy */ }
+    const hit = box && await box.match(url).catch(() => null);
+    return hit ? hit.json().catch(() => null) : null;
+  }
+  function unlockLessons(id, lang) {
+    const m = lessons[lang][id], key = lang + ":" + id;
+    if (!m || ![...m.values()].some(l => l.locked) || !(CertHub.gate && CertHub.gate.member)) return Promise.resolve(m || null);
+    if (!unlocking[key]) unlocking[key] = memberLessons(id, lang).then(j => {
+      delete unlocking[key];
+      let n = 0;
+      if (j && j.id === id && Array.isArray(j.lessons)) j.lessons.forEach(l => { if (l && typeof l.t === "string" && m.has(l.t) && !l.locked) { (m.stubs = m.stubs || new Map()).set(l.t, m.get(l.t)); m.set(l.t, l); n++; } });
+      // Nothing came back (offline with no saved copy, or an outage): say so instead of "Loading…".
+      const failed = !(j && Array.isArray(j.lessons));
+      if (n || failed !== !!m.unlockFailed) { m.unlockFailed = failed; document.dispatchEvent(new Event("certhub:lessons")); }
+      return m;
+    });
+    return unlocking[key];
+  }
+  // Sign-in (or the first account check) after the lessons loaded: fetch the rest and redraw.
+  document.addEventListener("certhub:me", () => ["en", "es"].forEach(lang => Object.keys(lessons[lang]).forEach(id => unlockLessons(id, lang))));
+  // Sign-out: delete the saved copy and put the locked openings back in the lessons already loaded.
+  function forgetMemberLessons() {
+    if (window.caches) caches.delete(MEMBER_CACHE).catch(() => {});
+    ["en", "es"].forEach(lang => Object.values(lessons[lang]).forEach(m => { if (m && m.stubs) { m.stubs.forEach((l, t) => m.set(t, l)); m.stubs = null; } }));
+    document.dispatchEvent(new Event("certhub:lessons"));
   }
   function addLessons(id, list, meta) {
     if (!Array.isArray(list)) return;
@@ -609,7 +646,7 @@
     i18n, addUiEs: d => i18n.add(d), U, store, certs, buildPlan, loadProgress, saveProgress, freshProgress, applyTheme, themeButton, ACCENTS, accent, setAccent, exportAll, importAll, activeNotices,
     backupText, restoreText, ui, install, labs, labOrder, loadLabProgress, saveLabProgress, labStatus,
     register(c) { certs[c.id] = c; if (Array.isArray(c.questions)) c.qCount = c.questions.length; },
-    loadQuestions, addQuestions, loadPlan, addPlanDetail, loadLessons, addLessons, lessonMeta, addDiagrams, diagramsFor, loadPbqs, addPbqs, loadQuestionsEs, addQuestionsEs, loadHandson, addHandson, addHandsonEs, loadCareers, addCareers, addInterview, careers, loadScript, activity, reminderIcs, addReminder, reportUrl, downloadFile, makeBadge, BASE,
+    loadQuestions, addQuestions, loadPlan, addPlanDetail, loadLessons, addLessons, forgetMemberLessons, lessonMeta, addDiagrams, diagramsFor, loadPbqs, addPbqs, loadQuestionsEs, addQuestionsEs, loadHandson, addHandson, addHandsonEs, loadCareers, addCareers, addInterview, careers, loadScript, activity, reminderIcs, addReminder, reportUrl, downloadFile, makeBadge, BASE,
     // data/lab-index.js registers a short entry for every lab (enough for cards and counts); the full labs
     // (data/labs-*.js) load on first use and replace them.
     registerLabs(list, meta) { list.forEach(l => { if (!labs[l.id]) labOrder.push(l.id); if (!(meta && meta.index && labs[l.id])) labs[l.id] = meta && meta.index ? Object.assign({ stub: true }, l) : l; }); },

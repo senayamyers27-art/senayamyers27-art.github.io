@@ -191,6 +191,8 @@
   // is separate: it only ever comes from the API, for members with that plan.
   CertHub.gate = {
     get locked() { return !!API && known && !signedIn() && !offlineMember; },
+    // Signed in, or signed in on this device before and the API can't be reached right now.
+    get member() { return !!API && (signedIn() || offlineMember); },
     wall(kind) {
       const what = { lesson: "Read every lesson in this plan", lab: "Open every hands-on lab, with step-by-step guides and checks", practice: "Smart practice, domain drills, checkpoint tests, exam simulations and a full practice exam", tools: "Practice VMs, games, puzzles, flashcards, cheat sheets and daily review" }[kind] || "Every lesson, lab and practice test";
       return `<div class="panel gatewall"><span class="chip">Free account</span>
@@ -690,6 +692,45 @@
       } catch (err) { msg.textContent = err.message; }
       return;
     }
+    if (f.id === "sms-form") {
+      e.preventDefault();
+      const msg = $("#sms-msg"), step2 = $("#sms-step2"), email = $("#sms-email").value;
+      try {
+        if (step2.hidden) {
+          msg.textContent = "Sending…";
+          const { data } = await api("POST", "/v1/auth/sms/start", { email });
+          step2.hidden = false; $("#sms-btn").textContent = "Log in";
+          msg.textContent = "If that account has a mobile number, we texted a code to it. It expires in 10 minutes.";
+          if (data.devCode) $("#sms-code").value = data.devCode; // development only: no text messages are sent
+          $("#sms-code").focus();
+          return;
+        }
+        msg.textContent = "Checking…";
+        const { data } = await api("POST", "/v1/auth/sms/verify", { email, code: $("#sms-code").value });
+        if (NATIVE && data.token) NATIVE.setToken(data.token);
+        await refreshMe(); ui.toast("Signed in."); syncAll(); location.hash = "profile";
+      } catch (err) { msg.textContent = err.message; }
+      return;
+    }
+    if (f.id === "smsadd-form") {
+      e.preventDefault();
+      const msg = $("#smsadd-msg"), step2 = $("#smsadd-step2");
+      try {
+        if (step2.hidden) {
+          msg.textContent = "Sending…";
+          const { data } = await api("POST", "/v1/account/sms", { phone: $("#smsadd-phone").value });
+          step2.hidden = false; $("#smsadd-btn").textContent = "Confirm number";
+          msg.textContent = `We texted a 6-digit code to ${data.phone}. It expires in 10 minutes.`;
+          if (data.devCode) $("#smsadd-code").value = data.devCode; // development only
+          $("#smsadd-code").focus();
+          return;
+        }
+        msg.textContent = "Checking…";
+        await api("POST", "/v1/account/sms/confirm", { code: $("#smsadd-code").value });
+        ui.toast("Mobile number added."); profileView();
+      } catch (err) { msg.textContent = err.message; }
+      return;
+    }
     if (f.id === "setpw-form") {
       e.preventDefault();
       const msg = $("#setpw-msg");
@@ -780,13 +821,21 @@
         if (!(await ui.confirm("Remove your backup password? You'll sign in with an email link, Google or a passkey.", { ok: "Remove", cancel: "Keep it", danger: true }))) return;
         await api("DELETE", "/v1/account/password"); ui.toast("Backup password removed."); profileView(); return;
       }
+      if (a === "rmsms") {
+        if (!(await ui.confirm("Stop text-message sign-in codes to this number?", { ok: "Remove", cancel: "Keep it", danger: true }))) return;
+        await api("DELETE", "/v1/account/sms"); ui.toast("Mobile number removed."); profileView(); return;
+      }
+      if (a === "emailtips") {
+        const on = b.dataset.on !== "1";
+        await api("PUT", "/v1/profile", { emailTips: on }); ui.toast(on ? "Study tips by email are on." : "Study tips by email are off."); profileView(); return;
+      }
       if (a === "copyref") { ui.copy($("#ref-link").value, "invite link"); return; }
       if (a === "shareref") { navigator.share({ title: "StudyToCert", text: "Free study plans for IT, cloud and cybersecurity certifications. Your first month of Pro is free with my link.", url: $("#ref-link").value }).catch(() => {}); return; }
       if (a === "delassign") {
         if (!(await ui.confirm(`Delete the assignment "${b.dataset.name}"?`, { ok: "Delete", cancel: "Keep it", danger: true }))) return;
         await api("DELETE", `/v1/classes/${b.dataset.class}/assignments/${b.dataset.assign}`); ui.toast("Assignment deleted."); classView(b.dataset.class.slice(4)); return;
       }
-      if (a === "signout") { store.set(MEMBER_KEY, ""); await api("POST", "/v1/auth/logout", {}); if (NATIVE) NATIVE.setToken(""); setMe((await api("GET", "/v1/me").catch(() => ({ data: null }))).data); ui.toast("Signed out. Your progress stays on this device."); if (location.hash === "#profile") location.hash = "login"; else CertHub.rerender(); }
+      if (a === "signout") { store.set(MEMBER_KEY, ""); CertHub.forgetMemberLessons(); await api("POST", "/v1/auth/logout", {}); if (NATIVE) NATIVE.setToken(""); setMe((await api("GET", "/v1/me").catch(() => ({ data: null }))).data); ui.toast("Signed out. Your progress stays on this device."); if (location.hash === "#profile") location.hash = "login"; else CertHub.rerender(); }
       if (a === "sync") await syncAll();
       if (a === "removeprofile") {
         if (!(await ui.confirm("Remove your profile from this browser? Your study progress stays.", { ok: "Remove", cancel: "Keep it" }))) return;
@@ -1097,7 +1146,7 @@
         ${emailForm(NATIVE ? "Email me a sign-in code" : "Email me a login link", "login")}
         ${PASSKEYS ? `<div class="orline" role="separator"><span>or</span></div><div class="btns" data-style="margin-top:0"><button type="button" class="btn ghost" data-aact="passkey-signin">Log in with a passkey</button></div><p class="note" id="passkey-msg" role="status" data-style="margin:0"></p>` : ""}
         <p class="note authhint">No password to remember: we email you a ${NATIVE ? "code" : "link"} each time.</p>
-        <details class="pwlogin"><summary>Can't get to your email? Log in with your password</summary>
+        <details class="pwlogin"><summary>Can't get to your email? Log in another way</summary>
           <form id="password-form" novalidate>
             <label for="pw-email"><strong>Email</strong></label>
             <input type="email" id="pw-email" class="textin" autocomplete="username" required placeholder="you@example.com">
@@ -1107,6 +1156,18 @@
             <p class="note" id="pw-msg" role="status"></p>
             <p class="note" data-style="margin:0">No password yet? Log in once with your email, then add a backup password on your profile.</p>
           </form>
+          ${me && me.sms ? `<form id="sms-form" novalidate>
+            <h3>Or get a code by text</h3>
+            <p class="note">If you added a mobile number on your profile, we'll text a 6-digit code to it.</p>
+            <label for="sms-email"><strong>Email</strong></label>
+            <input type="email" id="sms-email" class="textin" autocomplete="username" required placeholder="you@example.com">
+            <div id="sms-step2" hidden>
+              <label for="sms-code"><strong>6-digit code</strong></label>
+              <input type="text" id="sms-code" class="textin" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+            </div>
+            <div class="btns"><button type="submit" class="btn" id="sms-btn">Text me a code</button></div>
+            <p class="note" id="sms-msg" role="status"></p>
+          </form>` : ""}
         </details>
       </div>
       <p class="authswitch">New to StudyToCert? <a class="btn ghost sm" href="#signup">Create a free account</a></p>
@@ -1231,6 +1292,16 @@
           <div class="btns"><button type="submit" class="btn">${change ? "Change password" : "Save backup password"}</button></div>
           <p class="note" id="setpw-msg" role="status" data-style="margin:0"></p>
         </form>`;
+  const smsAddForm = pr => `<form id="smsadd-form" novalidate>
+          <label for="smsadd-phone"><strong>Mobile number</strong> <span class="note">(US or Canada)</span></label>
+          <input type="tel" id="smsadd-phone" class="textin" autocomplete="tel" value="${esc(pr.phone || "")}" placeholder="+1 555 123 4567" required>
+          <div id="smsadd-step2" hidden>
+            <label for="smsadd-code"><strong>6-digit code</strong></label>
+            <input type="text" id="smsadd-code" class="textin" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+          </div>
+          <div class="btns"><button type="submit" class="btn" id="smsadd-btn">Text me a code</button></div>
+          <p class="note" id="smsadd-msg" role="status" data-style="margin:0"></p>
+        </form>`;
   async function profileView() {
     const app = $("#app");
     if (!API) return localProfileView();
@@ -1268,10 +1339,13 @@
         <div class="row"><div class="grow"><strong>Passkeys</strong><br><span class="note">Fingerprint, face or device PIN.</span></div><a class="btn ghost sm" href="#account">Manage</a></div>
         <div class="row"><div class="grow"><strong>Backup password</strong><br><span class="note">${pr.hasPassword ? "Set. Use it on the login page if you can't get to your email." : "Not set yet."}</span></div>${pr.hasPassword ? `<button type="button" class="btn ghost sm" data-aact="rmpassword">Remove</button>` : ""}</div>
         ${pr.hasPassword ? `<details class="pwchange"><summary>Change your backup password</summary>${/* html: fixed markup */ setPwForm(true)}</details>` : ""}
+        ${pr.sms ? `<div class="row"><div class="grow"><strong>Text-message codes</strong><br><span class="note">${pr.smsPhone ? `Codes go to ${esc(pr.smsPhone)}. Use "Log in another way" on the login page.` : "Not set up. Add a mobile number to get a sign-in code by text if you can't get to your email."}</span></div>${pr.smsPhone ? `<button type="button" class="btn ghost sm" data-aact="rmsms">Remove</button>` : ""}</div>
+        ${pr.smsPhone ? "" : `<details class="pwchange"><summary>Add a mobile number</summary>${/* html: built with esc() */ smsAddForm(pr)}</details>`}` : ""}
       </div>
       <h2>Account</h2>
       <div class="panel">
         <div class="row"><div class="grow"><strong>Account settings</strong><br><span class="note">Sync, Pro, classes, signed-in devices, download or delete your data.</span></div><a class="btn ghost sm" href="#account">Open</a></div>
+        <div class="row"><div class="grow"><strong>Study tips by email</strong><br><span class="note">${pr.emailTips ? "On: a few short emails in your first week with study tips." : "Off."}</span></div><button type="button" class="btn ghost sm" data-aact="emailtips" data-on="${pr.emailTips ? "1" : "0"}">${pr.emailTips ? "Turn off" : "Turn on"}</button></div>
         <div class="row"><div class="grow"><strong>Site settings</strong><br><span class="note">Theme, text size, language, weekly goal and backups on this device.</span></div><a class="btn ghost sm" href="#settings">Open</a></div>
         <div class="row"><div class="grow"><strong>Sign out</strong><br><span class="note">Your progress stays on this device.</span></div><button type="button" class="btn ghost sm" data-aact="signout">Sign out</button></div>
       </div>`;

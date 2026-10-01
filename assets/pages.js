@@ -2,7 +2,7 @@
    (and at /privacy/, /terms/, /security/ on the real site). Keep these accurate: they describe
    what the code actually does, so update them whenever storage, hosting or tracking changes. */
 (function () {
-  const EFFECTIVE = "September 29, 2026";
+  const EFFECTIVE = "October 1, 2026";
   const SITE = "StudyToCert";
   const U = CertHub.U;
   const contact = () => `<a href="mailto:security@studytocert.com">security@studytocert.com</a>`;
@@ -22,6 +22,8 @@
       <li>The details you give when you sign up: your full name, your phone number, what describes you (for example student or working in IT), and optionally your goal certification and target exam date. Your phone number is used only to help you get back into your account and for support; it's never shown to anyone, shared or used for marketing.</li>
       <li>Your profile, only if you fill it in: a display name, a short “About me”, the certification you're working toward and study hours a week. Only you can see it.</li>
       <li>If you add a backup password: a salted, one-way hash of it (PBKDF2), so we can check it when you log in. We never store or see the password itself, and we email you when it's added or changed.</li>
+      <li>If you add a mobile number for text-message sign-in codes: that number, confirmed with a code we text to it. Codes are sent through our text-message provider (Twilio), stored only as a one-way hash, work once and expire in 10 minutes. The number is used only to text you sign-in codes, and we email you when one is added.</li>
+      <li>Study tips by email: a few short study emails in your first week. Every one has an unsubscribe link, and you can switch them off on your profile.</li>
       <li>A copy of your study progress and lab progress, including lab notes, so it can sync between your devices, plus the rest of your saved work: study days and streak, readiness history, VM lab and puzzle results, game scores, badges, your weekly goal and the name for your certificates</li>
       <li>One cookie, <code>__Host-cs_session</code>, that keeps you signed in for up to 30 days without use and never more than 90 days. It is secure, HTTP-only and not used for tracking. The site stores only a hash of it.</li>
       <li>For each device you're signed in on: when you signed in and your browser's user-agent string, so the account page can list your devices and let you sign any of them out.</li>
@@ -173,6 +175,7 @@
     <div class="scroll" tabindex="0" role="region" aria-label="Table (scrolls sideways on small screens)"><table class="sectable"><tbody>
       ${row("Email links and passkeys", "Email sign-in links work once and expire in 15 minutes. Passkeys use your fingerprint, face or device PIN, which never leave your device.")}
       ${row("Backup password", "If you add one, it's stored only as a salted one-way hash, so nobody (including us) can read it. We email you whenever it's added or changed, and repeated wrong guesses are blocked.")}
+      ${row("Text-message codes", "If you add a mobile number, you can get a 6-digit sign-in code by text. Codes work once, expire in 10 minutes and allow only a few guesses, and we email you when a number is added.")}
       ${row("Your devices", "The Account page lists every signed-in device, with a button to sign out any of them or everywhere else.")}
       ${row("Payments", "Handled by a certified payment processor. We never see or store card numbers.")}
     </tbody></table></div>` : ""}

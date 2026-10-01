@@ -9,7 +9,7 @@
   let C, PLAN, W, DOM, Q, S, FREE_Q, PRO = null;
   let SIMS = null; // exam simulations for this certification: a list, false when there are none, null while loading
   let HO = null; // hands-on exercises (Python, terminal, KQL): { items, tables }, false when there are none, null while loading
-  let LES = null, LES_ES = null;
+  let LES = null, LES_ES = null, lessonsHooked = false;
   // Lesson language: "en" or "es" (Spanish translation where it exists), remembered in this browser.
   let LANG = (CertHub.store.get("certhub:lang") === "es") ? "es" : "en";
   const ES_UI = { "Key terms": "Términos clave", "Real-world example": "Ejemplo real", "Exam tip:": "Consejo para el examen:", "Check yourself": "Comprueba lo que sabes", "Answer out loud first, then open to check.": "Responde en voz alta y luego ábrelo para comprobar.", "▶ Watch the overview": "▶ Ver el resumen", "Mark as read": "Marcar como leído", "Read ✓ (mark unread)": "Leído ✓ (marcar como no leído)", "Read": "Leído" };
@@ -72,6 +72,7 @@
       if (active && !(S.quiz && !S.quiz.done) && ["week", "learn", "cheat", "progress", "certificate", "cards"].includes(S.tab)) render();
     });
     const p = loadProgress(C.id);
+    if (!lessonsHooked) { lessonsHooked = true; document.addEventListener("certhub:lessons", () => { lessonIdx.clear(); if (active && C && !(S.quiz && !S.quiz.done) && ["week", "learn", "cheat", "cards", "today", "progress", "certificate"].includes(S.tab)) render(); }); }
     // Some lesson titles were capitalized (September 2026); keep "read" marks and ratings saved under the old title.
     if (p.read || p.ratings) W.forEach(w => w.topics.forEach(t => {
       if (!/^[A-Z][a-z]/.test(t)) return;
@@ -384,18 +385,12 @@
     return typeof id === "string" && /^[A-Za-z0-9_-]{11}$/.test(id) ? `<a class="btn ghost sm" href="https://www.youtube.com/watch?v=${esc(id)}" target="_blank" rel="noopener">${tr("▶ Watch on YouTube")}</a>` : "";
   }
   // Free-account gate (CertHub.gate in sync.js): signed-out visitors read the first lessons of each plan; the
-  // rest show their title with a sign-up card. Off when accounts aren't switched on.
+  // public files carry only the title and opening paragraph of the rest (marked `locked`), and the full text comes
+  // from the API once someone signs in (CertHub.loadLessons). Off when accounts aren't switched on.
   const GATE = () => CertHub.gate || { locked: false, wall: () => "" };
-  const FREE_LESSONS = 2;
-  let lessonOrder = null;
-  function lessonLocked(t) {
-    if (!GATE().locked || !LES) return false;
-    if (!lessonOrder || lessonOrder.id !== C.id || lessonOrder.les !== LES) lessonOrder = { id: C.id, les: LES, list: W.flatMap(w => lessonTopics(w).filter(x => LES.has(x))) };
-    return lessonOrder.list.indexOf(t) >= FREE_LESSONS;
-  }
   function lessonHtml(t, n) {
     const l = lessonOf(t);
-    if (l && lessonLocked(t)) return `<li><div class="lesson locked"><span class="grow">${esc(l.tt || t)}</span><a class="btn ghost sm lockbtn" href="#signup">${CertHub.fx.icon("spark")}${tr("Sign up free to read")}</a></div></li>`;
+    if (l && l.locked) return `<li><div class="lesson locked"><span class="grow">${esc(l.tt || t)}</span>${GATE().locked || !GATE().member ? `<a class="btn ghost sm lockbtn" href="#signup">${CertHub.fx.icon("spark")}${tr("Sign up free to read")}</a>` : `<span class="note" role="status">${tr((LES && LES.unlockFailed) || (LES_ES && LES_ES.unlockFailed) ? "Connect to the internet to open this lesson." : "Loading the full lesson…")}</span>`}</div></li>`;
     if (!l) return `<li class="lesson-none">${esc(t)}</li>`;
     const r = isRead(t);
     return `<li><details class="lesson" data-k="${lessonKey(t)}"${l.tt ? ` lang="es"` : ""}><summary><span class="grow">${esc(l.tt || t)}</span>${r ? `<span class="chip done">${tr("Read")}</span>` : ""}</summary>
