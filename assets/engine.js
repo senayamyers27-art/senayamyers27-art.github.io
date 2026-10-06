@@ -17,7 +17,7 @@
   // The lesson to show for a topic: the Spanish translation when chosen and available.
   const lessonOf = t => (LANG === "es" && LES_ES && LES_ES.get(t)) || (LES && LES.get(t)); // lessons for this certification: a Map by topic text, false when there are none yet, null while loading
   let active = false;
-  const TAB_IDS = ["week", "learn", "plan", "practice", "labs", "progress", "guide", "about", "cheat", "certificate", "cards"];
+  const TAB_IDS = ["week", "learn", "plan", "practice", "labs", "progress", "guide", "about", "cheat", "certificate", "cards", "teach"];
   const Pro = () => CertHub.pro || { available: false, active: false };
   const toQ = ([id, w, d, q, o, a, e, src, why, lv]) => ({ id, w, d, q, o, a, e, src, why: Array.isArray(why) && why.length === 4 ? why : null, lv: [1, 2, 3].includes(lv) ? lv : 0 });
   const LEVELS = ["", "Easy", "Medium", "Hard"];
@@ -72,7 +72,7 @@
       if (active && !(S.quiz && !S.quiz.done) && ["week", "learn", "cheat", "progress", "certificate", "cards"].includes(S.tab)) render();
     });
     const p = loadProgress(C.id);
-    if (!lessonsHooked) { lessonsHooked = true; document.addEventListener("certhub:lessons", () => { lessonIdx.clear(); if (active && C && !(S.quiz && !S.quiz.done) && ["week", "learn", "cheat", "cards", "today", "progress", "certificate"].includes(S.tab)) render(); }); }
+    if (!lessonsHooked) { lessonsHooked = true; document.addEventListener("certhub:me", () => { if (active && C && S) { if (S.tab === "teach" && !(S.quiz && !S.quiz.done)) render(); else renderTabs(); } }); document.addEventListener("certhub:lessons", () => { lessonIdx.clear(); if (active && C && !(S.quiz && !S.quiz.done) && ["week", "learn", "cheat", "cards", "today", "progress", "certificate"].includes(S.tab)) render(); }); }
     // Some lesson titles were capitalized (September 2026); keep "read" marks and ratings saved under the old title.
     if (p.read || p.ratings) W.forEach(w => w.topics.forEach(t => {
       if (!/^[A-Z][a-z]/.test(t)) return;
@@ -285,9 +285,10 @@
   }
 
   /* ---------- views ---------- */
-  const TABS = [["week", "This week"], ["learn", "Lessons"], ["plan", "Plan"], ["practice", "Quizzes & tests"], ["labs", "Labs"], ["progress", "Progress"], ["guide", "Flashcards & guide"], ["about", "About the exam"]];
-  // The Pro tab only shows where Pro can be bought.
-  const tabs = () => TABS.filter(([k]) => k !== "guide" || Pro().available);
+  const TABS = [["week", "This week"], ["learn", "Lessons"], ["plan", "Plan"], ["practice", "Quizzes & tests"], ["labs", "Labs"], ["progress", "Progress"], ["guide", "Flashcards & guide"], ["about", "About the exam"], ["teach", "Teacher edition"]];
+  // The Pro tab only shows where Pro can be bought; the teacher edition only to teacher accounts.
+  const isTeacher = () => !!(CertHub.sync && CertHub.sync.me && CertHub.sync.me.teacher);
+  const tabs = () => TABS.filter(([k]) => (k !== "guide" || Pro().available) && (k !== "teach" || (C.hasTeacher && isTeacher())));
   function renderTabs() {
     $("#tabs").innerHTML = tabs().map(([k, l]) => `<button role="tab" aria-selected="${S.tab === k}" data-tab="${esc(k)}">${k === "plan" ? `${W.length}-week plan` : esc(l)}</button>`).join("");
     const days = Math.ceil((parseD(S.p.examDate) - today()) / DAY);
@@ -390,18 +391,22 @@
   const GATE = () => CertHub.gate || { locked: false, wall: () => "" };
   function lessonHtml(t, n) {
     const l = lessonOf(t);
-    if (l && l.locked) return `<li><div class="lesson locked"><span class="grow">${esc(l.tt || t)}</span>${GATE().locked || !GATE().member ? `<a class="btn ghost sm lockbtn" href="#signup">${CertHub.fx.icon("spark")}${tr("Sign up free to read")}</a>` : `<span class="note" role="status">${tr((LES && LES.unlockFailed) || (LES_ES && LES_ES.unlockFailed) ? "Connect to the internet to open this lesson." : "Loading the full lesson…")}</span>`}</div></li>`;
+    if (l && l.locked) return `<li><div class="lesson locked"><span class="grow">${esc(l.tt || t)}${l.hook && GATE().locked ? `<span class="lteaser">${inline(l.hook)}</span>` : ""}</span>${GATE().locked || !GATE().member ? `<a class="btn ghost sm lockbtn" href="#signup">${CertHub.fx.icon("spark")}${tr("Sign up free to read")}</a>` : `<span class="note" role="status">${tr((LES && LES.unlockFailed) || (LES_ES && LES_ES.unlockFailed) ? "Connect to the internet to open this lesson." : "Loading the full lesson…")}</span>`}</div></li>`;
     if (!l) return `<li class="lesson-none">${esc(t)}</li>`;
     const r = isRead(t);
     return `<li><details class="lesson" data-k="${lessonKey(t)}"${l.tt ? ` lang="es"` : ""}><summary><span class="grow">${esc(l.tt || t)}</span>${r ? `<span class="chip done">${tr("Read")}</span>` : ""}</summary>
       <div class="lbody">
         <div class="btns" data-style="margin-top:0"><button type="button" class="btn ghost sm" data-act="video" data-k="${lessonKey(t)}">${tr("▶ Watch the overview")}</button>${ytLink(t)}${"speechSynthesis" in window ? `<button type="button" class="btn ghost sm" data-act="listen" data-k="${lessonKey(t)}" aria-pressed="false">${tr("🔊 Listen")}</button>` : ""}</div>
+        ${l.hook ? `<div class="lhook">${CertHub.fx.icon("spark")}<p>${inline(l.hook)}</p></div>` : ""}
         ${(l.body || []).map((x, i) => para(x) + (i === 0 ? diagramHtml(t) : "")).join("")}
+        ${l.analogy || l.mnemonic ? `<div class="panel lidea">${l.analogy ? `<p><strong>${tr("Think of it like this")}</strong> ${inline(l.analogy)}</p>` : ""}${l.mnemonic ? `<p><strong>${tr("Memory trick")}</strong> ${inline(l.mnemonic)}</p>` : ""}</div>` : ""}
         ${l.terms && l.terms.length ? `<h3>${tr("Key terms")}</h3><dl class="terms">${l.terms.map(([a, b]) => `<dt>${inline(a)}</dt><dd>${inline(b)}</dd>`).join("")}</dl>` : ""}
         ${l.example ? `<div class="panel ex"><strong>${tr("Real-world example")}</strong>${[].concat(l.example).map(para).join("")}</div>` : ""}
+        ${l.mistakes && l.mistakes.length ? `<h3>${tr("Common mistakes")}</h3><ul class="lmistakes">${l.mistakes.map(([a, b]) => `<li><span class="wrong">${inline(a)}</span><span class="right">${inline(b)}</span></li>`).join("")}</ul>` : ""}
+        ${l.tryit && l.tryit.length ? `<h3>${tr("You decide")}</h3>${l.tryit.map(([q, a]) => `<div class="panel ltry"><p>${inline(q)}</p><details class="sq"><summary>${tr("Show the answer")}</summary><p>${inline(a)}</p></details></div>`).join("")}` : ""}
         ${l.tip ? `<div class="status notice"><strong>${tr("Exam tip:")}</strong> ${inline(l.tip)}</div>` : ""}
         ${l.check && l.check.length ? `<h3>${tr("Check yourself")}</h3><p class="note">${tr("Answer out loud first, then open to check.")}</p>${l.check.map(([q, a]) => `<details class="sq"><summary>${inline(q)}</summary><p>${inline(a)}</p></details>`).join("")}` : ""}
-        <div class="btns" data-ui>${readBtn(t)}${n ? `<button class="btn ghost sm" data-act="weekly" data-w="${esc(n)}">Quiz me on week ${esc(n)}</button>` : ""}</div>
+        <div class="btns" data-ui>${readBtn(t)}${n ? `<button class="btn ghost sm" data-act="weekly" data-w="${esc(n)}">Quiz me on week ${esc(n)}</button>` : ""}${C.hasTeacher && isTeacher() ? `<button type="button" class="btn ghost sm" data-act="teachplan" data-k="${lessonKey(t)}">Teacher edition</button>` : ""}</div>
         ${rateHtml(t)}
         ${reportLink(`${C.short} lesson: ${t.slice(0, 80)}`, `Certification: ${C.name} (${C.exam})\nLesson: ${t}`)}
       </div></details></li>`;
@@ -1087,6 +1092,43 @@
     const list = ((CertHub.site || {}).compare || []).filter(p => p.includes(C.id) && CertHub.certs[p[0]] && CertHub.certs[p[1]]);
     return list.length ? `<p class="note no-print">Compare: ${list.map(([a, b]) => `<a href="/compare/${esc(a)}-vs-${esc(b)}/">${esc(CertHub.certs[a].short)} vs ${esc(CertHub.certs[b].short)}</a>`).join(" · ")}</p>` : "";
   }
+  /* ---------- teacher edition (teacher accounts; plans come from the API) ---------- */
+  const teach = {};
+  function loadTeach(id) {
+    if (teach[id]) return;
+    const api = (CertHub.site && CertHub.site.apiUrl) || "";
+    teach[id] = { loading: true };
+    fetch(`${api}/v1/content/teacher/${id}`, { ...CertHub.sync.authInit(), cache: "no-store" })
+      .then(r => r.json().then(j => r.ok ? { plans: new Map((j.plans || []).filter(x => x && typeof x.t === "string").map(x => [x.t, x])) } : { error: (j && j.message) || "Couldn't load the teacher edition." }))
+      .catch(() => ({ error: "Couldn't load the teacher edition. Check your connection." }))
+      .then(v => { teach[id] = v; if (active && C && C.id === id && S.tab === "teach") render(); });
+  }
+  function planHtml(t, x, n) {
+    const k = lessonKey(t), l = lessonOf(t);
+    return `<details class="tplan" data-k="${k}"><summary><span class="grow">${esc((l && l.tt) || t)}</span><span class="chip">Week ${esc(n)}</span></summary><div class="lbody">
+      <h3>Objectives</h3><ul>${(x.objectives || []).map(o => `<li>${inline(o)}</li>`).join("")}</ul>
+      <h3>45-minute plan</h3><table class="sectable tminutes"><tbody>${(x.plan || []).map(([m, step, what]) => `<tr><td class="num">${esc(m)} min</td><th scope="row">${esc(step)}</th><td>${inline(what)}</td></tr>`).join("")}</tbody></table>
+      ${x.warmup ? `<h3>Warm-up</h3><p>${inline(x.warmup)}</p>` : ""}
+      ${x.activity ? `<h3>Activity: ${esc(x.activity.title || "")}</h3>${x.activity.materials ? `<p class="note"><strong>Materials:</strong> ${inline(x.activity.materials)}</p>` : ""}<ol>${(x.activity.steps || []).map(st => `<li>${inline(st)}</li>`).join("")}</ol>` : ""}
+      ${x.discussion && x.discussion.length ? `<h3>Discussion questions</h3><ul>${x.discussion.map(q => `<li>${inline(q)}</li>`).join("")}</ul>` : ""}
+      ${x.exit && x.exit.length ? `<h3>Exit ticket</h3><ol class="texit">${x.exit.map(([q, a]) => `<li>${inline(q)}<p class="tanswer"><strong>Answer:</strong> ${inline(a)}</p></li>`).join("")}</ol>` : ""}
+      ${x.differentiation && x.differentiation.length ? `<h3>Differentiation</h3><ul>${x.differentiation.map(d => `<li>${inline(d)}</li>`).join("")}</ul>` : ""}
+      <div class="btns no-print"><button type="button" class="btn ghost sm" data-act="teachstudent" data-k="${k}">Open the student lesson</button><button type="button" class="btn ghost sm" data-act="teachprint" data-k="${k}">Print this plan</button></div>
+    </div></details>`;
+  }
+  function teachView() {
+    const head = `<h1>Teacher edition: ${esc(C.short)}</h1>`;
+    if (!isTeacher()) return head + `<p class="meta">Lesson plans for teachers and trainers. Choose "Teacher or trainer" under What describes you on <a href="#profile">your profile</a> to see them.</p>`;
+    loadTeach(C.id);
+    const T = teach[C.id];
+    if (!T || T.loading) return head + CertHub.fx.skeleton();
+    if (T.error) return head + `<div class="status warn" role="alert">${esc(T.error)}</div>`;
+    const weeks = W.filter(w => lessonTopics(w).some(t => T.plans.has(t)));
+    return head + `<p class="meta">A ready-to-teach plan for every lesson in the ${W.length}-week ${esc(C.short)} plan: objectives, a 45-minute plan, a class activity, discussion questions, an exit ticket with answers and ideas for students who need support or a challenge. Students never see this tab.</p>
+    <div class="btns no-print"><button type="button" class="btn" data-act="teachprintall">Print every plan</button><a class="btn ghost" href="#account">Your classes and assignments</a></div>
+    ${weeks.map(w => `<section class="teach-week"><h2 data-style="--c:${dc(w.dom)}">Week ${esc(w.n)}: ${esc(w.title || DOM[w.dom].name)}</h2>${lessonTopics(w).filter(t => T.plans.has(t)).map(t => planHtml(t, T.plans.get(t), w.n)).join("")}</section>`).join("")}`;
+  }
+
   function learnView() {
     const head = `<h1>Lessons</h1>`;
     if (LES === null) return head + `<p class="note">Loading lessons…</p>`;
@@ -1444,7 +1486,7 @@
     if (S.tab === "guide" && !Pro().available) S.tab = "week";
     if (S.tab !== "learn" && window.speechSynthesis) speechSynthesis.cancel();
     const walled = fn => () => GATE().locked ? `<h1>${esc(C.short)}</h1>${/* html: fixed markup from sync.js */ GATE().wall("tools")}` : fn();
-    const v = { cards: walled(cardsPrintView), certificate: certificateView, cheat: walled(cheatView), week: weekView, learn: learnView, plan: planView, practice: practiceView, labs: labsView, progress: progressView, guide: guideView, about: aboutView }[S.tab];
+    const v = { cards: walled(cardsPrintView), certificate: certificateView, cheat: walled(cheatView), week: weekView, learn: learnView, plan: planView, practice: practiceView, labs: labsView, progress: progressView, guide: guideView, about: aboutView, teach: teachView }[S.tab];
     $("#app").innerHTML = v();
     if (LES !== null) cacheReadiness();
     if (pendingVideo && LES && S.tab === "learn") {
@@ -1455,6 +1497,10 @@
     if (S.openLesson && S.tab === "learn") {
       const det = document.querySelector(`#app details.lesson[data-k="${esc(S.openLesson)}"]`);
       if (det) { S.openLesson = null; det.open = true; det.scrollIntoView({ block: "start" }); det.querySelector("summary").focus({ preventScroll: true }); }
+    }
+    if (S.openPlan && S.tab === "teach") {
+      const det = document.querySelector(`#app details.tplan[data-k="${esc(S.openPlan)}"]`);
+      if (det) { S.openPlan = null; det.open = true; det.scrollIntoView({ block: "start" }); }
     }
     if (S.quiz && !S.quiz.done && S.quiz.end && S.tab === "practice") tick();
   }
@@ -1614,6 +1660,15 @@
       playweek: () => { const w = W[+t.dataset.w - 1], ts = w ? lessonTopics(w).filter(x => LES && LES.has(x)) : []; if (ts.length) playOverview(ts[0], { queue: ts.slice(1) }); },
       video: () => { const tt = LES && [...LES.keys()].find(x => lessonKey(x) === t.dataset.k); if (tt) playOverview(tt); },
       printlessons: () => { document.querySelectorAll("#app details").forEach(d => { d.open = true; }); window.print(); },
+      teachstudent: () => { S.openLesson = t.dataset.k; location.hash = `${C.id}.learn`; },
+      teachprint: () => {
+        const app = $("#app"), det = t.closest("details.tplan");
+        det.open = true; det.classList.add("printme"); app.classList.add("printone");
+        const done = () => { app.classList.remove("printone"); det.classList.remove("printme"); window.removeEventListener("afterprint", done); };
+        window.addEventListener("afterprint", done); window.print();
+      },
+      teachprintall: () => { document.querySelectorAll("#app details.tplan").forEach(d => { d.open = true; }); window.print(); },
+      teachplan: () => { S.openPlan = t.dataset.k; location.hash = `${C.id}.teach`; },
       placement: () => {
         const per = Math.max(2, Math.min(5, Math.floor(24 / C.domains.length)));
         const qs = C.domains.flatMap(d => pickFor(q => q.d === d.id, per));
