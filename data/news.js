@@ -1,6 +1,21 @@
 /* What's new: learner-facing release notes, newest first. Add an entry when something visible ships.
    Each entry: { date: "YYYY-MM-DD", title, items: [ ... ], es: { title, items } } (es: the Spanish version). Shown at #whats-new and on the home page. */
 CertHub.news = [
+  { date: "2026-10-06", title: "Teacher tools, study groups and study emails",
+    items: [
+      "Teachers: present any lesson plan as slides, print a student worksheet, assign a single lesson, lab or online exit ticket to a class, and share assignments to Google Classroom.",
+      "Study groups: start a group for a certification and see each other's progress numbers. Only names and numbers, no answers or emails.",
+      "Optional emails from your profile: study reminders at the hour you choose, an exam countdown a week and a day before your exam, and a monthly What's new.",
+      "Explain it simpler on every lesson, a dyslexia-friendly font and a reading ruler in Settings, and a Book your exam guide on each About the exam tab.",
+      "Passed an exam? Share how you prepared from your profile. With your permission, it can help other learners."
+    ],
+    es: { title: "Herramientas para docentes, grupos de estudio y correos de estudio", items: [
+      "Docentes: presenta cualquier plan de clase como diapositivas, imprime una hoja de trabajo, asigna una lección, un laboratorio o un ticket de salida en línea a una clase y comparte tareas en Google Classroom.",
+      "Grupos de estudio: crea un grupo para una certificación y vean el progreso de cada uno. Solo nombres y números, sin respuestas ni correos.",
+      "Correos opcionales desde tu perfil: recordatorios de estudio a la hora que elijas, una cuenta regresiva una semana y un día antes del examen, y un resumen mensual de novedades.",
+      "Explícalo más simple en cada lección, una fuente para dislexia y una regla de lectura en Configuración, y una guía para reservar el examen en cada pestaña Acerca del examen.",
+      "¿Aprobaste un examen? Cuenta cómo te preparaste desde tu perfil. Con tu permiso, puede ayudar a otros estudiantes."
+    ] } },
   { date: "2026-09-29", title: "Help on every page",
     items: ["A Help button at the bottom right of every page searches answers to common questions, offline too. Once it's switched on, an AI assistant can also answer questions about the site and explain exam topics. Chats aren't saved."],
     es: { title: "Ayuda en cada página", items: ["Un botón de Ayuda abajo a la derecha de cada página busca respuestas a preguntas frecuentes, también sin conexión. Cuando se active, un asistente de IA también podrá responder preguntas sobre el sitio y explicar temas del examen. Las conversaciones no se guardan."] } },

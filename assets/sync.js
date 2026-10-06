@@ -267,7 +267,7 @@
       pending.add(storageKey);
       clearTimeout(pushTimer); pushTimer = setTimeout(pushPending, 2500);
     },
-    syncAll, refreshMe, savePrompt, api, authInit, get me() { return me; }, get enabled() { return !!API; }
+    syncAll, refreshMe, savePrompt, api, authInit, modeSwitch, setMode, assignFrom, stories: storiesInto, get me() { return me; }, get enabled() { return !!API; }
   };
 
   /* ---------- plan limits ---------- */
@@ -369,6 +369,8 @@
     <div id="orgpanel"></div>
     <h2>Classes</h2>
     <div id="classpanel">${CertHub.fx.skeleton()}</div>
+    <h2>Study groups</h2>
+    <div id="grouppanel">${CertHub.fx.skeleton()}</div>
     <h2>Passkeys</h2>
     <div id="passkeypanel">${CertHub.fx.skeleton()}</div>
     <h2>Signed-in devices</h2>
@@ -491,7 +493,7 @@
       const { data } = await api("GET", "/v1/classes");
       el.innerHTML = `<div class="panel">
         <p data-style="margin:0"><strong>Classes you're in</strong></p>
-        ${data.joined.length ? data.joined.map(j => `<div class="row"><div class="grow"><strong>${esc(j.name)}</strong><br><span class="note">Teacher: ${esc(j.teacherName)}${j.certId ? ` · ${esc(certLabel(j.certId))}` : ""} · you appear as ${esc(j.displayName)}${j.showEmail ? " (with your email)" : ""}</span></div><button type="button" class="btn ghost sm" data-aact="leaveclass" data-class="${esc(j.id)}" data-name="${esc(j.name)}">Leave</button></div>${(j.assignments || []).length ? `<ul class="clean assignlist">${j.assignments.map(a => `<li class="${a.done ? "done" : ""}"><strong>${esc(a.title)}</strong> <span class="chip ${a.done ? "done" : ""}">${a.done ? "Done" : `${+a.value} / ${+a.target}`}</span><br><span class="note">${assignLine(a)}</span></li>`).join("")}</ul>` : ""}`).join("") : `<p class="note" data-style="margin:0">None. Your teacher shares a join link or code; your progress is shared only after you agree.</p>`}
+        ${data.joined.length ? data.joined.map(j => `<div class="row"><div class="grow"><strong>${esc(j.name)}</strong><br><span class="note">Teacher: ${esc(j.teacherName)}${j.certId ? ` · ${esc(certLabel(j.certId))}` : ""} · you appear as ${esc(j.displayName)}${j.showEmail ? " (with your email)" : ""}</span></div><button type="button" class="btn ghost sm" data-aact="leaveclass" data-class="${esc(j.id)}" data-name="${esc(j.name)}">Leave</button></div>${(j.assignments || []).length ? `<ul class="clean assignlist">${j.assignments.map(a => `<li class="${a.done ? "done" : ""}"><strong>${esc(a.title)}</strong> <span class="chip ${a.done ? "done" : ""}">${a.done ? "Done" : `${+a.value} / ${+a.target}`}</span><br><span class="note">${assignLine(a)}</span>${ITEM_KINDS.includes(a.kind) ? `<div class="btns" data-style="margin:6px 0 0">${assignOpen(a, j.id)}</div><div class="exitbox" id="exit-${esc(a.id)}"></div>` : ""}</li>`).join("")}</ul>` : ""}`).join("") : `<p class="note" data-style="margin:0">None. Your teacher shares a join link or code; your progress is shared only after you agree.</p>`}
         <form id="classcode-form" class="row" novalidate>
           <div class="grow"><label for="classcode-in">Class code</label><input type="text" id="classcode-in" class="textin" maxlength="16" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="e.g. k7m2qx9fab"></div>
           <button type="submit" class="btn sm">Join a class</button>
@@ -512,6 +514,88 @@
   }
 
   const JOIN_KEY = "certhub:join";
+  /* ---------- study groups ---------- */
+  const pctOr = v => v == null ? "–" : `${+v}%`;
+  const groupBoard = g => `<div class="scroll" tabindex="0" role="region" aria-label="${esc(g.name)} progress (scrolls sideways on small screens)"><table class="sectable"><thead><tr><th scope="col">Name</th><th scope="col">Readiness</th><th scope="col">Lessons read</th><th scope="col">Questions</th><th scope="col">Best exam</th><th scope="col">Last active</th></tr></thead><tbody>
+    ${g.members.map(m => `<tr${m.you ? ' class="you"' : ""}><td>${esc(m.displayName)}${m.you ? ` <span class="chip">You</span>` : ""}</td><td>${m.readiness == null ? "–" : `${+m.readiness}/100`}</td><td>${+m.lessonsRead}${m.lessonsTotal == null ? "" : ` / ${+m.lessonsTotal}`}</td><td>${+m.answered}</td><td>${pctOr(m.bestExam)}</td><td>${fmtDate(m.lastActive)}</td></tr>`).join("")}</tbody></table></div>`;
+  async function groupPanel() {
+    const el = document.getElementById("grouppanel"); if (!el) return;
+    try {
+      const { data } = await api("GET", "/v1/groups");
+      el.innerHTML = `<div class="panel">
+        <p class="note" data-style="margin-top:0">Study with friends or classmates: everyone in a group sees each other's name and progress numbers for one certification. No answers or notes, and no emails.</p>
+        ${data.groups.map(g => `<div class="groupcard"><div class="row"><div class="grow"><strong>${esc(g.name)}</strong><br><span class="note">${esc(certLabel(g.certId))} · ${plural(g.members.length, "member")} · join code <code>${esc(g.code)}</code></span></div><button type="button" class="btn ghost sm" data-aact="copygroup" data-code="${esc(g.code)}">Copy invite link</button><button type="button" class="btn ghost sm" data-aact="leavegroup" data-group="${esc(g.id)}" data-name="${esc(g.name)}">Leave</button></div>${groupBoard(g)}</div>`).join("")}
+        <details class="sq"><summary>Start a study group</summary>
+          <form id="group-form">
+            <label for="group-name">Group name</label><input type="text" id="group-name" class="textin" maxlength="60" required placeholder="e.g. Saturday Security+ crew">
+            <label for="group-cert">Certification</label><select id="group-cert" class="textin" required>${certOptions("", "Choose a certification")}</select>
+            <label for="group-you">Your name in the group</label><input type="text" id="group-you" class="textin" maxlength="40" required value="${esc((me && me.user && me.user.displayName) || "")}">
+            <div class="btns"><button type="submit" class="btn sm">Start the group</button></div>
+            <p class="note" id="group-msg" role="status"></p>
+          </form>
+        </details>
+        <details class="sq"><summary>Join with a code</summary>
+          <form id="groupcode-form"><label for="groupcode">Join code</label><input type="text" id="groupcode" class="textin" maxlength="10" required autocomplete="off"><div class="btns"><button type="submit" class="btn sm">Continue</button></div></form>
+        </details></div>`;
+    } catch (e) { el.innerHTML = `<div class="status warn">${esc(e.message)}</div>`; }
+  }
+  /* ---------- success stories: members who passed share how they prepared ---------- */
+  const STORY_STATUS = { pending: "Waiting for a quick check before it's shown", approved: "Shown on the site", hidden: "Not shown on the site" };
+  async function storyPanel() {
+    const el = document.getElementById("storypanel"); if (!el) return;
+    try {
+      const { data } = await api("GET", "/v1/stories/mine");
+      const today = new Date().toISOString().slice(0, 10);
+      el.innerHTML = `<div class="panel">
+        <p class="note" data-style="margin-top:0">Passed an exam? Tell other learners how you prepared. If you allow it, your story can appear on the site after a quick check, under the name you choose or with no name. No email or account details are ever shown.</p>
+        ${data.stories.map(st => `<div class="row"><div class="grow"><strong>${esc(certLabel(st.certId))}</strong> <span class="note">· passed ${esc(st.passedOn)} · ${esc(st.publish ? STORY_STATUS[st.status] || st.status : "Private: only you can see it")}</span><br><span class="note">${esc(st.quote)}</span></div><button type="button" class="btn ghost sm" data-aact="rmstory" data-story="${esc(st.id)}">Delete</button></div>`).join("")}
+        <details class="sq"${data.stories.length ? "" : " open"}><summary>Share your result</summary>
+          <form id="story-form" novalidate>
+            <label for="story-cert">Certification you passed</label><select id="story-cert" class="textin" required>${certOptions("", "Choose a certification")}</select>
+            <label for="story-date">Date you passed</label><input type="date" id="story-date" class="textin" required max="${esc(today)}">
+            <label for="story-quote">How you prepared, in a sentence or two</label><textarea id="story-quote" class="textin" rows="3" maxlength="600" required placeholder="e.g. Two lessons a day, a practice exam every Sunday, and the labs for the hands-on questions."></textarea>
+            <label for="story-name">Name to show (leave blank to stay anonymous)</label><input type="text" id="story-name" class="textin" maxlength="40" placeholder="e.g. Sam R.">
+            <label class="check"><input type="checkbox" id="story-publish"> StudyToCert can show this on the site</label>
+            <div class="btns"><button type="submit" class="btn sm">Save my story</button></div>
+            <p class="note" id="story-msg" role="status">Sharing the same certification again replaces your earlier story. You can delete it any time, which removes it from the site.</p>
+          </form></details></div>`;
+    } catch (e) { el.innerHTML = `<div class="status warn">${esc(e.message)}</div>`; }
+  }
+  // Approved stories, shown only when there are some (the box stays empty otherwise).
+  async function storiesInto(id, certId, heading = "From learners who passed") {
+    if (!API) return;
+    try {
+      const { data } = await api("GET", "/v1/stories" + (certId ? "?cert=" + encodeURIComponent(certId) : ""));
+      const el = document.getElementById(id);
+      if (!el || !data.stories || !data.stories.length) return;
+      el.innerHTML = `<h2>${esc(heading)}</h2><div class="stories">${data.stories.slice(0, 6).map(st => `<figure class="panel story"><blockquote>${esc(st.quote)}</blockquote><figcaption class="note">${esc(st.shownAs || "A StudyToCert learner")}, passed ${esc(certLabel(st.certId))} in ${esc(new Date(st.passedOn + "T12:00:00").toLocaleDateString(undefined, { month: "long", year: "numeric" }))}</figcaption></figure>`).join("")}</div>`;
+    } catch (e) { /* stories are a nice-to-have */ }
+  }
+  async function adminStoriesPanel() {
+    const el = document.getElementById("adminstories"); if (!el) return;
+    try {
+      const { data } = await api("GET", "/v1/admin/stories");
+      el.innerHTML = data.stories.length ? data.stories.map(st => `<div class="panel"><div class="row"><div class="grow"><strong>${esc(certLabel(st.certId))}</strong> <span class="note">· ${esc(st.shownAs || "no name")} · passed ${esc(st.passedOn)} · ${esc(st.status)}</span><p data-style="margin:6px 0 0">${esc(st.quote)}</p></div>${st.status !== "approved" ? `<button type="button" class="btn sm" data-aact="modstory" data-story="${esc(st.id)}" data-status="approved">Approve</button>` : ""}${st.status !== "hidden" ? `<button type="button" class="btn ghost sm" data-aact="modstory" data-story="${esc(st.id)}" data-status="hidden">Hide</button>` : ""}</div></div>`).join("")
+        : `<p class="note">No stories yet. Members share them from their profile after they pass; only ones they allow to be shown appear here.</p>`;
+    } catch (e) { el.innerHTML = `<div class="status warn">${esc(e.message)}</div>`; }
+  }
+  async function groupJoinView(code) {
+    const app = $("#app");
+    if (!signedIn()) { app.innerHTML = `<h1>Join a study group</h1><p class="meta">Sign in first, then open the invite link again.</p><div class="btns"><a class="btn" href="#signup">Sign up free</a><a class="btn ghost" href="#login">Log in</a></div>`; return; }
+    app.innerHTML = `<h1>Join a study group</h1>${CertHub.fx.skeleton()}`;
+    try {
+      const { data } = await api("GET", `/v1/groups/join/${code}`);
+      const g = data.group;
+      app.innerHTML = `<h1>Join "${esc(g.name)}"</h1><p class="meta">${esc(certLabel(g.certId))} · ${plural(g.members, "member")}</p>
+        <div class="panel"><p data-style="margin-top:0">Everyone in this group will see the name you choose below and these numbers for ${esc(certLabel(g.certId))}: exam readiness, lessons read, questions answered, best practice exam score and when you were last active. Nobody sees your answers, notes or email. Leave any time from your Account page.</p>
+        <form id="groupjoin-form" data-code="${esc(code)}">
+          <label for="gj-name">Your name in the group</label><input type="text" id="gj-name" class="textin" maxlength="40" required value="${esc((me && me.user && me.user.displayName) || "")}">
+          <label class="check"><input type="checkbox" id="gj-consent"> I agree to share these numbers with the group</label>
+          <div class="btns"><button type="submit" class="btn">${data.isMember ? "Update my name" : "Join the group"}</button></div><p class="note" id="gj-msg" role="status"></p>
+        </form></div>`;
+    } catch (e) { app.innerHTML = `<h1>Join a study group</h1><div class="status warn">${esc(e.message)}</div>`; }
+  }
+
   async function joinView(code) {
     const shell = body => { $("#app").innerHTML = `<p class="crumbs"><a href="#account">Account</a> / Join a class</p>${/* html: callers pass markup built with esc() */ body}`; };
     if (!API) return shell(`<h1>Join a class</h1><div class="status">Accounts aren't available on this site, so classes aren't either.</div>`);
@@ -574,13 +658,14 @@
       </div>
       <h2>Assignments</h2>
       <div class="panel">
-        ${(data.assignments || []).length ? data.assignments.map(a => `<div class="row"><div class="grow"><strong>${esc(a.title)}</strong><br><span class="note">${assignLine(a)} · ${+a.done} of ${plural(n, "student")} done</span></div><button type="button" class="btn ghost sm" data-aact="delassign" data-class="${esc(c.id)}" data-assign="${esc(a.id)}" data-name="${esc(a.title)}">Delete</button></div>`).join("") : `<p class="note" data-style="margin-top:0">No assignments yet. Set a target, like a practice exam score by a date; students see it on their Account page with their progress.</p>`}
+        ${(data.assignments || []).length ? data.assignments.map(a => `<div class="row"><div class="grow"><strong>${esc(a.title)}</strong><br><span class="note">${assignLine(a)} · ${+a.done} of ${plural(n, "student")} done</span>${a.kind === "exit" ? `<div class="btns" data-style="margin:6px 0 0"><button type="button" class="btn ghost sm" data-aact="exitresults" data-class="${esc(c.id)}" data-assign="${esc(a.id)}">See answers</button></div><div class="exitbox" id="exitres-${esc(a.id)}"></div>` : ""}${ITEM_KINDS.includes(a.kind) && a.kind !== "exit" ? `<div class="btns" data-style="margin:6px 0 0"><a class="btn ghost sm" target="_blank" rel="noopener" href="${esc(classroomShare(a))}">Share to Google Classroom</a></div>` : ""}</div><button type="button" class="btn ghost sm" data-aact="delassign" data-class="${esc(c.id)}" data-assign="${esc(a.id)}" data-name="${esc(a.title)}">Delete</button></div>`).join("") : `<p class="note" data-style="margin-top:0">No assignments yet. Set a target, like a practice exam score by a date; students see it on their Account page with their progress.</p>`}
         <details class="sq"><summary>Add an assignment</summary>
           <form id="assign-form" data-class="${esc(c.id)}">
             <label for="assign-title">Title</label><input type="text" id="assign-title" class="textin" maxlength="100" required placeholder="e.g. Week 4 practice exam">
-            <label for="assign-kind">Students should</label><select id="assign-kind" class="textin"><option value="exam">Score at least … % on a practice exam</option><option value="lessons">Read at least … lessons</option><option value="readiness">Reach … /100 exam readiness</option><option value="questions">Answer at least … practice questions</option></select>
-            <label for="assign-target">Target</label><input type="number" id="assign-target" class="textin" min="1" max="5000" required value="80">
+            <label for="assign-kind">Students should</label><select id="assign-kind" class="textin"><option value="exam">Score at least … % on a practice exam</option><option value="lessons">Read at least … lessons</option><option value="readiness">Reach … /100 exam readiness</option><option value="questions">Answer at least … practice questions</option><option value="lesson">Read one lesson</option><option value="lab">Finish one lab</option><option value="exit">Answer a lesson's exit ticket</option></select>
             <label for="assign-cert">Certification</label><select id="assign-cert" class="textin">${certOptions(c.certId || "", "Choose a certification")}</select>
+            <div id="assign-target-box"><label for="assign-target">Target</label><input type="number" id="assign-target" class="textin" min="1" max="5000" value="80"></div>
+            <div id="assign-item-box" hidden><label for="assign-item" id="assign-item-l">Lesson</label><select id="assign-item" class="textin"></select></div>
             <label for="assign-due">Due date (optional)</label><input type="date" id="assign-due" class="textin">
             <div class="btns"><button type="submit" class="btn sm">Add assignment</button></div>
             <p class="note" id="assign-msg" role="status"></p>
@@ -592,6 +677,15 @@
       <div class="scroll" tabindex="0" role="region" aria-label="Class roster (scrolls sideways on small screens)"><table class="sectable"><thead><tr><th scope="col">Student</th><th scope="col">Certification</th><th scope="col">Readiness</th><th scope="col">Lessons read</th><th scope="col">Best practice exam</th><th scope="col">Questions answered</th><th scope="col">Hands-on done</th><th scope="col">Labs done</th><th scope="col">Last active</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead><tbody>
       ${rows || `<tr><td colspan="10">No students yet. Share the join link; students appear here after they agree to share.</td></tr>`}
       </tbody></table></div>`;
+      // Arrived from "Assign" on a teacher edition plan: open the form with it filled in.
+      const pend = pendingAssign();
+      if (pend) {
+        const det = $("#assign-form").closest("details"); det.open = true;
+        $("#assign-kind").value = pend.kind; $("#assign-cert").value = pend.cert; $("#assign-title").value = pend.title.slice(0, 100);
+        try { sessionStorage.removeItem(PEND_KEY); } catch (e) {}
+        await assignItems(); if (pend.item) $("#assign-item").value = pend.item;
+        det.scrollIntoView({ block: "center" });
+      }
     } catch (e) { $("#app").innerHTML = `${crumbs}<h1>Class roster</h1><div class="status warn">${esc(e.message)}</div>`; }
   }
 
@@ -645,13 +739,86 @@
       <h2>Most studied (30 days)</h2>
       <div class="panel">${d.certs.length ? `<ol>${d.certs.map(c => `<li>${esc(certLabel(c.certId))} <span class="note">· ${plural(c.learners, "learner")}</span></li>`).join("")}</ol>` : `<p class="note" data-style="margin:0">No synced study yet.</p>`}</div>
       <h2>Classes and referrals</h2>
-      <div class="stats">${tile(d.classes.classes, "classes")}${tile(d.classes.students, "students in classes")}${tile(d.referrals.referred, "plans from referrals")}${tile(d.referrals.rewarded, "referral credits given")}</div>`;
+      <div class="stats">${tile(d.classes.classes, "classes")}${tile(d.classes.students, "students in classes")}${tile(d.referrals.referred, "plans from referrals")}${tile(d.referrals.rewarded, "referral credits given")}</div>
+      <h2>Success stories</h2>
+      <p class="note">Shown on the site only after you approve them, and only when the member allowed it. Check that each one reads as a real experience and names no exam questions.</p>
+      <div id="adminstories">${CertHub.fx.skeleton()}</div>`;
+      adminStoriesPanel();
     } catch (e) { $("#app").innerHTML = `${crumbs}<h1>Site dashboard</h1><div class="status warn">${esc(e.status === 403 ? "This page is for the site's owner." : e.message)}</div>`; }
   }
 
   // What an assignment asks for, in words.
-  const ASSIGN = { lessons: n => `Read ${n} lessons`, exam: n => `Score ${n}% or more on a practice exam`, readiness: n => `Reach ${n}/100 exam readiness`, questions: n => `Answer ${n} practice questions` };
-  const assignLine = a => `${esc(ASSIGN[a.kind] ? ASSIGN[a.kind](a.target) : a.kind)} in ${esc(certLabel(a.certId))}${a.dueDate ? ` · due ${esc(a.dueDate)}` : ""}`;
+  const ASSIGN = { lessons: n => `Read ${n} lessons`, exam: n => `Score ${n}% or more on a practice exam`, readiness: n => `Reach ${n}/100 exam readiness`, questions: n => `Answer ${n} practice questions`, lesson: () => "Read the lesson", lab: () => "Finish the lab", exit: () => "Answer the exit ticket" };
+  const assignLine = a => `${esc(ASSIGN[a.kind] ? ASSIGN[a.kind](a.target) : a.kind)} ${a.kind === "lab" ? "" : `in ${esc(certLabel(a.certId))}`}${a.dueDate ? ` · due ${esc(a.dueDate)}` : ""}`;
+  const ITEM_KINDS = ["lesson", "lab", "exit"];
+  // The link that opens what a one-item assignment points at.
+  const assignOpen = (a, cls) => a.kind === "lesson" ? `<a class="btn ghost sm" href="#${esc(a.certId)}.lesson-${esc(a.item)}">Open the lesson</a>`
+    : a.kind === "lab" ? `<a class="btn ghost sm" href="#${esc(a.item)}">Open the lab</a>`
+    : a.kind === "exit" ? `<button type="button" class="btn ghost sm" data-aact="exitopen" data-class="${esc(cls)}" data-assign="${esc(a.id)}">${a.done ? "Change your answers" : "Answer the exit ticket"}</button>` : "";
+  // The one-item picker in the assignment form: lessons of the chosen certification, or labs.
+  async function assignItems() {
+    const kind = ($("#assign-kind") || {}).value, box = $("#assign-item-box"), sel = $("#assign-item"), cert = ($("#assign-cert") || {}).value;
+    if (!box) return;
+    const item = ITEM_KINDS.includes(kind);
+    box.hidden = !item; $("#assign-target-box").hidden = item;
+    if (!item) return;
+    if (kind === "lab") {
+      $("#assign-item-l").textContent = "Lab";
+      sel.innerHTML = CertHub.labOrder.map(id => `<option value="${esc(id)}">${esc(CertHub.labs[id].title)}</option>`).join("");
+      return;
+    }
+    $("#assign-item-l").textContent = "Lesson";
+    if (!cert) { sel.innerHTML = `<option value="">Choose a certification first</option>`; return; }
+    sel.innerHTML = `<option value="">Loading lessons…</option>`;
+    const m = await CertHub.loadLessons(cert).catch(() => null);
+    if (!m || ($("#assign-cert") || {}).value !== cert) { if (!m) sel.innerHTML = `<option value="">No lessons for this certification yet</option>`; return; }
+    const key = t => "l" + [...String(t)].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7).toString(36);
+    sel.innerHTML = [...m.keys()].map(t => `<option value="${esc(key(t))}">${esc(t.length > 90 ? t.slice(0, 88) + "…" : t)}</option>`).join("");
+    const pend = pendingAssign(); if (pend && pend.item) sel.value = pend.item;
+  }
+  document.addEventListener("change", e => { if (e.target.id === "assign-kind" || e.target.id === "assign-cert") assignItems(); });
+  // Google Classroom's share link: the teacher picks the class there and posts the link as an assignment or material.
+  const SITE = () => location.origin + location.pathname.replace(/[^/]*$/, "");
+  const classroomShare = a => `https://classroom.google.com/share?url=${encodeURIComponent(SITE() + (a.kind === "lab" ? `#${a.item}` : `#${a.certId}.lesson-${a.item}`))}&title=${encodeURIComponent(a.title)}`;
+  // Exit tickets: the student's form, and the teacher's view of everyone's answers.
+  async function exitOpen(cls, asg) {
+    const box = $("#exit-" + asg); if (!box) return;
+    box.innerHTML = CertHub.fx.skeleton();
+    try {
+      const { data } = await api("GET", `/v1/classes/${cls}/assignments/${asg}/exit`);
+      box.innerHTML = `<form class="exitform panel" data-class="${esc(cls)}" data-assign="${esc(asg)}"><p class="note" data-style="margin-top:0">Exit ticket: ${esc(data.lesson)}</p>
+        ${data.questions.map((q, i) => `<label for="ex-${esc(asg)}-${i}"><strong>${i + 1}. ${esc(q)}</strong></label><textarea id="ex-${esc(asg)}-${i}" class="textin" rows="3" maxlength="1000" required>${esc((data.answers || [])[i] || "")}</textarea>`).join("")}
+        <div class="btns"><button type="submit" class="btn sm">${data.answers ? "Update answers" : "Send to my teacher"}</button></div><p class="note" role="status"></p></form>`;
+    } catch (e) { box.innerHTML = `<div class="status warn">${esc(e.message)}</div>`; }
+  }
+  async function exitResultsView(cls, asg) {
+    const box = $("#exitres-" + asg); if (!box) return;
+    if (box.innerHTML) { box.innerHTML = ""; return; }
+    box.innerHTML = CertHub.fx.skeleton();
+    try {
+      const { data } = await api("GET", `/v1/classes/${cls}/assignments/${asg}/results`);
+      const done = data.students.filter(x => x.answers).length;
+      box.innerHTML = `<div class="panel exitres"><p class="note" data-style="margin-top:0">${esc(data.lesson)} · ${done} of ${data.students.length} answered</p>
+        ${data.questions.map((q, i) => `<h3>${i + 1}. ${esc(q.question)}</h3><p class="note"><strong>Expected:</strong> ${esc(q.expected)}</p><ul class="clean">${data.students.map(st => `<li><strong>${esc(st.displayName)}:</strong> ${st.answers ? esc(st.answers[i]) : `<span class="note">not answered yet</span>`}</li>`).join("")}</ul>`).join("")}</div>`;
+    } catch (e) { box.innerHTML = `<div class="status warn">${esc(e.message)}</div>`; }
+  }
+  document.addEventListener("submit", async e => {
+    const f = e.target; if (!f.classList || !f.classList.contains("exitform")) return;
+    e.preventDefault();
+    const msg = f.querySelector("[role=status]");
+    try {
+      await api("POST", `/v1/classes/${f.dataset.class}/assignments/${f.dataset.assign}/exit`, { answers: [...f.querySelectorAll("textarea")].map(t => t.value) });
+      ui.toast("Sent to your teacher."); CertHub.rerender();
+    } catch (err) { msg.textContent = err.message; }
+  });
+  // "Assign" from a teacher edition plan: remembered until the teacher picks the class.
+  const PEND_KEY = "certhub:assign";
+  const pendingAssign = () => { try { const p = JSON.parse(sessionStorage.getItem(PEND_KEY) || "null"); return p && Date.now() - p.at < 30 * 60e3 ? p : null; } catch (e) { return null; } };
+  function assignFrom(p) {
+    try { sessionStorage.setItem(PEND_KEY, JSON.stringify({ ...p, at: Date.now() })); } catch (e) {}
+    location.hash = "account";
+    ui.toast("Open the class to assign it to, then press Add assignment.");
+  }
 
   function download(name, text, type) {
     const a = document.createElement("a");
@@ -689,6 +856,40 @@
         const { data } = await api("POST", "/v1/auth/password", { email: $("#pw-email").value, password: $("#pw-pass").value });
         if (NATIVE && data.token) NATIVE.setToken(data.token);
         await refreshMe(); ui.toast("Signed in."); syncAll(); location.hash = "profile";
+      } catch (err) { msg.textContent = err.message; }
+      return;
+    }
+    if (f.id === "group-form") {
+      e.preventDefault();
+      try { const { data } = await api("POST", "/v1/groups", { name: $("#group-name").value, certId: $("#group-cert").value, displayName: $("#group-you").value }); ui.toast(`Group started. Join code: ${data.code}`); groupPanel(); }
+      catch (err) { $("#group-msg").textContent = err.message; }
+      return;
+    }
+    if (f.id === "story-form") {
+      e.preventDefault();
+      try {
+        const { data } = await api("POST", "/v1/stories", { certId: $("#story-cert").value, passedOn: $("#story-date").value, quote: $("#story-quote").value, shownAs: $("#story-name").value, publish: $("#story-publish").checked });
+        ui.toast($("#story-publish").checked ? "Thanks. Your story will appear after a quick check." : "Saved. Only you can see it.");
+        if (data) storyPanel();
+      } catch (err) { $("#story-msg").textContent = err.message; }
+      return;
+    }
+    if (f.id === "groupcode-form") { e.preventDefault(); const c = $("#groupcode").value.trim().toLowerCase(); if (/^[a-km-np-z2-9]{10}$/.test(c)) location.hash = "gjoin-" + c; else ui.toast("Join codes are 10 letters and numbers."); return; }
+    if (f.id === "groupjoin-form") {
+      e.preventDefault();
+      const msg = $("#gj-msg");
+      if (!$("#gj-consent").checked) { msg.textContent = "Tick the box to agree to share your numbers with the group."; return; }
+      try { await api("POST", `/v1/groups/join/${f.dataset.code}`, { displayName: $("#gj-name").value, consent: true }); ui.toast("You joined the group."); location.hash = "account"; }
+      catch (err) { msg.textContent = err.message; }
+      return;
+    }
+    if (f.id === "emailprefs-form") {
+      e.preventDefault();
+      const msg = $("#ep-msg");
+      try {
+        let tz = ""; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (err) {}
+        await api("PUT", "/v1/profile", { remind: $("#ep-remind").value, remindHour: +$("#ep-hour").value, countdown: $("#ep-countdown").checked, news: $("#ep-news").checked, tz });
+        ui.toast("Email settings saved."); profileView();
       } catch (err) { msg.textContent = err.message; }
       return;
     }
@@ -746,7 +947,8 @@
       e.preventDefault();
       const msg = $("#assign-msg");
       try {
-        await api("POST", `/v1/classes/${f.dataset.class}/assignments`, { title: $("#assign-title").value, kind: $("#assign-kind").value, target: +$("#assign-target").value, certId: $("#assign-cert").value, dueDate: $("#assign-due").value || null });
+        const kind = $("#assign-kind").value;
+        await api("POST", `/v1/classes/${f.dataset.class}/assignments`, { title: $("#assign-title").value, kind, target: ITEM_KINDS.includes(kind) ? 1 : +$("#assign-target").value, item: ITEM_KINDS.includes(kind) ? $("#assign-item").value : undefined, certId: $("#assign-cert").value, dueDate: $("#assign-due").value || null });
         ui.toast("Assignment added."); classView(f.dataset.class.slice(4));
       } catch (err) { msg.textContent = err.message; }
       return;
@@ -812,11 +1014,55 @@
     } catch (err) { ui.toast(err.message); if (f.id === "code-form") { const m = $("#signin-msg"); if (m) m.textContent = err.message; } if (f.id === "signin-form") { $("#signin-msg").textContent = err.message; turnstileReset(); } }
   });
 
+  // Sign-up: teachers don't need "Which describes you?".
+  document.addEventListener("change", e => {
+    if (e.target.name !== "su-kind") return;
+    const box = $("#su-role-box"); if (box) box.hidden = e.target.value === "teacher";
+  });
+
+  /* ---------- student / teacher view ---------- */
+  // One button switches the account between the two: teacher shows the teacher editions; student goes back to the
+  // role the person had before (kept on this device), or "student".
+  const PREV_ROLE = "certhub:studentRole";
+  async function setMode(mode) {
+    if (!signedIn()) { location.hash = "signup"; return; }
+    if (mode === "teacher") {
+      try { const pr = (await api("GET", "/v1/profile")).data; if (pr.role && pr.role !== "teacher") store.set(PREV_ROLE, pr.role); } catch (e) {}
+      await api("PUT", "/v1/profile", { role: "teacher" });
+    } else {
+      const prev = store.get(PREV_ROLE);
+      await api("PUT", "/v1/profile", { role: STUDENT_ROLES.some(([v]) => v === prev) ? prev : "student" });
+    }
+    await refreshMe();
+    document.querySelectorAll(".modeswitch [data-mode]").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.mode === mode)));
+    ui.toast(mode === "teacher" ? "Teacher view is on: lesson plans appear on each certification." : "Student view is on.");
+    if (CertHub.rerender) CertHub.rerender();
+  }
+  // The switch itself, for the menu, the Lessons tab and the Schools page. Empty when signed out or without accounts.
+  function modeSwitch(where = "") {
+    if (!API || !signedIn()) return "";
+    const t = !!(me && me.teacher);
+    return `<div class="modeswitch ${esc(where)}" role="group" aria-label="View as"><span class="note">View as</span><button type="button" class="chipbtn" data-aact="mode" data-mode="student" aria-pressed="${!t}">Student</button><button type="button" class="chipbtn" data-aact="mode" data-mode="teacher" aria-pressed="${t}">Teacher</button></div>`;
+  }
+
   document.addEventListener("click", async e => {
     const b = e.target.closest("[data-aact]"); if (!b) return;
     const a = b.dataset.aact;
     try {
       if (a === "code-restart") { CertHub.rerender(); return; }
+      if (a === "copygroup") { ui.copy(`${location.origin}${location.pathname}#gjoin-${b.dataset.code}`, "invite link"); return; }
+      if (a === "leavegroup") {
+        if (!(await ui.confirm(`Leave "${b.dataset.name}"? The group stops seeing your progress.`, { ok: "Leave", cancel: "Stay", danger: true }))) return;
+        await api("DELETE", `/v1/groups/${b.dataset.group}/membership`); ui.toast("You left the group."); groupPanel(); return;
+      }
+      if (a === "rmstory") {
+        if (!(await ui.confirm("Delete this story? It's removed from the site too.", { ok: "Delete", cancel: "Keep it", danger: true }))) return;
+        await api("DELETE", `/v1/stories/${b.dataset.story}`); ui.toast("Story deleted."); storyPanel(); return;
+      }
+      if (a === "modstory") { await api("POST", `/v1/admin/stories/${b.dataset.story}`, { status: b.dataset.status }); ui.toast(b.dataset.status === "approved" ? "Approved: it's on the site." : "Hidden."); adminStoriesPanel(); return; }
+      if (a === "exitopen") { await exitOpen(b.dataset.class, b.dataset.assign); return; }
+      if (a === "exitresults") { await exitResultsView(b.dataset.class, b.dataset.assign); return; }
+      if (a === "mode") { if (b.getAttribute("aria-pressed") !== "true") await setMode(b.dataset.mode === "teacher" ? "teacher" : "student"); return; }
       if (a === "rmpassword") {
         if (!(await ui.confirm("Remove your backup password? You'll sign in with an email link, Google or a passkey.", { ok: "Remove", cancel: "Keep it", danger: true }))) return;
         await api("DELETE", "/v1/account/password"); ui.toast("Backup password removed."); profileView(); return;
@@ -1179,13 +1425,19 @@
   const ROLES = [["student", "Student"], ["career-changer", "Changing careers into IT"], ["it-pro", "Working in IT"], ["teacher", "Teacher or trainer"], ["other", "Something else"]];
   const SIGNUP_KEY = "certhub:signup";
   const phoneOk = v => { const d = v.replace(/\D/g, ""); return /^\+?[\d\s().-]{7,24}$/.test(v) && d.length >= 7 && d.length <= 15; };
+  // Students pick what describes them; teachers are "teacher" (which opens the teacher editions).
+  const STUDENT_ROLES = ROLES.filter(([v]) => v !== "teacher");
   const signupDetailsHtml = () => `<fieldset class="signupdetails"><legend>1. About you</legend>
+          <div class="sukind" role="radiogroup" aria-labelledby="su-kind-l"><strong id="su-kind-l">I'm signing up as a</strong>
+            <label class="kindcard"><input type="radio" name="su-kind" value="student" required><span><b>Student</b><small>Study for a certification</small></span></label>
+            <label class="kindcard"><input type="radio" name="su-kind" value="teacher"><span><b>Teacher</b><small>Teach a class, with lesson plans</small></span></label>
+          </div>
           <label for="su-name"><strong>Full name</strong></label>
           <input type="text" id="su-name" class="textin" maxlength="60" autocomplete="name" required>
           <label for="su-phone"><strong>Phone number</strong></label>
           <input type="tel" id="su-phone" class="textin" maxlength="24" autocomplete="tel" inputmode="tel" placeholder="+1 555 123 4567" required>
           <div class="formgrid">
-            <div><label for="su-role"><strong>Which describes you?</strong></label><select id="su-role" class="textin" required><option value="">Choose one</option>${ROLES.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join("")}</select></div>
+            <div id="su-role-box"><label for="su-role"><strong>Which describes you?</strong></label><select id="su-role" class="textin"><option value="">Choose one</option>${STUDENT_ROLES.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join("")}</select></div>
             <div><label for="su-goal"><strong>Goal certification</strong></label><select id="su-goal" class="textin">${/* html: options built with esc() */ certOptions("", "Not decided yet")}</select></div>
           </div>
           <label for="su-date"><strong>Target exam date</strong> <span class="note">(optional)</span></label>
@@ -1196,7 +1448,9 @@
   function readSignupDetails() {
     const v = id => (($("#" + id) || {}).value || "").trim();
     const fail = (id, m) => { const el = $("#" + id); if (el) el.focus(); const msg = $("#su-msg"); if (msg) msg.textContent = m; throw new Error(m); };
-    const d = { displayName: v("su-name"), phone: v("su-phone"), role: v("su-role"), goalCert: v("su-goal") || null, examDate: v("su-date") || null };
+    const kind = ($('input[name="su-kind"]:checked') || {}).value || "";
+    const d = { displayName: v("su-name"), phone: v("su-phone"), role: kind === "teacher" ? "teacher" : v("su-role"), goalCert: v("su-goal") || null, examDate: v("su-date") || null };
+    if (!kind) { const r = $('input[name="su-kind"]'); if (r) r.focus(); const msg = $("#su-msg"); if (msg) msg.textContent = "Choose Student or Teacher."; throw new Error("Choose Student or Teacher."); }
     if (d.displayName.length < 2) fail("su-name", "Enter your full name.");
     if (!phoneOk(d.phone)) fail("su-phone", "Enter a phone number with digits only, for example +1 555 123 4567.");
     if (!d.role) fail("su-role", "Choose what describes you.");
@@ -1312,6 +1566,7 @@
     try { pr = (await api("GET", "/v1/profile")).data; }
     catch (e) { app.innerHTML = `<h1>Your profile</h1><div class="status warn" role="alert">${esc(e.message)}</div>`; return; }
     if (location.hash !== "#profile") return;
+    setTimeout(storyPanel, 0);
     const note = landingNote ? `<div class="status ${landingNote.kind === "ok" ? "" : "warn"}" role="alert">${esc(landingNote.text)}</div>` : "";
     landingNote = null;
     const name = pr.displayName || pr.email.split("@")[0];
@@ -1332,6 +1587,22 @@
       <h2>Edit profile</h2>
       ${profileForm(onlineForm(pr), "Save profile")}
       <p class="note">Your profile is private: only you can see it. Teachers see only the name you give when you join their class.</p>
+      <h2>Emails</h2>
+      <div class="panel">
+        <div class="row"><div class="grow"><strong>Study tips by email</strong><br><span class="note">${pr.emailTips ? "On: a few short emails in your first week with study tips." : "Off."}</span></div><button type="button" class="btn ghost sm" data-aact="emailtips" data-on="${pr.emailTips ? "1" : "0"}">${pr.emailTips ? "Turn off" : "Turn on"}</button></div>
+        <form id="emailprefs-form" novalidate>
+          <div class="formgrid">
+            <div><label for="ep-remind"><strong>Study reminders</strong></label><select id="ep-remind" class="textin">${[["off", "Off"], ["daily", "Every day"], ["weekdays", "Weekdays"], ["weekly", "Once a week (Mondays)"]].map(([v, l]) => `<option value="${esc(v)}" ${pr.remind === v ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></div>
+            <div><label for="ep-hour"><strong>At</strong></label><select id="ep-hour" class="textin">${Array.from({ length: 24 }, (_, h) => `<option value="${/* num */ h}" ${+pr.remindHour === h ? "selected" : ""}>${esc(h === 0 ? "12 a.m." : h < 12 ? `${h} a.m.` : h === 12 ? "12 p.m." : `${h - 12} p.m.`)}</option>`).join("")}</select></div>
+          </div>
+          <label class="check"><input type="checkbox" id="ep-countdown" ${pr.countdown ? "checked" : ""}> Exam countdown: a week before and the day before your target exam date${pr.examDate ? "" : " (add one in Edit profile)"}</label>
+          <label class="check"><input type="checkbox" id="ep-news" ${pr.news ? "checked" : ""}> What's new: one email a month with new features</label>
+          <div class="btns"><button type="submit" class="btn sm">Save email settings</button></div>
+          <p class="note" id="ep-msg" role="status" data-style="margin:0">Times are in your time zone${pr.tz ? ` (${esc(pr.tz)})` : ""}. Every email has a link to stop them.</p>
+        </form>
+      </div>
+      <h2>Passed your exam?</h2>
+      <div id="storypanel">${CertHub.fx.skeleton()}</div>
       <h2>Sign-in methods</h2>
       <div class="panel">
         <div class="row"><div class="grow"><strong>Email link</strong><br><span class="note">${esc(pr.email)}. Always available.</span></div></div>
@@ -1345,7 +1616,6 @@
       <h2>Account</h2>
       <div class="panel">
         <div class="row"><div class="grow"><strong>Account settings</strong><br><span class="note">Sync, Pro, classes, signed-in devices, download or delete your data.</span></div><a class="btn ghost sm" href="#account">Open</a></div>
-        <div class="row"><div class="grow"><strong>Study tips by email</strong><br><span class="note">${pr.emailTips ? "On: a few short emails in your first week with study tips." : "Off."}</span></div><button type="button" class="btn ghost sm" data-aact="emailtips" data-on="${pr.emailTips ? "1" : "0"}">${pr.emailTips ? "Turn off" : "Turn on"}</button></div>
         <div class="row"><div class="grow"><strong>Site settings</strong><br><span class="note">Theme, text size, language, weekly goal and backups on this device.</span></div><a class="btn ghost sm" href="#settings">Open</a></div>
         <div class="row"><div class="grow"><strong>Sign out</strong><br><span class="note">Your progress stays on this device.</span></div><button type="button" class="btn ghost sm" data-aact="signout">Sign out</button></div>
       </div>`;
@@ -1438,6 +1708,13 @@
         <ul class="clean"><li>Everything in Pro</li><li>Unlimited full-length exams</li><li>AI Tutor for every missed question</li><li>AI weak-spot practice questions</li><li>AI Study Coach with a weekly plan</li><li>AI resume review and mock job interviews</li><li>AI feedback on lab write-ups</li><li>100 help assistant questions a day</li></ul>
         <div class="btns">${/* html: fixed markup with esc() */ cta("premium")}</div></div>
     </div>
+    <h2>For schools, bootcamps and teams</h2>
+    <div class="dashgrid">
+      <div class="panel"><strong>Free for classes</strong><p class="note" data-style="margin:4px 0 0">Teachers create classes, share a join code, assign lessons, labs and exit tickets, and see progress from students who agree to share it. Students use free accounts.</p></div>
+      <div class="panel"><strong>Teacher edition</strong><p class="note" data-style="margin:4px 0 0">Lesson plans with objectives, a 45-minute outline, a class activity, slides, a printable worksheet and an exit ticket with answers. Free for teacher accounts.</p></div>
+      <div class="panel"><strong>Pro seats for your learners</strong><p class="note" data-style="margin:4px 0 0">Give a group Pro or Premium Pro under one organization plan, managed from one place. <a href="mailto:support@studytocert.com?subject=${encodeURIComponent("Seats for my school or team")}">Ask about seats</a></p></div>
+    </div>
+    <div id="storiesbox"></div>
     <h2>Compare plans</h2>
     <div class="panel ptablewrap" tabindex="0" role="region" aria-label="Plan comparison"><table class="ptable">
       <thead><tr><th scope="col">Feature</th><th scope="col">Free</th><th scope="col">Pro</th><th scope="col">Premium Pro</th></tr></thead>
@@ -1455,14 +1732,15 @@
   }
 
   CertHub.accountViews = {
-    plans: plansView,
-    account: () => { setTimeout(() => { renderStatus(); if (signedIn()) { classPanel(); passkeyPanel(); devicePanel(); refPanel(); } else turnstile(); }, 0); return accountView(); },
+    plans: () => { setTimeout(() => storiesInto("storiesbox"), 0); return plansView(); },
+    account: () => { setTimeout(() => { renderStatus(); if (signedIn()) { classPanel(); groupPanel(); passkeyPanel(); devicePanel(); refPanel(); } else turnstile(); }, 0); return accountView(); },
     admin: adminView,
     login: mode => { setTimeout(turnstile, 0); return loginView(mode); },
     profile: profileView,
     cohort: cohortView,
     join: joinView,
-    classRoster: classView
+    classRoster: classView,
+    groupJoin: groupJoinView
   };
 
   if (API) document.addEventListener("DOMContentLoaded", async () => {

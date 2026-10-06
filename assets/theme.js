@@ -43,7 +43,7 @@ try {
   var t = localStorage.getItem("certhub:theme"); if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
   var a = localStorage.getItem("certhub:accent"); if (/^(green|purple|rose|amber|classic)$/.test(a || "")) document.documentElement.setAttribute("data-accent", a);
   var r = localStorage.getItem("certhub:size"); if (r === "lg" || r === "xl") document.documentElement.setAttribute("data-size", r);
-  if (localStorage.getItem("certhub:easyread") === "on") document.documentElement.setAttribute("data-read", "easy");
+  var er = localStorage.getItem("certhub:easyread"); if (er === "on" || er === "dyslexic") document.documentElement.setAttribute("data-read", er === "on" ? "easy" : "dyslexic");
   if (localStorage.getItem("certhub:contrast") === "more") document.documentElement.setAttribute("data-contrast", "more");
   if (localStorage.getItem("certhub:motion") === "reduce") document.documentElement.setAttribute("data-motion", "reduce");
   if (localStorage.getItem("certhub:links") === "on") document.documentElement.setAttribute("data-links", "on");
